@@ -457,6 +457,9 @@ nav button.act{color:var(--acc)}
     <div class="muted" id="devInfo" style="margin-top:6px"></div>
     <button class="ghost" style="margin-top:14px;width:100%" onclick="reconcile()">Przelicz kalendarz ze zdarzeń</button>
     <button class="ghost" style="margin-top:8px;width:100%" onclick="fbSignOut()">Wyloguj</button>
+    <div class="dim2" style="margin-top:14px;text-align:center">
+      Wersja aplikacji: <span id="appVersion">—</span>
+    </div>
   </div>
 </section>
 </main>
@@ -526,6 +529,11 @@ const firebaseConfig = {
   appId:             "1:122871594657:web:b35f059bf46c50a0bb7ae0"
 };
 const DEVICE_ID = "pillbox01";
+
+/* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
+   plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
+   TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
+const APP_VERSION = "2026-08-01.2";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -1466,7 +1474,38 @@ window.showTab = t => {
   window.scrollTo({ top:0, behavior:"smooth" });
 };
 
-if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(()=>{});
+/* ═══════════════════════════════════════════════════════════════
+ *  AUTOMATYCZNA AKTUALIZACJA
+ *  Po podmianie plików na GitHubie aplikacja ma się sama odświeżyć.
+ *  iOS potrafi trzymać starą wersję w pamięci nawet po zamknięciu,
+ *  więc dopytujemy o nowszą przy każdym powrocie do aplikacji.
+ * ═══════════════════════════════════════════════════════════════ */
+if ("serviceWorker" in navigator){
+  let reloading = false;
+  const reloadOnce = () => { if (!reloading){ reloading = true; location.reload(); } };
+
+  navigator.serviceWorker.addEventListener("controllerchange", reloadOnce);
+
+  navigator.serviceWorker.register("sw.js").then(reg => {
+    reg.update().catch(()=>{});
+    setInterval(() => reg.update().catch(()=>{}), 60*60*1000);
+
+    reg.addEventListener("updatefound", () => {
+      const sw = reg.installing;
+      if (!sw) return;
+      sw.addEventListener("statechange", () => {
+        /* Nowa wersja gotowa, a stara wciąż steruje stroną → przeładuj. */
+        if (sw.state === "installed" && navigator.serviceWorker.controller) reloadOnce();
+      });
+    });
+
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden) reg.update().catch(()=>{});
+    });
+  }).catch(()=>{});
+}
+
+document.getElementById("appVersion").textContent = APP_VERSION;
 </script>
 </body>
 </html>
