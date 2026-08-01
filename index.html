@@ -28,7 +28,11 @@
   --r:16px;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{overscroll-behavior-y:none}
+/* Cokolwiek szerszego od ekranu powodowalo poziome przewijanie i kalendarz
+   "uciekal" w bok. Blokujemy to twardo na poziomie dokumentu.            */
+html,body{overscroll-behavior-y:none;max-width:100%;overflow-x:hidden}
+svg{max-width:100%}
+main{overflow-x:hidden}
 body{margin:0;background:
       radial-gradient(1200px 600px at 50% -10%, #16233c 0%, transparent 60%), var(--bg);
      color:var(--txt);font:16px/1.5 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,sans-serif;
@@ -231,6 +235,12 @@ nav button.act{color:var(--acc)}
     <h1 id="hTitle">Kalendarz</h1>
     <div class="sub" id="hSub">—</div>
   </div>
+  <button id="refreshBtn" onclick="odswiez()" aria-label="Odśwież"
+          style="padding:8px 10px;background:transparent;border:1px solid var(--line)">
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+         stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 3v6h-6"/></svg>
+  </button>
   <span class="chip" id="batChip">–</span>
 </header>
 
@@ -238,6 +248,19 @@ nav button.act{color:var(--acc)}
 
 <!-- ─────────── KALENDARZ ─────────── -->
 <section id="tab-cal">
+
+  <!-- Ostrzeżenie: wieczko zostało otwarte. Ukryte, dopóki pudełko nie
+       zgłosi boxOpen=true. Celowo nad wszystkim innym.                -->
+  <div class="card hide" id="openWarn"
+       style="border-color:var(--warn);background:rgba(251,191,36,.10)">
+    <div class="row" style="gap:12px;align-items:center">
+      <div style="font-size:26px;line-height:1">🔓</div>
+      <div style="min-width:0">
+        <b style="color:var(--warn)">Pudełko jest otwarte</b>
+        <div class="dim2" id="openWarnWhen" style="margin-top:2px"></div>
+      </div>
+    </div>
+  </div>
 
   <div class="card" id="todayCard">
     <div class="row between" style="align-items:flex-start">
@@ -248,6 +271,8 @@ nav button.act{color:var(--acc)}
       </div>
       <div class="pillrow" id="todayPill" style="min-height:0;margin:0"></div>
     </div>
+    <div class="dim2 hide" id="nightHint" style="margin-top:10px;padding-top:10px;
+         border-top:1px solid var(--line);font-size:12.5px"></div>
   </div>
 
   <div class="card">
@@ -523,7 +548,8 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/fireba
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut,
          setPersistence, indexedDBLocalPersistence, browserLocalPersistence }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { getDatabase, ref, onValue, set, update, remove, query, orderByChild, limitToLast }
+import { getDatabase, ref, onValue, set, update, remove, query, orderByChild,
+         limitToLast, goOnline, get }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 
 /* ═══════════════════════════════════════════════════════════════
@@ -543,7 +569,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-01.4";
+const APP_VERSION = "2026-08-01.7";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -570,15 +596,39 @@ let events = [];
 let viewYear, viewMonth, sheetDate = null, pendingDose = null;
 
 /* ───────── narzędzia ───────── */
+
+/* Granica doby lekowej. MUSI być tą samą liczbą co DAY_START_HOUR
+   w firmware/PillBox/config.h — inaczej pudełko i telefon liczyłyby dni
+   inaczej i kalendarz by się rozjechał.
+
+   Sens: tabletka wzięta o 01:30 należy jeszcze do dnia poprzedniego.
+   Dzięki temu nocna dawka nie wygląda jak podwójna dawka nazajutrz,
+   a wczorajszy dzień nie robi się czerwony, dopóki naprawdę nie minie. */
+const DAY_START_HOUR = 3;
+
 const pad = n => String(n).padStart(2,"0");
 const dateKey = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
-const todayKey = () => dateKey(new Date());
+
+/* Data kalendarzowa przesunięta o granicę doby — czyli „do którego dnia
+   lekowego należy ten moment”. */
+const medDate = d => new Date(d.getTime() - DAY_START_HOUR*3600*1000);
+const todayKey = () => dateKey(medDate(new Date()));
+
+/* Czy trwa jeszcze wczorajsza doba (jest po północy, ale przed granicą)? */
+const inNightWindow = () => new Date().getHours() < DAY_START_HOUR;
 const nf = n => (Math.round(n*100)/100).toString().replace(".", ",");
 const esc = s => String(s??"").replace(/[<>&"]/g, c => ({"<":"&lt;",">":"&gt;","&":"&amp;",'"':"&quot;"}[c]));
 
 function devDate(ts){ return new Date((ts + cfg.tzOffsetMin*60) * 1000); }
-function devKey(ts){ const d = devDate(ts);
+
+/* Do którego DNIA LEKOWEGO należy zdarzenie z pudełka. Odejmujemy granicę
+   doby, więc otwarcie o 02:00 trafia do dnia poprzedniego — dokładnie tak,
+   jak liczy to localDayNumber() w firmware. */
+function devKey(ts){ const d = devDate(ts - DAY_START_HOUR*3600);
   return `${d.getUTCFullYear()}-${pad(d.getUTCMonth()+1)}-${pad(d.getUTCDate())}`; }
+
+/* Godzina otwarcia — prawdziwa, zegarowa, BEZ przesunięcia doby.
+   (devHM poniżej korzysta z devDate, nie z devKey — i tak ma zostać.) */
 function devHM(ts){ const d = devDate(ts); return `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`; }
 function slotMin(h){ return +h.slice(0,2)*60 + +h.slice(3,5); }
 
@@ -661,7 +711,10 @@ onAuthStateChanged(auth, u => {
 
 /* ═══════════════ START ═══════════════ */
 function boot(){
-  const now = new Date();
+  /* Otwieramy miesiac biezacej doby lekowej. Tuz po polnocy pierwszego dnia
+     miesiaca inaczej pokazalby sie nowy miesiac, a podswietlony dzien
+     lezalby w poprzednim - czyli poza ekranem.                         */
+  const now = medDate(new Date());
   viewYear = now.getFullYear(); viewMonth = now.getMonth();
   document.getElementById("inrDate").value = todayKey();
 
@@ -679,6 +732,38 @@ function boot(){
     doses = s.val() || {}; renderAll(); settlePills();
   });
   onValue(ref(db, `users/${uid}/inr`), s => { inr = s.val() || {}; renderAll(); });
+
+  /* ───────── Odświeżanie po powrocie do aplikacji ─────────
+     iOS usypia JavaScript, gdy schowasz aplikację, i zrywa połączenie
+     z Firebase. Po powrocie trzeba je jawnie wznowić — bez tego trzeba
+     było zamykać i otwierać aplikację, żeby zobaczyć nowe dane.        */
+  const wakeUp = async () => {
+    if (document.hidden || !uid) return;
+    try {
+      goOnline(db);                       // wznów nasłuch w czasie rzeczywistym
+      /* Jednorazowy odczyt „na już" — nie czekamy, aż serwer sam się odezwie. */
+      const [st, ev, ds, ir, cf] = await Promise.all([
+        get(ref(db, `devices/${DEVICE_ID}/status`)),
+        get(query(ref(db, `devices/${DEVICE_ID}/events`), orderByChild("ts"), limitToLast(400))),
+        get(ref(db, `users/${uid}/doses`)),
+        get(ref(db, `users/${uid}/inr`)),
+        get(ref(db, `devices/${DEVICE_ID}/config`))
+      ]);
+      if (cf.val()) cfg = Object.assign(cfg, cf.val());
+      events = []; ev.forEach(c => events.push(Object.assign({ id:c.key }, c.val())));
+      events.sort((a,b) => b.ts - a.ts);
+      doses = ds.val() || {};
+      inr   = ir.val() || {};
+      renderStatus(st.val());
+      renderSettings(); renderAll();
+      doReconcile(true);
+    } catch (e) { console.error("odswiezanie:", e); }
+  };
+  document.addEventListener("visibilitychange", wakeUp);
+  window.addEventListener("focus", wakeUp);
+  window.addEventListener("pageshow", wakeUp);
+  setInterval(wakeUp, 5 * 60 * 1000);     // siatka bezpieczeństwa
+  window.odswiez = wakeUp;
 }
 
 function renderAll(){
@@ -733,7 +818,17 @@ async function doReconcile(silent = true){
     }
   }
   const n = Object.keys(updates).length;
-  if (n) await update(ref(db), updates);
+  if (n) {
+    try {
+      await update(ref(db), updates);
+    } catch (e) {
+      /* Cichy blad zapisu wygladal jak "aplikacja nic nie robi". Teraz mowi. */
+      console.error("zapis kalendarza:", e);
+      alert("Nie udało się zapisać do bazy.\n\n" + (e?.message || e) +
+            "\n\nSprawdź reguły bezpieczeństwa w Firebase.");
+      return;
+    }
+  }
   if (!silent) {
     alert(n ? `Gotowe — uzupełniono ${n} ${n === 1 ? "dzień" : "dni"} w kalendarzu.`
             : `Kalendarz jest już aktualny.\n\nPrzeanalizowano ${events.length} zdarzeń `
@@ -780,7 +875,7 @@ function renderCalendar(){
   /* Zabezpieczenie: gdyby render wywolal sie zanim boot() ustawi miesiac,
      kalendarz wyszedłby pusty bez zadnego bledu. Domyslamy sie „dzis".  */
   if (!Number.isInteger(viewYear) || !Number.isInteger(viewMonth)){
-    const n = new Date(); viewYear = n.getFullYear(); viewMonth = n.getMonth();
+    const n = medDate(new Date()); viewYear = n.getFullYear(); viewMonth = n.getMonth();
   }
   const first = new Date(viewYear, viewMonth, 1);
   const days  = new Date(viewYear, viewMonth+1, 0).getDate();
@@ -823,6 +918,18 @@ function renderToday(){
     document.getElementById("todayWhen").textContent =
       `${nf(sum)} tabl.` + (r?.ts ? ` · o ${devHM(r.ts)}` : "");
   }
+  /* Po północy, a przed granicą doby, „dziś” to wciąż wczorajsza data.
+     Bez tej informacji wyglądałoby to na błąd aplikacji.              */
+  const hint = document.getElementById("nightHint");
+  if (hint){
+    hint.classList.toggle("hide", !inNightWindow());
+    if (inNightWindow()){
+      const d = new Date(key + "T12:00:00");
+      hint.textContent = `Jest po północy — to wciąż dawka z ${d.toLocaleDateString("pl-PL",
+        {day:"numeric", month:"long"})}. Nowy dzień zaczyna się o ${pad(DAY_START_HOUR)}:00.`;
+    }
+  }
+
   document.getElementById("hSub").textContent =
     `${cfg.drugName || "Lek"}${+cfg.drugStrength ? " " + cfg.drugStrength + " mg" : ""} · ${nf(cfg.defaultDose??1)} tabl. dziennie`;
 }
@@ -1041,8 +1148,31 @@ function relTime(sec){
   return d === 1 ? "wczoraj" : `${d} dni temu`;
 }
 
+/* Baner „pudełko jest otwarte”. Pudełko zgłasza to samo z siebie po
+   kwadransie od otwarcia, więc baner pojawia się mniej więcej wtedy,
+   kiedy usłyszysz pierwszy sygnał.                                    */
+function renderOpenWarn(st){
+  const box = document.getElementById("openWarn");
+  if (!box) return;
+  const open = !!(st && st.boxOpen);
+  box.classList.toggle("hide", !open);
+  if (!open) return;
+
+  const since = st.openSince || 0;
+  const when  = document.getElementById("openWarnWhen");
+  if (since > 1){
+    const mins = Math.max(0, Math.round(Date.now()/1000 - since) / 60);
+    when.textContent = mins < 60
+      ? `Otwarte od ${Math.round(mins)} min (od ${devHM(since)}).`
+      : `Otwarte od ${Math.floor(mins/60)} h ${Math.round(mins%60)} min (od ${devHM(since)}).`;
+  } else {
+    when.textContent = "Zamknij wieczko, żeby leki nie wilgotniały.";
+  }
+}
+
 function renderStatus(st){
   const chip = document.getElementById("batChip");
+  renderOpenWarn(st);
 
   /* Pudełko jeszcze się nie odezwało — zamiast samotnej kreski i pustego
      paska pokazujemy zrozumiały komunikat.                             */
@@ -1073,8 +1203,10 @@ function renderStatus(st){
   chip.textContent = pct + "%";
   chip.className = "chip " + (pct > 40 ? "on" : pct > 15 ? "warn" : "off");
 
-  /* Szacunek: pełne ogniwo 470 mAh starczy około 90 dni przy obecnym poborze,
-     więc jeden punkt procentowy to mniej więcej 0,9 dnia.               */
+  /* Szacunek: pełne ogniwo 470 mAh starczy około 90 dni przy obecnym poborze.
+     Odkąd procent liczony jest z krzywej LiPo, a nie z prostej, odpowiada
+     mniej więcej realnie pozostałemu ładunkowi — więc mnożenie razy 0,9
+     dnia ma sens także w dolnej połowie skali, gdzie wcześniej zawyżało. */
   const eta = document.getElementById("batEta");
   eta.textContent = pct > 15
     ? `Szacunkowo ok. ${Math.round(pct * 0.9)} dni do ładowania.`
@@ -1090,13 +1222,19 @@ function renderStatus(st){
   const q = st.queued || 0, qi = document.getElementById("queueInfo");
   qi.innerHTML = q ? `<span style="color:var(--warn)">⏳ ${q} zdarzeń czeka w pamięci pudełka.</span>` : "";
 
+  /* battRaw = odczyt prosto z krzywej, przed wygładzeniem. Gdy różni się
+     mocno od wskazania, znaczy że filtr właśnie nadrabia spadek.        */
+  const rawTxt = (typeof st.battRaw === "number" && st.battRaw !== pct)
+    ? `<br>Pomiar surowy: ${st.battRaw}% (wskazanie wygładzone)` : "";
   document.getElementById("devInfo").innerHTML =
     `ID: <b>${DEVICE_ID}</b><br>Firmware: ${st.fw||"?"}<br>WiFi: ${esc(st.ssid)||"?"} (${st.rssi||"?"} dBm)<br>` +
-    `Wybudzeń: ${st.boots||0} · w kolejce: ${q}`;
+    `Wybudzeń: ${st.boots||0} · w kolejce: ${q}${rawTxt}`;
 }
 
 /* ═══════════════ ZAPAS TABLETEK ═══════════════ */
-function yesterdayKey(){ const d=new Date(); d.setDate(d.getDate()-1); return dateKey(d); }
+/* Wczoraj = dzień przed bieżącym DNIEM LEKOWYM. O 01:00 „dziś” to wciąż
+   poprzedni dzień kalendarzowy, więc liczymy od todayKey(), nie od zegara. */
+function yesterdayKey(){ const d = medDate(new Date()); d.setDate(d.getDate()-1); return dateKey(d); }
 
 async function settlePills(){
   if (typeof cfg.pillsLeft !== "number") return;
@@ -1204,7 +1342,7 @@ const dev2 = d => d == null ? "—" : (d > 0 ? "+" : d < 0 ? "−" : "") +
 const DOW_PL = ["poniedziałek","wtorek","środa","czwartek","piątek","sobota","niedziela"];
 
 function analyze(days){
-  const end = new Date();
+  const end = medDate(new Date());
   const times = [], deviations = [], hist = Array(24).fill(0);
   const byDow = Array.from({length:7}, () => ({ taken:0, total:0, times:[] }));
   const plan = slotMin(cfg.schedule[0] || "08:00");
@@ -1362,7 +1500,9 @@ window.renderAnalysis = renderAnalysis;
 
 /* ═══════════════ RAPORT ═══════════════ */
 function collectRows(days){
-  const rows = [], end = new Date();
+  /* Koniec zakresu to biezaca DOBA LEKOWA. O 01:30 raport nie moze
+     doklejac pustego wiersza na jutro, bo dzisiejsza dawka wciaz trwa. */
+  const rows = [], end = medDate(new Date());
   for (let i = days-1; i >= 0; i--){
     const d = new Date(end); d.setDate(end.getDate()-i);
     const key = dateKey(d), rec = (doses[key]||{})[0], { sum, any } = dayDose(key);
