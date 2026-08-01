@@ -1,6 +1,6 @@
 /* Minimalny service worker - wymagany, aby iOS traktowal strone jak PWA.
    Cache'ujemy tylko wlasna powloke; dane Firebase zawsze z sieci.        */
-const CACHE = "pillbox-v1";
+const CACHE = "pillbox-2026-08-01.2";
 const SHELL = ["./", "./index.html", "./manifest.json"];
 
 self.addEventListener("install", e => {
