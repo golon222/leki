@@ -1,1675 +1,1681 @@
-<!DOCTYPE html>
-<html lang="pl">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<!-- ══════════════════════════════════════════════════════════════════
-     NAZWA APLIKACJI — zmieniasz w 3 miejscach w TYM pliku:
-       1. meta apple-mobile-web-app-title  (podpis pod ikoną na iPhonie)
-       2. <title>                          (karta przeglądarki)
-       3. <h1> na ekranie logowania        (szukaj: NAZWA-EKRAN-LOGOWANIA)
-     …oraz w pliku manifest.json (pola "name" i "short_name").
-     Pod ikoną na iPhonie mieści się około 11 znaków.
-     ══════════════════════════════════════════════════════════════════ -->
-<meta name="apple-mobile-web-app-title" content="PillBox">
-<meta name="theme-color" content="#0b1220">
-<link rel="manifest" href="manifest.json">
-<link rel="apple-touch-icon" href="icon-192.png">
-<title>PillBox</title>
-<style>
-:root{
-  --bg:#0b1220; --bg2:#0f1829;
-  --card:#151f33; --card2:#1d2942; --line:#26344f;
-  --txt:#e8eefc; --dim:#8ea0c0; --dim2:#61748f;
-  --ok:#34d399; --bad:#f87171; --warn:#fbbf24; --acc:#5eead4;
-  --pill:#8ab4f8; --pillEdge:#5b8ede;
-  --r:16px;
+/* =====================================================================
+ *  PillBox.ino  -  Inteligentne pudelko na leki / IoT Pill Reminder
+ *  Plytka : Seeed Studio XIAO ESP32-C3
+ *  Autor  : projekt Kuba
+ *
+ *  BIBLIOTEKI (Menedzer bibliotek Arduino):
+ *    - ArduinoJson  (Benoit Blanchon)  >= 7.0
+ *    - reszta jest czescia rdzenia "esp32 by Espressif Systems" (2.0.14+ / 3.x)
+ *
+ *  PROJEKT SKLADA SIE Z DWOCH PLIKOW:
+ *    PillBox.ino  - ten plik, kod programu (zaczyna sie od tego naglowka)
+ *    config.h     - ustawienia (zaczyna sie od "config.h - Inteligentne...")
+ *  Oba musza lezec w folderze o nazwie PillBox.
+ *
+ *  USTAWIENIA PLYTKI:
+ *    Board            : XIAO_ESP32C3
+ *    USB CDC On Boot  : Enabled   (zeby dzialal Serial przez USB-C)
+ *    Partition Scheme : Huge APP (3MB No OTA/1MB SPIFFS)
+ *                       (domyslny podzial jest ZA MALY - program ma ~1,5 MB)
+ *
+ *  CYKL ZYCIA:
+ *    deep sleep  -->  wybudzenie (kontaktron / przycisk / timer)  -->
+ *    obsluga  -->  ewentualne WiFi + Firebase  -->  deep sleep
+ * ===================================================================== */
+
+#include "config.h"
+
+/*  Zabezpieczenie przed pomyleniem plikow. Jesli config.h zawiera cos
+ *  innego niz ustawienia, kompilator powie to wprost, zamiast sypac
+ *  setkami niezrozumialych bledow.                                    */
+#ifndef PILLBOX_CONFIG_VERSION
+  #error "config.h ma niewlasciwa tresc - pobierz oba pliki (PillBox.ino i config.h) na nowo."
+#endif
+
+#include <WiFi.h>
+#include <WiFiClientSecure.h>
+#include <HTTPClient.h>
+#include <Preferences.h>
+#include <ArduinoJson.h>
+#include <WebServer.h>
+#include <DNSServer.h>
+#include <esp_sleep.h>
+#include <soc/soc_caps.h>       // SOC_GPIO_SUPPORT_DEEPSLEEP_WAKEUP
+#include <esp_wifi.h>
+#include <driver/gpio.h>
+#include <time.h>
+
+/* =====================================================================
+ *  PAMIEC RTC  (przezywa deep sleep, ginie po odlaczeniu zasilania)
+ * ===================================================================== */
+RTC_DATA_ATTR uint32_t rtcBootCount     = 0;
+RTC_DATA_ATTR int8_t   rtcPendingSlot   = -1;   // slot ktory wlasnie dzwoni
+RTC_DATA_ATTR uint8_t  rtcAlarmRetries  = 0;    // ile prob juz bylo
+RTC_DATA_ATTR bool     rtcTimeValid     = false;
+RTC_DATA_ATTR uint32_t rtcLastOpenTs    = 0;    // antydrganiowo dla kontaktronu
+RTC_DATA_ATTR char     rtcSchedule[96]  = {0};  // "08:00|20:00"
+RTC_DATA_ATTR int16_t  rtcTzOffsetMin   = DEFAULT_TZ_OFFSET;
+RTC_DATA_ATTR uint32_t rtcTakenDay      = 0;    // YYYYMMDD ostatniej zapisanej dawki
+RTC_DATA_ATTR int16_t  rtcPillsLeft     = -1;   // z Firebase; -1 = nieznane
+RTC_DATA_ATTR uint32_t rtcRolloverDay   = 0;    // ostatnia rozliczona doba
+RTC_DATA_ATTR uint8_t  rtcRetryCount    = 0;    // nieudane proby wyslania
+RTC_DATA_ATTR uint8_t  rtcStuckOpen     = 0;    // ile razy z rzedu pudelko bylo otwarte
+RTC_DATA_ATTR uint8_t  rtcStuckButton   = 0;    // ile razy z rzedu przycisk byl wcisniety
+RTC_DATA_ATTR float    rtcLastVoltage   = 0.0f; // do wykrycia podlaczenia ladowarki
+RTC_DATA_ATTR bool     rtcCutoff        = false;// tryb ochrony rozladowanego ogniwa
+
+/* --- Pudelko zostawione otwarte --------------------------------------- */
+RTC_DATA_ATTR uint32_t rtcOpenSinceTs   = 0;    // kiedy zauwazylismy otwarcie
+RTC_DATA_ATTR uint32_t rtcNextWarnTs    = 0;    // kiedy nastepny sygnal
+RTC_DATA_ATTR uint16_t rtcOpenWarnCount = 0;    // ile sygnalow juz bylo
+RTC_DATA_ATTR bool     rtcOpenReported  = false;// aplikacja wie, ze jest otwarte
+RTC_DATA_ATTR bool     rtcOpenClearPend = false;// trzeba jej zglosic zamkniecie
+RTC_DATA_ATTR bool     rtcArmedForClose = false;// spimy czekajac na ZAMKNIECIE
+RTC_DATA_ATTR uint8_t  rtcBattPct       = 255;  // wygladzony procent; 255 = brak historii
+
+/* =====================================================================
+ *  STAN GLOBALNY
+ * ===================================================================== */
+Preferences prefs;
+
+int    batteryPercentage    = 0;    // po wygladzeniu - to trafia do aplikacji
+int    batteryRawPercentage = 0;    // prosto z krzywej, do diagnostyki
+float  realBatteryVoltage   = 0.0f;
+
+String slots[12];          // godziny "HH:MM"
+int    slotCount = 0;
+
+enum WakeReason { WAKE_BOOT, WAKE_REED, WAKE_BUTTON, WAKE_TIMER, WAKE_CLOSED };
+WakeReason wakeReason = WAKE_BOOT;
+
+bool boxOpenWarned = false;     // czy w tym wybudzeniu zabrzmial sygnal "otwarte"
+
+bool batterySaver = false;      // true = za niskie napiecie, nie wlaczamy radia
+bool timeSyncedThisWake = false;
+
+bool syncTimeNTP();             // deklaracja - wifiConnect() wola ja od razu
+
+/* --- Bezpiecznik czasowy -----------------------------------------------
+   Chroni przed zawieszeniem sie na wieki, ale NIE moze przerwac operacji,
+   ktore z natury trwaja dlugo: dzwoniacego alarmu (do 120 s) czy portalu
+   konfiguracyjnego (do 5 min). Dlatego limit jest ruchomy - po takiej
+   operacji przesuwamy go, zeby zostal czas na wyslanie danych.
+   Bez tego dluzsze wpisywanie hasla WiFi konczyloby sie konfiguracja,
+   po ktorej urzadzenie i tak nie zdazyloby sie nigdzie polaczyc.        */
+uint32_t awakeDeadlineMs = AWAKE_LIMIT_MS;
+
+bool awakeTooLong() { return millis() > awakeDeadlineMs; }
+
+void extendAwake(uint32_t ms) {
+  uint32_t d = millis() + ms;
+  if (d > awakeDeadlineMs) awakeDeadlineMs = d;
 }
-*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-/* Cokolwiek szerszego od ekranu powodowalo poziome przewijanie i kalendarz
-   "uciekal" w bok. Blokujemy to twardo na poziomie dokumentu.            */
-html,body{overscroll-behavior-y:none;max-width:100%;overflow-x:hidden}
-svg{max-width:100%}
-main{overflow-x:hidden}
-body{margin:0;background:
-      radial-gradient(1200px 600px at 50% -10%, #16233c 0%, transparent 60%), var(--bg);
-     color:var(--txt);font:16px/1.5 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,sans-serif;
-     padding:0 0 env(safe-area-inset-bottom);-webkit-font-smoothing:antialiased}
 
-/* ---------- szkielet ----------
-   Pasek statusu iOS: to NAGŁÓWEK rezerwuje na niego miejsce własnym
-   paddingiem. Gdyby robiło to body, przyklejony nagłówek wjeżdżałby
-   pod zegarek i wskaźnik baterii przy przewijaniu.                    */
-header{display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:20;
-       padding:calc(10px + env(safe-area-inset-top)) 18px 10px;
-       background:rgba(11,18,32,.92);backdrop-filter:blur(16px);border-bottom:1px solid var(--line)}
-header .ttl{flex:1;min-width:0}
-header h1{font-size:17px;margin:0;font-weight:650;letter-spacing:-.01em;
-          white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-header .sub{font-size:11.5px;color:var(--dim2);margin-top:1px;
-            white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-main{padding:16px 16px 96px;max-width:580px;margin:0 auto}
-section{animation:fade .28s ease}
-@keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
-
-.card{background:linear-gradient(180deg,var(--card) 0%,#131c2e 100%);
-      border:1px solid var(--line);border-radius:var(--r);padding:16px;margin-bottom:14px;
-      box-shadow:0 1px 0 rgba(255,255,255,.03) inset, 0 8px 24px -18px #000;
-      overflow-wrap:anywhere}
-/* Bez min-width:0 elementy w kontenerach flex nie chcą się kurczyć poniżej
-   swojej treści i wypychają zawartość poza kartę.                        */
-.card .row > *{min-width:0}
-.stat, .inrrow > span{min-width:0}
-.card h3{margin:0 0 4px;font-size:15px;font-weight:650}
-.muted{color:var(--dim);font-size:13px}
-.dim2{color:var(--dim2);font-size:12px}
-.row{display:flex;gap:10px;align-items:center}
-.between{justify-content:space-between}
-hr.sep{border:0;border-top:1px solid var(--line);margin:14px 0}
-
-button{font:inherit;border:0;border-radius:12px;padding:11px 15px;background:var(--card2);
-       color:var(--txt);cursor:pointer;transition:transform .1s, filter .15s;font-weight:500}
-button:active{transform:scale(.96)}
-button.primary{background:linear-gradient(180deg,#5eead4,#2dd4bf);color:#06322c;font-weight:700}
-button.ghost{background:transparent;border:1px solid var(--line);color:var(--dim)}
-button.danger{background:rgba(248,113,113,.16);color:#fecaca}
-button[disabled]{opacity:.4;pointer-events:none}
-input,select{font:inherit;background:var(--card2);color:var(--txt);border:1px solid var(--line);
-      border-radius:12px;padding:11px 12px;width:100%;min-width:0;outline:none;
-      -webkit-appearance:none;appearance:none}
-/* Pole daty na iOS ma własną, dużą szerokość minimalną i potrafi rozepchnąć
-   sąsiada poza kartę. Poniższe wymusza, żeby respektowało kontener.       */
-input[type=date]{min-height:44px;line-height:20px;text-align:left}
-input:focus,select:focus{border-color:var(--acc)}
-label{font-size:12px;color:var(--dim2);display:block;margin:12px 0 5px;
-      text-transform:uppercase;letter-spacing:.06em;font-weight:600}
-
-/* Dwa pola obok siebie. Siatka z minmax(0,…) nie da się rozepchnąć
-   zawartością, w odróżnieniu od flexboxa.                                */
-.pair{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);
-      gap:10px;margin-top:12px;align-items:end}
-.pair > div{min-width:0}
-.pair label{margin:0 0 5px}
-
-.chip{font-size:11.5px;padding:5px 10px;border-radius:999px;background:var(--card2);
-      color:var(--dim);white-space:nowrap;border:1px solid var(--line)}
-.chip.on{color:var(--ok);border-color:rgba(52,211,153,.35)}
-.chip.warn{color:var(--warn);border-color:rgba(251,191,36,.35)}
-.chip.off{color:var(--bad);border-color:rgba(248,113,113,.35)}
-
-/* ---------- kalendarz ---------- */
-.calhead{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
-.calhead b{font-size:17px;text-transform:capitalize;font-weight:650}
-.calhead button{padding:8px 14px;font-size:18px;line-height:1}
-.grid{display:grid;grid-template-columns:repeat(7,1fr);gap:5px}
-.dow{text-align:center;font-size:10.5px;color:var(--dim2);font-weight:600;letter-spacing:.04em;padding-bottom:4px}
-.day{aspect-ratio:1;border-radius:12px;background:#141d2f;display:flex;flex-direction:column;
-     align-items:center;justify-content:center;font-size:13.5px;font-weight:600;position:relative;
-     cursor:pointer;border:1.5px solid #1d2942;color:var(--dim);transition:transform .1s}
-.day:active{transform:scale(.93)}
-.day.blank{background:transparent;border-color:transparent;cursor:default}
-.day.taken  {background:rgba(52,211,153,.14);border-color:rgba(52,211,153,.5);color:#a7f3d0}
-.day.partial{background:rgba(251,191,36,.13);border-color:rgba(251,191,36,.5);color:#fde68a}
-.day.missed {background:rgba(248,113,113,.13);border-color:rgba(248,113,113,.5);color:#fecaca}
-.day.future {opacity:.45}
-.day.today{box-shadow:0 0 0 2px var(--acc);opacity:1}
-.day .dose{position:absolute;bottom:4px;font-size:9px;font-weight:700;opacity:.9}
-.day .inr{position:absolute;top:3px;right:4px;width:11px;height:11px}
-/* Legenda w dwóch równych kolumnach — przy zawijaniu flexem znaczniki
-   rozjeżdżały się w pionie i wyglądało to niechlujnie.               */
-.legend{display:grid;grid-template-columns:1fr 1fr;gap:9px 10px;
-        font-size:11.5px;color:var(--dim2);margin-top:14px}
-.legend span{display:flex;align-items:center;gap:6px;min-width:0}
-.legend i{display:inline-block;width:9px;height:9px;border-radius:3px;flex:none}
-.legend svg{flex:none}
-
-/* ---------- bateria ---------- */
-.batt{width:52px;height:25px;border:2px solid var(--dim2);border-radius:6px;position:relative;padding:2.5px;flex:none}
-.batt::after{content:"";position:absolute;right:-6px;top:7px;width:4px;height:9px;background:var(--dim2);border-radius:0 2px 2px 0}
-.battfill{height:100%;border-radius:2.5px;width:0;transition:width .5s}
-.bar{height:6px;background:#101828;border-radius:99px;overflow:hidden;border:1px solid var(--line)}
-.bar>div{height:100%;width:0;border-radius:99px;transition:width .5s}
-
-/* ---------- arkusz ---------- */
-.sheet{position:fixed;inset:0;background:rgba(3,7,16,.72);backdrop-filter:blur(3px);
-       display:none;align-items:flex-end;z-index:60}
-.sheet.show{display:flex;animation:fade .2s}
-.sheet>div{background:var(--bg2);width:100%;max-width:580px;margin:0 auto;border:1px solid var(--line);
-     border-radius:22px 22px 0 0;padding:10px 18px calc(20px + env(safe-area-inset-bottom));
-     max-height:92vh;overflow:auto;animation:up .3s cubic-bezier(.2,.9,.3,1)}
-@keyframes up{from{transform:translateY(40px)}to{transform:none}}
-.grab{width:38px;height:4px;background:var(--line);border-radius:9px;margin:2px auto 14px}
-
-/* ---------- sterowanie dawką ---------- */
-.dosewrap{display:flex;align-items:center;justify-content:center;gap:18px;margin:6px 0 4px}
-.stepbtn{width:56px;height:56px;border-radius:50%;font-size:26px;font-weight:300;padding:0;
-         background:var(--card2);border:1px solid var(--line);display:flex;align-items:center;justify-content:center}
-.dosebox{text-align:center;min-width:132px}
-.doseval{font-size:34px;font-weight:750;letter-spacing:-.02em;line-height:1.1}
-.doselbl{font-size:12px;color:var(--dim2);margin-top:1px}
-.pillrow{display:flex;gap:8px;justify-content:center;align-items:center;min-height:66px;margin:8px 0 2px}
-.changed{border:1px solid rgba(94,234,212,.4);background:rgba(94,234,212,.07);
-         border-radius:12px;padding:10px 12px;font-size:13px;margin-top:12px}
-
-/* Sześć przycisków licznika. Flex je rozpychał — „−100" ma szerszą treść
-   niż „+1", więc ostatni wychodził poza kartę. Grid z minmax(0,1fr)
-   wymusza równe kolumny niezależnie od zawartości.                    */
-.pillpad{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:5px;margin-top:12px}
-.pillpad button{padding:11px 2px;font-size:13.5px;font-weight:600;min-width:0;
-                white-space:nowrap;overflow:hidden}
-.pillpad .minus{background:rgba(248,113,113,.16);color:#fecaca}
-.pillpad .plus {background:rgba(52,211,153,.16);color:#a7f3d0}
-
-/* ---------- kafelki statystyk ---------- */
-.stats{display:grid;grid-template-columns:repeat(2,1fr);gap:9px;margin-top:14px}
-.stat{background:#101a2b;border:1px solid var(--line);border-radius:12px;padding:11px 12px}
-.stat .sv{font-size:23px;font-weight:750;letter-spacing:-.02em;line-height:1.15}
-.stat .sl{font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.05em;
-          font-weight:600;margin-top:1px}
-
-/* ---------- INR ---------- */
-.inrbig{font-size:46px;font-weight:750;letter-spacing:-.03em;line-height:1}
-.inrlist{max-height:none}
-.inrrow{display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid var(--line)}
-.inrrow:last-child{border-bottom:0}
-.inrdot{width:9px;height:9px;border-radius:50%;flex:none}
-.inrval{font-weight:700;font-size:16px;min-width:42px}
-
-/* ---------- nawigacja ---------- */
-nav{position:fixed;bottom:0;left:0;right:0;display:flex;z-index:30;
-    background:rgba(15,24,41,.92);backdrop-filter:blur(16px);border-top:1px solid var(--line);
-    padding-bottom:env(safe-area-inset-bottom)}
-nav button{flex:1;background:none;border-radius:0;padding:9px 0 8px;font-size:10.5px;color:var(--dim2);
-           display:flex;flex-direction:column;align-items:center;gap:3px;font-weight:600}
-nav button svg{width:21px;height:21px}
-nav button.act{color:var(--acc)}
-.hide{display:none!important}
-
-/* ---------- raport ---------- */
-#report{display:none}
-@media print{
-  header,nav,main,#login,.sheet{display:none!important}
-  body{background:#fff;color:#000;font-size:11pt;padding:0}
-  #report{display:block;padding:0 4mm}
-  #report h2{margin:0 0 2mm;font-size:16pt}
-  #report h3{margin:6mm 0 2mm;font-size:12pt}
-  #report .meta{color:#555;font-size:9pt;margin-bottom:5mm}
-  #report table{width:100%;border-collapse:collapse;font-size:9pt;margin-bottom:4mm}
-  #report th,#report td{border:1px solid #bbb;padding:3px 5px;text-align:left}
-  #report th{background:#eee}
-  #report tr.miss td{background:#fde8e8}
-  #report tr.out td{background:#fff3d6}
-  #report .sum{margin:4mm 0;font-size:10pt}
+/* =====================================================================
+ *  1.  POMIAR BATERII
+ *      Blok zgodny 1:1 ze specyfikacja projektu - nie zmieniac matematyki.
+ * ===================================================================== */
+/* Mediana z 5 probek. Pojedynczy odczyt ADC w ESP32 potrafi skakac o 2-3%,
+   przez co procent baterii "tanczyl" miedzy wybudzeniami. Mediana odrzuca
+   skrajne przypadki lepiej niz srednia (jeden zaklocony odczyt nie psuje
+   wyniku). Sama matematyka przeliczenia pozostaje bez zmian.            */
+int readBatteryRaw() {
+  int v[5];
+  for (int i = 0; i < 5; i++) { v[i] = analogRead(PIN_BATTERY); delay(3); }
+  for (int i = 0; i < 4; i++)
+    for (int j = i + 1; j < 5; j++)
+      if (v[j] < v[i]) { int t = v[i]; v[i] = v[j]; v[j] = t; }
+  return v[2];
 }
-</style>
-</head>
-<body>
 
-<!-- ═══════════════ EKRAN POWITALNY ═══════════════
-     Widoczny przez ułamek sekundy, zanim Firebase odtworzy zapisaną sesję.
-     Bez niego przy każdym uruchomieniu mrugałby ekran logowania i wyglądałoby
-     to, jakby aplikacja Cię wylogowała.                                     -->
-<div id="splash" style="padding:calc(140px + env(safe-area-inset-top)) 24px 0;text-align:center">
-  <div id="splashPill"></div>
-  <div style="margin-top:18px;font-size:15px;color:var(--dim2)">PillBox</div>
-</div>
+/* ---------------------------------------------------------------------
+   KRZYWA ROZLADOWANIA OGNIWA LiPo
 
-<!-- ═══════════════ LOGOWANIE ═══════════════ -->
-<div id="login" class="hide" style="padding:calc(56px + env(safe-area-inset-top)) 24px 40px;max-width:420px;margin:0 auto">
-  <div style="text-align:center;margin-bottom:26px" id="loginPill"></div>
-  <!-- NAZWA-EKRAN-LOGOWANIA -->
-  <h1 style="font-size:24px;margin:0 0 6px;text-align:center;font-weight:700">PillBox</h1>
-  <p class="muted" style="text-align:center;margin-top:0">Zaloguj się, żeby zobaczyć kalendarz.</p>
-  <label>E-mail</label><input id="email" type="email" autocomplete="username" inputmode="email">
-  <label>Hasło</label><input id="pass" type="password" autocomplete="current-password">
-  <p id="loginErr" style="color:var(--bad);font-size:13px;min-height:18px"></p>
-  <button class="primary" style="width:100%" onclick="doLogin()">Zaloguj</button>
-</div>
+   Ogniwo litowo-polimerowe NIE rozladowuje sie liniowo. Z 4,20 V spada do
+   okolic 4,00 V bardzo szybko, potem przez wieksza czesc pojemnosci tkwi
+   miedzy 3,85 a 3,75 V, a pod koniec leci gwaltownie w dol. Rozciagniecie
+   prostej od 3,3 do 4,2 V dawalo wiec wskazanie, ktore na gorze pedzilo,
+   w srodku stalo, a na dole klamalo grubo na plus: przy 3,70 V pokazywalo
+   44%, choc realnie zostawalo kilkanascie procent.
 
-<!-- ═══════════════ APLIKACJA ═══════════════ -->
-<div id="app" class="hide">
-<header>
-  <div class="ttl">
-    <h1 id="hTitle">Kalendarz</h1>
-    <div class="sub" id="hSub">—</div>
-  </div>
-  <button id="refreshBtn" onclick="odswiez()" aria-label="Odśwież"
-          style="padding:8px 10px;background:transparent;border:1px solid var(--line)">
-    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-         stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 3v6h-6"/></svg>
-  </button>
-  <span class="chip" id="batChip">–</span>
-</header>
+   To nie byla tylko kosmetyka. Prog ostrzegawczy 10% wypadal przy 3,39 V,
+   czyli tuz nad napieciem odciecia - sygnal "naladuj mnie" odzywal sie
+   praktycznie w chwili, gdy pudelko i tak juz zasypialo. Teraz 10% to
+   ok. 3,69 V, czyli ostrzezenie z realnym wyprzedzeniem.
 
-<main>
-
-<!-- ─────────── KALENDARZ ─────────── -->
-<section id="tab-cal">
-
-  <!-- Ostrzeżenie: wieczko zostało otwarte. Ukryte, dopóki pudełko nie
-       zgłosi boxOpen=true. Celowo nad wszystkim innym.                -->
-  <div class="card hide" id="openWarn"
-       style="border-color:var(--warn);background:rgba(251,191,36,.10)">
-    <div class="row" style="gap:12px;align-items:center">
-      <div style="font-size:26px;line-height:1">🔓</div>
-      <div style="min-width:0">
-        <b style="color:var(--warn)">Pudełko jest otwarte</b>
-        <div class="dim2" id="openWarnWhen" style="margin-top:2px"></div>
-      </div>
-    </div>
-  </div>
-
-  <div class="card" id="todayCard">
-    <div class="row between" style="align-items:flex-start">
-      <div>
-        <div class="dim2" style="text-transform:uppercase;letter-spacing:.06em;font-weight:600">Dzisiaj</div>
-        <div id="todayState" style="font-size:19px;font-weight:650;margin-top:3px;line-height:1.25">—</div>
-        <div class="muted" id="todayWhen"></div>
-      </div>
-      <div class="pillrow" id="todayPill" style="min-height:0;margin:0"></div>
-    </div>
-    <div class="dim2 hide" id="nightHint" style="margin-top:10px;padding-top:10px;
-         border-top:1px solid var(--line);font-size:12.5px"></div>
-  </div>
-
-  <div class="card">
-    <div class="calhead">
-      <button class="ghost" onclick="shiftMonth(-1)">‹</button>
-      <b id="monthLbl"></b>
-      <button class="ghost" onclick="shiftMonth(1)">›</button>
-    </div>
-    <div class="grid" id="dowRow"></div>
-    <div class="grid" id="calGrid" style="margin-top:6px"></div>
-    <div class="legend">
-      <span><i style="background:var(--ok)"></i>pełna dawka</span>
-      <span><i style="background:var(--warn)"></i>mniejsza dawka</span>
-      <span><i style="background:var(--bad)"></i>nie wzięte</span>
-      <span><svg width="10" height="10" viewBox="0 0 10 10"><circle cx="5" cy="5" r="4"
-        fill="rgba(167,139,250,.25)" stroke="#a78bfa" stroke-width="1.6"/></svg>pomiar INR</span>
-    </div>
-    <hr class="sep">
-    <div class="row between">
-      <span class="muted">Skuteczność w tym miesiącu</span>
-      <b id="adherence" style="font-size:17px">–</b>
-    </div>
-  </div>
-
-  <!-- ZAPAS TABLETEK -->
-  <div class="card">
-    <div class="row between" style="align-items:flex-start">
-      <div>
-        <h3>Zapas w opakowaniu</h3>
-        <div class="muted" id="pillsSub">—</div>
-      </div>
-      <div style="text-align:right">
-        <div id="pillsBig" style="font-size:32px;font-weight:750;line-height:1">–</div>
-        <div class="dim2">tabletek</div>
-      </div>
-    </div>
-    <div class="bar" style="margin-top:12px"><div id="pillsBar"></div></div>
-    <div class="pillpad">
-      <button class="minus" onclick="addPills(-10)">−10</button>
-      <button class="minus" onclick="addPills(-1)">−1</button>
-      <button class="minus" onclick="addPills(-0.5)">−½</button>
-      <button class="plus"  onclick="addPills(1)">+1</button>
-      <button class="plus"  onclick="addPills(10)">+10</button>
-      <button class="plus"  onclick="addPills(100)">+100</button>
-    </div>
-    <button class="ghost" style="width:100%;margin-top:8px" onclick="setPills()">Ustaw dokładną liczbę</button>
-  </div>
-
-  <!-- STAN PUDEŁKA -->
-  <div class="card">
-    <div class="row between" style="align-items:flex-start">
-      <div>
-        <h3>Pudełko</h3>
-        <div id="batBig" style="font-size:30px;font-weight:750;line-height:1.15">–</div>
-        <div class="muted" id="batVolt"></div>
-      </div>
-      <div class="batt"><div class="battfill" id="battFill"></div></div>
-    </div>
-    <div class="bar" style="margin-top:12px"><div id="batBar"></div></div>
-    <div class="dim2" id="batEta" style="margin-top:8px"></div>
-    <hr class="sep">
-    <div class="row between"><span class="muted">Ostatnia aktualizacja</span>
-      <b id="lastSync" style="font-size:13.5px">–</b></div>
-    <div class="dim2" id="lastSyncRel" style="text-align:right"></div>
-    <div id="queueInfo" style="margin-top:8px;font-size:13px"></div>
-  </div>
-</section>
-
-<!-- ─────────── INR ─────────── -->
-<section id="tab-inr" class="hide">
-
-  <div class="card">
-    <div class="row between" style="align-items:flex-start">
-      <div style="min-width:0">
-        <div class="dim2" style="text-transform:uppercase;letter-spacing:.06em;font-weight:600">Ostatni pomiar</div>
-        <div class="inrbig" id="inrLast">–</div>
-        <div id="inrLastWhen" class="muted"></div>
-      </div>
-      <div style="text-align:right;flex:none">
-        <div class="chip" id="inrBadge">—</div>
-        <div class="dim2" style="margin-top:8px" id="inrRangeLbl"></div>
-      </div>
-    </div>
-  </div>
-
-  <!-- DODAWANIE POMIARU — najważniejsza rzecz na tym ekranie -->
-  <div class="card" id="inrAddCard" style="border-color:rgba(94,234,212,.35)">
-    <div class="row between">
-      <h3 style="margin:0">Dodaj pomiar</h3>
-      <span class="dim2">data + wynik</span>
-    </div>
-    <div class="pair">
-      <div><label>Data pomiaru</label><input type="date" id="inrDate"></div>
-      <div><label>Wynik INR</label>
-        <input type="number" id="inrVal" step="0.1" min="0.5" max="12"
-               inputmode="decimal" placeholder="2,4"></div>
-    </div>
-    <input id="inrNote" placeholder="Notatka, np. dzień po antybiotyku" style="margin-top:10px">
-    <button class="primary" style="width:100%;margin-top:14px;padding:14px;font-size:15px"
-            onclick="addInr()">＋  Zapisz pomiar</button>
-    <div id="inrAddMsg" class="dim2" style="text-align:center;margin-top:8px;min-height:15px"></div>
-  </div>
-
-  <div class="card">
-    <h3>Przebieg</h3>
-    <div class="muted" style="margin-bottom:8px">Zielone pasmo to Twój zakres terapeutyczny.</div>
-    <div id="inrChart"></div>
-  </div>
-
-  <div class="card">
-    <h3>Historia pomiarów</h3>
-    <div class="inrlist" id="inrList" style="margin-top:6px"></div>
-  </div>
-</section>
-
-<!-- ─────────── ANALIZA ─────────── -->
-<section id="tab-ana" class="hide">
-
-  <div class="card">
-    <div class="row between">
-      <h3 style="margin:0">Okres analizy</h3>
-      <select id="anRange" onchange="renderAnalysis()" style="width:auto;padding:8px 10px;font-size:13px">
-        <option value="30">30 dni</option>
-        <option value="90" selected>3 miesiące</option>
-        <option value="180">6 miesięcy</option>
-        <option value="365">rok</option>
-      </select>
-    </div>
-    <div class="stats">
-      <div class="stat"><div class="sv" id="anAdh">–</div><div class="sl">regularność</div>
-        <div class="dim2" id="anAdhSub"></div></div>
-      <div class="stat"><div class="sv" id="anMedian">–</div><div class="sl">typowa godzina</div>
-        <div class="dim2" id="anMedianSub"></div></div>
-      <div class="stat"><div class="sv" id="anSpread">–</div><div class="sl">rozrzut</div>
-        <div class="dim2" id="anSpreadSub"></div></div>
-      <div class="stat"><div class="sv" id="anPunct">–</div><div class="sl">punktualność</div>
-        <div class="dim2" id="anPunctSub"></div></div>
-    </div>
-    <div id="anDrift" style="margin-top:14px;font-size:13.5px;line-height:1.6"></div>
-  </div>
-
-  <div class="card">
-    <h3>O której bierzesz lek</h3>
-    <div class="muted" style="margin-bottom:6px">Liczba dni w każdej godzinie. Turkusowy słupek to godzina zaplanowana.</div>
-    <div id="anHours"></div>
-  </div>
-
-  <div class="card">
-    <h3>Dni tygodnia</h3>
-    <div class="muted" style="margin-bottom:6px">Procent dni, w których lek został wzięty.</div>
-    <div id="anDow"></div>
-    <div id="anDowHint" style="margin-top:8px;font-size:13.5px"></div>
-  </div>
-
-  <div class="card">
-    <h3>INR a regularność</h3>
-    <div class="muted" style="margin-bottom:8px">Co działo się w tygodniu poprzedzającym każdy pomiar.</div>
-    <div id="anInr"></div>
-  </div>
-</section>
-
-<!-- ─────────── USTAWIENIA ─────────── -->
-<section id="tab-set" class="hide">
-
-  <div class="card">
-    <h3>Lek i dawkowanie</h3>
-    <label>Nazwa leku</label><input id="drugName" placeholder="Warfin">
-    <label>Moc tabletki</label>
-    <select id="drugStrength">
-      <option value="5">5 mg — tabletka różowa</option>
-      <option value="3">3 mg — tabletka niebieska</option>
-      <option value="0">inna — tabletka biała</option>
-    </select>
-    <label>Standardowa dawka dzienna (tabletki)</label>
-    <input id="defDose" type="number" step="0.5" min="0.5" inputmode="decimal">
-    <label>Godzina przypomnienia</label>
-    <div id="slotEditor"></div>
-    <div class="row" style="margin-top:10px">
-      <button class="ghost" onclick="addSlot()">+ Dodaj godzinę</button>
-      <button class="primary" style="flex:1" onclick="saveConfig()">Zapisz</button>
-    </div>
-    <label>Strefa czasowa (minuty od UTC)</label>
-    <input id="tzInput" type="number" step="15" inputmode="numeric">
-  </div>
-
-  <div class="card">
-    <h3>Zakres terapeutyczny INR</h3>
-    <div class="muted">Ustala go lekarz prowadzący. Najczęściej 2,0–3,0.</div>
-    <div class="pair" style="grid-template-columns:minmax(0,1fr) minmax(0,1fr)">
-      <div><label>Od</label><input id="inrMin" type="number" step="0.1" inputmode="decimal"></div>
-      <div><label>Do</label><input id="inrMax" type="number" step="0.1" inputmode="decimal"></div>
-    </div>
-    <button class="primary" style="width:100%;margin-top:12px" onclick="saveInrRange()">Zapisz zakres</button>
-  </div>
-
-  <div class="card">
-    <h3>Raport dla lekarza</h3>
-    <div class="muted">Przyjmowanie leku i wyniki INR w jednym dokumencie.</div>
-    <label>Zakres</label>
-    <select id="repRange">
-      <option value="30">ostatnie 30 dni</option>
-      <option value="90" selected>ostatnie 3 miesiące</option>
-      <option value="180">ostatnie 6 miesięcy</option>
-      <option value="365">ostatni rok</option>
-    </select>
-    <div class="row" style="margin-top:12px">
-      <button class="primary" style="flex:1" onclick="makeReport()">Drukuj / zapisz PDF</button>
-      <button class="ghost" onclick="exportCsv()">CSV</button>
-    </div>
-    <div class="dim2" style="margin-top:8px">
-      Na iPhonie: <i>Drukuj</i> → rozsuń podgląd dwoma palcami → <i>Udostępnij</i> → <i>Zapisz w plikach</i>.
-    </div>
-  </div>
-
-  <div class="card">
-    <h3>Urządzenie</h3>
-    <div class="muted" id="devInfo" style="margin-top:6px"></div>
-    <button class="ghost" style="margin-top:14px;width:100%" onclick="reconcile()">Przelicz kalendarz ze zdarzeń</button>
-    <button class="ghost" style="margin-top:8px;width:100%" onclick="fbSignOut()">Wyloguj</button>
-    <div class="dim2" style="margin-top:14px;text-align:center">
-      Wersja aplikacji: <span id="appVersion">—</span>
-    </div>
-  </div>
-</section>
-</main>
-
-<nav>
-  <button id="nav-cal" class="act" onclick="showTab('cal')">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round">
-      <rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18"/></svg>Kalendarz</button>
-  <button id="nav-inr" onclick="showTab('inr')">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M3 14l4.5-5 3.5 4 3-7 4 8h3"/></svg>INR</button>
-  <button id="nav-ana" onclick="showTab('ana')">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round">
-      <path d="M4 20V11M9.5 20V5M15 20v-6M20.5 20V8"/></svg>Analiza</button>
-  <button id="nav-set" onclick="showTab('set')">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round">
-      <circle cx="12" cy="12" r="3.2"/>
-      <path d="M12 2.5v2.6M12 18.9v2.6M21.5 12h-2.6M5.1 12H2.5M18.7 5.3l-1.8 1.8M7.1 16.9l-1.8 1.8M18.7 18.7l-1.8-1.8M7.1 7.1L5.3 5.3"/></svg>Ustawienia</button>
-</nav>
-</div>
-
-<!-- ═══════════════ ARKUSZ DNIA ═══════════════ -->
-<div class="sheet" id="sheet" onclick="if(event.target===this)closeSheet()">
-  <div>
-    <div class="grab"></div>
-    <div class="row between" style="margin-bottom:6px">
-      <b id="sheetDate" style="font-size:17px"></b>
-      <button class="ghost" style="padding:7px 12px" onclick="closeSheet()">Zamknij</button>
-    </div>
-    <div id="sheetBody"></div>
-  </div>
-</div>
-
-<!-- ═══════════════ POTWIERDZENIE ═══════════════ -->
-<div class="sheet" id="confirm">
-  <div style="border-radius:22px;margin:0 12px 12px;max-width:420px">
-    <div class="grab"></div>
-    <b id="cfTitle" style="font-size:17px"></b>
-    <p class="muted" id="cfText" style="margin:8px 0 18px"></p>
-    <div class="row">
-      <button class="ghost" style="flex:1" onclick="cfResolve(false)">Anuluj</button>
-      <button class="primary" style="flex:1" onclick="cfResolve(true)" id="cfOk">Tak, zmień</button>
-    </div>
-  </div>
-</div>
-
-<div id="report"></div>
-
-<script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut,
-         setPersistence, indexedDBLocalPersistence, browserLocalPersistence }
-  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { getDatabase, ref, onValue, set, update, remove, query, orderByChild,
-         limitToLast, goOnline, get }
-  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
-
-/* ═══════════════════════════════════════════════════════════════
- *  KONFIGURACJA — wklej z Firebase Console → Ustawienia projektu
- * ═══════════════════════════════════════════════════════════════ */
-const firebaseConfig = {
-  apiKey:            "AIzaSyD7YwKvgn8PmqNKcxUEPdc8i6oJShgOkKg",
-  authDomain:        "pudelko-na-leki.firebaseapp.com",
-  databaseURL:       "https://pudelko-na-leki-default-rtdb.europe-west1.firebasedatabase.app",
-  projectId:         "pudelko-na-leki",
-  storageBucket:     "pudelko-na-leki.firebasestorage.app",
-  messagingSenderId: "122871594657",
-  appId:             "1:122871594657:web:b35f059bf46c50a0bb7ae0"
+   Punkty ponizej to typowa krzywa spoczynkowa ogniwa LiPo przy malym
+   obciazeniu - a takie wlasnie mamy, bo pomiar robimy przed wlaczeniem
+   radia. Miedzy punktami interpolujemy liniowo.
+   --------------------------------------------------------------------- */
+/* @extract-begin */
+struct BattCurvePoint { float v; uint8_t pct; };
+static const BattCurvePoint BATT_CURVE[] = {
+  {4.20f,100}, {4.15f, 95}, {4.11f, 90}, {4.08f, 85}, {4.02f, 80},
+  {3.98f, 75}, {3.95f, 70}, {3.91f, 65}, {3.87f, 60}, {3.85f, 55},
+  {3.84f, 50}, {3.82f, 45}, {3.80f, 40}, {3.79f, 35}, {3.77f, 30},
+  {3.75f, 25}, {3.73f, 20}, {3.71f, 15}, {3.69f, 10}, {3.61f,  5},
+  {3.27f,  0}
 };
-const DEVICE_ID = "pillbox01";
+static const int BATT_CURVE_N = sizeof(BATT_CURVE) / sizeof(BATT_CURVE[0]);
+/* @extract-end */
 
-/* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
-   plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
-   TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-01.7";
-/* ═══════════════════════════════════════════════════════════════ */
-
-const app  = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db   = getDatabase(app);
-
-/* ───────── Trwałe logowanie ─────────
-   Sesja ma przeżyć zamknięcie aplikacji i restart telefonu. IndexedDB jest
-   na iOS najtrwalsze; localStorage to zapas, gdyby było niedostępne.
-   Dodatkowo prosimy system, żeby nie kasował naszych danych przy
-   sprzątaniu pamięci — bez tego iOS potrafi je usunąć po dłuższej przerwie. */
-const authReady = setPersistence(auth, indexedDBLocalPersistence)
-  .catch(() => setPersistence(auth, browserLocalPersistence))
-  .catch(() => {});
-
-if (navigator.storage?.persist) navigator.storage.persist().catch(()=>{});
-
-let uid = null;
-let cfg = { schedule:["08:00"], tzOffsetMin:120, defaultDose:1,
-            drugName:"Warfin", drugStrength:5, inrMin:2.0, inrMax:3.0 };
-let doses = {};      // { "2026-07-31": { "0": {dose, status, source, ts, note} } }
-let inr   = {};      // { "2026-07-20": { value, ts, note } }
-let events = [];
-let viewYear, viewMonth, sheetDate = null, pendingDose = null;
-
-/* ───────── narzędzia ───────── */
-
-/* Granica doby lekowej. MUSI być tą samą liczbą co DAY_START_HOUR
-   w firmware/PillBox/config.h — inaczej pudełko i telefon liczyłyby dni
-   inaczej i kalendarz by się rozjechał.
-
-   Sens: tabletka wzięta o 01:30 należy jeszcze do dnia poprzedniego.
-   Dzięki temu nocna dawka nie wygląda jak podwójna dawka nazajutrz,
-   a wczorajszy dzień nie robi się czerwony, dopóki naprawdę nie minie. */
-const DAY_START_HOUR = 3;
-
-const pad = n => String(n).padStart(2,"0");
-const dateKey = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
-
-/* Data kalendarzowa przesunięta o granicę doby — czyli „do którego dnia
-   lekowego należy ten moment”. */
-const medDate = d => new Date(d.getTime() - DAY_START_HOUR*3600*1000);
-const todayKey = () => dateKey(medDate(new Date()));
-
-/* Czy trwa jeszcze wczorajsza doba (jest po północy, ale przed granicą)? */
-const inNightWindow = () => new Date().getHours() < DAY_START_HOUR;
-const nf = n => (Math.round(n*100)/100).toString().replace(".", ",");
-const esc = s => String(s??"").replace(/[<>&"]/g, c => ({"<":"&lt;",">":"&gt;","&":"&amp;",'"':"&quot;"}[c]));
-
-function devDate(ts){ return new Date((ts + cfg.tzOffsetMin*60) * 1000); }
-
-/* Do którego DNIA LEKOWEGO należy zdarzenie z pudełka. Odejmujemy granicę
-   doby, więc otwarcie o 02:00 trafia do dnia poprzedniego — dokładnie tak,
-   jak liczy to localDayNumber() w firmware. */
-function devKey(ts){ const d = devDate(ts - DAY_START_HOUR*3600);
-  return `${d.getUTCFullYear()}-${pad(d.getUTCMonth()+1)}-${pad(d.getUTCDate())}`; }
-
-/* Godzina otwarcia — prawdziwa, zegarowa, BEZ przesunięcia doby.
-   (devHM poniżej korzysta z devDate, nie z devKey — i tak ma zostać.) */
-function devHM(ts){ const d = devDate(ts); return `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`; }
-function slotMin(h){ return +h.slice(0,2)*60 + +h.slice(3,5); }
-
-function pillColors(){
-  const s = +cfg.drugStrength;
-  if (s === 5) return { fill:"#f0a6c0", edge:"#d9799c" };   // Warfin 5 mg — różowa
-  if (s === 3) return { fill:"#8ab4f8", edge:"#5b8ede" };   // Warfin 3 mg — niebieska
-  return { fill:"#e6ebf5", edge:"#a9b6cc" };                // inna — biała
+int battPercentFromCurve(float v) {
+  if (v >= BATT_CURVE[0].v)              return 100;
+  if (v <= BATT_CURVE[BATT_CURVE_N-1].v) return 0;
+  for (int i = 1; i < BATT_CURVE_N; i++) {
+    if (v >= BATT_CURVE[i].v) {
+      const BattCurvePoint& hi = BATT_CURVE[i-1];
+      const BattCurvePoint& lo = BATT_CURVE[i];
+      float t = (v - lo.v) / (hi.v - lo.v);
+      int p = (int)lround(lo.pct + t * (float)(hi.pct - lo.pct));
+      return p < 0 ? 0 : (p > 100 ? 100 : p);
+    }
+  }
+  return 0;
 }
 
-/* ═══════════════════════════════════════════════════════════════
- *  TABLETKA — rysowana, z nacięciem krzyżowym jak Warfin.
- *  Wypełnienie odpowiada dawce: pusta = 0, pół = 0,5, pełna = 1.
- * ═══════════════════════════════════════════════════════════════ */
-function tabletSVG(fraction, size=54, idx=0){
-  const c = pillColors(), r = size/2 - 3, cx = size/2, cy = size/2;
-  const f = Math.max(0, Math.min(1, fraction));
-  const cid = `clip${idx}_${Math.round(f*100)}_${size}`;
-  return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
-    <defs>
-      <clipPath id="${cid}"><rect x="0" y="0" width="${size*f}" height="${size}"/></clipPath>
-      <radialGradient id="g${cid}" cx="35%" cy="30%">
-        <stop offset="0%" stop-color="#fff" stop-opacity=".55"/>
-        <stop offset="100%" stop-color="#fff" stop-opacity="0"/>
-      </radialGradient>
-    </defs>
-    <circle cx="${cx}" cy="${cy}" r="${r}" fill="none"
-            stroke="${c.edge}" stroke-width="2" stroke-dasharray="${f<1?'3 3':'0'}" opacity="${f>0?1:.5}"/>
-    <g clip-path="url(#${cid})">
-      <circle cx="${cx}" cy="${cy}" r="${r}" fill="${c.fill}" stroke="${c.edge}" stroke-width="2"/>
-      <circle cx="${cx}" cy="${cy}" r="${r}" fill="url(#g${cid})"/>
-      <path d="M${cx} ${cy-r+3.5} V${cy+r-3.5} M${cx-r+3.5} ${cy} H${cx+r-3.5}"
-            stroke="${c.edge}" stroke-width="1.3" opacity=".65"/>
-    </g>
-  </svg>`;
-}
+/* Wygladzanie miedzy wybudzeniami.
 
-/* Rysuje dawkę jako zestaw tabletek (max 4, potem "×N"). */
-function doseGraphic(dose, size=54){
-  if (dose <= 0) return tabletSVG(0, size, 9) +
-    `<span class="dim2" style="align-self:center;margin-left:6px">brak</span>`;
-  if (dose > 4) return tabletSVG(1, size, 8) +
-    `<b style="align-self:center;font-size:20px;margin-left:6px">× ${nf(dose)}</b>`;
-  let out = "", left = dose, i = 0;
-  while (left > 0.001 && i < 4){ out += tabletSVG(Math.min(1,left), size, i); left -= 1; i++; }
+   Dwa problemy naraz. Po pierwsze szum ADC: w plaskiej czesci krzywej
+   10 mV to az 3 punkty procentowe, wiec surowy odczyt "tanczy". Po drugie
+   wskazanie skaczace w gore i w dol wyglada jak awaria.
+
+   Rozwiazanie: ograniczamy krok. Miedzy dwoma wybudzeniami wskazanie moze
+   spasc najwyzej o BATT_STEP_DOWN punktow i urosnac najwyzej o
+   BATT_STEP_UP. Przy realnym zuzyciu rzedu 1% na dobe to i tak z duzym
+   zapasem, a pojedynczy zanizony pomiar przesuwa wskazanie o kilka
+   punktow zamiast o dwadziescia.
+
+   Ruch w gore jest celowo dopuszczony, choc bateria sama sie nie laduje.
+   Bez tego kazde chwilowe zaklocenie zostawaloby w pamieci na zawsze i
+   wskazanie dryfowaloby coraz nizej. Jeden punkt na wybudzenie jest zbyt
+   powolny, zeby wygladac na awarie, a wystarcza, by blad sam sie zagoil.
+   Prawdziwe ladowanie obslugujemy osobno - patrz resetBatteryFilter.   */
+void resetBatteryFilter() { rtcBattPct = 255; }
+
+int battSmooth(int raw) {
+  if (rtcBattPct == 255) { rtcBattPct = (uint8_t)raw; return raw; }
+  int prev = rtcBattPct;
+  int out  = raw;
+  if (out > prev + BATT_STEP_UP)   out = prev + BATT_STEP_UP;
+  if (out < prev - BATT_STEP_DOWN) out = prev - BATT_STEP_DOWN;
+  if (out < 0)   out = 0;
+  if (out > 100) out = 100;
+  rtcBattPct = (uint8_t)out;
   return out;
 }
 
-/* ═══════════════ LOGOWANIE ═══════════════ */
-document.getElementById("loginPill").innerHTML  = tabletSVG(1, 76, 99);
-document.getElementById("splashPill").innerHTML = tabletSVG(1, 64, 98);
+void readBattery() {
+  pinMode(PIN_BATTERY, INPUT);
+  analogReadResolution(12);
+  analogSetPinAttenuation(PIN_BATTERY, ADC_11db);
+  delay(5);
+  (void)analogRead(PIN_BATTERY);            // odczyt "na sucho", stabilizacja S/H
 
-window.doLogin = async () => {
-  const err = document.getElementById("loginErr");
-  err.textContent = "";
-  try {
-    await authReady;                      // najpierw ustaw trwałą sesję
-    await signInWithEmailAndPassword(auth,
-      document.getElementById("email").value.trim(),
-      document.getElementById("pass").value);
-  } catch(e){ err.textContent = "Nie udało się zalogować."; }
-};
+  /* --- pomiar napiecia: matematyka bez zmian, zgodna ze specyfikacja --- */
+  int rawValue = readBatteryRaw();
+  float pinVoltage = (rawValue / 4095.0) * 3.3;
+  float rawBatteryVoltage = pinVoltage * 2.0;
+  // Wyliczony empirycznie wspolczynnik kalibracji (4.20V / 4.56V)
+  const float CALIBRATION_FACTOR = 0.921;
+  realBatteryVoltage = rawBatteryVoltage * CALIBRATION_FACTOR;
 
-window.fbSignOut = async () => {
-  const ok = await askConfirm("Wylogować się?",
-    "Przy następnym uruchomieniu trzeba będzie podać e-mail i hasło. " +
-    "Normalnie nie musisz się wylogowywać — sesja jest zapamiętana.");
-  if (ok) signOut(auth);
-};
+  /* --- przeliczenie na procent: krzywa LiPo zamiast prostej --- */
+  batteryRawPercentage = battPercentFromCurve(realBatteryVoltage);
+  batteryPercentage    = battSmooth(batteryRawPercentage);
 
-onAuthStateChanged(auth, u => {
-  document.getElementById("splash").classList.add("hide");
-  if (!u){ uid=null; document.getElementById("login").classList.remove("hide");
-           document.getElementById("app").classList.add("hide"); return; }
-  uid = u.uid;
-  document.getElementById("login").classList.add("hide");
-  document.getElementById("app").classList.remove("hide");
-  boot();
-});
-
-/* ═══════════════ START ═══════════════ */
-function boot(){
-  /* Otwieramy miesiac biezacej doby lekowej. Tuz po polnocy pierwszego dnia
-     miesiaca inaczej pokazalby sie nowy miesiac, a podswietlony dzien
-     lezalby w poprzednim - czyli poza ekranem.                         */
-  const now = medDate(new Date());
-  viewYear = now.getFullYear(); viewMonth = now.getMonth();
-  document.getElementById("inrDate").value = todayKey();
-
-  onValue(ref(db, `devices/${DEVICE_ID}/config`), s => {
-    if (s.val()) cfg = Object.assign(cfg, s.val());
-    renderSettings(); renderAll();
-  });
-  onValue(ref(db, `devices/${DEVICE_ID}/status`), s => renderStatus(s.val()));
-  onValue(query(ref(db, `devices/${DEVICE_ID}/events`), orderByChild("ts"), limitToLast(400)), s => {
-    events = []; s.forEach(c => events.push(Object.assign({id:c.key}, c.val())));
-    events.sort((a,b)=>b.ts-a.ts);
-    doReconcile(true);          // automatycznie, bez komunikatow
-  });
-  onValue(ref(db, `users/${uid}/doses`), s => {
-    doses = s.val() || {}; renderAll(); settlePills();
-  });
-  onValue(ref(db, `users/${uid}/inr`), s => { inr = s.val() || {}; renderAll(); });
-
-  /* ───────── Odświeżanie po powrocie do aplikacji ─────────
-     iOS usypia JavaScript, gdy schowasz aplikację, i zrywa połączenie
-     z Firebase. Po powrocie trzeba je jawnie wznowić — bez tego trzeba
-     było zamykać i otwierać aplikację, żeby zobaczyć nowe dane.        */
-  const wakeUp = async () => {
-    if (document.hidden || !uid) return;
-    try {
-      goOnline(db);                       // wznów nasłuch w czasie rzeczywistym
-      /* Jednorazowy odczyt „na już" — nie czekamy, aż serwer sam się odezwie. */
-      const [st, ev, ds, ir, cf] = await Promise.all([
-        get(ref(db, `devices/${DEVICE_ID}/status`)),
-        get(query(ref(db, `devices/${DEVICE_ID}/events`), orderByChild("ts"), limitToLast(400))),
-        get(ref(db, `users/${uid}/doses`)),
-        get(ref(db, `users/${uid}/inr`)),
-        get(ref(db, `devices/${DEVICE_ID}/config`))
-      ]);
-      if (cf.val()) cfg = Object.assign(cfg, cf.val());
-      events = []; ev.forEach(c => events.push(Object.assign({ id:c.key }, c.val())));
-      events.sort((a,b) => b.ts - a.ts);
-      doses = ds.val() || {};
-      inr   = ir.val() || {};
-      renderStatus(st.val());
-      renderSettings(); renderAll();
-      doReconcile(true);
-    } catch (e) { console.error("odswiezanie:", e); }
-  };
-  document.addEventListener("visibilitychange", wakeUp);
-  window.addEventListener("focus", wakeUp);
-  window.addEventListener("pageshow", wakeUp);
-  setInterval(wakeUp, 5 * 60 * 1000);     // siatka bezpieczeństwa
-  window.odswiez = wakeUp;
+  LOG("[BAT] raw=%d  U=%.3fV  %d%% (z krzywej %d%%)\n",
+      rawValue, realBatteryVoltage, batteryPercentage, batteryRawPercentage);
 }
 
-function renderAll(){
-  renderCalendar(); renderToday(); renderPills(); renderInr();
-  if (curTab === "ana") renderAnalysis();
-  /* Arkusz dnia trzeba odświeżyć razem z resztą — inaczej po zapisaniu
-     zmiany pasek „Zmiana: … → …" zostawał na ekranie mimo zapisu.      */
-  if (sheetDate && document.getElementById("sheet").classList.contains("show")) renderSheet();
+/* =====================================================================
+ *  2.  BUZZER  (pasywny piezo -> PWM przez LEDC)
+ * ===================================================================== */
+void buzzerInit() {
+#if ESP_ARDUINO_VERSION_MAJOR >= 3
+  ledcAttach(PIN_BUZZER, BUZZER_FREQ_HZ, 10);
+#else
+  ledcSetup(0, BUZZER_FREQ_HZ, 10);
+  ledcAttachPin(PIN_BUZZER, 0);
+#endif
 }
 
-/* ═══════════════ REKONCYLIACJA ═══════════════
-   Wywoływana automatycznie (cicho) po każdej zmianie zdarzeń oraz ręcznie
-   przyciskiem w Ustawieniach — wtedy z komunikatem, żeby było widać,
-   że coś się wydarzyło.                                                */
-async function doReconcile(silent = true){
-  if (!uid){ if (!silent) alert("Najpierw zaloguj się w aplikacji."); return; }
-  if (!events.length){
-    if (!silent) alert("Pudełko nie przysłało jeszcze żadnych zdarzeń.");
+void buzzerTone(uint32_t freq) {
+#if ESP_ARDUINO_VERSION_MAJOR >= 3
+  ledcWriteTone(PIN_BUZZER, freq);
+#else
+  ledcWriteTone(0, freq);
+#endif
+}
+
+void buzzerOff() {
+  buzzerTone(0);
+#if ESP_ARDUINO_VERSION_MAJOR >= 3
+  ledcWrite(PIN_BUZZER, 0);
+#else
+  ledcWrite(0, 0);
+#endif
+  pinMode(PIN_BUZZER, OUTPUT);
+  digitalWrite(PIN_BUZZER, LOW);            // brak napiecia DC na piezo = 0 mA
+}
+
+/* Krotki sygnal potwierdzenia (np. "zapisalem otwarcie"). */
+void beepAck() {
+  buzzerInit();
+  buzzerTone(BUZZER_FREQ_HZ);
+  delay(60);
+  buzzerTone(BUZZER_FREQ_HZ * 3 / 2);
+  delay(80);
+  buzzerOff();
+}
+
+/* Sygnal bledu / brak sieci - dwa niskie piknięcia. */
+void beepErr() {
+  buzzerInit();
+  for (int i = 0; i < 2; i++) { buzzerTone(700); delay(120); buzzerTone(0); delay(90); }
+  buzzerOff();
+}
+
+/* "JUZ DZIS BRALES" - opadajaca seria, wyraznie inna od potwierdzenia.
+   Piec szybkich tonow w dol + dlugi niski. Trudno pomylic z ACK.       */
+void beepAlreadyTaken() {
+  buzzerInit();
+  const uint16_t f[5] = {3000, 2600, 2200, 1800, 1400};
+  for (int r = 0; r < 2; r++) {
+    for (int i = 0; i < 5; i++) { buzzerTone(f[i]); delay(70); }
+    buzzerTone(0); delay(120);
+  }
+  buzzerTone(900); delay(400);
+  buzzerOff();
+}
+
+/* Niski zapas tabletek - trzy dlugie niskie piknięcia po potwierdzeniu. */
+void beepLowStock() {
+  buzzerInit();
+  for (int i = 0; i < 3; i++) { buzzerTone(1100); delay(250); buzzerTone(0); delay(150); }
+  buzzerOff();
+}
+
+/* "PADAM - naladuj mnie". Charakterystyczny, opadajacy zew: dwa dlugie
+   tony schodzace w dol, powtorzone. Slychac go po kazdym potwierdzeniu
+   dawki, wiec dowiesz sie o niskiej baterii bez zagladania do telefonu. */
+void beepLowBattery(bool critical) {
+  buzzerInit();
+  int reps = critical ? 3 : 2;
+  for (int r = 0; r < reps; r++) {
+    buzzerTone(1600); delay(critical ? 320 : 200);
+    buzzerTone(800);  delay(critical ? 450 : 280);
+    buzzerTone(0);    delay(200);
+  }
+  buzzerOff();
+}
+
+/* "ZOSTAWILES MNIE OTWARTE" - jeden rowny, dluzszy ton.
+   Celowo nie jest to melodia ani seria: wszystkie pozostale sygnaly w tym
+   urzadzeniu sa zlozone (rosnace, opadajace, powtarzane), wiec pojedynczy
+   plaski ton slychac jako cos wyraznie innego, a przy tym nie jest
+   natretny - ma przypomniec, a nie zdenerwowac.                          */
+void beepBoxOpen() {
+  buzzerInit();
+  buzzerTone(OPEN_WARN_TONE_HZ);
+  delay(OPEN_WARN_MS);
+  buzzerOff();
+}
+
+/* Potwierdzenie wykrycia ladowarki - rosnaca tercja. */
+void beepCharging() {
+  buzzerInit();
+  const uint16_t f[4] = {1400, 1800, 2300, 2900};
+  for (int i = 0; i < 4; i++) { buzzerTone(f[i]); delay(90); }
+  buzzerOff();
+}
+
+/* =====================================================================
+ *  3.  GPIO / WYBUDZANIE
+ * ===================================================================== */
+void configureInputs() {
+  pinMode(PIN_REED,   REED_MODE);
+  pinMode(PIN_BUTTON, BUTTON_MODE);
+}
+
+bool boxIsOpen()      { return digitalRead(PIN_REED)   == REED_OPEN_LEVEL; }
+bool buttonPressed()  { return digitalRead(PIN_BUTTON) == BUTTON_PRESS_LEVEL; }
+
+const char* wakeName(WakeReason w) {
+  switch (w) {
+    case WAKE_BOOT:   return "reset/wlaczenie";
+    case WAKE_REED:   return "KONTAKTRON (otwarto pudelko)";
+    case WAKE_BUTTON: return "przycisk";
+    case WAKE_TIMER:  return "timer";
+    case WAKE_CLOSED: return "zamkniecie wieczka";
+  }
+  return "?";
+}
+
+WakeReason detectWakeReason() {
+  esp_sleep_wakeup_cause_t c = esp_sleep_get_wakeup_cause();
+  switch (c) {
+    case ESP_SLEEP_WAKEUP_TIMER:
+      return WAKE_TIMER;
+    case ESP_SLEEP_WAKEUP_GPIO: {
+      /* Pytamy uklad, KTORY pin nas obudzil, zamiast zgadywac z biezacego
+         stanu wejsc.
+
+         Poprzednia wersja odczytywala piny dopiero tutaj - a od wybudzenia
+         do tego miejsca mija ponad sekunda (start rdzenia, Serial, pomiar
+         baterii). Jesli otworzyles pudelko, wzialeś tabletke i zamknales
+         je w dwie sekundy, kontaktron byl juz z powrotem w stanie
+         spoczynkowym. Przycisk tez nie byl wcisniety, wiec kod wybieral
+         ostatnia galaz: "krotkie tapniecie przycisku" - i zamiast zapisac
+         dawke, pudelko wchodzilo na piec minut w tryb konfiguracji WiFi.
+         Stad brak wpisu w aplikacji i brak ostrzegawczego pikniecia.
+
+         Rejestr wybudzenia jest zatrzaskiwany sprzetowo w chwili zdarzenia,
+         wiec nie ma znaczenia, jak szybko zamknales wieczko.            */
+      uint64_t src = 0;
+#if defined(SOC_GPIO_SUPPORT_DEEPSLEEP_WAKEUP) && SOC_GPIO_SUPPORT_DEEPSLEEP_WAKEUP
+      src = esp_sleep_get_gpio_wakeup_status();
+#endif
+      LOG("[WAKE] maska zrodel: 0x%08lX  (kontaktron=GPIO%d, przycisk=GPIO%d)\n",
+          (unsigned long)src, GPIO_REED, GPIO_BUTTON);
+
+      if (src & (1ULL << GPIO_REED))
+        return rtcArmedForClose ? WAKE_CLOSED : WAKE_REED;
+      if (src & (1ULL << GPIO_BUTTON))
+        return WAKE_BUTTON;
+
+      /* Maska pusta - awaryjnie wracamy do odczytu pinow. */
+      delay(30);                            // debounce
+      if (boxIsOpen())      return WAKE_REED;
+      if (buttonPressed())  return WAKE_BUTTON;
+      if (rtcArmedForClose) return WAKE_CLOSED;
+
+      /* Nic nie jest juz aktywne. Kontaktron byl uzbrojony na otwarcie,
+         wiec krotkie otwarcie jest duzo bardziej prawdopodobne niz
+         tapniecie ukrytego przycisku. Pomylka w te strone kosztuje jeden
+         nadmiarowy wpis; w druga - zgubiona dawke i piec minut punktu
+         dostepowego. Wybieramy tansza pomylke.                         */
+      LOGLN("[WAKE] brak maski - zakladam krotkie otwarcie pudelka");
+      return WAKE_REED;
+    }
+    default:
+      return WAKE_BOOT;                     // POWERON / RESET / USB
+  }
+}
+
+/* =====================================================================
+ *  4.  HARMONOGRAM
+ * ===================================================================== */
+void parseSchedule(const String& s) {
+  slotCount = 0;
+  int start = 0;
+  while (start < (int)s.length() && slotCount < 12) {
+    int sep = s.indexOf('|', start);
+    if (sep < 0) sep = s.length();
+    String item = s.substring(start, sep);
+    item.trim();
+    if (item.length() == 5 && item.charAt(2) == ':') slots[slotCount++] = item;
+    start = sep + 1;
+  }
+}
+
+void loadSchedule() {
+  String s = String(rtcSchedule);
+  if (s.length() < 5) {                     // zimny start -> NVS
+    prefs.begin(NVS_NAMESPACE, true);
+    s = prefs.getString("sched", DEFAULT_SCHEDULE);
+    rtcTzOffsetMin = prefs.getShort("tz", DEFAULT_TZ_OFFSET);
+    prefs.end();
+    strncpy(rtcSchedule, s.c_str(), sizeof(rtcSchedule) - 1);
+  }
+  parseSchedule(s);
+  LOG("[SCH] %s  (tz=%d min, %d slotow)\n", s.c_str(), rtcTzOffsetMin, slotCount);
+}
+
+void saveSchedule(const String& s, int16_t tz) {
+  prefs.begin(NVS_NAMESPACE, false);
+  prefs.putString("sched", s);
+  prefs.putShort("tz", tz);
+  prefs.end();
+  strncpy(rtcSchedule, s.c_str(), sizeof(rtcSchedule) - 1);
+  rtcTzOffsetMin = tz;
+  parseSchedule(s);
+}
+
+/* Czas lokalny w minutach od polnocy. */
+int localMinutesOfDay(time_t utc) {
+  time_t local = utc + (time_t)rtcTzOffsetMin * 60;
+  struct tm tmv;
+  gmtime_r(&local, &tmv);
+  return tmv.tm_hour * 60 + tmv.tm_min;
+}
+
+int slotMinutes(int i) {
+  return slots[i].substring(0, 2).toInt() * 60 + slots[i].substring(3, 5).toInt();
+}
+
+/* Dzien LEKOWY jako liczba YYYYMMDD - wygodne do porownan "czy juz dzis".
+   To nie jest zwykla data kalendarzowa. Doba lekowa konczy sie dopiero
+   o DAY_START_HOUR, wiec tabletka wzieta o 01:00 czy 02:00 nalezy jeszcze
+   do dnia poprzedniego. Odejmujemy te godziny przed odczytaniem daty -
+   caly kod porownujacy dni dostaje wtedy wlasciwa odpowiedz sam z siebie. */
+uint32_t localDayNumber(time_t utc) {
+  time_t local = utc + (time_t)rtcTzOffsetMin * 60 - (time_t)DAY_START_HOUR * 3600;
+  struct tm tmv;
+  gmtime_r(&local, &tmv);
+  return (uint32_t)(tmv.tm_year + 1900) * 10000UL + (tmv.tm_mon + 1) * 100UL + tmv.tm_mday;
+}
+
+/* Ktory slot pasuje do podanego momentu (+/- MATCH_WINDOW_MIN)? -1 = zaden. */
+int matchSlot(time_t utc) {
+  if (!rtcTimeValid || slotCount == 0) return -1;
+  int now = localMinutesOfDay(utc);
+  int best = -1, bestDiff = 100000;
+  for (int i = 0; i < slotCount; i++) {
+    int d = abs(now - slotMinutes(i));
+    if (d > 720) d = 1440 - d;              // przez polnoc
+    if (d <= MATCH_WINDOW_MIN && d < bestDiff) { bestDiff = d; best = i; }
+  }
+  return best;
+}
+
+/* Sekundy do minuty po najblizszym koncu doby LEKOWEJ (czyli po
+   DAY_START_HOUR, nie po polnocy). Wczesniejsze budzenie nie mialoby sensu:
+   o 00:01 wciaz trwa wczorajsza doba i nie ma jeszcze czego rozliczac.   */
+uint32_t secondsToDayBoundary(time_t utc) {
+  if (!rtcTimeValid) return HOUSEKEEP_MAX_S;
+  time_t shifted = utc + (time_t)rtcTzOffsetMin * 60 - (time_t)DAY_START_HOUR * 3600;
+  uint32_t secOfDay = (uint32_t)(shifted % 86400);
+  return 86400UL - secOfDay + 60UL;
+}
+
+/* =====================================================================
+ *  4b.  PUDELKO ZOSTAWIONE OTWARTE
+ *
+ *  Zamiast czuwac przez kwadrans (co zjadaloby bateria), pudelko normalnie
+ *  spi i tylko przycina dlugosc snu tak, zeby obudzic sie dokladnie na
+ *  moment sygnalu. Jedno wybudzenie to ulamek sekundy pracy procesora,
+ *  wiec pilnowanie otwartego wieczka przez cala noc kosztuje mniej niz
+ *  jedno polaczenie z WiFi.
+ * ===================================================================== */
+
+/* Ile sekund zostalo do nastepnego sygnalu ostrzegawczego. */
+uint32_t openWarnSecondsLeft() {
+  if (rtcOpenSinceTs == 0) return OPEN_WARN_FIRST_S;      // dopiero otwarto
+  if (rtcTimeValid && rtcNextWarnTs) {
+    uint32_t now = (uint32_t)time(nullptr);
+    return now >= rtcNextWarnTs ? 5 : (rtcNextWarnTs - now);
+  }
+  /* Bez wiarygodnego zegara odmierzamy dlugoscia samego snu. */
+  return rtcOpenWarnCount == 0 ? OPEN_WARN_FIRST_S : OPEN_WARN_REPEAT_S;
+}
+
+/* Wywolywane przy KAZDYM wybudzeniu, przed reszta logiki.
+   Zwraca true, jesli wlasnie zabrzmial sygnal "zostawiles mnie otwarte". */
+bool trackBoxOpen() {
+  uint32_t now = rtcTimeValid ? (uint32_t)time(nullptr) : 0;
+
+  /* --- wieczko zamkniete: kasujemy caly stan alarmowy --- */
+  if (!boxIsOpen()) {
+    if (rtcOpenSinceTs || rtcOpenWarnCount) {
+      LOG("[OPN] pudelko zamkniete (bylo otwarte, %u sygnalow)\n", rtcOpenWarnCount);
+      if (rtcOpenReported) rtcOpenClearPend = true;   // aplikacja czeka na odwolanie
+    }
+    rtcOpenSinceTs = 0; rtcNextWarnTs = 0; rtcOpenWarnCount = 0;
+    rtcOpenReported = false; rtcStuckOpen = 0;
+    return false;
+  }
+
+  /* --- pierwsze wykrycie otwarcia: tylko zapisujemy moment --- */
+  if (rtcOpenSinceTs == 0) {
+    rtcOpenSinceTs = now ? now : 1;                   // 1 = "otwarte, czas nieznany"
+    rtcNextWarnTs  = now ? now + OPEN_WARN_FIRST_S : 0;
+    LOG("[OPN] pudelko otwarte - przypomne za %d min\n", OPEN_WARN_FIRST_S / 60);
+    return false;
+  }
+
+  /* --- czy wypada juz sygnal? --- */
+  bool due = (rtcTimeValid && rtcNextWarnTs)
+               ? (now >= rtcNextWarnTs)
+               : (wakeReason == WAKE_TIMER);   // sen byl przyciety do interwalu
+  if (!due) return false;
+
+  rtcOpenWarnCount++;
+  rtcNextWarnTs = now ? now + OPEN_WARN_REPEAT_S : 0;
+
+  /* Po OPEN_WARN_MAX sygnalach milkniemy. Jesli pudelko jest otwarte od
+     kilkunastu godzin, to prawdopodobnie nie zapomnialem wieczka, tylko
+     magnes sie przesunal - dalsze pikanie niczego nie naprawi, a bateria
+     jest potrzebniejsza na przypomnienia o leku.                        */
+  if (rtcOpenWarnCount > OPEN_WARN_MAX) {
+    LOG("[OPN] otwarte od bardzo dawna (%u) - dalej pilnuje, ale juz cicho\n",
+        rtcOpenWarnCount);
+    return false;
+  }
+
+  LOG("[OPN] nadal otwarte - sygnal %u z %d\n", rtcOpenWarnCount, OPEN_WARN_MAX);
+  beepBoxOpen();
+  return true;
+}
+
+/* Sekundy do najblizszego slotu w przyszlosci. */
+uint32_t secondsToNextSlot(time_t utc) {
+  if (!rtcTimeValid || slotCount == 0) return HOUSEKEEP_MAX_S;
+  int now = localMinutesOfDay(utc);
+  time_t local = utc + (time_t)rtcTzOffsetMin * 60;
+  int sec = local % 60;
+  uint32_t best = 24UL * 3600UL;
+  for (int i = 0; i < slotCount; i++) {
+    int32_t d = slotMinutes(i) - now;
+    if (d <= 0) d += 1440;
+    uint32_t s = (uint32_t)d * 60UL - sec;
+    if (s < best) best = s;
+  }
+  return best;
+}
+
+/* =====================================================================
+ *  5.  KOLEJKA OFFLINE  (Preferences / NVS - pierscien)
+ *      Rekord: "ts;type;batt;volt;slot"
+ * ===================================================================== */
+void queuePush(const String& rec) {
+  prefs.begin(NVS_NAMESPACE, false);
+  uint16_t head  = prefs.getUShort("qh", 0);
+  uint16_t count = prefs.getUShort("qc", 0);
+  char key[8];
+  snprintf(key, sizeof(key), "q%u", (unsigned)((head + count) % QUEUE_CAPACITY));
+  prefs.putString(key, rec);
+  if (count < QUEUE_CAPACITY) {
+    prefs.putUShort("qc", count + 1);
+  } else {                                  // pelno -> nadpisz najstarszy
+    prefs.putUShort("qh", (head + 1) % QUEUE_CAPACITY);
+  }
+  prefs.end();
+  LOG("[QUE] zapisano offline: %s (w kolejce %u)\n", rec.c_str(), count + 1);
+}
+
+uint16_t queueCount() {
+  prefs.begin(NVS_NAMESPACE, true);
+  uint16_t c = prefs.getUShort("qc", 0);
+  prefs.end();
+  return c;
+}
+
+bool queuePeek(String& out) {
+  prefs.begin(NVS_NAMESPACE, true);
+  uint16_t head = prefs.getUShort("qh", 0);
+  uint16_t count = prefs.getUShort("qc", 0);
+  bool ok = false;
+  if (count > 0) {
+    char key[8];
+    snprintf(key, sizeof(key), "q%u", (unsigned)head);
+    out = prefs.getString(key, "");
+    ok = out.length() > 0;
+  }
+  prefs.end();
+  return ok;
+}
+
+void queuePop() {
+  prefs.begin(NVS_NAMESPACE, false);
+  uint16_t head = prefs.getUShort("qh", 0);
+  uint16_t count = prefs.getUShort("qc", 0);
+  if (count > 0) {
+    prefs.putUShort("qh", (head + 1) % QUEUE_CAPACITY);
+    prefs.putUShort("qc", count - 1);
+  }
+  prefs.end();
+}
+
+/* --- Korekta dryfu zegara po dlugim okresie offline ---------------------
+   W deep sleep czas liczy wewnetrzny oscylator RC, ktory po kilku dniach
+   potrafi uciec o kilkadziesiat minut. Gdy po powrocie sieci NTP pokaze
+   inny czas, przesuwamy o te sama roznice wszystkie zdarzenia czekajace
+   w kolejce - inaczej trafilyby w bazie na zla godzine (a przy zdarzeniu
+   tuz przed polnoca nawet na zly dzien).
+   Korekta jest plaska, wiec dla najstarszych wpisow lekko przestrzelona,
+   ale blad liczony jest w minutach, a nie godzinach.                     */
+void queueShiftTimestamps(int32_t delta) {
+  if (delta == 0 || delta > 21600 || delta < -21600) return;   // max +/- 6 h
+
+  prefs.begin(NVS_NAMESPACE, false);
+  uint16_t head  = prefs.getUShort("qh", 0);
+  uint16_t count = prefs.getUShort("qc", 0);
+  int fixed = 0;
+  for (uint16_t i = 0; i < count; i++) {
+    char key[8];
+    snprintf(key, sizeof(key), "q%u", (unsigned)((head + i) % QUEUE_CAPACITY));
+    String rec = prefs.getString(key, "");
+    int p = rec.indexOf(';');
+    if (p <= 0) continue;
+    uint32_t ts = (uint32_t)rec.substring(0, p).toInt();
+    if (ts < 1700000000UL) continue;                 // brak czasu - nie ruszamy
+    prefs.putString(key, String((unsigned long)(ts + delta)) + rec.substring(p));
+    fixed++;
+  }
+  prefs.end();
+  if (fixed) LOG("[QUE] skorygowano czas %d zdarzen o %ld s\n", fixed, (long)delta);
+}
+
+/* =====================================================================
+ *  6.  WiFi
+ * ===================================================================== */
+bool wifiConnect() {
+  if (batterySaver) {
+    LOGLN("[NET] tryb oszczedzania baterii - radio pozostaje wylaczone");
+    return false;
+  }
+  if (WiFi.status() == WL_CONNECTED) return true;
+  WiFi.persistent(true);
+  WiFi.mode(WIFI_STA);
+  WiFi.setSleep(true);                      // modem-sleep w trakcie pracy
+  WiFi.begin();                             // uzyj poswiadczen zapisanych w NVS
+
+  /* Czekamy najwyzej WIFI_TIMEOUT_MS. Chwilowa awaria routera nie moze
+     zatrzymac urzadzenia na dluzej - zdarzenie laduje w kolejce, a
+     planNextSleep() ustawia wczesniejsze wybudzenie na ponowna probe.  */
+  uint32_t t0 = millis();
+  while (WiFi.status() != WL_CONNECTED && millis() - t0 < WIFI_TIMEOUT_MS
+         && !awakeTooLong()) {
+    delay(200);
+  }
+  bool ok = WiFi.status() == WL_CONNECTED;
+  LOG("[NET] %s%s\n", ok ? "polaczono, IP=" : "BRAK POLACZENIA",
+      ok ? WiFi.localIP().toString().c_str() : "");
+
+  /* ZASADA: kazde udane polaczenie = natychmiastowe sprawdzenie godziny.
+     Zegar RC dryfuje w deep sleepie, wiec nie ufamy mu ani chwili dluzej
+     niz to konieczne. Koszt: jeden pakiet UDP.                          */
+  if (ok && !timeSyncedThisWake) {
+    syncTimeNTP();
+    timeSyncedThisWake = true;
+  }
+  return ok;
+}
+
+void wifiOff() {
+  WiFi.disconnect(true, false);
+  WiFi.mode(WIFI_OFF);
+  esp_wifi_stop();
+}
+
+bool syncTimeNTP() {
+  time_t before = time(nullptr);
+  bool hadTime = rtcTimeValid && before > 1700000000;
+
+  configTime(0, 0, "pool.ntp.org", "time.google.com", "time.cloudflare.com");
+  uint32_t t0 = millis();
+  while (time(nullptr) < 1700000000 && millis() - t0 < 8000 && !awakeTooLong()) delay(200);
+  rtcTimeValid = time(nullptr) > 1700000000;
+  LOG("[NTP] %s (epoch=%lu)\n", rtcTimeValid ? "OK" : "FAIL", (unsigned long)time(nullptr));
+
+  /* Zegar sie przesunal w trakcie dlugiego offline'u? Popraw zaleglosci. */
+  if (rtcTimeValid && hadTime) {
+    int32_t delta = (int32_t)(time(nullptr) - before);
+    if (delta > 60 || delta < -60) queueShiftTimestamps(delta);
+  }
+  return rtcTimeValid;
+}
+
+/* =====================================================================
+ *  7.  FIREBASE  (REST: Auth email/haslo + Realtime Database)
+ * ===================================================================== */
+String idToken;
+
+bool firebaseSignIn() {
+  if (idToken.length() > 20) return true;   // juz zalogowani w tym wybudzeniu
+
+  WiFiClientSecure client;
+  client.setInsecure();                     // prototyp; produkcyjnie: setCACert()
+  client.setTimeout(15);
+
+  HTTPClient http;
+  http.setConnectTimeout(8000);
+  http.setTimeout(12000);
+  String url = "https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key="
+               WEB_API_KEY;
+  if (!http.begin(client, url)) { LOGLN("[FB ] nie mozna otworzyc polaczenia"); return false; }
+  http.addHeader("Content-Type", "application/json");
+
+  JsonDocument req;
+  req["email"] = DEVICE_EMAIL;
+  req["password"] = DEVICE_PASSWORD;
+  req["returnSecureToken"] = true;
+  String body;
+  serializeJson(req, body);
+
+  int code = http.POST(body);
+
+  /* Odpowiedz wczytujemy W CALOSCI do pamieci, a dopiero potem parsujemy.
+     Czytanie JSON-a prosto ze strumienia TLS bywa zawodne przy dluzszych
+     odpowiedziach, a token Firebase ma ~1000 znakow - dokladnie ten
+     przypadek konczyl sie komunikatem "HTTP 200 -> FAIL".               */
+  String payload = (code > 0) ? http.getString() : String();
+  http.end();
+
+  if (code != 200) {
+    LOG("[FB ] signIn HTTP %d\n", code);
+    if (payload.length())
+      LOG("[FB ] serwer odpowiedzial: %s\n", payload.substring(0, 250).c_str());
+    return false;
+  }
+
+  JsonDocument res;
+  DeserializationError err = deserializeJson(res, payload);
+  if (err) {
+    LOG("[FB ] blad parsowania JSON: %s (odpowiedz ma %d znakow)\n",
+        err.c_str(), payload.length());
+    return false;
+  }
+
+  idToken = res["idToken"].as<String>();
+  if (idToken.length() < 20) {
+    LOG("[FB ] brak idToken w odpowiedzi: %s\n", payload.substring(0, 250).c_str());
+    return false;
+  }
+
+  LOG("[FB ] zalogowano, token ma %d znakow\n", idToken.length());
+  return true;
+}
+
+String rtdbUrl(const String& path) {
+  return String("https://") + RTDB_HOST + path + "?auth=" + idToken;
+}
+
+int rtdbSend(const char* method, const String& path, const String& body, String* resp = nullptr) {
+  WiFiClientSecure client;
+  client.setInsecure();
+  client.setTimeout(10);
+
+  HTTPClient http;
+  http.setConnectTimeout(8000);
+  http.setTimeout(10000);
+  if (!http.begin(client, rtdbUrl(path))) return -1;
+  http.addHeader("Content-Type", "application/json");
+  int code = http.sendRequest(method, body);
+  if (resp && code > 0) *resp = http.getString();
+  http.end();
+  return code;
+}
+
+/* Wysyla pojedyncze zdarzenie. rec = "ts;type;batt;volt;slot" */
+bool pushEventRecord(const String& rec) {
+  int p1 = rec.indexOf(';');
+  int p2 = rec.indexOf(';', p1 + 1);
+  int p3 = rec.indexOf(';', p2 + 1);
+  int p4 = rec.indexOf(';', p3 + 1);
+  if (p4 < 0) return false;
+
+  JsonDocument doc;
+  doc["ts"]      = (uint32_t)rec.substring(0, p1).toInt();
+  doc["type"]    = rec.substring(p1 + 1, p2);
+  doc["battery"] = rec.substring(p2 + 1, p3).toInt();
+  doc["volt"]    = rec.substring(p3 + 1, p4).toFloat();
+  doc["slot"]    = rec.substring(p4 + 1).toInt();
+  doc["fw"]      = FW_VERSION;
+
+  String body;
+  serializeJson(doc, body);
+  int code = rtdbSend("POST", "/devices/" DEVICE_ID "/events.json", body);
+  LOG("[FB ] push event HTTP %d : %s\n", code, body.c_str());
+  return code == 200;
+}
+
+void pushStatus() {
+  JsonDocument doc;
+  doc["battery"]  = batteryPercentage;
+  doc["battRaw"]  = batteryRawPercentage;   // przed wygladzeniem - do diagnostyki
+  doc["volt"]     = realBatteryVoltage;
+  doc["lastSeen"] = (uint32_t)time(nullptr);
+  doc["rssi"]     = WiFi.RSSI();
+  doc["ssid"]     = WiFi.SSID();
+  doc["fw"]       = FW_VERSION;
+  doc["boots"]    = rtcBootCount;
+  doc["queued"]   = queueCount();
+  /* Aplikacja pokazuje ostrzezenie, gdy wieczko zostalo otwarte.
+     openSince pozwala jej napisac, od jak dawna - bez zgadywania.     */
+  doc["boxOpen"]   = boxIsOpen();
+  doc["openSince"] = boxIsOpen() ? rtcOpenSinceTs : 0;
+  String body;
+  serializeJson(doc, body);
+  rtdbSend("PUT", "/devices/" DEVICE_ID "/status.json", body);
+}
+
+/* Pobiera harmonogram ustawiony w aplikacji. */
+void fetchConfig() {
+  String resp;
+  int code = rtdbSend("GET", "/devices/" DEVICE_ID "/config.json", "", &resp);
+  if (code != 200 || resp.length() < 5 || resp == "null") {
+    LOG("[FB ] brak config (HTTP %d) - zostaje lokalny\n", code);
     return;
   }
-  const updates = {};
-  for (const ev of events){
-    if (!ev.ts) continue;
-    const key = devKey(ev.ts);
-    let slot = (typeof ev.slot === "number" && ev.slot >= 0) ? ev.slot : -1;
-    if (slot < 0 && cfg.schedule.length === 1) slot = 0;
-    else if (slot < 0){
-      const m = devDate(ev.ts).getUTCHours()*60 + devDate(ev.ts).getUTCMinutes();
-      let best=-1, bd=1e9;
-      cfg.schedule.forEach((h,i)=>{ let d=Math.abs(m-slotMin(h)); if(d>720)d=1440-d;
-        if(d<=90 && d<bd){bd=d;best=i;} });
-      slot = best;
+  JsonDocument doc;
+  if (deserializeJson(doc, resp) != DeserializationError::Ok) return;
+
+  String s = "";
+  JsonArray arr = doc["schedule"].as<JsonArray>();
+  for (JsonVariant v : arr) {
+    if (s.length()) s += "|";
+    s += v.as<String>();
+  }
+  int16_t tz = doc["tzOffsetMin"] | DEFAULT_TZ_OFFSET;
+  if (s.length() >= 5 && (s != String(rtcSchedule) || tz != rtcTzOffsetMin)) {
+    saveSchedule(s, tz);
+    LOG("[FB ] nowy harmonogram: %s\n", s.c_str());
+  }
+
+  /* Stan opakowania liczy aplikacja - plytka tylko go czyta, zeby moc
+     ostrzec dzwiekiem. Dzieki temu nie ma konfliktu zapisow.           */
+  if (!doc["pillsLeft"].isNull()) {
+    rtcPillsLeft = doc["pillsLeft"].as<int>();
+    LOG("[FB ] zostalo tabletek: %d\n", rtcPillsLeft);
+  }
+}
+
+/* Wysyla zaleglosci z kolejki - choćby z 10 dni bez internetu.
+   Kazdy wpis kasujemy dopiero po potwierdzeniu HTTP 200, wiec zerwane
+   polaczenie w polowie nie gubi danych. Przerwiemy tez, gdy czuwanie
+   trwa juz za dlugo - reszta poleci przy nastepnym wybudzeniu.        */
+bool flushQueue() {
+  String rec;
+  int guard = QUEUE_CAPACITY + 2;
+  while (queuePeek(rec) && guard-- > 0) {
+    if (awakeTooLong()) {
+      LOGLN("[QUE] limit czasu czuwania - dokoncze przy nastepnym polaczeniu");
+      return false;
     }
-    if (slot < 0) continue;
-
-    const cur = doses?.[key]?.[slot];
-    if (cur && cur.source === "manual") continue;      // ręczna korekta wygrywa zawsze
-
-    if (ev.type === "open"){
-      if (cur && cur.status === "taken") continue;
-      /* openTs = rzeczywista godzina otwarcia pudełka. Trzymamy ją osobno
-         od ts, bo ts po ręcznej korekcie przestaje być wiarygodny, a
-         statystyki por przyjmowania muszą opierać się wyłącznie na
-         pomiarach z urządzenia.                                        */
-      updates[`users/${uid}/doses/${key}/${slot}`] =
-        { status:"taken", dose: cfg.defaultDose ?? 1, source:"device",
-          ts: ev.ts, openTs: ev.ts };
-    } else if (ev.type === "missed"){
-      if (cur && cur.status === "taken") continue;
-      updates[`users/${uid}/doses/${key}/${slot}`] =
-        { status:"missed", dose:0, source:"device", ts: ev.ts };
-    }
+    if (!pushEventRecord(rec)) return false;
+    queuePop();
   }
-  const n = Object.keys(updates).length;
-  if (n) {
-    try {
-      await update(ref(db), updates);
-    } catch (e) {
-      /* Cichy blad zapisu wygladal jak "aplikacja nic nie robi". Teraz mowi. */
-      console.error("zapis kalendarza:", e);
-      alert("Nie udało się zapisać do bazy.\n\n" + (e?.message || e) +
-            "\n\nSprawdź reguły bezpieczeństwa w Firebase.");
-      return;
-    }
-  }
-  if (!silent) {
-    alert(n ? `Gotowe — uzupełniono ${n} ${n === 1 ? "dzień" : "dni"} w kalendarzu.`
-            : `Kalendarz jest już aktualny.\n\nPrzeanalizowano ${events.length} zdarzeń `
-              + `z pudełka, nic nie wymagało zmiany.`);
-  }
-}
-window.reconcile = () => doReconcile(false);
-
-/* ═══════════════ KALENDARZ ═══════════════ */
-const DOW = ["Pn","Wt","Śr","Cz","Pt","So","Nd"];
-document.getElementById("dowRow").innerHTML = DOW.map(d=>`<div class="dow">${d}</div>`).join("");
-
-window.shiftMonth = n => {
-  viewMonth += n;
-  if (viewMonth < 0){ viewMonth = 11; viewYear--; }
-  if (viewMonth > 11){ viewMonth = 0; viewYear++; }
-  renderCalendar();
-};
-
-function dayDose(key){
-  const rec = doses[key] || {};
-  let sum = 0, any = false;
-  for (let i = 0; i < (cfg.schedule.length||1); i++){
-    const r = rec[i];
-    if (r){ any = true; if (r.status === "taken") sum += (r.dose ?? 1); }
-  }
-  return { sum, any };
+  return true;
 }
 
-function dayStatus(key){
-  const { sum, any } = dayDose(key);
-  const target = (cfg.defaultDose ?? 1) * (cfg.schedule.length || 1);
-  const past = key < todayKey();
-  if (!any && !past) return "future";
-  if (!any && past)  return "missed";
-  if (sum <= 0)      return "missed";
-  return sum >= target - 0.001 ? "taken" : "partial";
+/* =====================================================================
+ *  8.  ZDARZENIA
+ * ===================================================================== */
+String makeRecordAt(const char* type, int slot, uint32_t ts) {
+  char buf[80];
+  snprintf(buf, sizeof(buf), "%lu;%s;%d;%.3f;%d",
+           (unsigned long)ts, type, batteryPercentage, realBatteryVoltage, slot);
+  return String(buf);
 }
 
-const INR_MARK = `<svg class="inr" viewBox="0 0 12 12"><circle cx="6" cy="6" r="4"
-  fill="rgba(167,139,250,.25)" stroke="#a78bfa" stroke-width="1.6"/></svg>`;
-
-function renderCalendar(){
-  /* Zabezpieczenie: gdyby render wywolal sie zanim boot() ustawi miesiac,
-     kalendarz wyszedłby pusty bez zadnego bledu. Domyslamy sie „dzis".  */
-  if (!Number.isInteger(viewYear) || !Number.isInteger(viewMonth)){
-    const n = medDate(new Date()); viewYear = n.getFullYear(); viewMonth = n.getMonth();
-  }
-  const first = new Date(viewYear, viewMonth, 1);
-  const days  = new Date(viewYear, viewMonth+1, 0).getDate();
-  const lead  = (first.getDay() + 6) % 7;
-  document.getElementById("monthLbl").textContent =
-    first.toLocaleDateString("pl-PL", { month:"long", year:"numeric" });
-
-  let html = "", taken = 0, total = 0;
-  for (let i = 0; i < lead; i++) html += `<div class="day blank"></div>`;
-  for (let d = 1; d <= days; d++){
-    const key = `${viewYear}-${pad(viewMonth+1)}-${pad(d)}`;
-    const st = dayStatus(key), { sum } = dayDose(key);
-    if (st !== "future"){ total++; if (st === "taken") taken++; else if (st === "partial") taken += .5; }
-    html += `<div class="day ${st} ${key===todayKey()?"today":""}" data-k="${key}">
-        ${inr[key] ? INR_MARK : ""}${d}
-        ${sum>0 ? `<span class="dose">${nf(sum)}</span>` : ""}
-      </div>`;
-  }
-  const grid = document.getElementById("calGrid");
-  grid.innerHTML = html;
-  grid.querySelectorAll(".day[data-k]").forEach(el => el.onclick = () => openSheet(el.dataset.k));
-  document.getElementById("adherence").textContent = total ? Math.round(taken/total*100)+"%" : "–";
+String makeRecord(const char* type, int slot) {
+  return makeRecordAt(type, slot, rtcTimeValid ? (uint32_t)time(nullptr) : 0);
 }
 
-function renderToday(){
-  const key = todayKey(), { sum, any } = dayDose(key);
-  const target = (cfg.defaultDose ?? 1) * (cfg.schedule.length || 1);
-  const el = document.getElementById("todayState");
-  document.getElementById("todayPill").innerHTML = doseGraphic(sum, 44);
-  if (!any){
-    el.textContent = "Jeszcze nie wzięte";  el.style.color = "var(--warn)";
-    document.getElementById("todayWhen").textContent = `Przypomnienie o ${cfg.schedule[0] || "—"}`;
-  } else if (sum <= 0){
-    el.textContent = "Pominięte";           el.style.color = "var(--bad)";
-    document.getElementById("todayWhen").textContent = "Możesz to poprawić w kalendarzu";
+/* --- Znaczniki dobowe przezywajace RESET --------------------------------
+   Pamiec RTC przezywa deep sleep, ale NIE przezywa resetu ani odlaczenia
+   baterii. Gdyby "dawka juz wzieta dzisiaj" siedziala wylacznie tam, po
+   kazdym restarcie pudelko zapominaloby o dzisiejszej dawce i pozwolilo
+   zapisac ja drugi raz - a to jest wlasnie to, przed czym ma chronic.
+   Dlatego oba znaczniki dublujemy w pamieci nieulotnej.                 */
+void loadDayMarkers() {
+  if (rtcTakenDay != 0 && rtcRolloverDay != 0) return;   // RTC ma komplet
+  prefs.begin(NVS_NAMESPACE, true);
+  if (rtcTakenDay == 0)    rtcTakenDay    = prefs.getULong("takenDay", 0);
+  if (rtcRolloverDay == 0) rtcRolloverDay = prefs.getULong("rollDay", 0);
+  prefs.end();
+  LOG("[DAY] odtworzono z pamieci: wzieta=%lu, rozliczona=%lu\n",
+      (unsigned long)rtcTakenDay, (unsigned long)rtcRolloverDay);
+}
+
+/* Kasuje znaczniki doby - do testowania. Po tym pudelko znowu potraktuje
+   najblizsze otwarcie jako pierwsza dzisiejsza dawke.                    */
+void clearDayMarkers() {
+  rtcTakenDay = 0;
+  rtcRolloverDay = 0;
+  prefs.begin(NVS_NAMESPACE, false);
+  prefs.remove("takenDay");
+  prefs.remove("rollDay");
+  prefs.end();
+  LOGLN("[DAY] znaczniki doby wyczyszczone");
+}
+
+void setTakenDay(uint32_t day) {
+  if (rtcTakenDay == day) return;
+  rtcTakenDay = day;
+  prefs.begin(NVS_NAMESPACE, false);
+  prefs.putULong("takenDay", day);
+  prefs.end();
+}
+
+void setRolloverDay(uint32_t day) {
+  if (rtcRolloverDay == day) return;
+  rtcRolloverDay = day;
+  prefs.begin(NVS_NAMESPACE, false);
+  prefs.putULong("rollDay", day);
+  prefs.end();
+}
+
+/* --- Rolowanie doby ----------------------------------------------------
+   Wywolywane przy kazdym wybudzeniu z timera. Gdy zmienil sie dzien, a
+   dawka z poprzedniej doby nigdy nie zostala zapisana, do kolejki trafia
+   zdarzenie "missed" ze znacznikiem 23:59 tamtego dnia. NIE wlaczamy tu
+   radia - wpis poleci przy najblizszym polaczeniu, a kalendarz w apce
+   dostanie twarda informacje zamiast domyslania sie z braku danych.    */
+void checkDayRollover() {
+  if (!rtcTimeValid) return;
+  uint32_t today = localDayNumber(time(nullptr));
+
+  if (rtcRolloverDay == 0) { setRolloverDay(today); return; }    // pierwszy raz
+  if (rtcRolloverDay == today) return;                           // ta sama doba
+
+  if (rtcTakenDay != rtcRolloverDay) {
+    /* 23:59 poprzedniej doby = teraz minus tyle, ile uplynelo dzis, minus minuta */
+    time_t now = time(nullptr);
+    uint32_t ts = (uint32_t)(now - (localMinutesOfDay(now) * 60) - 60);
+    queuePush(makeRecordAt("missed", slotCount == 1 ? 0 : -1, ts));
+    LOG("[DAY] doba %lu zamknieta bez dawki -> missed\n", (unsigned long)rtcRolloverDay);
   } else {
-    el.textContent = sum >= target-0.001 ? "Wzięte" : "Wzięte — mniejsza dawka";
-    el.style.color = sum >= target-0.001 ? "var(--ok)" : "var(--warn)";
-    const r = (doses[key]||{})[0];
-    document.getElementById("todayWhen").textContent =
-      `${nf(sum)} tabl.` + (r?.ts ? ` · o ${devHM(r.ts)}` : "");
+    LOG("[DAY] doba %lu zamknieta poprawnie\n", (unsigned long)rtcRolloverDay);
   }
-  /* Po północy, a przed granicą doby, „dziś” to wciąż wczorajsza data.
-     Bez tej informacji wyglądałoby to na błąd aplikacji.              */
-  const hint = document.getElementById("nightHint");
-  if (hint){
-    hint.classList.toggle("hide", !inNightWindow());
-    if (inNightWindow()){
-      const d = new Date(key + "T12:00:00");
-      hint.textContent = `Jest po północy — to wciąż dawka z ${d.toLocaleDateString("pl-PL",
-        {day:"numeric", month:"long"})}. Nowy dzień zaczyna się o ${pad(DAY_START_HOUR)}:00.`;
+  setRolloverDay(today);
+}
+
+/* Probuje wyslac online; jesli sie nie uda - do NVS. */
+void reportEvent(const char* type, int slot) {
+  String rec = makeRecord(type, slot);
+
+  if (wifiConnect()) {
+    /* wifiConnect() sam synchronizuje zegar. Jesli zdarzenie powstalo, zanim
+       znalismy czas (ts=0), odtwarzamy je teraz z prawidlowym znacznikiem. */
+    if (rtcTimeValid && rec.startsWith("0;")) rec = makeRecord(type, slot);
+
+    if (firebaseSignIn()) {
+      fetchConfig();
+      flushQueue();
+      if (pushEventRecord(rec)) {
+        pushStatus();
+        rtcRetryCount = 0;                 // sukces - kasujemy backoff
+        beepAck();
+        if (strcmp(type, "open") == 0) {
+          if (rtcPillsLeft >= 0 && rtcPillsLeft < LOW_STOCK_WARN) {
+            delay(300); beepLowStock();    // "konczy sie opakowanie"
+          }
+          if (batteryPercentage <= BATT_WARN_PCT) {
+            delay(300);
+            beepLowBattery(batteryPercentage <= BATT_CRIT_PCT);
+          }
+        }
+        return;
+      }
     }
   }
-
-  document.getElementById("hSub").textContent =
-    `${cfg.drugName || "Lek"}${+cfg.drugStrength ? " " + cfg.drugStrength + " mg" : ""} · ${nf(cfg.defaultDose??1)} tabl. dziennie`;
+  /* Brak sieci albo blad serwera: zdarzenie ląduje w pamieci nieulotnej,
+     a rtcRetryCount steruje tym, jak szybko sprobujemy ponownie.       */
+  queuePush(rec);
+  if (rtcRetryCount < 200) rtcRetryCount++;
+  beepErr();
 }
 
-/* ═══════════════ ARKUSZ DNIA ═══════════════ */
-window.openSheet = key => {
-  sheetDate = key;
-  pendingDose = dayDose(key).sum;
-  const d = new Date(key + "T12:00:00");
-  document.getElementById("sheetDate").textContent =
-    d.toLocaleDateString("pl-PL", { weekday:"long", day:"numeric", month:"long" });
-  renderSheet();
-  document.getElementById("sheet").classList.add("show");
-};
-window.closeSheet = () => document.getElementById("sheet").classList.remove("show");
+/* =====================================================================
+ *  9.  ALARM
+ * ===================================================================== */
+/* Dzwoni przez ALARM_WINDOW_S i sprawdza czy pudelko zostalo otwarte.
+   Zwraca true jesli otwarto.                                          */
+bool runAlarmWindow() {
+  /* Krytycznie niska bateria: zew ladowania poprzedza alarm o leku, zebys
+     dowiedzial sie o tym takze wtedy, gdy akurat nie otwierasz pudelka. */
+  if (batteryPercentage <= BATT_CRIT_PCT) { beepLowBattery(true); delay(400); }
 
-function renderSheet(){
-  const rec = (doses[sheetDate] || {})[0] || {};
-  const saved = dayDose(sheetDate).sum;
-  const dirty = Math.abs(pendingDose - saved) > 0.001;
-  const src = rec.source === "device" ? "zarejestrowane przez pudełko"
-            : rec.source === "manual" ? "wpis ręczny" : "brak wpisu";
+  buzzerInit();
+  uint32_t deadline = millis() + (uint32_t)ALARM_WINDOW_S * 1000UL;
 
-  document.getElementById("sheetBody").innerHTML = `
-    <div class="pillrow">${doseGraphic(pendingDose, 62)}</div>
-    <div class="dosewrap">
-      <button class="stepbtn" onclick="stepDose(-0.5)" ${pendingDose<=0?"disabled":""}>−</button>
-      <div class="dosebox">
-        <div class="doseval" style="color:${pendingDose>0?"var(--txt)":"var(--dim2)"}">${nf(pendingDose)}</div>
-        <div class="doselbl">${pendingDose===1?"tabletka":"tabletki"} · co ½</div>
-      </div>
-      <button class="stepbtn" onclick="stepDose(0.5)">+</button>
-    </div>
-
-    <div class="dim2" style="text-align:center;margin-top:6px">
-      ${esc(src)}${rec.ts ? " · o " + devHM(rec.ts) : ""}
-    </div>
-
-    ${dirty ? `<div class="changed">
-        Zmiana: <b>${nf(saved)}</b> → <b>${nf(pendingDose)}</b> tabl.
-        <button class="primary" style="width:100%;margin-top:10px" onclick="commitDose()">
-          Zapisz zmianę</button>
-        <button class="ghost" style="width:100%;margin-top:6px" onclick="resetDose()">Cofnij</button>
-      </div>` : ``}
-
-    <label>Notatka</label>
-    <input id="dayNote" placeholder="np. wzięte po kolacji" value="${esc(rec.note||"")}"
-           onchange="saveNote(this.value)">
-
-    ${inr[sheetDate] ? `<div class="card" style="margin:14px 0 0;background:rgba(167,139,250,.09);
-        border-color:rgba(167,139,250,.3)">
-        <div class="row between"><span class="muted">Pomiar INR tego dnia</span>
-        <b style="font-size:19px">${nf(inr[sheetDate].value)}</b></div></div>` : ``}
-  `;
-}
-
-window.stepDose = d => {
-  pendingDose = Math.min(10, Math.max(0, Math.round((pendingDose + d) * 2) / 2));
-  renderSheet();
-};
-window.resetDose = () => { pendingDose = dayDose(sheetDate).sum; renderSheet(); };
-
-window.commitDose = async () => {
-  const saved = dayDose(sheetDate).sum;
-  const dateTxt = new Date(sheetDate+"T12:00:00").toLocaleDateString("pl-PL",
-    { weekday:"long", day:"numeric", month:"long" });
-  const ok = await askConfirm("Na pewno zmienić wpis?",
-    `${dateTxt}: z ${nf(saved)} na ${nf(pendingDose)} tabletki. ` +
-    `Wpis zostanie oznaczony jako ręczny i nie będzie już nadpisywany przez pudełko.`);
-  if (!ok) return;
-
-  const rec = (doses[sheetDate] || {})[0] || {};
-  await set(ref(db, `users/${uid}/doses/${sheetDate}/0`), {
-    status: pendingDose > 0 ? "taken" : "missed",
-    dose: pendingDose,
-    source: "manual",
-    ts: rec.ts || Math.floor(new Date(sheetDate+"T12:00:00").getTime()/1000),
-    ...(rec.openTs ? { openTs: rec.openTs } : {}),   // godzina z pudełka zostaje
-    ...(rec.note ? { note: rec.note } : {})
-  });
-  renderSheet();
-};
-
-window.saveNote = async txt => {
-  const rec = (doses[sheetDate] || {})[0];
-  /* Notatka na dniu bez wpisu i w przyszłości nie może tworzyć wpisu
-     „nie wzięte" — inaczej jutrzejszy dzień robiłby się czerwony. */
-  if (!rec && sheetDate > todayKey() && !txt.trim()) return;
-  if (!rec && sheetDate > todayKey()){ alert("Notatkę można dodać dopiero w dniu przyjęcia."); return; }
-  await set(ref(db, `users/${uid}/doses/${sheetDate}/0`), {
-    status: rec?.status || (dayDose(sheetDate).sum > 0 ? "taken" : "missed"),
-    dose:   rec?.dose ?? dayDose(sheetDate).sum,
-    source: rec?.source || "manual",
-    ts:     rec?.ts || Math.floor(new Date(sheetDate+"T12:00:00").getTime()/1000),
-    ...(rec?.openTs ? { openTs: rec.openTs } : {}),
-    note:   txt
-  });
-};
-
-/* ───────── potwierdzenie ───────── */
-let cfCb = null;
-function askConfirm(title, text){
-  document.getElementById("cfTitle").textContent = title;
-  document.getElementById("cfText").textContent = text;
-  document.getElementById("confirm").classList.add("show");
-  return new Promise(res => { cfCb = res; });
-}
-window.cfResolve = v => {
-  document.getElementById("confirm").classList.remove("show");
-  if (cfCb){ cfCb(v); cfCb = null; }
-};
-
-/* ═══════════════ INR ═══════════════ */
-function inrState(v){
-  if (v < cfg.inrMin) return { txt:"poniżej zakresu", cls:"warn", col:"var(--warn)" };
-  if (v > cfg.inrMax) return { txt:"powyżej zakresu", cls:"off",  col:"var(--bad)" };
-  return { txt:"w zakresie", cls:"on", col:"var(--ok)" };
-}
-
-window.addInr = async () => {
-  const date = document.getElementById("inrDate").value;
-  const val  = parseFloat(String(document.getElementById("inrVal").value).replace(",","."));
-  const msg = document.getElementById("inrAddMsg");
-  if (!date || !val || val <= 0 || val > 15){
-    msg.textContent = "Podaj datę i wynik (np. 2,4)."; msg.style.color = "var(--bad)"; return;
+  while (millis() < deadline) {
+    for (int b = 0; b < BEEPS_PER_BURST; b++) {
+      buzzerTone(BUZZER_FREQ_HZ);
+      delay(BEEP_MS);
+      buzzerTone(0);
+      delay(120);
+      if (boxIsOpen()) { buzzerOff(); return true; }
+    }
+    uint32_t gapEnd = millis() + BURST_GAP_MS;
+    while (millis() < gapEnd) {
+      if (boxIsOpen()) { buzzerOff(); return true; }
+      delay(50);
+    }
   }
-  const note = document.getElementById("inrNote").value.trim();
-  await set(ref(db, `users/${uid}/inr/${date}`), {
-    value: Math.round(val*100)/100,
-    ts: Math.floor(new Date(date+"T12:00:00").getTime()/1000),
-    ...(note ? { note } : {})
+  buzzerOff();
+  return false;
+}
+
+/* =====================================================================
+ * 10.  PORTAL KONFIGURACJI WiFi  (zamiast Bluetooth)
+ *
+ *      Pudelko tworzy wlasna siec WiFi. Laczysz sie z nia telefonem,
+ *      automatycznie otwiera sie strona, wybierasz swoja siec z listy
+ *      i wpisujesz haslo. Zadnej dodatkowej aplikacji.
+ *
+ *      DLACZEGO NIE BLUETOOTH: kontroler BLE w rdzeniu arduino-esp32 3.3.x
+ *      wywala sie na ESP32-C3 juz przy inicjalizacji (HLI Magic mismatch,
+ *      Memory protection fault) i restartuje plytke w petli. Portal przez
+ *      WiFi nie ma tej zaleznosci, dziala z kazdego telefonu i zajmuje
+ *      mniej pamieci.
+ * ===================================================================== */
+static String htmlEscape(const String& in) {
+  String o;
+  for (size_t i = 0; i < in.length(); i++) {
+    char c = in[i];
+    if      (c == '&')  o += "&amp;";
+    else if (c == '<')  o += "&lt;";
+    else if (c == '>')  o += "&gt;";
+    else if (c == '"')  o += "&quot;";
+    else if (c == '\'') o += "&#39;";
+    else o += c;
+  }
+  return o;
+}
+
+static String portalPage(int found) {
+  String o = F("<!doctype html><html lang=pl><meta charset=utf-8>"
+      "<meta name=viewport content='width=device-width,initial-scale=1'>"
+      "<title>PillBox</title><style>"
+      "body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#0b1220;"
+      "color:#e8eefc;padding:26px 20px;max-width:420px;margin:0 auto}"
+      "h2{font-size:20px;margin:0 0 4px}p{color:#8ea0c0;font-size:14px;margin:0 0 20px}"
+      "label{font-size:12px;color:#61748f;text-transform:uppercase;letter-spacing:.06em}"
+      "select,input{width:100%;padding:13px;margin:6px 0 16px;border-radius:11px;"
+      "border:1px solid #26344f;background:#1d2942;color:#e8eefc;font-size:16px;"
+      "box-sizing:border-box;-webkit-appearance:none}"
+      "button{width:100%;padding:15px;border:0;border-radius:11px;background:#2dd4bf;"
+      "color:#06322c;font-size:16px;font-weight:600}</style>"
+      "<h2>PillBox</h2><p>Wybierz swoja siec WiFi.</p>"
+      "<form action='/save' method='POST'><label>Siec</label><select name='s'>");
+  for (int i = 0; i < found; i++) {
+    String e = htmlEscape(WiFi.SSID(i));
+    o += "<option value=\"" + e + "\">" + e + "  (" + String((int)WiFi.RSSI(i)) + " dBm)</option>";
+  }
+  o += F("</select><label>Haslo</label><input name='p' type='password' autocomplete='off'>"
+         "<button type=submit>Polacz</button></form>");
+  return o;
+}
+
+void startWifiPortal() {
+  /* Trzy pikniecia = "jestem w trybie konfiguracji" */
+  buzzerInit();
+  for (int i = 0; i < 3; i++) { buzzerTone(2200); delay(90); buzzerTone(0); delay(90); }
+  buzzerOff();
+
+  WiFi.persistent(true);
+  WiFi.disconnect(true, false);
+  WiFi.mode(WIFI_AP_STA);
+
+  /* Skan robimy PRZED uruchomieniem punktu dostepowego - pozniej bylby
+     wolniejszy i potrafi zrywac polaczenie telefonu.                   */
+  int found = WiFi.scanNetworks();
+  if (found < 0) found = 0;
+  LOG("[AP ] znaleziono %d sieci\n", found);
+
+  WiFi.softAP(AP_SSID, AP_PASS);
+  IPAddress ip = WiFi.softAPIP();
+  LOG("[AP ] siec '%s', otworz http://%s\n", AP_SSID, ip.toString().c_str());
+
+  DNSServer dns;
+  dns.start(53, "*", ip);            // kazda domena -> nasza strona (captive portal)
+  WebServer server(80);
+
+  bool done = false;
+  String pendingSsid, pendingPass;
+
+  server.on("/", [&]() { server.send(200, "text/html; charset=utf-8", portalPage(found)); });
+
+  server.on("/save", HTTP_POST, [&]() {
+    pendingSsid = server.arg("s");
+    pendingPass = server.arg("p");
+    server.send(200, "text/html; charset=utf-8",
+      F("<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width'>"
+        "<body style='font-family:-apple-system,sans-serif;background:#0b1220;color:#e8eefc;"
+        "padding:40px 24px;text-align:center'>"
+        "<h2>Lacze sie...</h2><p style='color:#8ea0c0'>Mozesz zamknac to okno.<br>"
+        "Pudelko potwierdzi dzwiekiem.</p>"));
+    done = true;
   });
-  document.getElementById("inrVal").value = "";
-  document.getElementById("inrNote").value = "";
-  msg.textContent = `Zapisano ${nf(val)} na ${date}.`; msg.style.color = "var(--ok)";
-  setTimeout(()=>{ msg.textContent = ""; }, 3500);
-};
 
-window.delInr = async date => {
-  const ok = await askConfirm("Usunąć pomiar?", `Wynik z dnia ${date} zniknie z historii i z wykresu.`);
-  if (ok) await remove(ref(db, `users/${uid}/inr/${date}`));
-};
+  /* iOS sprawdza polaczenie pod losowymi adresami - kazdy odsylamy na strone. */
+  server.onNotFound([&]() {
+    server.sendHeader("Location", String("http://") + ip.toString(), true);
+    server.send(302, "text/plain", "");
+  });
 
-function renderInr(){
-  const keys = Object.keys(inr).sort();
-  const lastK = keys[keys.length-1];
-  const el = document.getElementById("inrLast");
-  const badge = document.getElementById("inrBadge");
-  document.getElementById("inrRangeLbl").textContent = `cel ${nf(cfg.inrMin)}–${nf(cfg.inrMax)}`;
+  server.begin();
 
-  if (!lastK){
-    el.textContent = "–"; el.style.color = "var(--dim2)";
-    badge.textContent = "brak pomiarów"; badge.className = "chip";
-    document.getElementById("inrLastWhen").textContent = "Dodaj pierwszy wynik poniżej.";
-  } else {
-    const v = inr[lastK].value, s = inrState(v);
-    el.textContent = nf(v); el.style.color = s.col;
-    badge.textContent = s.txt; badge.className = "chip " + s.cls;
-    const dd = Math.round((Date.now()/1000 - inr[lastK].ts)/86400);
-    document.getElementById("inrLastWhen").textContent =
-      new Date(lastK+"T12:00:00").toLocaleDateString("pl-PL",{day:"numeric",month:"long",year:"numeric"})
-      + (dd > 0 ? ` · ${dd} dni temu` : " · dzisiaj");
+  uint32_t t0 = millis();
+  while (!done && millis() - t0 < (uint32_t)PORTAL_TIMEOUT_S * 1000UL) {
+    dns.processNextRequest();
+    server.handleClient();
+    delay(5);
   }
 
-  document.getElementById("inrChart").innerHTML = inrChart(keys.slice(-16));
+  server.stop();
+  dns.stop();
+  WiFi.softAPdisconnect(true);
+  WiFi.mode(WIFI_STA);
 
-  document.getElementById("inrList").innerHTML = keys.slice().reverse().map(k => {
-    const v = inr[k].value, s = inrState(v);
-    return `<div class="inrrow">
-      <span class="inrdot" style="background:${s.col}"></span>
-      <span class="inrval" style="color:${s.col}">${nf(v)}</span>
-      <span style="flex:1">
-        <div style="font-size:14px">${new Date(k+"T12:00:00").toLocaleDateString("pl-PL",
-            {day:"numeric",month:"short",year:"numeric"})}</div>
-        ${inr[k].note ? `<div class="dim2">${esc(inr[k].note)}</div>` : ""}
-      </span>
-      <button class="danger" style="padding:7px 11px;font-size:13px" onclick="delInr('${k}')">Usuń</button>
-    </div>`;
-  }).join("") || `<span class="muted">Brak pomiarów.</span>`;
-}
-
-function inrChart(keys){
-  if (keys.length < 1) return `<div class="muted" style="padding:26px 0;text-align:center">
-      Wykres pojawi się po pierwszym pomiarze.</div>`;
-  const W = 520, H = 190, PL = 34, PR = 10, PT = 12, PB = 26;
-  const vals = keys.map(k => inr[k].value);
-  const lo = Math.min(...vals, cfg.inrMin) - 0.5;
-  const hi = Math.max(...vals, cfg.inrMax) + 0.5;
-  const x = i => PL + (keys.length===1 ? (W-PL-PR)/2 : i*(W-PL-PR)/(keys.length-1));
-  const y = v => PT + (hi-v)/(hi-lo)*(H-PT-PB);
-
-  const band = `<rect x="${PL}" y="${y(cfg.inrMax)}" width="${W-PL-PR}"
-      height="${Math.max(2,y(cfg.inrMin)-y(cfg.inrMax))}" fill="rgba(52,211,153,.14)"
-      stroke="rgba(52,211,153,.35)" stroke-width="1" rx="3"/>`;
-  const gridY = [cfg.inrMin, cfg.inrMax].map(v =>
-    `<text x="4" y="${y(v)+4}" fill="#61748f" font-size="10">${nf(v)}</text>`).join("");
-  const line = `<polyline fill="none" stroke="#a78bfa" stroke-width="2.4" stroke-linejoin="round"
-      stroke-linecap="round" points="${keys.map((k,i)=>`${x(i)},${y(inr[k].value)}`).join(" ")}"/>`;
-  const dots = keys.map((k,i)=>{
-    const v = inr[k].value, s = inrState(v);
-    return `<circle cx="${x(i)}" cy="${y(v)}" r="4.5" fill="${s.col}" stroke="#0f1829" stroke-width="2"/>`;
-  }).join("");
-  const labels = keys.map((k,i)=> (keys.length<=8 || i%2===0)
-    ? `<text x="${x(i)}" y="${H-8}" fill="#61748f" font-size="9.5" text-anchor="middle">${k.slice(8)}.${k.slice(5,7)}</text>` : "").join("");
-
-  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;overflow:visible">
-      ${band}${gridY}${line}${dots}${labels}</svg>`;
-}
-
-/* ═══════════════ STATUS PUDEŁKA ═══════════════ */
-function relTime(sec){
-  if (sec < 90) return "przed chwilą";
-  if (sec < 5400) return `${Math.round(sec/60)} min temu`;
-  if (sec < 86400) return `${Math.round(sec/3600)} godz. temu`;
-  const d = Math.round(sec/86400);
-  return d === 1 ? "wczoraj" : `${d} dni temu`;
-}
-
-/* Baner „pudełko jest otwarte”. Pudełko zgłasza to samo z siebie po
-   kwadransie od otwarcia, więc baner pojawia się mniej więcej wtedy,
-   kiedy usłyszysz pierwszy sygnał.                                    */
-function renderOpenWarn(st){
-  const box = document.getElementById("openWarn");
-  if (!box) return;
-  const open = !!(st && st.boxOpen);
-  box.classList.toggle("hide", !open);
-  if (!open) return;
-
-  const since = st.openSince || 0;
-  const when  = document.getElementById("openWarnWhen");
-  if (since > 1){
-    const mins = Math.max(0, Math.round(Date.now()/1000 - since) / 60);
-    when.textContent = mins < 60
-      ? `Otwarte od ${Math.round(mins)} min (od ${devHM(since)}).`
-      : `Otwarte od ${Math.floor(mins/60)} h ${Math.round(mins%60)} min (od ${devHM(since)}).`;
-  } else {
-    when.textContent = "Zamknij wieczko, żeby leki nie wilgotniały.";
-  }
-}
-
-function renderStatus(st){
-  const chip = document.getElementById("batChip");
-  renderOpenWarn(st);
-
-  /* Pudełko jeszcze się nie odezwało — zamiast samotnej kreski i pustego
-     paska pokazujemy zrozumiały komunikat.                             */
-  if (!st){
-    chip.textContent = "brak połączenia"; chip.className = "chip";
-    document.getElementById("batBig").textContent = "—";
-    document.getElementById("batBig").style.color = "var(--dim2)";
-    document.getElementById("batVolt").textContent = "Pudełko jeszcze się nie połączyło";
-    document.getElementById("battFill").style.width = "0";
-    document.getElementById("batBar").style.width = "0";
-    document.getElementById("batEta").textContent =
-      "Dane pojawią się po pierwszej synchronizacji z WiFi.";
-    document.getElementById("lastSync").textContent = "nigdy";
-    document.getElementById("lastSyncRel").textContent = "";
-    document.getElementById("queueInfo").innerHTML = "";
-    document.getElementById("devInfo").innerHTML =
-      `ID: <b>${DEVICE_ID}</b><br>Urządzenie nie wysłało jeszcze żadnych danych.`;
+  if (!done) {
+    LOGLN("[AP ] timeout - nikt sie nie polaczyl");
+    beepErr();
     return;
   }
-  const pct = st.battery ?? 0;
-  const col = pct > 40 ? "var(--ok)" : pct > 15 ? "var(--warn)" : "var(--bad)";
 
-  document.getElementById("batBig").textContent = pct + "%";
-  document.getElementById("batBig").style.color = col;
-  document.getElementById("batVolt").textContent = `${(st.volt||0).toFixed(2)} V · ogniwo 470 mAh`;
-  const f = document.getElementById("battFill"); f.style.width = Math.max(6,pct)+"%"; f.style.background = col;
-  const b = document.getElementById("batBar");  b.style.width = pct+"%"; b.style.background = col;
-  chip.textContent = pct + "%";
-  chip.className = "chip " + (pct > 40 ? "on" : pct > 15 ? "warn" : "off");
+  /* Konfiguracja moglaby pochlonac caly limit czuwania - dajemy zapas. */
+  extendAwake(90000);
+  LOG("[AP ] laczenie z siecia '%s'...\n", pendingSsid.c_str());
+  WiFi.begin(pendingSsid.c_str(), pendingPass.c_str());
 
-  /* Szacunek: pełne ogniwo 470 mAh starczy około 90 dni przy obecnym poborze.
-     Odkąd procent liczony jest z krzywej LiPo, a nie z prostej, odpowiada
-     mniej więcej realnie pozostałemu ładunkowi — więc mnożenie razy 0,9
-     dnia ma sens także w dolnej połowie skali, gdzie wcześniej zawyżało. */
-  const eta = document.getElementById("batEta");
-  eta.textContent = pct > 15
-    ? `Szacunkowo ok. ${Math.round(pct * 0.9)} dni do ładowania.`
-    : "Czas naładować pudełko przez USB-C.";
-  eta.style.color = pct > 15 ? "" : "var(--bad)";
+  uint32_t t1 = millis();
+  while (WiFi.status() != WL_CONNECTED && millis() - t1 < WIFI_TIMEOUT_MS + 10000UL) delay(200);
 
-  const ls = st.lastSeen || 0, ago = Math.round(Date.now()/1000 - ls);
-  document.getElementById("lastSync").textContent = ls
-    ? new Date(ls*1000).toLocaleString("pl-PL",{day:"2-digit",month:"2-digit",year:"numeric",
-        hour:"2-digit",minute:"2-digit"}) : "nigdy";
-  document.getElementById("lastSyncRel").textContent = ls ? relTime(ago) : "";
-
-  const q = st.queued || 0, qi = document.getElementById("queueInfo");
-  qi.innerHTML = q ? `<span style="color:var(--warn)">⏳ ${q} zdarzeń czeka w pamięci pudełka.</span>` : "";
-
-  /* battRaw = odczyt prosto z krzywej, przed wygładzeniem. Gdy różni się
-     mocno od wskazania, znaczy że filtr właśnie nadrabia spadek.        */
-  const rawTxt = (typeof st.battRaw === "number" && st.battRaw !== pct)
-    ? `<br>Pomiar surowy: ${st.battRaw}% (wskazanie wygładzone)` : "";
-  document.getElementById("devInfo").innerHTML =
-    `ID: <b>${DEVICE_ID}</b><br>Firmware: ${st.fw||"?"}<br>WiFi: ${esc(st.ssid)||"?"} (${st.rssi||"?"} dBm)<br>` +
-    `Wybudzeń: ${st.boots||0} · w kolejce: ${q}${rawTxt}`;
-}
-
-/* ═══════════════ ZAPAS TABLETEK ═══════════════ */
-/* Wczoraj = dzień przed bieżącym DNIEM LEKOWYM. O 01:00 „dziś” to wciąż
-   poprzedni dzień kalendarzowy, więc liczymy od todayKey(), nie od zegara. */
-function yesterdayKey(){ const d = medDate(new Date()); d.setDate(d.getDate()-1); return dateKey(d); }
-
-async function settlePills(){
-  if (typeof cfg.pillsLeft !== "number") return;
-  const today = todayKey(), until = cfg.pillsCountedUntil || "0000-00-00";
-  const closed = Object.keys(doses).filter(d => d < today).sort();
-  if (!closed.length) return;
-  const newest = closed[closed.length-1];
-  if (newest <= until) return;
-  let used = 0;
-  for (const d of closed){ if (d <= until) continue;
-    for (const r of Object.values(doses[d])) if (r.status === "taken") used += (r.dose ?? 1); }
-  cfg.pillsLeft = Math.max(0, Math.round((cfg.pillsLeft - used)*100)/100);
-  cfg.pillsCountedUntil = newest;
-  await update(ref(db, `devices/${DEVICE_ID}/config`),
-    { pillsLeft: cfg.pillsLeft, pillsCountedUntil: cfg.pillsCountedUntil });
-}
-
-function renderPills(){
-  const big = document.getElementById("pillsBig"), sub = document.getElementById("pillsSub");
-  const bar = document.getElementById("pillsBar");
-  if (typeof cfg.pillsLeft !== "number"){
-    big.textContent = "–"; sub.textContent = "Ustaw stan opakowania."; bar.style.width = "0"; return;
+  if (WiFi.status() != WL_CONNECTED) {
+    LOGLN("[AP ] nie udalo sie - zle haslo albo siec 5 GHz");
+    beepErr(); delay(300); beepErr();
+    return;
   }
-  const takenToday = Object.values(doses[todayKey()]||{})
-    .filter(r=>r.status==="taken").reduce((a,r)=>a+(r.dose??1),0);
-  const left = Math.max(0, cfg.pillsLeft - takenToday);
-  const perDay = (cfg.defaultDose ?? 1) * (cfg.schedule.length || 1);
-  const days = perDay > 0 ? Math.floor(left/perDay) : 0;
-  const col = days < 7 ? "var(--bad)" : days < 14 ? "var(--warn)" : "var(--ok)";
-  big.textContent = nf(left); big.style.color = col;
-  bar.style.width = Math.min(100, left/100*100) + "%"; bar.style.background = col;
-  sub.textContent = `starczy na ok. ${days} dni` + (days < 7 ? " — czas po receptę" : "");
+
+  LOG("[AP ] polaczono, IP=%s\n", WiFi.localIP().toString().c_str());
+  syncTimeNTP();
+  timeSyncedThisWake = true;
+  if (firebaseSignIn()) { fetchConfig(); flushQueue(); pushStatus(); }
+  beepAck();
 }
 
-async function savePills(n){
-  cfg.pillsLeft = Math.max(0, Math.round(n*100)/100);
-  cfg.pillsCountedUntil = cfg.pillsCountedUntil || yesterdayKey();
-  await update(ref(db, `devices/${DEVICE_ID}/config`),
-    { pillsLeft: cfg.pillsLeft, pillsCountedUntil: cfg.pillsCountedUntil });
-  renderPills();
+/* =====================================================================
+ * 11.  DEEP SLEEP
+ * ===================================================================== */
+void goToSleep(uint32_t seconds) {
+  buzzerOff();
+  wifiOff();
+
+  /* Jawne ustawienie podciagniec tuz przed snem - pinMode() bywa gubiony
+     przy przechodzeniu w deep sleep.                                    */
+#if USE_INTERNAL_PULLS
+  gpio_pullup_en((gpio_num_t)GPIO_REED);
+  gpio_pulldown_dis((gpio_num_t)GPIO_REED);
+#else
+  gpio_pullup_dis((gpio_num_t)GPIO_REED);     // zewnetrzny 1M do 3V3
+  gpio_pulldown_dis((gpio_num_t)GPIO_REED);
+#endif
+  gpio_pullup_en((gpio_num_t)GPIO_BUTTON);    // przycisk rozwarty = 0 uA
+  gpio_pulldown_dis((gpio_num_t)GPIO_BUTTON);
+
+  /* Wybudzanie z GPIO na ESP32-C3: tylko GPIO0..GPIO5.
+     Poziom wyzwalania jest zapisywany OSOBNO dla kazdego pinu, wiec
+     wywolujemy funkcje dwa razy - raz dla kontaktronu (HIGH = otwarte),
+     raz dla przycisku (LOW = wcisniety). Oba styki moga isc do GND.    */
+  bool armReed = true;
+
+  /* Jesli pudelko zostalo otwarte, pin kontaktronu juz jest w stanie
+     wybudzajacym - uklad obudzilby sie natychmiast, w petli. Wypinamy
+     go i skracamy sen, zeby szybko zauwazyc zamkniecie.                */
+  rtcArmedForClose = false;
+  if (boxIsOpen()) {
+    armReed = false;
+    rtcStuckOpen++;
+    /* Zamiast czekac na kolejne otwarcie - czekamy na ZAMKNIECIE. Pin jest
+       teraz w stanie "otwarte", wiec uzbrojenie go na ten sam poziom
+       obudziloby uklad natychmiast, w petli. Odwrocony poziom sprawia, ze
+       zamkniecie wieczka od razu konczy stan alarmowy, bez czekania na
+       timer - i o to chodzi, bo wtedy trzeba szybko uspokoic aplikacje.  */
+    esp_deep_sleep_enable_gpio_wakeup(
+        1ULL << GPIO_REED,
+        REED_OPEN_LEVEL == HIGH ? ESP_GPIO_WAKEUP_GPIO_LOW
+                                : ESP_GPIO_WAKEUP_GPIO_HIGH);
+    rtcArmedForClose = true;
+
+    uint32_t cap = openWarnSecondsLeft();
+    if (seconds > cap) seconds = cap;
+    LOG("[SLP] pudelko otwarte - obudze sie za %lu s albo przy zamknieciu\n",
+        (unsigned long)cap);
+  } else {
+    rtcStuckOpen = 0;
+  }
+
+  /* To samo dla przycisku. Zwarty albo zle podlaczony pin trzymalby uklad
+     w stanie wybudzajacym i pudelko piszczaloby w nieskonczonosc, wchodzac
+     co chwile w tryb parowania. Zaciety przycisk = przycisk wypiety.     */
+  bool armButton = true;
+  if (buttonPressed()) {
+    armButton = false;
+    rtcStuckButton++;
+    uint32_t cap = rtcStuckButton < 3 ? 30 : (rtcStuckButton < 6 ? 300 : 1800);
+    if (seconds > cap) seconds = cap;
+    LOG("[SLP] przycisk wciaz wcisniety (%u raz) - wylaczam go z wybudzania\n",
+        rtcStuckButton);
+  } else {
+    rtcStuckButton = 0;
+  }
+
+  if (seconds < 5) seconds = 5;
+  if (seconds > HOUSEKEEP_MAX_S) seconds = HOUSEKEEP_MAX_S;
+
+  if (armReed) {
+    esp_deep_sleep_enable_gpio_wakeup(
+        1ULL << GPIO_REED,
+        REED_OPEN_LEVEL == HIGH ? ESP_GPIO_WAKEUP_GPIO_HIGH
+                                : ESP_GPIO_WAKEUP_GPIO_LOW);
+  }
+  if (armButton) {
+    esp_deep_sleep_enable_gpio_wakeup(
+        1ULL << GPIO_BUTTON,
+        BUTTON_PRESS_LEVEL == HIGH ? ESP_GPIO_WAKEUP_GPIO_HIGH
+                                   : ESP_GPIO_WAKEUP_GPIO_LOW);
+  }
+
+  esp_sleep_enable_timer_wakeup((uint64_t)seconds * 1000000ULL);
+
+  /* Wypisujemy wprost, co ma nas obudzic. Gdy pudelko "nie budzi sie na
+     kontaktron", to jest pierwsza linia, ktora trzeba sprawdzic.        */
+  LOG("[SLP] uzbrojone zrodla: kontaktron(GPIO%d)=%s | przycisk(GPIO%d)=%s | timer=%lu s\n",
+      GPIO_REED,
+      armReed ? (REED_OPEN_LEVEL == HIGH ? "budzi przy stanie WYSOKIM (otwarcie)"
+                                         : "budzi przy stanie NISKIM (otwarcie)")
+              : (rtcArmedForClose ? "budzi przy ZAMKNIECIU (pudelko jest otwarte)"
+                                  : "WYLACZONY"),
+      GPIO_BUTTON,
+      armButton ? "budzi przy wcisnieciu" : "WYLACZONY",
+      (unsigned long)seconds);
+  LOG("[SLP] stan pinow teraz: kontaktron=%d, przycisk=%d\n",
+      digitalRead(PIN_REED), digitalRead(PIN_BUTTON));
+  LOG("[SLP] deep sleep na %lu s\n", (unsigned long)seconds);
+#if DEBUG_SERIAL
+  Serial.flush();
+#endif
+  esp_deep_sleep_start();
 }
-window.addPills = n => savePills(Math.max(0,(cfg.pillsLeft ?? 0) + n));
-window.setPills = () => {
-  const v = prompt("Ile tabletek jest w opakowaniu?", cfg.pillsLeft ?? 100);
-  if (v !== null && !isNaN(+v)) savePills(+v);
-};
 
-/* ═══════════════ USTAWIENIA ═══════════════ */
-function renderSettings(){
-  document.getElementById("slotEditor").innerHTML = cfg.schedule.map((h,i)=>
-    `<div class="row" style="margin-top:8px">
-       <input type="time" value="${h}" onchange="cfgTime(${i},this.value)">
-       ${cfg.schedule.length>1?`<button class="danger" onclick="delSlot(${i})">✕</button>`:""}
-     </div>`).join("");
-  document.getElementById("tzInput").value  = cfg.tzOffsetMin ?? 120;
-  document.getElementById("defDose").value  = cfg.defaultDose ?? 1;
-  document.getElementById("drugName").value = cfg.drugName || "Warfin";
-  document.getElementById("drugStrength").value = String(cfg.drugStrength ?? 3);
-  document.getElementById("inrMin").value = cfg.inrMin ?? 2;
-  document.getElementById("inrMax").value = cfg.inrMax ?? 3;
+/* Ile spac po obsluzeniu biezacego zdarzenia.
+   Wybieramy NAJWCZESNIEJSZY z powodow do wybudzenia.                  */
+uint32_t planNextSleep() {
+  time_t now = time(nullptr);
+
+  /* 1. Alarm czeka na ponowna probe - drzemka ma pierwszenstwo. */
+  if (rtcPendingSlot >= 0 && rtcAlarmRetries < MAX_ALARM_RETRIES) return SNOOZE_S;
+
+  /* 2. Nastepna zaplanowana dawka (30 s zapasu na dryf zegara). */
+  uint32_t s = secondsToNextSlot(now);
+  if (s > 30) s -= 30;
+
+  /* 3. Zaleglosci w kolejce -> ponow probe z narastajaca przerwa:
+        15 min, 30, 60, 120, 240 min. Chwilowa awaria routera zalatwia
+        sie sama, a stale zerwana siec nie zjada baterii.             */
+  uint16_t q = queueCount();
+  if (q > 0) {
+    uint8_t shift = rtcRetryCount > 4 ? 4 : rtcRetryCount;
+    uint32_t r = (uint32_t)RETRY_BASE_S << shift;
+    if (r > RETRY_MAX_S) r = RETRY_MAX_S;
+    LOG("[SLP] %u zdarzen w kolejce, ponowna proba za %lu s\n", q, (unsigned long)r);
+    if (r < s) s = r;
+  }
+
+  /* 4. Rolowanie doby minute po jej koncu (DAY_START_HOUR). */
+#if MIDNIGHT_CHECK
+  uint32_t m = secondsToDayBoundary(now);
+  if (m < s) s = m;
+#endif
+
+  /* 5. Pudelko zostawione otwarte - nie spimy dluzej niz do sygnalu. */
+  if (boxIsOpen()) {
+    uint32_t w = openWarnSecondsLeft();
+    if (w < s) s = w;
+  }
+
+  /* 6. Nie spimy dluzej niz HOUSEKEEP_MAX_S - okazja do sync czasu. */
+  if (s > HOUSEKEEP_MAX_S) s = HOUSEKEEP_MAX_S;
+  return s;
 }
-window.cfgTime = (i,v) => { cfg.schedule[i] = v; };
-window.addSlot = () => { cfg.schedule.push("20:00"); renderSettings(); };
-window.delSlot = i => { cfg.schedule.splice(i,1); renderSettings(); };
 
-window.saveConfig = async () => {
-  cfg.schedule     = [...new Set(cfg.schedule)].sort();
-  cfg.tzOffsetMin  = +document.getElementById("tzInput").value || 120;
-  cfg.defaultDose  = +document.getElementById("defDose").value || 1;
-  cfg.drugName     = document.getElementById("drugName").value.trim() || "Warfin";
-  cfg.drugStrength = +document.getElementById("drugStrength").value;
-  await update(ref(db, `devices/${DEVICE_ID}/config`), {
-    schedule: cfg.schedule, tzOffsetMin: cfg.tzOffsetMin, defaultDose: cfg.defaultDose,
-    drugName: cfg.drugName, drugStrength: cfg.drugStrength });
-  renderAll();
-  alert("Zapisano. Pudełko pobierze ustawienia przy najbliższym połączeniu.");
-};
+/* =====================================================================
+ * 12.  SETUP  =  cala logika (loop() nigdy nie jest osiagany)
+ * ===================================================================== */
+void setup() {
+#if DEBUG_SERIAL
+  Serial.begin(115200);
+  delay(300);
+#endif
 
-window.saveInrRange = async () => {
-  cfg.inrMin = +document.getElementById("inrMin").value || 2;
-  cfg.inrMax = +document.getElementById("inrMax").value || 3;
-  await update(ref(db, `devices/${DEVICE_ID}/config`), { inrMin: cfg.inrMin, inrMax: cfg.inrMax });
-  renderInr();
-};
+  /* --- Okno na wgranie programu -------------------------------------
+     Po resecie trzymamy sie wybudzeni przez chwile, zeby port USB zdazyl
+     sie zglosic i mozna bylo wgrac nowy program. Bez tego plytka zasypia
+     szybciej, niz komputer ja zauwazy.                                 */
+  rtcBootCount++;
+  configureInputs();          // MUSI byc przed oknem testowym ponizej
+  buzzerOff();
 
-/* ═══════════════════════════════════════════════════════════════
- *  ANALIZA
- *  Godziny liczymy WYŁĄCZNIE z openTs, czyli z momentu, w którym
- *  kontaktron naprawdę wykrył otwarcie. Ręczne korekty w kalendarzu
- *  nie zmyślają godzin, więc statystyka pozostaje uczciwa.
- * ═══════════════════════════════════════════════════════════════ */
-function openTimeOf(rec){
-  if (!rec) return null;
-  if (typeof rec.openTs === "number" && rec.openTs > 0) return rec.openTs;
-  if (rec.source === "device" && rec.ts > 0) return rec.ts;
-  return null;
-}
-function openMinutes(rec){
-  const t = openTimeOf(rec); if (t == null) return null;
-  const d = devDate(t); return d.getUTCHours()*60 + d.getUTCMinutes();
-}
-const hm  = m => m == null ? "—" : `${pad(Math.floor(((m%1440)+1440)%1440/60))}:${pad(Math.round(m)%60)}`;
-const dev2 = d => d == null ? "—" : (d > 0 ? "+" : d < 0 ? "−" : "") +
-  `${Math.floor(Math.abs(d)/60) ? Math.floor(Math.abs(d)/60)+" h " : ""}${Math.round(Math.abs(d))%60} min`;
-const DOW_PL = ["poniedziałek","wtorek","środa","czwartek","piątek","sobota","niedziela"];
+#if BOOT_HOLD_MS > 0
+  if (esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_UNDEFINED) {
+    /* --- Okno na wgranie programu, a przy okazji test stykow ----------
+       Deep sleep odlacza port USB, wiec wybudzenia kontaktronem nie da
+       sie zobaczyc w monitorze portu szeregowego. Tu, dopoki plytka
+       jeszcze nie spi, kazda zmiana stanu jest wypisywana od razu.
+       Dzieki temu wiadomo, czy styk w ogole dziala - a to rozdziela dwa
+       zupelnie rozne problemy: zle okablowanie od zlego wybudzania.    */
+    LOG("\n[USB] okno na wgrywanie: %d s (mozesz teraz kliknac Upload)\n",
+        BOOT_HOLD_MS / 1000);
+    LOGLN("[TEST] To jest takze test stykow. Przysun i odsun magnes od");
+    LOGLN("[TEST] kontaktronu - kazda zmiana pojawi sie ponizej.");
+    LOGLN("[TEST] Przytrzymanie ukrytego przycisku kasuje znacznik");
+    LOGLN("[TEST] dzisiejszej dawki (przydatne przy testowaniu).");
 
-function analyze(days){
-  const end = medDate(new Date());
-  const times = [], deviations = [], hist = Array(24).fill(0);
-  const byDow = Array.from({length:7}, () => ({ taken:0, total:0, times:[] }));
-  const plan = slotMin(cfg.schedule[0] || "08:00");
-  let taken = 0, missed = 0, doseSum = 0;
+    bool     lastReed = boxIsOpen(), lastBtn = buttonPressed(), btnHeld = false;
+    uint16_t reedChanges = 0, btnChanges = 0;
+    LOG("[TEST] stan poczatkowy: kontaktron=%d (%s), przycisk=%d (%s)\n",
+        digitalRead(PIN_REED),   lastReed ? "OTWARTE"   : "zamkniete",
+        digitalRead(PIN_BUTTON), lastBtn  ? "wcisniety" : "zwolniony");
 
-  for (let i = days-1; i >= 0; i--){
-    const d = new Date(end); d.setDate(end.getDate()-i);
-    const key = A_dateKey(d);
-    if (key > todayKey()) continue;
-    const rec = (doses[key]||{})[0];
-    const { sum, any } = dayDose(key);
-    const dow = (d.getDay()+6)%7;
-
-    const isTaken = any && sum > 0;
-    if (any || key < todayKey()){
-      byDow[dow].total++;
-      if (isTaken){ taken++; byDow[dow].taken++; doseSum += sum; } else missed++;
+    uint32_t hold = millis(), window = BOOT_HOLD_MS;
+    while (millis() - hold < window) {
+      bool r = boxIsOpen(), b = buttonPressed();
+      if (r != lastReed) {
+        lastReed = r; reedChanges++;
+        LOG("\n[TEST] kontaktron -> %s (pin=%d)\n",
+            r ? "OTWARTE" : "ZAMKNIETE", digitalRead(PIN_REED));
+        /* Kazda zmiana przedluza okno, zeby dalo sie spokojnie pomachac
+           magnesem kilka razy. Sufit chroni przed czuwaniem bez konca.  */
+        if (window < BOOT_TEST_MAX_MS) window = (millis() - hold) + BOOT_HOLD_MS;
+      }
+      if (b != lastBtn) {
+        lastBtn = b; btnChanges++;
+        if (b) btnHeld = true;
+        LOG("\n[TEST] przycisk -> %s\n", b ? "WCISNIETY" : "zwolniony");
+        if (window < BOOT_TEST_MAX_MS) window = (millis() - hold) + BOOT_HOLD_MS;
+      }
+#if DEBUG_SERIAL
+      if ((millis() - hold) % 1000 < 20) { Serial.print("."); Serial.flush(); }
+#endif
+      delay(20);
     }
-    if (!isTaken) continue;
+    LOGLN("");
+    LOG("[TEST] kontaktron zmienil stan %u raz(y), przycisk %u raz(y)\n",
+        reedChanges, btnChanges);
+    if (reedChanges == 0)
+      LOGLN("[TEST] Jesli ruszales magnesem, a tu jest zero - winne jest\n"
+            "[TEST] okablowanie lub sam kontaktron, nie oprogramowanie.");
+    else
+      LOGLN("[TEST] Styk dziala. Jesli mimo to pudelko nie budzi sie ze snu,\n"
+            "[TEST] problem lezy w wybudzaniu, nie w polaczeniu.");
 
-    const m = openMinutes(rec);
-    if (m == null) continue;
-    times.push(m); hist[Math.floor(m/60)]++; byDow[dow].times.push(m);
-    let dv = m - plan; if (dv > 720) dv -= 1440; if (dv < -720) dv += 1440;
-    deviations.push(dv);
+    if (btnHeld) {
+      clearDayMarkers();
+      LOGLN("[TEST] znacznik dzisiejszej dawki skasowany - mozesz testowac otwieranie");
+      beepAck();
+    }
+    extendAwake(20000);                    // nie zjadaj limitu czuwania
+  }
+#endif
+
+  readBattery();
+  loadSchedule();
+  loadDayMarkers();
+  wakeReason = detectWakeReason();
+
+  /* --- Ochrona ogniwa i wykrywanie ladowarki --------------------------
+     Odczyt ponizej 2,0 V = brak baterii (zasilanie z USB) - ignorujemy.  */
+  bool haveCell = realBatteryVoltage > 2.0f;
+
+  /* Napiecie wyraznie wyzsze niz przy poprzednim wybudzeniu oznacza, ze
+     ktos wlasnie podlaczyl ladowarke. To najlepszy moment, zeby zlapac
+     siec i ustawic zegar - zwlaszcza gdy pudelko wczesniej padlo.       */
+  bool chargingDetected = haveCell && rtcLastVoltage > 2.0f &&
+                          realBatteryVoltage > rtcLastVoltage + CHARGE_RISE_V;
+  rtcLastVoltage = realBatteryVoltage;
+
+  if (rtcCutoff) {
+    /* Bylismy odciete. Wracamy do zycia dopiero po realnym doladowaniu. */
+    if (haveCell && realBatteryVoltage < BATT_RECOVER_V) {
+      LOG("[BAT] %.2f V - nadal za malo, sprawdze za %d s\n",
+          realBatteryVoltage, CUTOFF_RECHECK_S);
+      goToSleep(CUTOFF_RECHECK_S);
+    }
+    LOGLN("[BAT] ladowanie wykryte - wracam do pracy");
+    rtcCutoff = false;
+    rtcTimeValid = false;                   // po padzie zegar jest bez wartosci
+    resetBatteryFilter();                   // wskazanie ma znow moc rosnac
+    batteryPercentage = batteryRawPercentage;
+    rtcBattPct = (uint8_t)batteryRawPercentage;
+    beepCharging();
+    if (wifiConnect() && firebaseSignIn()) { fetchConfig(); flushQueue(); pushStatus(); }
+    goToSleep(planNextSleep());
   }
 
-  const sorted = [...times].sort((a,b)=>a-b);
-  const n = sorted.length;
-  const median = n ? (n%2 ? sorted[(n-1)/2] : (sorted[n/2-1]+sorted[n/2])/2) : null;
-  const mean   = n ? times.reduce((a,b)=>a+b,0)/n : null;
-  const sd     = n > 1 ? Math.sqrt(times.reduce((a,b)=>a+(b-mean)**2,0)/n) : null;
-  const meanDev = deviations.length ? deviations.reduce((a,b)=>a+b,0)/deviations.length : null;
-
-  return { days, taken, missed, total: taken+missed, doseSum, plan,
-    times: sorted, n, median, mean, sd, meanDev, hist, byDow,
-    earliest: n ? sorted[0] : null, latest: n ? sorted[n-1] : null,
-    within30: deviations.filter(d=>Math.abs(d)<=30).length,
-    within60: deviations.filter(d=>Math.abs(d)<=60).length,
-    late60:   deviations.filter(d=>d > 60).length,
-    early60:  deviations.filter(d=>d < -60).length };
-}
-const A_dateKey = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
-
-/* Kontekst pomiaru INR: co działo się w N dniach bezpośrednio przed nim.
-   Przy warfarynie INR odpowiada na regularność z poprzedzającego tygodnia,
-   więc to najbardziej wartościowe zestawienie w całej analizie.        */
-function inrContext(dateStr, window = 7){
-  let taken = 0, total = 0, doseSum = 0;
-  const times = [];
-  /* Liczymy dni POPRZEDZAJĄCE pobranie (i = 1..window), bez dnia badania.
-     Krew pobiera się rano, zwykle przed wzięciem tabletki, więc wliczanie
-     tego dnia zaniżałoby regularność bez żadnego powodu.               */
-  for (let i = 1; i <= window; i++){
-    const d = new Date(dateStr+"T12:00:00"); d.setDate(d.getDate()-i);
-    const key = A_dateKey(d);
-    if (key > todayKey()) continue;
-    const rec = (doses[key]||{})[0];
-    const { sum, any } = dayDose(key);
-    total++;
-    if (any && sum > 0){ taken++; doseSum += sum;
-      const m = openMinutes(rec); if (m != null) times.push(m); }
-  }
-  const avg = times.length ? times.reduce((a,b)=>a+b,0)/times.length : null;
-  return { taken, total, doseSum, avgTime: avg,
-           adherence: total ? Math.round(taken/total*100) : null, samples: times.length };
-}
-
-function barsSVG(vals, labels, colorFn, height = 96){
-  const W = 520, PB = 18, max = Math.max(1, ...vals);
-  const bw = W / vals.length;
-  return `<svg viewBox="0 0 ${W} ${height+PB}" style="width:100%;height:auto">
-    ${vals.map((v,i)=>{
-      const h = v ? Math.max(3, v/max*height) : 0;
-      return `<rect x="${i*bw+bw*0.16}" y="${height-h}" width="${bw*0.68}" height="${h}"
-                rx="2.5" fill="${colorFn(i,v)}"/>` +
-             (v ? `<text x="${i*bw+bw/2}" y="${height-h-3}" fill="#8ea0c0" font-size="9"
-                text-anchor="middle">${v}</text>` : "");
-    }).join("")}
-    ${labels.map((l,i)=> l ? `<text x="${i*bw+bw/2}" y="${height+13}" fill="#61748f"
-        font-size="9.5" text-anchor="middle">${l}</text>` : "").join("")}
-  </svg>`;
-}
-
-function renderAnalysis(){
-  const days = +(document.getElementById("anRange")?.value || 90);
-  const a = analyze(days);
-  const setTxt = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = v; };
-
-  setTxt("anAdh", a.total ? Math.round(a.taken/a.total*100)+"%" : "–");
-  setTxt("anAdhSub", `${a.taken} z ${a.total} dawek`);
-  setTxt("anMedian", hm(a.median));
-  setTxt("anMedianSub", a.n ? `z ${a.n} zarejestrowanych otwarć` : "brak danych z pudełka");
-  setTxt("anSpread", a.sd == null ? "–" : `± ${Math.round(a.sd)} min`);
-  setTxt("anSpreadSub", a.n ? `od ${hm(a.earliest)} do ${hm(a.latest)}` : "—");
-  setTxt("anPunct", a.n ? Math.round(a.within30/a.n*100)+"%" : "–");
-  setTxt("anPunctSub", a.n ? `${a.within30} z ${a.n} w ±30 min od ${hm(a.plan)}` : "—");
-
-  const drift = document.getElementById("anDrift");
-  if (drift) drift.innerHTML = a.meanDev == null ? `<span class="muted">Brak danych.</span>`
-    : `Średnio bierzesz lek <b>${dev2(a.meanDev)}</b> ${a.meanDev >= 0 ? "po" : "przed"}
-       zaplanowaną godziną ${hm(a.plan)}.
-       ${a.late60 ? `<br><span style="color:var(--warn)">${a.late60} raz(y) ponad godzinę później.</span>` : ""}
-       ${a.early60 ? `<br><span style="color:var(--warn)">${a.early60} raz(y) ponad godzinę wcześniej.</span>` : ""}`;
-
-  const hs = document.getElementById("anHours");
-  if (hs){
-    const used = a.hist.map((v,i)=>v?i:-1).filter(i=>i>=0);
-    const lo = used.length ? Math.max(0, Math.min(...used)-1) : 5;
-    const hi = used.length ? Math.min(23, Math.max(...used)+1) : 12;
-    const slice = a.hist.slice(lo, hi+1);
-    hs.innerHTML = a.n ? barsSVG(slice,
-      slice.map((_,i)=> (lo+i)%2===0 ? `${pad(lo+i)}` : ""),
-      (i)=> (lo+i)===Math.floor(a.plan/60) ? "#5eead4" : "#7c93b8")
-      : `<div class="muted" style="padding:18px 0;text-align:center">
-           Statystyka pojawi się po kilku dniach zbierania danych.</div>`;
+  if (haveCell && realBatteryVoltage < BATT_CUTOFF_V) {
+    LOG("[BAT] %.2f V - odcinam sie dla ochrony ogniwa\n", realBatteryVoltage);
+    beepLowBattery(true);
+    rtcCutoff = true;
+    /* NIE spimy bezterminowo - budzimy sie co 15 min, zeby wykryc moment
+       podlaczenia ladowarki i od razu zsynchronizowac zegar.            */
+    goToSleep(CUTOFF_RECHECK_S);
   }
 
-  const dw = document.getElementById("anDow");
-  if (dw){
-    const pct = a.byDow.map(d => d.total ? Math.round(d.taken/d.total*100) : 0);
-    dw.innerHTML = a.byDow.some(d=>d.total)
-      ? barsSVG(pct, ["Pn","Wt","Śr","Cz","Pt","So","Nd"],
-          (i,v)=> !a.byDow[i].total ? "#26344f" : v>=90 ? "#34d399" : v>=70 ? "#fbbf24" : "#f87171", 70)
-      : `<div class="muted" style="padding:14px 0;text-align:center">Brak danych.</div>`;
-    const worst = a.byDow.map((d,i)=>({i,p:d.total?d.taken/d.total:1,t:d.total}))
-                    .filter(x=>x.t>=2).sort((x,y)=>x.p-y.p)[0];
-    const hint = document.getElementById("anDowHint");
-    if (hint) hint.innerHTML = worst && worst.p < 0.9
-      ? `Najczęściej zapominasz w <b>${DOW_PL[worst.i]}</b> (${Math.round(worst.p*100)}%).`
-      : `<span class="muted">Bierzesz lek równie regularnie przez cały tydzień.</span>`;
+  batterySaver = haveCell && realBatteryVoltage < BATT_SAFE_V;
+  if (batterySaver) LOGLN("[BAT] niskie napiecie - loguje offline, bez WiFi");
+
+  if (chargingDetected) {
+    LOGLN("[BAT] wykryto ladowanie - synchronizuje czas");
+    /* Filtr baterii z zasady nie pozwala wskazaniu rosnac. Ladowanie to
+       jedyny moment, w ktorym rosnac powinno - wiec kasujemy historie
+       i przyjmujemy swiezy odczyt bez inercji.                          */
+    resetBatteryFilter();
+    batteryPercentage = batteryRawPercentage;
+    rtcBattPct = (uint8_t)batteryRawPercentage;
+    LOG("[BAT] filtr wyzerowany, wskazanie %d%%\n", batteryPercentage);
+    beepCharging();
+    batterySaver = false;                   // ladujemy sie, mozna wlaczyc radio
+    if (wifiConnect() && firebaseSignIn()) { fetchConfig(); flushQueue(); pushStatus(); }
   }
 
-  const ic = document.getElementById("anInr");
-  if (ic){
-    const keys = Object.keys(inr).sort().reverse().slice(0, 8);
-    ic.innerHTML = keys.length ? keys.map(k => {
-      const v = inr[k].value, s = inrState(v), c = inrContext(k, 7);
-      return `<div class="inrrow">
-        <span class="inrdot" style="background:${s.col}"></span>
-        <span class="inrval" style="color:${s.col}">${nf(v)}</span>
-        <span style="flex:1">
-          <div style="font-size:13.5px">${new Date(k+"T12:00:00")
-            .toLocaleDateString("pl-PL",{day:"numeric",month:"short"})}</div>
-          <div class="dim2">7 dni przed: ${c.adherence ?? "–"}% regularności${
-            c.avgTime != null ? ` · średnio o ${hm(c.avgTime)}` : ""}</div>
-        </span></div>`;
-    }).join("") + `<div class="dim2" style="margin-top:10px;line-height:1.5">
-        Warfaryna reaguje na regularność z poprzedzającego tygodnia — jeśli wynik odstaje,
-        sprawdź, co działo się w tych dniach.</div>`
-      : `<div class="muted">Dodaj pomiary INR, żeby zobaczyć zależność.</div>`;
+  LOG("\n===== boot #%lu  powod: %s  bat=%d%% =====\n",
+      (unsigned long)rtcBootCount, wakeName(wakeReason), batteryPercentage);
+  LOG("[GPIO] kontaktron=%d (pudelko %s), przycisk=%d (%s)\n",
+      digitalRead(PIN_REED),   boxIsOpen()     ? "OTWARTE"  : "zamkniete",
+      digitalRead(PIN_BUTTON), buttonPressed() ? "wcisniety" : "zwolniony");
+
+  /* Pilnowanie otwartego wieczka dziala niezaleznie od powodu wybudzenia -
+     stad przed switchem, a nie w ktorymkolwiek z przypadkow.            */
+  boxOpenWarned = trackBoxOpen();
+
+  switch (wakeReason) {
+
+    /* ---------- Z. Wieczko wlasnie zamkniete ----------
+       Nic wiecej nie trzeba robic - trackBoxOpen() juz wyczyscil stan
+       alarmowy, a ewentualne powiadomienie aplikacji poleci nizej.    */
+    case WAKE_CLOSED:
+      LOGLN("[OPN] wybudzenie: ktos zamknal pudelko");
+      break;
+
+    /* ---------- A. Pierwsze wlaczenie / reset ---------- */
+    case WAKE_BOOT: {
+      bool haveCreds = false;
+      { wifi_config_t wc;
+        WiFi.mode(WIFI_STA);
+        delay(50);                                   // czas na inicjalizacje sterownika
+        if (esp_wifi_get_config(WIFI_IF_STA, &wc) == ESP_OK)
+          haveCreds = strlen((const char*)wc.sta.ssid) > 0;
+        if (!haveCreds && WiFi.SSID().length() > 0) haveCreds = true;   // zapasowa sciezka
+      }
+      if (!haveCreds) {
+        LOGLN("[SYS] brak zapisanego WiFi -> portal konfiguracyjny");
+        startWifiPortal();
+      } else {
+        if (wifiConnect()) {
+          if (firebaseSignIn()) { fetchConfig(); flushQueue(); }
+          reportEvent("boot", -1);
+        } else {
+          queuePush(makeRecord("boot", -1));
+        }
+      }
+      break;
+    }
+
+    /* ---------- B. Kontaktron: ktos otworzyl pudelko ---------- */
+    case WAKE_REED: {
+      /* Otwarcie pudelka to najwazniejsze zdarzenie w calym urzadzeniu -
+         dajemy mu z zapasem czasu na sygnal, polaczenie i wyslanie.     */
+      extendAwake(60000);
+#if ONE_DOSE_PER_DAY
+      /* --- Bierzesz raz dziennie. Liczy sie TYLKO pierwsze otwarcie. ---
+         Ta kontrola musi byc PRZED antydrganiami. Wczesniej bylo odwrotnie
+         i drugie otwarcie w ciagu minuty konczylo sie cisza zamiast
+         ostrzezenia - a to wlasnie wtedy najbardziej grozi podwojna dawka. */
+      if (rtcTimeValid) {
+        uint32_t today = localDayNumber(time(nullptr));
+        if (rtcTakenDay == today) {
+          LOG("[REED] dawka na dzien %lu juz zapisana -> OSTRZEZENIE\n",
+              (unsigned long)today);
+          beepAlreadyTaken();
+          uint32_t tw = millis();
+          while (boxIsOpen() && millis() - tw < 60000 && !awakeTooLong()) delay(500);
+          break;
+        }
+      }
+#endif
+
+      /* Antydrgania: dwa drgniecia styku w ciagu 60 s to jedno otwarcie.
+         Dotyczy juz tylko sytuacji, gdy dawki jeszcze dzis nie bylo.     */
+      if (rtcTimeValid) {
+        uint32_t now = (uint32_t)time(nullptr);
+        if (rtcLastOpenTs && now > rtcLastOpenTs && now - rtcLastOpenTs < 60) {
+          LOGLN("[REED] drgniecie styku w ciagu 60 s - pomijam");
+          break;
+        }
+        rtcLastOpenTs = now;
+      }
+
+#if ONE_DOSE_PER_DAY
+      if (rtcTimeValid) setTakenDay(localDayNumber(time(nullptr)));
+#endif
+
+      int slot = (rtcPendingSlot >= 0) ? rtcPendingSlot : matchSlot(time(nullptr));
+      if (slot < 0 && slotCount == 1) slot = 0;   // raz dziennie: zawsze slot 0
+      LOG("[REED] otwarcie zapisane, slot=%d%s\n", slot,
+          rtcTimeValid ? "" : "  (zegar jeszcze nieznany)");
+
+      rtcPendingSlot  = -1;                 // alarm obsluzony
+      rtcAlarmRetries = 0;
+      reportEvent("open", slot);
+
+#if ONE_DOSE_PER_DAY
+      /* Jesli w chwili otwarcia nie znalismy jeszcze daty, znacznik nie
+         mogl powstac. reportEvent() laczy sie z siecia i ustawia zegar,
+         wiec dopiero teraz mozemy go domknac - inaczej kolejne otwarcie
+         tego samego dnia nie zostaloby rozpoznane.                      */
+      if (rtcTimeValid) {
+        uint32_t today = localDayNumber(time(nullptr));
+        if (rtcTakenDay != today) {
+          setTakenDay(today);
+          LOG("[DAY] znacznik dawki uzupelniony po synchronizacji: %lu\n",
+              (unsigned long)today);
+        }
+      }
+#endif
+
+      /* Poczekaj az pudelko zostanie zamkniete, inaczej wysoki stan na
+         pinie natychmiast wybudzi uklad ponownie.                      */
+      uint32_t t0 = millis();
+      while (boxIsOpen() && millis() - t0 < 60000 && !awakeTooLong()) delay(500);
+      break;
+    }
+
+    /* ---------- C. Przycisk: portal konfiguracji WiFi ---------- */
+    case WAKE_BUTTON:
+      /* Przycisk zwarty na stale wybudzalby uklad w kolko i pudelko
+         piszczaloby bez konca. Po kilku takich wybudzeniach z rzedu
+         przestajemy reagowac, dopoki styk sie nie rozewrze.            */
+      if (rtcStuckButton >= 3) {
+        LOG("[BTN] przycisk zwarty od %u wybudzen - ignoruje\n", rtcStuckButton);
+        break;
+      }
+      LOGLN("[BTN] tryb konfiguracji WiFi (portal)");
+      startWifiPortal();
+      break;
+
+    /* ---------- D. Timer: pora na lek albo rutynowy meldunek ---------- */
+    case WAKE_TIMER: {
+      if (!rtcTimeValid) {                  // bez czasu nie wiemy co robic
+        if (wifiConnect() && firebaseSignIn()) fetchConfig();
+      }
+#if MIDNIGHT_CHECK
+      checkDayRollover();                   // czy poprzednia doba sie domknela
+#endif
+      int slot = matchSlot(time(nullptr));
+
+      if (rtcPendingSlot >= 0) slot = rtcPendingSlot;   // kontynuacja alarmu
+
+#if ONE_DOSE_PER_DAY
+      /* Jesli dawka na dzis juz zostala zapisana - nie dzwon w ogole. */
+      if (slot >= 0 && rtcTimeValid && rtcTakenDay == localDayNumber(time(nullptr))) {
+        LOGLN("[ALM] dawka na dzis juz wzieta - alarm pominiety");
+        rtcPendingSlot = -1;
+        rtcAlarmRetries = 0;
+        slot = -1;
+      }
+#endif
+
+      if (slot >= 0) {
+        rtcPendingSlot = slot;
+        LOG("[ALM] slot %d (%s), proba %u/%u\n",
+            slot, slots[slot].c_str(), rtcAlarmRetries + 1, MAX_ALARM_RETRIES);
+
+        bool opened = runAlarmWindow();
+        /* Dzwonienie moglo zjesc caly limit - zostawiamy czas na wyslanie. */
+        extendAwake(60000);
+
+        if (opened) {                             // otwarto w trakcie dzwonienia
+          rtcPendingSlot = -1;
+          rtcAlarmRetries = 0;
+          rtcLastOpenTs = (uint32_t)time(nullptr);
+          if (rtcTimeValid) setTakenDay(localDayNumber(time(nullptr)));
+          reportEvent("open", slot);
+#if ONE_DOSE_PER_DAY
+          if (rtcTimeValid && rtcTakenDay != localDayNumber(time(nullptr)))
+            setTakenDay(localDayNumber(time(nullptr)));
+#endif
+          uint32_t t0 = millis();
+          while (boxIsOpen() && millis() - t0 < 60000 && !awakeTooLong()) delay(500);
+        } else {
+          rtcAlarmRetries++;
+          if (rtcAlarmRetries >= MAX_ALARM_RETRIES) {
+            LOGLN("[ALM] pominieta dawka");
+            reportEvent("missed", slot);
+            rtcPendingSlot = -1;
+            rtcAlarmRetries = 0;
+          }
+        }
+      } else {
+        /* Rutynowe wybudzenie: meldunek o baterii, sync czasu, config. */
+        LOGLN("[SYS] housekeeping");
+        if (wifiConnect() && firebaseSignIn()) { fetchConfig(); flushQueue(); pushStatus(); }
+      }
+      break;
+    }
   }
-}
-window.renderAnalysis = renderAnalysis;
 
-/* ═══════════════ RAPORT ═══════════════ */
-function collectRows(days){
-  /* Koniec zakresu to biezaca DOBA LEKOWA. O 01:30 raport nie moze
-     doklejac pustego wiersza na jutro, bo dzisiejsza dawka wciaz trwa. */
-  const rows = [], end = medDate(new Date());
-  for (let i = days-1; i >= 0; i--){
-    const d = new Date(end); d.setDate(end.getDate()-i);
-    const key = dateKey(d), rec = (doses[key]||{})[0], { sum, any } = dayDose(key);
-    rows.push({ key,
-      status: !any ? (key < todayKey() ? "missed" : "") : (sum > 0 ? "taken" : "missed"),
-      dose: any && sum > 0 ? nf(sum) : (key < todayKey() ? "0" : ""),
-      time: openTimeOf(rec) != null ? devHM(openTimeOf(rec)) : "",
-      src:  rec ? (rec.source === "device" ? "pudełko" : "ręcznie") : "",
-      note: rec?.note || "",
-      inr:  inr[key] ? nf(inr[key].value) : "" });
+  /* --- Powiadomienie aplikacji o otwartym wieczku ----------------------
+     Wysylamy tylko na zmianie stanu: gdy wlasnie zabrzmial pierwszy (lub
+     kolejny) sygnal, albo gdy pudelko zostalo zamkniete, a aplikacja wciaz
+     pokazuje alarm. Nie robimy tego przy zwyklym, krotkim otwarciu na lek -
+     tam radio i tak sie wlacza, a alarm nie ma jeszcze racji bytu.       */
+#if OPEN_REPORT_APP
+  if (boxOpenWarned || rtcOpenClearPend) {
+    if (batterySaver) {
+      LOGLN("[OPN] niskie napiecie - nie wlaczam radia dla samego statusu");
+    } else {
+      extendAwake(45000);
+      if (wifiConnect() && firebaseSignIn()) {
+        pushStatus();
+        rtcOpenReported  = boxIsOpen();
+        rtcOpenClearPend = false;
+        LOG("[OPN] aplikacja powiadomiona: pudelko %s\n",
+            boxIsOpen() ? "OTWARTE" : "zamkniete");
+      } else {
+        LOGLN("[OPN] brak sieci - sprobuje przy nastepnym wybudzeniu");
+      }
+    }
   }
-  return rows;
-}
-const ST_PL = { taken:"wzięte", missed:"nie wzięte", "":"—" };
+#endif
 
-window.makeReport = () => {
-  const days = +document.getElementById("repRange").value;
-  const rows = collectRows(days);
-  const taken  = rows.filter(r=>r.status==="taken").length;
-  const missed = rows.filter(r=>r.status==="missed").length;
-  const total  = taken + missed;
-  const sumDose = rows.reduce((a,r)=>a+(parseFloat(String(r.dose).replace(",","."))||0),0);
-
-  const inrKeys = Object.keys(inr).filter(k => k >= rows[0].key).sort();
-  const inRange = inrKeys.filter(k => inr[k].value >= cfg.inrMin && inr[k].value <= cfg.inrMax).length;
-  const an = analyze(days);
-
-  document.getElementById("report").innerHTML = `
-    <h2>Raport przyjmowania leku${cfg.drugName ? " — " + esc(cfg.drugName) : ""}</h2>
-    <div class="meta">
-      Pacjent: ${esc(auth.currentUser?.email || "—")} &nbsp;·&nbsp;
-      Lek: ${esc(cfg.drugName)}${+cfg.drugStrength ? " " + cfg.drugStrength + " mg" : ""},
-      dawka standardowa ${nf(cfg.defaultDose??1)} tabl./dobę &nbsp;·&nbsp;
-      Okres: ${rows[0]?.key} — ${rows[rows.length-1]?.key} &nbsp;·&nbsp;
-      Wygenerowano: ${new Date().toLocaleString("pl-PL")}<br>
-      Źródło: automatyczny rejestrator otwarć pojemnika (${DEVICE_ID}) oraz korekty pacjenta.
-    </div>
-    <div class="sum">
-      Dawek zaplanowanych: <b>${total}</b> | przyjętych: <b>${taken}</b> |
-      pominiętych: <b>${missed}</b> | skuteczność: <b>${total?Math.round(taken/total*100):0}%</b> |
-      łącznie tabletek: <b>${nf(sumDose)}</b>
-    </div>
-
-    <h3>Analiza pór przyjmowania</h3>
-    ${an.n ? `<table><tbody>
-        <tr><th style="width:46%">Zaplanowana godzina</th><td>${hm(an.plan)}</td></tr>
-        <tr><th>Dni z zarejestrowaną godziną</th><td>${an.n}</td></tr>
-        <tr><th>Godzina typowa (mediana)</th><td>${hm(an.median)}</td></tr>
-        <tr><th>Godzina średnia</th><td>${hm(an.mean)}</td></tr>
-        <tr><th>Rozrzut (odchylenie std.)</th><td>${an.sd==null?"—":"± "+Math.round(an.sd)+" min"}</td></tr>
-        <tr><th>Najwcześniej / najpóźniej</th><td>${hm(an.earliest)} / ${hm(an.latest)}</td></tr>
-        <tr><th>Średnie odchylenie od planu</th><td>${dev2(an.meanDev)} ${an.meanDev>=0?"później":"wcześniej"}</td></tr>
-        <tr><th>Dawki w ±30 min od planu</th><td>${an.within30} z ${an.n}
-            (${Math.round(an.within30/an.n*100)}%)</td></tr>
-        <tr><th>Dawki w ±60 min od planu</th><td>${an.within60} z ${an.n}
-            (${Math.round(an.within60/an.n*100)}%)</td></tr>
-        <tr><th>Ponad godzinę później / wcześniej</th><td>${an.late60} / ${an.early60}</td></tr>
-      </tbody></table>
-
-      <table><thead><tr><th>Godzina</th>${an.hist.map((v,i)=>v?`<th>${pad(i)}</th>`:"").join("")}</tr></thead>
-        <tbody><tr><td>Liczba dni</td>${an.hist.map(v=>v?`<td>${v}</td>`:"").join("")}</tr></tbody></table>`
-      : `<div class="sum">Brak zarejestrowanych godzin otwarcia w tym okresie.</div>`}
-
-    <h3>Regularność w podziale na dni tygodnia</h3>
-    <table><thead><tr><th>Dzień</th><th>Wzięte</th><th>Wszystkich</th><th>Regularność</th>
-      <th>Typowa godzina</th></tr></thead><tbody>
-      ${an.byDow.map((d,i)=>{
-        const avg = d.times.length ? d.times.reduce((a,b)=>a+b,0)/d.times.length : null;
-        const p = d.total ? Math.round(d.taken/d.total*100) : null;
-        return `<tr class="${p!=null&&p<80?"out":""}"><td>${DOW_PL[i]}</td><td>${d.taken}</td>
-          <td>${d.total}</td><td>${p==null?"—":p+"%"}</td><td>${hm(avg)}</td></tr>`;
-      }).join("")}
-    </tbody></table>
-
-    <h3>Pomiary INR (cel ${nf(cfg.inrMin)}–${nf(cfg.inrMax)})</h3>
-    ${inrKeys.length ? `<div class="sum">Pomiarów: <b>${inrKeys.length}</b> |
-        w zakresie terapeutycznym: <b>${inRange}</b>
-        (<b>${Math.round(inRange/inrKeys.length*100)}%</b>)</div>
-      <table><thead><tr><th>Data</th><th>INR</th><th>Ocena</th>
-        <th>Regularność w 7 dni przed</th><th>Typowa godzina w tym tygodniu</th>
-        <th>Suma tabletek</th><th>Uwagi</th></tr></thead><tbody>
-      ${inrKeys.map(k=>{
-        const v=inr[k].value, ok=v>=cfg.inrMin&&v<=cfg.inrMax, c=inrContext(k,7);
-        return `<tr class="${ok?"":"out"}"><td>${k}</td><td>${nf(v)}</td>
-        <td>${ok?"w zakresie":(v<cfg.inrMin?"poniżej":"powyżej")}</td>
-        <td>${c.adherence==null?"—":c.adherence+"% ("+c.taken+"/"+c.total+")"}</td>
-        <td>${hm(c.avgTime)}</td><td>${nf(c.doseSum)}</td>
-        <td>${esc(inr[k].note||"")}</td></tr>`;}).join("")}
-      </tbody></table>
-      <div class="sum" style="font-size:9pt;color:#555">
-        Kolumny „7 dni przed" opisują tydzień bezpośrednio poprzedzający pobranie krwi —
-        okres, w którym warfaryna kształtuje wynik INR. Godziny pochodzą wyłącznie
-        z automatycznej rejestracji otwarć pojemnika.
-      </div>` : `<div class="sum">Brak pomiarów w tym okresie.</div>`}
-
-    <h3>Dzienny rejestr przyjmowania</h3>
-    <table><thead><tr><th>Data</th><th>Status</th><th>Tabletek</th><th>Godzina</th>
-      <th>Źródło</th><th>INR</th><th>Uwagi</th></tr></thead><tbody>
-      ${rows.map(r=>`<tr class="${r.status==="missed"?"miss":""}">
-        <td>${r.key}</td><td>${ST_PL[r.status]??r.status}</td><td>${r.dose}</td>
-        <td>${r.time}</td><td>${r.src}</td><td>${r.inr}</td><td>${esc(r.note)}</td></tr>`).join("")}
-    </tbody></table>`;
-  setTimeout(()=>window.print(), 120);
-};
-
-window.exportCsv = async () => {
-  const days = +document.getElementById("repRange").value;
-  const rows = collectRows(days);
-  const csv = "﻿" + ["Data;Status;Tabletek;Godzina;Zrodlo;INR;Uwagi"]
-    .concat(rows.map(r=>[r.key, ST_PL[r.status]??r.status, r.dose, r.time, r.src, r.inr,
-                         (r.note||"").replace(/;/g,",")].join(";"))).join("\n");
-  const file = new File([csv], `leki_${todayKey()}.csv`, { type:"text/csv" });
-  if (navigator.canShare && navigator.canShare({ files:[file] })){
-    try { await navigator.share({ files:[file], title:"Raport przyjmowania leku" }); return; }
-    catch(e){ if (e.name === "AbortError") return; }
-  }
-  const url = URL.createObjectURL(file), a = document.createElement("a");
-  a.href = url; a.download = file.name; a.click();
-  setTimeout(()=>URL.revokeObjectURL(url), 3000);
-};
-
-/* ═══════════════ NAWIGACJA ═══════════════ */
-let curTab = "cal";
-window.showTab = t => {
-  curTab = t;
-  ["cal","inr","ana","set"].forEach(x=>{
-    document.getElementById("tab-"+x).classList.toggle("hide", x!==t);
-    document.getElementById("nav-"+x).classList.toggle("act", x===t);
-  });
-  document.getElementById("hTitle").textContent =
-    { cal:"Kalendarz", inr:"Pomiary INR", ana:"Analiza", set:"Ustawienia" }[t];
-  if (t === "ana") renderAnalysis();
-  window.scrollTo({ top:0, behavior:"smooth" });
-};
-
-/* ═══════════════════════════════════════════════════════════════
- *  AUTOMATYCZNA AKTUALIZACJA
- *  Po podmianie plików na GitHubie aplikacja ma się sama odświeżyć.
- *  iOS potrafi trzymać starą wersję w pamięci nawet po zamknięciu,
- *  więc dopytujemy o nowszą przy każdym powrocie do aplikacji.
- * ═══════════════════════════════════════════════════════════════ */
-if ("serviceWorker" in navigator){
-  let reloading = false;
-  const reloadOnce = () => { if (!reloading){ reloading = true; location.reload(); } };
-
-  navigator.serviceWorker.addEventListener("controllerchange", reloadOnce);
-
-  navigator.serviceWorker.register("sw.js").then(reg => {
-    reg.update().catch(()=>{});
-    setInterval(() => reg.update().catch(()=>{}), 60*60*1000);
-
-    reg.addEventListener("updatefound", () => {
-      const sw = reg.installing;
-      if (!sw) return;
-      sw.addEventListener("statechange", () => {
-        /* Nowa wersja gotowa, a stara wciąż steruje stroną → przeładuj. */
-        if (sw.state === "installed" && navigator.serviceWorker.controller) reloadOnce();
-      });
-    });
-
-    document.addEventListener("visibilitychange", () => {
-      if (!document.hidden) reg.update().catch(()=>{});
-    });
-  }).catch(()=>{});
+  goToSleep(planNextSleep());
 }
 
-document.getElementById("appVersion").textContent = APP_VERSION;
-</script>
-</body>
-</html>
+void loop() {
+  /* nieosiagalne - urzadzenie zawsze konczy w deep sleep */
+}
