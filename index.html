@@ -1,0 +1,1388 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<!-- ══════════════════════════════════════════════════════════════════
+     NAZWA APLIKACJI — zmieniasz w 3 miejscach w TYM pliku:
+       1. meta apple-mobile-web-app-title  (podpis pod ikoną na iPhonie)
+       2. <title>                          (karta przeglądarki)
+       3. <h1> na ekranie logowania        (szukaj: NAZWA-EKRAN-LOGOWANIA)
+     …oraz w pliku manifest.json (pola "name" i "short_name").
+     Pod ikoną na iPhonie mieści się około 11 znaków.
+     ══════════════════════════════════════════════════════════════════ -->
+<meta name="apple-mobile-web-app-title" content="PillBox">
+<meta name="theme-color" content="#0b1220">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>PillBox</title>
+<style>
+:root{
+  --bg:#0b1220; --bg2:#0f1829;
+  --card:#151f33; --card2:#1d2942; --line:#26344f;
+  --txt:#e8eefc; --dim:#8ea0c0; --dim2:#61748f;
+  --ok:#34d399; --bad:#f87171; --warn:#fbbf24; --acc:#5eead4;
+  --pill:#8ab4f8; --pillEdge:#5b8ede;
+  --r:16px;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{overscroll-behavior-y:none}
+body{margin:0;background:
+      radial-gradient(1200px 600px at 50% -10%, #16233c 0%, transparent 60%), var(--bg);
+     color:var(--txt);font:16px/1.5 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,sans-serif;
+     padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom);-webkit-font-smoothing:antialiased}
+
+/* ---------- szkielet ---------- */
+header{display:flex;align-items:center;gap:10px;padding:12px 18px 10px;position:sticky;top:0;z-index:20;
+       background:rgba(11,18,32,.82);backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
+header .ttl{flex:1;min-width:0}
+header h1{font-size:17px;margin:0;font-weight:650;letter-spacing:-.01em}
+header .sub{font-size:11.5px;color:var(--dim2);margin-top:1px}
+main{padding:16px 16px 96px;max-width:580px;margin:0 auto}
+section{animation:fade .28s ease}
+@keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+.card{background:linear-gradient(180deg,var(--card) 0%,#131c2e 100%);
+      border:1px solid var(--line);border-radius:var(--r);padding:16px;margin-bottom:14px;
+      box-shadow:0 1px 0 rgba(255,255,255,.03) inset, 0 8px 24px -18px #000}
+.card h3{margin:0 0 4px;font-size:15px;font-weight:650}
+.muted{color:var(--dim);font-size:13px}
+.dim2{color:var(--dim2);font-size:12px}
+.row{display:flex;gap:10px;align-items:center}
+.between{justify-content:space-between}
+hr.sep{border:0;border-top:1px solid var(--line);margin:14px 0}
+
+button{font:inherit;border:0;border-radius:12px;padding:11px 15px;background:var(--card2);
+       color:var(--txt);cursor:pointer;transition:transform .1s, filter .15s;font-weight:500}
+button:active{transform:scale(.96)}
+button.primary{background:linear-gradient(180deg,#5eead4,#2dd4bf);color:#06322c;font-weight:700}
+button.ghost{background:transparent;border:1px solid var(--line);color:var(--dim)}
+button.danger{background:rgba(248,113,113,.16);color:#fecaca}
+button[disabled]{opacity:.4;pointer-events:none}
+input,select{font:inherit;background:var(--card2);color:var(--txt);border:1px solid var(--line);
+      border-radius:12px;padding:11px 12px;width:100%;outline:none}
+input:focus,select:focus{border-color:var(--acc)}
+label{font-size:12px;color:var(--dim2);display:block;margin:12px 0 5px;
+      text-transform:uppercase;letter-spacing:.06em;font-weight:600}
+
+.chip{font-size:11.5px;padding:5px 10px;border-radius:999px;background:var(--card2);
+      color:var(--dim);white-space:nowrap;border:1px solid var(--line)}
+.chip.on{color:var(--ok);border-color:rgba(52,211,153,.35)}
+.chip.warn{color:var(--warn);border-color:rgba(251,191,36,.35)}
+.chip.off{color:var(--bad);border-color:rgba(248,113,113,.35)}
+
+/* ---------- kalendarz ---------- */
+.calhead{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.calhead b{font-size:17px;text-transform:capitalize;font-weight:650}
+.calhead button{padding:8px 14px;font-size:18px;line-height:1}
+.grid{display:grid;grid-template-columns:repeat(7,1fr);gap:5px}
+.dow{text-align:center;font-size:10.5px;color:var(--dim2);font-weight:600;letter-spacing:.04em;padding-bottom:4px}
+.day{aspect-ratio:1;border-radius:12px;background:#141d2f;display:flex;flex-direction:column;
+     align-items:center;justify-content:center;font-size:13.5px;font-weight:600;position:relative;
+     cursor:pointer;border:1.5px solid #1d2942;color:var(--dim);transition:transform .1s}
+.day:active{transform:scale(.93)}
+.day.blank{background:transparent;border-color:transparent;cursor:default}
+.day.taken  {background:rgba(52,211,153,.14);border-color:rgba(52,211,153,.5);color:#a7f3d0}
+.day.partial{background:rgba(251,191,36,.13);border-color:rgba(251,191,36,.5);color:#fde68a}
+.day.missed {background:rgba(248,113,113,.13);border-color:rgba(248,113,113,.5);color:#fecaca}
+.day.future {opacity:.45}
+.day.today{box-shadow:0 0 0 2px var(--acc);opacity:1}
+.day .dose{position:absolute;bottom:4px;font-size:9px;font-weight:700;opacity:.9}
+.day .inr{position:absolute;top:3px;right:4px;width:11px;height:11px}
+.legend{display:flex;gap:12px;font-size:11.5px;color:var(--dim2);margin-top:14px;flex-wrap:wrap}
+.legend i{display:inline-block;width:9px;height:9px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+
+/* ---------- bateria ---------- */
+.batt{width:52px;height:25px;border:2px solid var(--dim2);border-radius:6px;position:relative;padding:2.5px;flex:none}
+.batt::after{content:"";position:absolute;right:-6px;top:7px;width:4px;height:9px;background:var(--dim2);border-radius:0 2px 2px 0}
+.battfill{height:100%;border-radius:2.5px;width:0;transition:width .5s}
+.bar{height:6px;background:#101828;border-radius:99px;overflow:hidden;border:1px solid var(--line)}
+.bar>div{height:100%;width:0;border-radius:99px;transition:width .5s}
+
+/* ---------- arkusz ---------- */
+.sheet{position:fixed;inset:0;background:rgba(3,7,16,.72);backdrop-filter:blur(3px);
+       display:none;align-items:flex-end;z-index:60}
+.sheet.show{display:flex;animation:fade .2s}
+.sheet>div{background:var(--bg2);width:100%;max-width:580px;margin:0 auto;border:1px solid var(--line);
+     border-radius:22px 22px 0 0;padding:10px 18px calc(20px + env(safe-area-inset-bottom));
+     max-height:92vh;overflow:auto;animation:up .3s cubic-bezier(.2,.9,.3,1)}
+@keyframes up{from{transform:translateY(40px)}to{transform:none}}
+.grab{width:38px;height:4px;background:var(--line);border-radius:9px;margin:2px auto 14px}
+
+/* ---------- sterowanie dawką ---------- */
+.dosewrap{display:flex;align-items:center;justify-content:center;gap:18px;margin:6px 0 4px}
+.stepbtn{width:56px;height:56px;border-radius:50%;font-size:26px;font-weight:300;padding:0;
+         background:var(--card2);border:1px solid var(--line);display:flex;align-items:center;justify-content:center}
+.dosebox{text-align:center;min-width:132px}
+.doseval{font-size:34px;font-weight:750;letter-spacing:-.02em;line-height:1.1}
+.doselbl{font-size:12px;color:var(--dim2);margin-top:1px}
+.pillrow{display:flex;gap:8px;justify-content:center;align-items:center;min-height:66px;margin:8px 0 2px}
+.changed{border:1px solid rgba(94,234,212,.4);background:rgba(94,234,212,.07);
+         border-radius:12px;padding:10px 12px;font-size:13px;margin-top:12px}
+
+/* ---------- kafelki statystyk ---------- */
+.stats{display:grid;grid-template-columns:repeat(2,1fr);gap:9px;margin-top:14px}
+.stat{background:#101a2b;border:1px solid var(--line);border-radius:12px;padding:11px 12px}
+.stat .sv{font-size:23px;font-weight:750;letter-spacing:-.02em;line-height:1.15}
+.stat .sl{font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.05em;
+          font-weight:600;margin-top:1px}
+
+/* ---------- INR ---------- */
+.inrbig{font-size:46px;font-weight:750;letter-spacing:-.03em;line-height:1}
+.inrlist{max-height:none}
+.inrrow{display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid var(--line)}
+.inrrow:last-child{border-bottom:0}
+.inrdot{width:9px;height:9px;border-radius:50%;flex:none}
+.inrval{font-weight:700;font-size:16px;min-width:42px}
+
+/* ---------- nawigacja ---------- */
+nav{position:fixed;bottom:0;left:0;right:0;display:flex;z-index:30;
+    background:rgba(15,24,41,.92);backdrop-filter:blur(16px);border-top:1px solid var(--line);
+    padding-bottom:env(safe-area-inset-bottom)}
+nav button{flex:1;background:none;border-radius:0;padding:9px 0 8px;font-size:10.5px;color:var(--dim2);
+           display:flex;flex-direction:column;align-items:center;gap:3px;font-weight:600}
+nav button svg{width:21px;height:21px}
+nav button.act{color:var(--acc)}
+.hide{display:none!important}
+
+/* ---------- raport ---------- */
+#report{display:none}
+@media print{
+  header,nav,main,#login,.sheet{display:none!important}
+  body{background:#fff;color:#000;font-size:11pt;padding:0}
+  #report{display:block;padding:0 4mm}
+  #report h2{margin:0 0 2mm;font-size:16pt}
+  #report h3{margin:6mm 0 2mm;font-size:12pt}
+  #report .meta{color:#555;font-size:9pt;margin-bottom:5mm}
+  #report table{width:100%;border-collapse:collapse;font-size:9pt;margin-bottom:4mm}
+  #report th,#report td{border:1px solid #bbb;padding:3px 5px;text-align:left}
+  #report th{background:#eee}
+  #report tr.miss td{background:#fde8e8}
+  #report tr.out td{background:#fff3d6}
+  #report .sum{margin:4mm 0;font-size:10pt}
+}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════ LOGOWANIE ═══════════════ -->
+<div id="login" style="padding:70px 24px;max-width:420px;margin:0 auto">
+  <div style="text-align:center;margin-bottom:26px" id="loginPill"></div>
+  <!-- NAZWA-EKRAN-LOGOWANIA -->
+  <h1 style="font-size:24px;margin:0 0 6px;text-align:center;font-weight:700">PillBox</h1>
+  <p class="muted" style="text-align:center;margin-top:0">Zaloguj się, żeby zobaczyć kalendarz.</p>
+  <label>E-mail</label><input id="email" type="email" autocomplete="username" inputmode="email">
+  <label>Hasło</label><input id="pass" type="password" autocomplete="current-password">
+  <p id="loginErr" style="color:var(--bad);font-size:13px;min-height:18px"></p>
+  <button class="primary" style="width:100%" onclick="doLogin()">Zaloguj</button>
+</div>
+
+<!-- ═══════════════ APLIKACJA ═══════════════ -->
+<div id="app" class="hide">
+<header>
+  <div class="ttl">
+    <h1 id="hTitle">Kalendarz</h1>
+    <div class="sub" id="hSub">—</div>
+  </div>
+  <span class="chip" id="batChip">–</span>
+</header>
+
+<main>
+
+<!-- ─────────── KALENDARZ ─────────── -->
+<section id="tab-cal">
+
+  <div class="card" id="todayCard">
+    <div class="row between" style="align-items:flex-start">
+      <div>
+        <div class="dim2" style="text-transform:uppercase;letter-spacing:.06em;font-weight:600">Dzisiaj</div>
+        <div id="todayState" style="font-size:19px;font-weight:650;margin-top:3px">—</div>
+        <div class="muted" id="todayWhen"></div>
+      </div>
+      <div class="pillrow" id="todayPill" style="min-height:0;margin:0"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="calhead">
+      <button class="ghost" onclick="shiftMonth(-1)">‹</button>
+      <b id="monthLbl"></b>
+      <button class="ghost" onclick="shiftMonth(1)">›</button>
+    </div>
+    <div class="grid" id="dowRow"></div>
+    <div class="grid" id="calGrid" style="margin-top:6px"></div>
+    <div class="legend">
+      <span><i style="background:var(--ok)"></i>pełna dawka</span>
+      <span><i style="background:var(--warn)"></i>mniejsza dawka</span>
+      <span><i style="background:var(--bad)"></i>nie wzięte</span>
+      <span><svg width="10" height="12" style="vertical-align:-2px;margin-right:4px"><circle cx="5" cy="6" r="4" fill="none" stroke="#a78bfa" stroke-width="1.6"/></svg>pomiar INR</span>
+    </div>
+    <hr class="sep">
+    <div class="row between">
+      <span class="muted">Skuteczność w tym miesiącu</span>
+      <b id="adherence" style="font-size:17px">–</b>
+    </div>
+  </div>
+
+  <!-- ZAPAS TABLETEK -->
+  <div class="card">
+    <div class="row between" style="align-items:flex-start">
+      <div>
+        <h3>Zapas w opakowaniu</h3>
+        <div class="muted" id="pillsSub">—</div>
+      </div>
+      <div style="text-align:right">
+        <div id="pillsBig" style="font-size:32px;font-weight:750;line-height:1">–</div>
+        <div class="dim2">tabletek</div>
+      </div>
+    </div>
+    <div class="bar" style="margin-top:12px"><div id="pillsBar"></div></div>
+    <div class="row" style="margin-top:12px;gap:6px">
+      <button style="flex:1" onclick="addPills(-100)">−100</button>
+      <button style="flex:1" onclick="addPills(-10)">−10</button>
+      <button style="flex:1" onclick="addPills(-1)">−1</button>
+      <button style="flex:1" onclick="addPills(1)">+1</button>
+      <button style="flex:1" onclick="addPills(10)">+10</button>
+      <button style="flex:1" onclick="addPills(100)">+100</button>
+    </div>
+    <button class="ghost" style="width:100%;margin-top:8px" onclick="setPills()">Ustaw dokładną liczbę</button>
+  </div>
+
+  <!-- STAN PUDEŁKA -->
+  <div class="card">
+    <div class="row between" style="align-items:flex-start">
+      <div>
+        <h3>Pudełko</h3>
+        <div id="batBig" style="font-size:30px;font-weight:750;line-height:1.15">–</div>
+        <div class="muted" id="batVolt"></div>
+      </div>
+      <div class="batt"><div class="battfill" id="battFill"></div></div>
+    </div>
+    <div class="bar" style="margin-top:12px"><div id="batBar"></div></div>
+    <hr class="sep">
+    <div class="row between"><span class="muted">Ostatnia aktualizacja</span>
+      <b id="lastSync" style="font-size:13.5px">–</b></div>
+    <div class="dim2" id="lastSyncRel" style="text-align:right"></div>
+    <div id="queueInfo" style="margin-top:8px;font-size:13px"></div>
+  </div>
+</section>
+
+<!-- ─────────── INR ─────────── -->
+<section id="tab-inr" class="hide">
+
+  <div class="card">
+    <div class="row between" style="align-items:flex-start">
+      <div>
+        <div class="dim2" style="text-transform:uppercase;letter-spacing:.06em;font-weight:600">Ostatni pomiar</div>
+        <div class="inrbig" id="inrLast">–</div>
+        <div id="inrLastWhen" class="muted"></div>
+      </div>
+      <div style="text-align:right">
+        <div class="chip" id="inrBadge">—</div>
+        <div class="dim2" style="margin-top:8px" id="inrRangeLbl"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- DODAWANIE POMIARU — najważniejsza rzecz na tym ekranie -->
+  <div class="card" id="inrAddCard" style="border-color:rgba(94,234,212,.35)">
+    <div class="row between">
+      <h3 style="margin:0">Dodaj pomiar</h3>
+      <span class="dim2">data + wynik</span>
+    </div>
+    <div class="row" style="margin-top:12px;align-items:flex-end">
+      <div style="flex:1.35"><label style="margin-top:0">Data pomiaru</label><input type="date" id="inrDate"></div>
+      <div style="flex:1"><label style="margin-top:0">Wynik INR</label>
+        <input type="number" id="inrVal" step="0.1" min="0.5" max="12" inputmode="decimal" placeholder="2,4"></div>
+    </div>
+    <input id="inrNote" placeholder="Notatka, np. dzień po antybiotyku" style="margin-top:10px">
+    <button class="primary" style="width:100%;margin-top:14px;padding:14px;font-size:15px"
+            onclick="addInr()">＋  Zapisz pomiar</button>
+    <div id="inrAddMsg" class="dim2" style="text-align:center;margin-top:8px;min-height:15px"></div>
+  </div>
+
+  <div class="card">
+    <h3>Przebieg</h3>
+    <div class="muted" style="margin-bottom:8px">Zielone pasmo to Twój zakres terapeutyczny.</div>
+    <div id="inrChart"></div>
+  </div>
+
+  <div class="card">
+    <h3>Historia pomiarów</h3>
+    <div class="inrlist" id="inrList" style="margin-top:6px"></div>
+  </div>
+</section>
+
+<!-- ─────────── ANALIZA ─────────── -->
+<section id="tab-ana" class="hide">
+
+  <div class="card">
+    <div class="row between">
+      <h3 style="margin:0">Okres analizy</h3>
+      <select id="anRange" onchange="renderAnalysis()" style="width:auto;padding:8px 10px;font-size:13px">
+        <option value="30">30 dni</option>
+        <option value="90" selected>3 miesiące</option>
+        <option value="180">6 miesięcy</option>
+        <option value="365">rok</option>
+      </select>
+    </div>
+    <div class="stats">
+      <div class="stat"><div class="sv" id="anAdh">–</div><div class="sl">regularność</div>
+        <div class="dim2" id="anAdhSub"></div></div>
+      <div class="stat"><div class="sv" id="anMedian">–</div><div class="sl">typowa godzina</div>
+        <div class="dim2" id="anMedianSub"></div></div>
+      <div class="stat"><div class="sv" id="anSpread">–</div><div class="sl">rozrzut</div>
+        <div class="dim2" id="anSpreadSub"></div></div>
+      <div class="stat"><div class="sv" id="anPunct">–</div><div class="sl">punktualność</div>
+        <div class="dim2" id="anPunctSub"></div></div>
+    </div>
+    <div id="anDrift" style="margin-top:14px;font-size:13.5px;line-height:1.6"></div>
+  </div>
+
+  <div class="card">
+    <h3>O której bierzesz lek</h3>
+    <div class="muted" style="margin-bottom:6px">Liczba dni w każdej godzinie. Turkusowy słupek to godzina zaplanowana.</div>
+    <div id="anHours"></div>
+  </div>
+
+  <div class="card">
+    <h3>Dni tygodnia</h3>
+    <div class="muted" style="margin-bottom:6px">Procent dni, w których lek został wzięty.</div>
+    <div id="anDow"></div>
+    <div id="anDowHint" style="margin-top:8px;font-size:13.5px"></div>
+  </div>
+
+  <div class="card">
+    <h3>INR a regularność</h3>
+    <div class="muted" style="margin-bottom:8px">Co działo się w tygodniu poprzedzającym każdy pomiar.</div>
+    <div id="anInr"></div>
+  </div>
+</section>
+
+<!-- ─────────── USTAWIENIA ─────────── -->
+<section id="tab-set" class="hide">
+
+  <div class="card">
+    <h3>Lek i dawkowanie</h3>
+    <label>Nazwa leku</label><input id="drugName" placeholder="Warfin">
+    <label>Moc tabletki</label>
+    <select id="drugStrength">
+      <option value="5">5 mg — tabletka różowa</option>
+      <option value="3">3 mg — tabletka niebieska</option>
+      <option value="0">inna — tabletka biała</option>
+    </select>
+    <label>Standardowa dawka dzienna (tabletki)</label>
+    <input id="defDose" type="number" step="0.5" min="0.5" inputmode="decimal">
+    <label>Godzina przypomnienia</label>
+    <div id="slotEditor"></div>
+    <div class="row" style="margin-top:10px">
+      <button class="ghost" onclick="addSlot()">+ Dodaj godzinę</button>
+      <button class="primary" style="flex:1" onclick="saveConfig()">Zapisz</button>
+    </div>
+    <label>Strefa czasowa (minuty od UTC)</label>
+    <input id="tzInput" type="number" step="15" inputmode="numeric">
+  </div>
+
+  <div class="card">
+    <h3>Zakres terapeutyczny INR</h3>
+    <div class="muted">Ustala go lekarz prowadzący. Najczęściej 2,0–3,0.</div>
+    <div class="row" style="margin-top:10px">
+      <div style="flex:1"><label style="margin-top:0">Od</label>
+        <input id="inrMin" type="number" step="0.1" inputmode="decimal"></div>
+      <div style="flex:1"><label style="margin-top:0">Do</label>
+        <input id="inrMax" type="number" step="0.1" inputmode="decimal"></div>
+    </div>
+    <button class="primary" style="width:100%;margin-top:12px" onclick="saveInrRange()">Zapisz zakres</button>
+  </div>
+
+  <div class="card">
+    <h3>Raport dla lekarza</h3>
+    <div class="muted">Przyjmowanie leku i wyniki INR w jednym dokumencie.</div>
+    <label>Zakres</label>
+    <select id="repRange">
+      <option value="30">ostatnie 30 dni</option>
+      <option value="90" selected>ostatnie 3 miesiące</option>
+      <option value="180">ostatnie 6 miesięcy</option>
+      <option value="365">ostatni rok</option>
+    </select>
+    <div class="row" style="margin-top:12px">
+      <button class="primary" style="flex:1" onclick="makeReport()">Drukuj / zapisz PDF</button>
+      <button class="ghost" onclick="exportCsv()">CSV</button>
+    </div>
+    <div class="dim2" style="margin-top:8px">
+      Na iPhonie: <i>Drukuj</i> → rozsuń podgląd dwoma palcami → <i>Udostępnij</i> → <i>Zapisz w plikach</i>.
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Urządzenie</h3>
+    <div class="muted" id="devInfo" style="margin-top:6px"></div>
+    <button class="ghost" style="margin-top:14px;width:100%" onclick="reconcile()">Przelicz kalendarz ze zdarzeń</button>
+    <button class="ghost" style="margin-top:8px;width:100%" onclick="fbSignOut()">Wyloguj</button>
+  </div>
+</section>
+</main>
+
+<nav>
+  <button id="nav-cal" class="act" onclick="showTab('cal')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round">
+      <rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18"/></svg>Kalendarz</button>
+  <button id="nav-inr" onclick="showTab('inr')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 14l4.5-5 3.5 4 3-7 4 8h3"/></svg>INR</button>
+  <button id="nav-ana" onclick="showTab('ana')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round">
+      <path d="M4 20V11M9.5 20V5M15 20v-6M20.5 20V8"/></svg>Analiza</button>
+  <button id="nav-set" onclick="showTab('set')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round">
+      <circle cx="12" cy="12" r="3.2"/>
+      <path d="M12 2.5v2.6M12 18.9v2.6M21.5 12h-2.6M5.1 12H2.5M18.7 5.3l-1.8 1.8M7.1 16.9l-1.8 1.8M18.7 18.7l-1.8-1.8M7.1 7.1L5.3 5.3"/></svg>Ustawienia</button>
+</nav>
+</div>
+
+<!-- ═══════════════ ARKUSZ DNIA ═══════════════ -->
+<div class="sheet" id="sheet" onclick="if(event.target===this)closeSheet()">
+  <div>
+    <div class="grab"></div>
+    <div class="row between" style="margin-bottom:6px">
+      <b id="sheetDate" style="font-size:17px"></b>
+      <button class="ghost" style="padding:7px 12px" onclick="closeSheet()">Zamknij</button>
+    </div>
+    <div id="sheetBody"></div>
+  </div>
+</div>
+
+<!-- ═══════════════ POTWIERDZENIE ═══════════════ -->
+<div class="sheet" id="confirm">
+  <div style="border-radius:22px;margin:0 12px 12px;max-width:420px">
+    <div class="grab"></div>
+    <b id="cfTitle" style="font-size:17px"></b>
+    <p class="muted" id="cfText" style="margin:8px 0 18px"></p>
+    <div class="row">
+      <button class="ghost" style="flex:1" onclick="cfResolve(false)">Anuluj</button>
+      <button class="primary" style="flex:1" onclick="cfResolve(true)" id="cfOk">Tak, zmień</button>
+    </div>
+  </div>
+</div>
+
+<div id="report"></div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut }
+  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { getDatabase, ref, onValue, set, update, remove, query, orderByChild, limitToLast }
+  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+
+/* ═══════════════════════════════════════════════════════════════
+ *  KONFIGURACJA — wklej z Firebase Console → Ustawienia projektu
+ * ═══════════════════════════════════════════════════════════════ */
+const firebaseConfig = {
+  apiKey:            "AIzaSyD7YwKvgn8PmqNKcxUEPdc8i6oJShgOkKg",
+  authDomain:        "pudelko-na-leki.firebaseapp.com",
+  databaseURL:       "https://pudelko-na-leki-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId:         "pudelko-na-leki",
+  storageBucket:     "pudelko-na-leki.firebasestorage.app",
+  messagingSenderId: "122871594657",
+  appId:             "1:122871594657:web:b35f059bf46c50a0bb7ae0"
+};
+const DEVICE_ID = "pillbox01";
+/* ═══════════════════════════════════════════════════════════════ */
+
+const app  = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db   = getDatabase(app);
+
+let uid = null;
+let cfg = { schedule:["08:00"], tzOffsetMin:120, defaultDose:1,
+            drugName:"Warfin", drugStrength:5, inrMin:2.0, inrMax:3.0 };
+let doses = {};      // { "2026-07-31": { "0": {dose, status, source, ts, note} } }
+let inr   = {};      // { "2026-07-20": { value, ts, note } }
+let events = [];
+let viewYear, viewMonth, sheetDate = null, pendingDose = null;
+
+/* ───────── narzędzia ───────── */
+const pad = n => String(n).padStart(2,"0");
+const dateKey = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const todayKey = () => dateKey(new Date());
+const nf = n => (Math.round(n*100)/100).toString().replace(".", ",");
+const esc = s => String(s??"").replace(/[<>&"]/g, c => ({"<":"&lt;",">":"&gt;","&":"&amp;",'"':"&quot;"}[c]));
+
+function devDate(ts){ return new Date((ts + cfg.tzOffsetMin*60) * 1000); }
+function devKey(ts){ const d = devDate(ts);
+  return `${d.getUTCFullYear()}-${pad(d.getUTCMonth()+1)}-${pad(d.getUTCDate())}`; }
+function devHM(ts){ const d = devDate(ts); return `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`; }
+function slotMin(h){ return +h.slice(0,2)*60 + +h.slice(3,5); }
+
+function pillColors(){
+  const s = +cfg.drugStrength;
+  if (s === 5) return { fill:"#f0a6c0", edge:"#d9799c" };   // Warfin 5 mg — różowa
+  if (s === 3) return { fill:"#8ab4f8", edge:"#5b8ede" };   // Warfin 3 mg — niebieska
+  return { fill:"#e6ebf5", edge:"#a9b6cc" };                // inna — biała
+}
+
+/* ═══════════════════════════════════════════════════════════════
+ *  TABLETKA — rysowana, z nacięciem krzyżowym jak Warfin.
+ *  Wypełnienie odpowiada dawce: pusta = 0, pół = 0,5, pełna = 1.
+ * ═══════════════════════════════════════════════════════════════ */
+function tabletSVG(fraction, size=54, idx=0){
+  const c = pillColors(), r = size/2 - 3, cx = size/2, cy = size/2;
+  const f = Math.max(0, Math.min(1, fraction));
+  const cid = `clip${idx}_${Math.round(f*100)}_${size}`;
+  return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+    <defs>
+      <clipPath id="${cid}"><rect x="0" y="0" width="${size*f}" height="${size}"/></clipPath>
+      <radialGradient id="g${cid}" cx="35%" cy="30%">
+        <stop offset="0%" stop-color="#fff" stop-opacity=".55"/>
+        <stop offset="100%" stop-color="#fff" stop-opacity="0"/>
+      </radialGradient>
+    </defs>
+    <circle cx="${cx}" cy="${cy}" r="${r}" fill="none"
+            stroke="${c.edge}" stroke-width="2" stroke-dasharray="${f<1?'3 3':'0'}" opacity="${f>0?1:.5}"/>
+    <g clip-path="url(#${cid})">
+      <circle cx="${cx}" cy="${cy}" r="${r}" fill="${c.fill}" stroke="${c.edge}" stroke-width="2"/>
+      <circle cx="${cx}" cy="${cy}" r="${r}" fill="url(#g${cid})"/>
+      <path d="M${cx} ${cy-r+3.5} V${cy+r-3.5} M${cx-r+3.5} ${cy} H${cx+r-3.5}"
+            stroke="${c.edge}" stroke-width="1.3" opacity=".65"/>
+    </g>
+  </svg>`;
+}
+
+/* Rysuje dawkę jako zestaw tabletek (max 4, potem "×N"). */
+function doseGraphic(dose, size=54){
+  if (dose <= 0) return tabletSVG(0, size, 9) +
+    `<span class="dim2" style="align-self:center;margin-left:6px">brak</span>`;
+  if (dose > 4) return tabletSVG(1, size, 8) +
+    `<b style="align-self:center;font-size:20px;margin-left:6px">× ${nf(dose)}</b>`;
+  let out = "", left = dose, i = 0;
+  while (left > 0.001 && i < 4){ out += tabletSVG(Math.min(1,left), size, i); left -= 1; i++; }
+  return out;
+}
+
+/* ═══════════════ LOGOWANIE ═══════════════ */
+document.getElementById("loginPill").innerHTML = tabletSVG(1, 76, 99);
+
+window.doLogin = async () => {
+  document.getElementById("loginErr").textContent = "";
+  try {
+    await signInWithEmailAndPassword(auth,
+      document.getElementById("email").value.trim(),
+      document.getElementById("pass").value);
+  } catch(e){ document.getElementById("loginErr").textContent = "Nie udało się zalogować."; }
+};
+window.fbSignOut = () => signOut(auth);
+
+onAuthStateChanged(auth, u => {
+  if (!u){ uid=null; document.getElementById("login").classList.remove("hide");
+           document.getElementById("app").classList.add("hide"); return; }
+  uid = u.uid;
+  document.getElementById("login").classList.add("hide");
+  document.getElementById("app").classList.remove("hide");
+  boot();
+});
+
+/* ═══════════════ START ═══════════════ */
+function boot(){
+  const now = new Date();
+  viewYear = now.getFullYear(); viewMonth = now.getMonth();
+  document.getElementById("inrDate").value = todayKey();
+
+  onValue(ref(db, `devices/${DEVICE_ID}/config`), s => {
+    if (s.val()) cfg = Object.assign(cfg, s.val());
+    renderSettings(); renderAll();
+  });
+  onValue(ref(db, `devices/${DEVICE_ID}/status`), s => renderStatus(s.val()));
+  onValue(query(ref(db, `devices/${DEVICE_ID}/events`), orderByChild("ts"), limitToLast(400)), s => {
+    events = []; s.forEach(c => events.push(Object.assign({id:c.key}, c.val())));
+    events.sort((a,b)=>b.ts-a.ts);
+    reconcile();
+  });
+  onValue(ref(db, `users/${uid}/doses`), s => {
+    doses = s.val() || {}; renderAll(); settlePills();
+  });
+  onValue(ref(db, `users/${uid}/inr`), s => { inr = s.val() || {}; renderAll(); });
+}
+
+function renderAll(){
+  renderCalendar(); renderToday(); renderPills(); renderInr();
+  if (curTab === "ana") renderAnalysis();
+  /* Arkusz dnia trzeba odświeżyć razem z resztą — inaczej po zapisaniu
+     zmiany pasek „Zmiana: … → …" zostawał na ekranie mimo zapisu.      */
+  if (sheetDate && document.getElementById("sheet").classList.contains("show")) renderSheet();
+}
+
+/* ═══════════════ REKONCYLIACJA ═══════════════ */
+window.reconcile = async () => {
+  if (!uid || !events.length) return;
+  const updates = {};
+  for (const ev of events){
+    if (!ev.ts) continue;
+    const key = devKey(ev.ts);
+    let slot = (typeof ev.slot === "number" && ev.slot >= 0) ? ev.slot : -1;
+    if (slot < 0 && cfg.schedule.length === 1) slot = 0;
+    else if (slot < 0){
+      const m = devDate(ev.ts).getUTCHours()*60 + devDate(ev.ts).getUTCMinutes();
+      let best=-1, bd=1e9;
+      cfg.schedule.forEach((h,i)=>{ let d=Math.abs(m-slotMin(h)); if(d>720)d=1440-d;
+        if(d<=90 && d<bd){bd=d;best=i;} });
+      slot = best;
+    }
+    if (slot < 0) continue;
+
+    const cur = doses?.[key]?.[slot];
+    if (cur && cur.source === "manual") continue;      // ręczna korekta wygrywa zawsze
+
+    if (ev.type === "open"){
+      if (cur && cur.status === "taken") continue;
+      /* openTs = rzeczywista godzina otwarcia pudełka. Trzymamy ją osobno
+         od ts, bo ts po ręcznej korekcie przestaje być wiarygodny, a
+         statystyki por przyjmowania muszą opierać się wyłącznie na
+         pomiarach z urządzenia.                                        */
+      updates[`users/${uid}/doses/${key}/${slot}`] =
+        { status:"taken", dose: cfg.defaultDose ?? 1, source:"device",
+          ts: ev.ts, openTs: ev.ts };
+    } else if (ev.type === "missed"){
+      if (cur && cur.status === "taken") continue;
+      updates[`users/${uid}/doses/${key}/${slot}`] =
+        { status:"missed", dose:0, source:"device", ts: ev.ts };
+    }
+  }
+  if (Object.keys(updates).length) await update(ref(db), updates);
+};
+
+/* ═══════════════ KALENDARZ ═══════════════ */
+const DOW = ["Pn","Wt","Śr","Cz","Pt","So","Nd"];
+document.getElementById("dowRow").innerHTML = DOW.map(d=>`<div class="dow">${d}</div>`).join("");
+
+window.shiftMonth = n => {
+  viewMonth += n;
+  if (viewMonth < 0){ viewMonth = 11; viewYear--; }
+  if (viewMonth > 11){ viewMonth = 0; viewYear++; }
+  renderCalendar();
+};
+
+function dayDose(key){
+  const rec = doses[key] || {};
+  let sum = 0, any = false;
+  for (let i = 0; i < (cfg.schedule.length||1); i++){
+    const r = rec[i];
+    if (r){ any = true; if (r.status === "taken") sum += (r.dose ?? 1); }
+  }
+  return { sum, any };
+}
+
+function dayStatus(key){
+  const { sum, any } = dayDose(key);
+  const target = (cfg.defaultDose ?? 1) * (cfg.schedule.length || 1);
+  const past = key < todayKey();
+  if (!any && !past) return "future";
+  if (!any && past)  return "missed";
+  if (sum <= 0)      return "missed";
+  return sum >= target - 0.001 ? "taken" : "partial";
+}
+
+const INR_MARK = `<svg class="inr" viewBox="0 0 12 12"><circle cx="6" cy="6" r="4"
+  fill="rgba(167,139,250,.25)" stroke="#a78bfa" stroke-width="1.6"/></svg>`;
+
+function renderCalendar(){
+  /* Zabezpieczenie: gdyby render wywolal sie zanim boot() ustawi miesiac,
+     kalendarz wyszedłby pusty bez zadnego bledu. Domyslamy sie „dzis".  */
+  if (!Number.isInteger(viewYear) || !Number.isInteger(viewMonth)){
+    const n = new Date(); viewYear = n.getFullYear(); viewMonth = n.getMonth();
+  }
+  const first = new Date(viewYear, viewMonth, 1);
+  const days  = new Date(viewYear, viewMonth+1, 0).getDate();
+  const lead  = (first.getDay() + 6) % 7;
+  document.getElementById("monthLbl").textContent =
+    first.toLocaleDateString("pl-PL", { month:"long", year:"numeric" });
+
+  let html = "", taken = 0, total = 0;
+  for (let i = 0; i < lead; i++) html += `<div class="day blank"></div>`;
+  for (let d = 1; d <= days; d++){
+    const key = `${viewYear}-${pad(viewMonth+1)}-${pad(d)}`;
+    const st = dayStatus(key), { sum } = dayDose(key);
+    if (st !== "future"){ total++; if (st === "taken") taken++; else if (st === "partial") taken += .5; }
+    html += `<div class="day ${st} ${key===todayKey()?"today":""}" data-k="${key}">
+        ${inr[key] ? INR_MARK : ""}${d}
+        ${sum>0 ? `<span class="dose">${nf(sum)}</span>` : ""}
+      </div>`;
+  }
+  const grid = document.getElementById("calGrid");
+  grid.innerHTML = html;
+  grid.querySelectorAll(".day[data-k]").forEach(el => el.onclick = () => openSheet(el.dataset.k));
+  document.getElementById("adherence").textContent = total ? Math.round(taken/total*100)+"%" : "–";
+}
+
+function renderToday(){
+  const key = todayKey(), { sum, any } = dayDose(key);
+  const target = (cfg.defaultDose ?? 1) * (cfg.schedule.length || 1);
+  const el = document.getElementById("todayState");
+  document.getElementById("todayPill").innerHTML = doseGraphic(sum, 44);
+  if (!any){
+    el.textContent = "Jeszcze nie wzięte";  el.style.color = "var(--warn)";
+    document.getElementById("todayWhen").textContent = `Przypomnienie o ${cfg.schedule[0] || "—"}`;
+  } else if (sum <= 0){
+    el.textContent = "Pominięte";           el.style.color = "var(--bad)";
+    document.getElementById("todayWhen").textContent = "Możesz to poprawić w kalendarzu";
+  } else {
+    el.textContent = sum >= target-0.001 ? "Wzięte" : "Wzięte — mniejsza dawka";
+    el.style.color = sum >= target-0.001 ? "var(--ok)" : "var(--warn)";
+    const r = (doses[key]||{})[0];
+    document.getElementById("todayWhen").textContent =
+      `${nf(sum)} tabl.` + (r?.ts ? ` · o ${devHM(r.ts)}` : "");
+  }
+  document.getElementById("hSub").textContent =
+    `${cfg.drugName || "Lek"}${+cfg.drugStrength ? " " + cfg.drugStrength + " mg" : ""} · ${nf(cfg.defaultDose??1)} tabl. dziennie`;
+}
+
+/* ═══════════════ ARKUSZ DNIA ═══════════════ */
+window.openSheet = key => {
+  sheetDate = key;
+  pendingDose = dayDose(key).sum;
+  const d = new Date(key + "T12:00:00");
+  document.getElementById("sheetDate").textContent =
+    d.toLocaleDateString("pl-PL", { weekday:"long", day:"numeric", month:"long" });
+  renderSheet();
+  document.getElementById("sheet").classList.add("show");
+};
+window.closeSheet = () => document.getElementById("sheet").classList.remove("show");
+
+function renderSheet(){
+  const rec = (doses[sheetDate] || {})[0] || {};
+  const saved = dayDose(sheetDate).sum;
+  const dirty = Math.abs(pendingDose - saved) > 0.001;
+  const src = rec.source === "device" ? "zarejestrowane przez pudełko"
+            : rec.source === "manual" ? "wpis ręczny" : "brak wpisu";
+
+  document.getElementById("sheetBody").innerHTML = `
+    <div class="pillrow">${doseGraphic(pendingDose, 62)}</div>
+    <div class="dosewrap">
+      <button class="stepbtn" onclick="stepDose(-0.5)" ${pendingDose<=0?"disabled":""}>−</button>
+      <div class="dosebox">
+        <div class="doseval" style="color:${pendingDose>0?"var(--txt)":"var(--dim2)"}">${nf(pendingDose)}</div>
+        <div class="doselbl">${pendingDose===1?"tabletka":"tabletki"} · co ½</div>
+      </div>
+      <button class="stepbtn" onclick="stepDose(0.5)">+</button>
+    </div>
+
+    <div class="dim2" style="text-align:center;margin-top:6px">
+      ${esc(src)}${rec.ts ? " · o " + devHM(rec.ts) : ""}
+    </div>
+
+    ${dirty ? `<div class="changed">
+        Zmiana: <b>${nf(saved)}</b> → <b>${nf(pendingDose)}</b> tabl.
+        <button class="primary" style="width:100%;margin-top:10px" onclick="commitDose()">
+          Zapisz zmianę</button>
+        <button class="ghost" style="width:100%;margin-top:6px" onclick="resetDose()">Cofnij</button>
+      </div>` : ``}
+
+    <label>Notatka</label>
+    <input id="dayNote" placeholder="np. wzięte po kolacji" value="${esc(rec.note||"")}"
+           onchange="saveNote(this.value)">
+
+    ${inr[sheetDate] ? `<div class="card" style="margin:14px 0 0;background:rgba(167,139,250,.09);
+        border-color:rgba(167,139,250,.3)">
+        <div class="row between"><span class="muted">Pomiar INR tego dnia</span>
+        <b style="font-size:19px">${nf(inr[sheetDate].value)}</b></div></div>` : ``}
+  `;
+}
+
+window.stepDose = d => {
+  pendingDose = Math.min(10, Math.max(0, Math.round((pendingDose + d) * 2) / 2));
+  renderSheet();
+};
+window.resetDose = () => { pendingDose = dayDose(sheetDate).sum; renderSheet(); };
+
+window.commitDose = async () => {
+  const saved = dayDose(sheetDate).sum;
+  const dateTxt = new Date(sheetDate+"T12:00:00").toLocaleDateString("pl-PL",
+    { weekday:"long", day:"numeric", month:"long" });
+  const ok = await askConfirm("Na pewno zmienić wpis?",
+    `${dateTxt}: z ${nf(saved)} na ${nf(pendingDose)} tabletki. ` +
+    `Wpis zostanie oznaczony jako ręczny i nie będzie już nadpisywany przez pudełko.`);
+  if (!ok) return;
+
+  const rec = (doses[sheetDate] || {})[0] || {};
+  await set(ref(db, `users/${uid}/doses/${sheetDate}/0`), {
+    status: pendingDose > 0 ? "taken" : "missed",
+    dose: pendingDose,
+    source: "manual",
+    ts: rec.ts || Math.floor(new Date(sheetDate+"T12:00:00").getTime()/1000),
+    ...(rec.openTs ? { openTs: rec.openTs } : {}),   // godzina z pudełka zostaje
+    ...(rec.note ? { note: rec.note } : {})
+  });
+  renderSheet();
+};
+
+window.saveNote = async txt => {
+  const rec = (doses[sheetDate] || {})[0];
+  /* Notatka na dniu bez wpisu i w przyszłości nie może tworzyć wpisu
+     „nie wzięte" — inaczej jutrzejszy dzień robiłby się czerwony. */
+  if (!rec && sheetDate > todayKey() && !txt.trim()) return;
+  if (!rec && sheetDate > todayKey()){ alert("Notatkę można dodać dopiero w dniu przyjęcia."); return; }
+  await set(ref(db, `users/${uid}/doses/${sheetDate}/0`), {
+    status: rec?.status || (dayDose(sheetDate).sum > 0 ? "taken" : "missed"),
+    dose:   rec?.dose ?? dayDose(sheetDate).sum,
+    source: rec?.source || "manual",
+    ts:     rec?.ts || Math.floor(new Date(sheetDate+"T12:00:00").getTime()/1000),
+    ...(rec?.openTs ? { openTs: rec.openTs } : {}),
+    note:   txt
+  });
+};
+
+/* ───────── potwierdzenie ───────── */
+let cfCb = null;
+function askConfirm(title, text){
+  document.getElementById("cfTitle").textContent = title;
+  document.getElementById("cfText").textContent = text;
+  document.getElementById("confirm").classList.add("show");
+  return new Promise(res => { cfCb = res; });
+}
+window.cfResolve = v => {
+  document.getElementById("confirm").classList.remove("show");
+  if (cfCb){ cfCb(v); cfCb = null; }
+};
+
+/* ═══════════════ INR ═══════════════ */
+function inrState(v){
+  if (v < cfg.inrMin) return { txt:"poniżej zakresu", cls:"warn", col:"var(--warn)" };
+  if (v > cfg.inrMax) return { txt:"powyżej zakresu", cls:"off",  col:"var(--bad)" };
+  return { txt:"w zakresie", cls:"on", col:"var(--ok)" };
+}
+
+window.addInr = async () => {
+  const date = document.getElementById("inrDate").value;
+  const val  = parseFloat(String(document.getElementById("inrVal").value).replace(",","."));
+  const msg = document.getElementById("inrAddMsg");
+  if (!date || !val || val <= 0 || val > 15){
+    msg.textContent = "Podaj datę i wynik (np. 2,4)."; msg.style.color = "var(--bad)"; return;
+  }
+  const note = document.getElementById("inrNote").value.trim();
+  await set(ref(db, `users/${uid}/inr/${date}`), {
+    value: Math.round(val*100)/100,
+    ts: Math.floor(new Date(date+"T12:00:00").getTime()/1000),
+    ...(note ? { note } : {})
+  });
+  document.getElementById("inrVal").value = "";
+  document.getElementById("inrNote").value = "";
+  msg.textContent = `Zapisano ${nf(val)} na ${date}.`; msg.style.color = "var(--ok)";
+  setTimeout(()=>{ msg.textContent = ""; }, 3500);
+};
+
+window.delInr = async date => {
+  const ok = await askConfirm("Usunąć pomiar?", `Wynik z dnia ${date} zniknie z historii i z wykresu.`);
+  if (ok) await remove(ref(db, `users/${uid}/inr/${date}`));
+};
+
+function renderInr(){
+  const keys = Object.keys(inr).sort();
+  const lastK = keys[keys.length-1];
+  const el = document.getElementById("inrLast");
+  const badge = document.getElementById("inrBadge");
+  document.getElementById("inrRangeLbl").textContent = `cel ${nf(cfg.inrMin)}–${nf(cfg.inrMax)}`;
+
+  if (!lastK){
+    el.textContent = "–"; el.style.color = "var(--dim2)";
+    badge.textContent = "brak pomiarów"; badge.className = "chip";
+    document.getElementById("inrLastWhen").textContent = "Dodaj pierwszy wynik poniżej.";
+  } else {
+    const v = inr[lastK].value, s = inrState(v);
+    el.textContent = nf(v); el.style.color = s.col;
+    badge.textContent = s.txt; badge.className = "chip " + s.cls;
+    const dd = Math.round((Date.now()/1000 - inr[lastK].ts)/86400);
+    document.getElementById("inrLastWhen").textContent =
+      new Date(lastK+"T12:00:00").toLocaleDateString("pl-PL",{day:"numeric",month:"long",year:"numeric"})
+      + (dd > 0 ? ` · ${dd} dni temu` : " · dzisiaj");
+  }
+
+  document.getElementById("inrChart").innerHTML = inrChart(keys.slice(-16));
+
+  document.getElementById("inrList").innerHTML = keys.slice().reverse().map(k => {
+    const v = inr[k].value, s = inrState(v);
+    return `<div class="inrrow">
+      <span class="inrdot" style="background:${s.col}"></span>
+      <span class="inrval" style="color:${s.col}">${nf(v)}</span>
+      <span style="flex:1">
+        <div style="font-size:14px">${new Date(k+"T12:00:00").toLocaleDateString("pl-PL",
+            {day:"numeric",month:"short",year:"numeric"})}</div>
+        ${inr[k].note ? `<div class="dim2">${esc(inr[k].note)}</div>` : ""}
+      </span>
+      <button class="danger" style="padding:7px 11px;font-size:13px" onclick="delInr('${k}')">Usuń</button>
+    </div>`;
+  }).join("") || `<span class="muted">Brak pomiarów.</span>`;
+}
+
+function inrChart(keys){
+  if (keys.length < 1) return `<div class="muted" style="padding:26px 0;text-align:center">
+      Wykres pojawi się po pierwszym pomiarze.</div>`;
+  const W = 520, H = 190, PL = 34, PR = 10, PT = 12, PB = 26;
+  const vals = keys.map(k => inr[k].value);
+  const lo = Math.min(...vals, cfg.inrMin) - 0.5;
+  const hi = Math.max(...vals, cfg.inrMax) + 0.5;
+  const x = i => PL + (keys.length===1 ? (W-PL-PR)/2 : i*(W-PL-PR)/(keys.length-1));
+  const y = v => PT + (hi-v)/(hi-lo)*(H-PT-PB);
+
+  const band = `<rect x="${PL}" y="${y(cfg.inrMax)}" width="${W-PL-PR}"
+      height="${Math.max(2,y(cfg.inrMin)-y(cfg.inrMax))}" fill="rgba(52,211,153,.14)"
+      stroke="rgba(52,211,153,.35)" stroke-width="1" rx="3"/>`;
+  const gridY = [cfg.inrMin, cfg.inrMax].map(v =>
+    `<text x="4" y="${y(v)+4}" fill="#61748f" font-size="10">${nf(v)}</text>`).join("");
+  const line = `<polyline fill="none" stroke="#a78bfa" stroke-width="2.4" stroke-linejoin="round"
+      stroke-linecap="round" points="${keys.map((k,i)=>`${x(i)},${y(inr[k].value)}`).join(" ")}"/>`;
+  const dots = keys.map((k,i)=>{
+    const v = inr[k].value, s = inrState(v);
+    return `<circle cx="${x(i)}" cy="${y(v)}" r="4.5" fill="${s.col}" stroke="#0f1829" stroke-width="2"/>`;
+  }).join("");
+  const labels = keys.map((k,i)=> (keys.length<=8 || i%2===0)
+    ? `<text x="${x(i)}" y="${H-8}" fill="#61748f" font-size="9.5" text-anchor="middle">${k.slice(8)}.${k.slice(5,7)}</text>` : "").join("");
+
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;overflow:visible">
+      ${band}${gridY}${line}${dots}${labels}</svg>`;
+}
+
+/* ═══════════════ STATUS PUDEŁKA ═══════════════ */
+function relTime(sec){
+  if (sec < 90) return "przed chwilą";
+  if (sec < 5400) return `${Math.round(sec/60)} min temu`;
+  if (sec < 86400) return `${Math.round(sec/3600)} godz. temu`;
+  const d = Math.round(sec/86400);
+  return d === 1 ? "wczoraj" : `${d} dni temu`;
+}
+
+function renderStatus(st){
+  const chip = document.getElementById("batChip");
+  if (!st){ chip.textContent = "brak danych"; return; }
+  const pct = st.battery ?? 0;
+  const col = pct > 40 ? "var(--ok)" : pct > 15 ? "var(--warn)" : "var(--bad)";
+
+  document.getElementById("batBig").textContent = pct + "%";
+  document.getElementById("batBig").style.color = col;
+  document.getElementById("batVolt").textContent = `${(st.volt||0).toFixed(2)} V · ogniwo 470 mAh`;
+  const f = document.getElementById("battFill"); f.style.width = Math.max(6,pct)+"%"; f.style.background = col;
+  const b = document.getElementById("batBar");  b.style.width = pct+"%"; b.style.background = col;
+  chip.textContent = pct + "%";
+  chip.className = "chip " + (pct > 40 ? "on" : pct > 15 ? "warn" : "off");
+
+  const ls = st.lastSeen || 0, ago = Math.round(Date.now()/1000 - ls);
+  document.getElementById("lastSync").textContent = ls
+    ? new Date(ls*1000).toLocaleString("pl-PL",{day:"2-digit",month:"2-digit",year:"numeric",
+        hour:"2-digit",minute:"2-digit"}) : "nigdy";
+  document.getElementById("lastSyncRel").textContent = ls ? relTime(ago) : "";
+
+  const q = st.queued || 0, qi = document.getElementById("queueInfo");
+  qi.innerHTML = q ? `<span style="color:var(--warn)">⏳ ${q} zdarzeń czeka w pamięci pudełka.</span>` : "";
+
+  document.getElementById("devInfo").innerHTML =
+    `ID: <b>${DEVICE_ID}</b><br>Firmware: ${st.fw||"?"}<br>WiFi: ${esc(st.ssid)||"?"} (${st.rssi||"?"} dBm)<br>` +
+    `Wybudzeń: ${st.boots||0} · w kolejce: ${q}`;
+}
+
+/* ═══════════════ ZAPAS TABLETEK ═══════════════ */
+function yesterdayKey(){ const d=new Date(); d.setDate(d.getDate()-1); return dateKey(d); }
+
+async function settlePills(){
+  if (typeof cfg.pillsLeft !== "number") return;
+  const today = todayKey(), until = cfg.pillsCountedUntil || "0000-00-00";
+  const closed = Object.keys(doses).filter(d => d < today).sort();
+  if (!closed.length) return;
+  const newest = closed[closed.length-1];
+  if (newest <= until) return;
+  let used = 0;
+  for (const d of closed){ if (d <= until) continue;
+    for (const r of Object.values(doses[d])) if (r.status === "taken") used += (r.dose ?? 1); }
+  cfg.pillsLeft = Math.max(0, Math.round((cfg.pillsLeft - used)*100)/100);
+  cfg.pillsCountedUntil = newest;
+  await update(ref(db, `devices/${DEVICE_ID}/config`),
+    { pillsLeft: cfg.pillsLeft, pillsCountedUntil: cfg.pillsCountedUntil });
+}
+
+function renderPills(){
+  const big = document.getElementById("pillsBig"), sub = document.getElementById("pillsSub");
+  const bar = document.getElementById("pillsBar");
+  if (typeof cfg.pillsLeft !== "number"){
+    big.textContent = "–"; sub.textContent = "Ustaw stan opakowania."; bar.style.width = "0"; return;
+  }
+  const takenToday = Object.values(doses[todayKey()]||{})
+    .filter(r=>r.status==="taken").reduce((a,r)=>a+(r.dose??1),0);
+  const left = Math.max(0, cfg.pillsLeft - takenToday);
+  const perDay = (cfg.defaultDose ?? 1) * (cfg.schedule.length || 1);
+  const days = perDay > 0 ? Math.floor(left/perDay) : 0;
+  const col = days < 7 ? "var(--bad)" : days < 14 ? "var(--warn)" : "var(--ok)";
+  big.textContent = nf(left); big.style.color = col;
+  bar.style.width = Math.min(100, left/100*100) + "%"; bar.style.background = col;
+  sub.textContent = `starczy na ok. ${days} dni` + (days < 7 ? " — czas po receptę" : "");
+}
+
+async function savePills(n){
+  cfg.pillsLeft = Math.max(0, Math.round(n*100)/100);
+  cfg.pillsCountedUntil = cfg.pillsCountedUntil || yesterdayKey();
+  await update(ref(db, `devices/${DEVICE_ID}/config`),
+    { pillsLeft: cfg.pillsLeft, pillsCountedUntil: cfg.pillsCountedUntil });
+  renderPills();
+}
+window.addPills = n => savePills(Math.max(0,(cfg.pillsLeft ?? 0) + n));
+window.setPills = () => {
+  const v = prompt("Ile tabletek jest w opakowaniu?", cfg.pillsLeft ?? 100);
+  if (v !== null && !isNaN(+v)) savePills(+v);
+};
+
+/* ═══════════════ USTAWIENIA ═══════════════ */
+function renderSettings(){
+  document.getElementById("slotEditor").innerHTML = cfg.schedule.map((h,i)=>
+    `<div class="row" style="margin-top:8px">
+       <input type="time" value="${h}" onchange="cfgTime(${i},this.value)">
+       ${cfg.schedule.length>1?`<button class="danger" onclick="delSlot(${i})">✕</button>`:""}
+     </div>`).join("");
+  document.getElementById("tzInput").value  = cfg.tzOffsetMin ?? 120;
+  document.getElementById("defDose").value  = cfg.defaultDose ?? 1;
+  document.getElementById("drugName").value = cfg.drugName || "Warfin";
+  document.getElementById("drugStrength").value = String(cfg.drugStrength ?? 3);
+  document.getElementById("inrMin").value = cfg.inrMin ?? 2;
+  document.getElementById("inrMax").value = cfg.inrMax ?? 3;
+}
+window.cfgTime = (i,v) => { cfg.schedule[i] = v; };
+window.addSlot = () => { cfg.schedule.push("20:00"); renderSettings(); };
+window.delSlot = i => { cfg.schedule.splice(i,1); renderSettings(); };
+
+window.saveConfig = async () => {
+  cfg.schedule     = [...new Set(cfg.schedule)].sort();
+  cfg.tzOffsetMin  = +document.getElementById("tzInput").value || 120;
+  cfg.defaultDose  = +document.getElementById("defDose").value || 1;
+  cfg.drugName     = document.getElementById("drugName").value.trim() || "Warfin";
+  cfg.drugStrength = +document.getElementById("drugStrength").value;
+  await update(ref(db, `devices/${DEVICE_ID}/config`), {
+    schedule: cfg.schedule, tzOffsetMin: cfg.tzOffsetMin, defaultDose: cfg.defaultDose,
+    drugName: cfg.drugName, drugStrength: cfg.drugStrength });
+  renderAll();
+  alert("Zapisano. Pudełko pobierze ustawienia przy najbliższym połączeniu.");
+};
+
+window.saveInrRange = async () => {
+  cfg.inrMin = +document.getElementById("inrMin").value || 2;
+  cfg.inrMax = +document.getElementById("inrMax").value || 3;
+  await update(ref(db, `devices/${DEVICE_ID}/config`), { inrMin: cfg.inrMin, inrMax: cfg.inrMax });
+  renderInr();
+};
+
+/* ═══════════════════════════════════════════════════════════════
+ *  ANALIZA
+ *  Godziny liczymy WYŁĄCZNIE z openTs, czyli z momentu, w którym
+ *  kontaktron naprawdę wykrył otwarcie. Ręczne korekty w kalendarzu
+ *  nie zmyślają godzin, więc statystyka pozostaje uczciwa.
+ * ═══════════════════════════════════════════════════════════════ */
+function openTimeOf(rec){
+  if (!rec) return null;
+  if (typeof rec.openTs === "number" && rec.openTs > 0) return rec.openTs;
+  if (rec.source === "device" && rec.ts > 0) return rec.ts;
+  return null;
+}
+function openMinutes(rec){
+  const t = openTimeOf(rec); if (t == null) return null;
+  const d = devDate(t); return d.getUTCHours()*60 + d.getUTCMinutes();
+}
+const hm  = m => m == null ? "—" : `${pad(Math.floor(((m%1440)+1440)%1440/60))}:${pad(Math.round(m)%60)}`;
+const dev2 = d => d == null ? "—" : (d > 0 ? "+" : d < 0 ? "−" : "") +
+  `${Math.floor(Math.abs(d)/60) ? Math.floor(Math.abs(d)/60)+" h " : ""}${Math.round(Math.abs(d))%60} min`;
+const DOW_PL = ["poniedziałek","wtorek","środa","czwartek","piątek","sobota","niedziela"];
+
+function analyze(days){
+  const end = new Date();
+  const times = [], deviations = [], hist = Array(24).fill(0);
+  const byDow = Array.from({length:7}, () => ({ taken:0, total:0, times:[] }));
+  const plan = slotMin(cfg.schedule[0] || "08:00");
+  let taken = 0, missed = 0, doseSum = 0;
+
+  for (let i = days-1; i >= 0; i--){
+    const d = new Date(end); d.setDate(end.getDate()-i);
+    const key = A_dateKey(d);
+    if (key > todayKey()) continue;
+    const rec = (doses[key]||{})[0];
+    const { sum, any } = dayDose(key);
+    const dow = (d.getDay()+6)%7;
+
+    const isTaken = any && sum > 0;
+    if (any || key < todayKey()){
+      byDow[dow].total++;
+      if (isTaken){ taken++; byDow[dow].taken++; doseSum += sum; } else missed++;
+    }
+    if (!isTaken) continue;
+
+    const m = openMinutes(rec);
+    if (m == null) continue;
+    times.push(m); hist[Math.floor(m/60)]++; byDow[dow].times.push(m);
+    let dv = m - plan; if (dv > 720) dv -= 1440; if (dv < -720) dv += 1440;
+    deviations.push(dv);
+  }
+
+  const sorted = [...times].sort((a,b)=>a-b);
+  const n = sorted.length;
+  const median = n ? (n%2 ? sorted[(n-1)/2] : (sorted[n/2-1]+sorted[n/2])/2) : null;
+  const mean   = n ? times.reduce((a,b)=>a+b,0)/n : null;
+  const sd     = n > 1 ? Math.sqrt(times.reduce((a,b)=>a+(b-mean)**2,0)/n) : null;
+  const meanDev = deviations.length ? deviations.reduce((a,b)=>a+b,0)/deviations.length : null;
+
+  return { days, taken, missed, total: taken+missed, doseSum, plan,
+    times: sorted, n, median, mean, sd, meanDev, hist, byDow,
+    earliest: n ? sorted[0] : null, latest: n ? sorted[n-1] : null,
+    within30: deviations.filter(d=>Math.abs(d)<=30).length,
+    within60: deviations.filter(d=>Math.abs(d)<=60).length,
+    late60:   deviations.filter(d=>d > 60).length,
+    early60:  deviations.filter(d=>d < -60).length };
+}
+const A_dateKey = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+
+/* Kontekst pomiaru INR: co działo się w N dniach bezpośrednio przed nim.
+   Przy warfarynie INR odpowiada na regularność z poprzedzającego tygodnia,
+   więc to najbardziej wartościowe zestawienie w całej analizie.        */
+function inrContext(dateStr, window = 7){
+  let taken = 0, total = 0, doseSum = 0;
+  const times = [];
+  /* Liczymy dni POPRZEDZAJĄCE pobranie (i = 1..window), bez dnia badania.
+     Krew pobiera się rano, zwykle przed wzięciem tabletki, więc wliczanie
+     tego dnia zaniżałoby regularność bez żadnego powodu.               */
+  for (let i = 1; i <= window; i++){
+    const d = new Date(dateStr+"T12:00:00"); d.setDate(d.getDate()-i);
+    const key = A_dateKey(d);
+    if (key > todayKey()) continue;
+    const rec = (doses[key]||{})[0];
+    const { sum, any } = dayDose(key);
+    total++;
+    if (any && sum > 0){ taken++; doseSum += sum;
+      const m = openMinutes(rec); if (m != null) times.push(m); }
+  }
+  const avg = times.length ? times.reduce((a,b)=>a+b,0)/times.length : null;
+  return { taken, total, doseSum, avgTime: avg,
+           adherence: total ? Math.round(taken/total*100) : null, samples: times.length };
+}
+
+function barsSVG(vals, labels, colorFn, height = 96){
+  const W = 520, PB = 18, max = Math.max(1, ...vals);
+  const bw = W / vals.length;
+  return `<svg viewBox="0 0 ${W} ${height+PB}" style="width:100%;height:auto">
+    ${vals.map((v,i)=>{
+      const h = v ? Math.max(3, v/max*height) : 0;
+      return `<rect x="${i*bw+bw*0.16}" y="${height-h}" width="${bw*0.68}" height="${h}"
+                rx="2.5" fill="${colorFn(i,v)}"/>` +
+             (v ? `<text x="${i*bw+bw/2}" y="${height-h-3}" fill="#8ea0c0" font-size="9"
+                text-anchor="middle">${v}</text>` : "");
+    }).join("")}
+    ${labels.map((l,i)=> l ? `<text x="${i*bw+bw/2}" y="${height+13}" fill="#61748f"
+        font-size="9.5" text-anchor="middle">${l}</text>` : "").join("")}
+  </svg>`;
+}
+
+function renderAnalysis(){
+  const days = +(document.getElementById("anRange")?.value || 90);
+  const a = analyze(days);
+  const setTxt = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = v; };
+
+  setTxt("anAdh", a.total ? Math.round(a.taken/a.total*100)+"%" : "–");
+  setTxt("anAdhSub", `${a.taken} z ${a.total} dawek`);
+  setTxt("anMedian", hm(a.median));
+  setTxt("anMedianSub", a.n ? `z ${a.n} zarejestrowanych otwarć` : "brak danych z pudełka");
+  setTxt("anSpread", a.sd == null ? "–" : `± ${Math.round(a.sd)} min`);
+  setTxt("anSpreadSub", a.n ? `od ${hm(a.earliest)} do ${hm(a.latest)}` : "—");
+  setTxt("anPunct", a.n ? Math.round(a.within30/a.n*100)+"%" : "–");
+  setTxt("anPunctSub", a.n ? `${a.within30} z ${a.n} w ±30 min od ${hm(a.plan)}` : "—");
+
+  const drift = document.getElementById("anDrift");
+  if (drift) drift.innerHTML = a.meanDev == null ? `<span class="muted">Brak danych.</span>`
+    : `Średnio bierzesz lek <b>${dev2(a.meanDev)}</b> ${a.meanDev >= 0 ? "po" : "przed"}
+       zaplanowaną godziną ${hm(a.plan)}.
+       ${a.late60 ? `<br><span style="color:var(--warn)">${a.late60} raz(y) ponad godzinę później.</span>` : ""}
+       ${a.early60 ? `<br><span style="color:var(--warn)">${a.early60} raz(y) ponad godzinę wcześniej.</span>` : ""}`;
+
+  const hs = document.getElementById("anHours");
+  if (hs){
+    const used = a.hist.map((v,i)=>v?i:-1).filter(i=>i>=0);
+    const lo = used.length ? Math.max(0, Math.min(...used)-1) : 5;
+    const hi = used.length ? Math.min(23, Math.max(...used)+1) : 12;
+    const slice = a.hist.slice(lo, hi+1);
+    hs.innerHTML = a.n ? barsSVG(slice,
+      slice.map((_,i)=> (lo+i)%2===0 ? `${pad(lo+i)}` : ""),
+      (i)=> (lo+i)===Math.floor(a.plan/60) ? "#5eead4" : "#7c93b8")
+      : `<div class="muted" style="padding:18px 0;text-align:center">
+           Statystyka pojawi się po kilku dniach zbierania danych.</div>`;
+  }
+
+  const dw = document.getElementById("anDow");
+  if (dw){
+    const pct = a.byDow.map(d => d.total ? Math.round(d.taken/d.total*100) : 0);
+    dw.innerHTML = a.byDow.some(d=>d.total)
+      ? barsSVG(pct, ["Pn","Wt","Śr","Cz","Pt","So","Nd"],
+          (i,v)=> !a.byDow[i].total ? "#26344f" : v>=90 ? "#34d399" : v>=70 ? "#fbbf24" : "#f87171", 70)
+      : `<div class="muted" style="padding:14px 0;text-align:center">Brak danych.</div>`;
+    const worst = a.byDow.map((d,i)=>({i,p:d.total?d.taken/d.total:1,t:d.total}))
+                    .filter(x=>x.t>=2).sort((x,y)=>x.p-y.p)[0];
+    const hint = document.getElementById("anDowHint");
+    if (hint) hint.innerHTML = worst && worst.p < 0.9
+      ? `Najczęściej zapominasz w <b>${DOW_PL[worst.i]}</b> (${Math.round(worst.p*100)}%).`
+      : `<span class="muted">Bierzesz lek równie regularnie przez cały tydzień.</span>`;
+  }
+
+  const ic = document.getElementById("anInr");
+  if (ic){
+    const keys = Object.keys(inr).sort().reverse().slice(0, 8);
+    ic.innerHTML = keys.length ? keys.map(k => {
+      const v = inr[k].value, s = inrState(v), c = inrContext(k, 7);
+      return `<div class="inrrow">
+        <span class="inrdot" style="background:${s.col}"></span>
+        <span class="inrval" style="color:${s.col}">${nf(v)}</span>
+        <span style="flex:1">
+          <div style="font-size:13.5px">${new Date(k+"T12:00:00")
+            .toLocaleDateString("pl-PL",{day:"numeric",month:"short"})}</div>
+          <div class="dim2">7 dni przed: ${c.adherence ?? "–"}% regularności${
+            c.avgTime != null ? ` · średnio o ${hm(c.avgTime)}` : ""}</div>
+        </span></div>`;
+    }).join("") + `<div class="dim2" style="margin-top:10px;line-height:1.5">
+        Warfaryna reaguje na regularność z poprzedzającego tygodnia — jeśli wynik odstaje,
+        sprawdź, co działo się w tych dniach.</div>`
+      : `<div class="muted">Dodaj pomiary INR, żeby zobaczyć zależność.</div>`;
+  }
+}
+window.renderAnalysis = renderAnalysis;
+
+/* ═══════════════ RAPORT ═══════════════ */
+function collectRows(days){
+  const rows = [], end = new Date();
+  for (let i = days-1; i >= 0; i--){
+    const d = new Date(end); d.setDate(end.getDate()-i);
+    const key = dateKey(d), rec = (doses[key]||{})[0], { sum, any } = dayDose(key);
+    rows.push({ key,
+      status: !any ? (key < todayKey() ? "missed" : "") : (sum > 0 ? "taken" : "missed"),
+      dose: any && sum > 0 ? nf(sum) : (key < todayKey() ? "0" : ""),
+      time: openTimeOf(rec) != null ? devHM(openTimeOf(rec)) : "",
+      src:  rec ? (rec.source === "device" ? "pudełko" : "ręcznie") : "",
+      note: rec?.note || "",
+      inr:  inr[key] ? nf(inr[key].value) : "" });
+  }
+  return rows;
+}
+const ST_PL = { taken:"wzięte", missed:"nie wzięte", "":"—" };
+
+window.makeReport = () => {
+  const days = +document.getElementById("repRange").value;
+  const rows = collectRows(days);
+  const taken  = rows.filter(r=>r.status==="taken").length;
+  const missed = rows.filter(r=>r.status==="missed").length;
+  const total  = taken + missed;
+  const sumDose = rows.reduce((a,r)=>a+(parseFloat(String(r.dose).replace(",","."))||0),0);
+
+  const inrKeys = Object.keys(inr).filter(k => k >= rows[0].key).sort();
+  const inRange = inrKeys.filter(k => inr[k].value >= cfg.inrMin && inr[k].value <= cfg.inrMax).length;
+  const an = analyze(days);
+
+  document.getElementById("report").innerHTML = `
+    <h2>Raport przyjmowania leku${cfg.drugName ? " — " + esc(cfg.drugName) : ""}</h2>
+    <div class="meta">
+      Pacjent: ${esc(auth.currentUser?.email || "—")} &nbsp;·&nbsp;
+      Lek: ${esc(cfg.drugName)}${+cfg.drugStrength ? " " + cfg.drugStrength + " mg" : ""},
+      dawka standardowa ${nf(cfg.defaultDose??1)} tabl./dobę &nbsp;·&nbsp;
+      Okres: ${rows[0]?.key} — ${rows[rows.length-1]?.key} &nbsp;·&nbsp;
+      Wygenerowano: ${new Date().toLocaleString("pl-PL")}<br>
+      Źródło: automatyczny rejestrator otwarć pojemnika (${DEVICE_ID}) oraz korekty pacjenta.
+    </div>
+    <div class="sum">
+      Dawek zaplanowanych: <b>${total}</b> | przyjętych: <b>${taken}</b> |
+      pominiętych: <b>${missed}</b> | skuteczność: <b>${total?Math.round(taken/total*100):0}%</b> |
+      łącznie tabletek: <b>${nf(sumDose)}</b>
+    </div>
+
+    <h3>Analiza pór przyjmowania</h3>
+    ${an.n ? `<table><tbody>
+        <tr><th style="width:46%">Zaplanowana godzina</th><td>${hm(an.plan)}</td></tr>
+        <tr><th>Dni z zarejestrowaną godziną</th><td>${an.n}</td></tr>
+        <tr><th>Godzina typowa (mediana)</th><td>${hm(an.median)}</td></tr>
+        <tr><th>Godzina średnia</th><td>${hm(an.mean)}</td></tr>
+        <tr><th>Rozrzut (odchylenie std.)</th><td>${an.sd==null?"—":"± "+Math.round(an.sd)+" min"}</td></tr>
+        <tr><th>Najwcześniej / najpóźniej</th><td>${hm(an.earliest)} / ${hm(an.latest)}</td></tr>
+        <tr><th>Średnie odchylenie od planu</th><td>${dev2(an.meanDev)} ${an.meanDev>=0?"później":"wcześniej"}</td></tr>
+        <tr><th>Dawki w ±30 min od planu</th><td>${an.within30} z ${an.n}
+            (${Math.round(an.within30/an.n*100)}%)</td></tr>
+        <tr><th>Dawki w ±60 min od planu</th><td>${an.within60} z ${an.n}
+            (${Math.round(an.within60/an.n*100)}%)</td></tr>
+        <tr><th>Ponad godzinę później / wcześniej</th><td>${an.late60} / ${an.early60}</td></tr>
+      </tbody></table>
+
+      <table><thead><tr><th>Godzina</th>${an.hist.map((v,i)=>v?`<th>${pad(i)}</th>`:"").join("")}</tr></thead>
+        <tbody><tr><td>Liczba dni</td>${an.hist.map(v=>v?`<td>${v}</td>`:"").join("")}</tr></tbody></table>`
+      : `<div class="sum">Brak zarejestrowanych godzin otwarcia w tym okresie.</div>`}
+
+    <h3>Regularność w podziale na dni tygodnia</h3>
+    <table><thead><tr><th>Dzień</th><th>Wzięte</th><th>Wszystkich</th><th>Regularność</th>
+      <th>Typowa godzina</th></tr></thead><tbody>
+      ${an.byDow.map((d,i)=>{
+        const avg = d.times.length ? d.times.reduce((a,b)=>a+b,0)/d.times.length : null;
+        const p = d.total ? Math.round(d.taken/d.total*100) : null;
+        return `<tr class="${p!=null&&p<80?"out":""}"><td>${DOW_PL[i]}</td><td>${d.taken}</td>
+          <td>${d.total}</td><td>${p==null?"—":p+"%"}</td><td>${hm(avg)}</td></tr>`;
+      }).join("")}
+    </tbody></table>
+
+    <h3>Pomiary INR (cel ${nf(cfg.inrMin)}–${nf(cfg.inrMax)})</h3>
+    ${inrKeys.length ? `<div class="sum">Pomiarów: <b>${inrKeys.length}</b> |
+        w zakresie terapeutycznym: <b>${inRange}</b>
+        (<b>${Math.round(inRange/inrKeys.length*100)}%</b>)</div>
+      <table><thead><tr><th>Data</th><th>INR</th><th>Ocena</th>
+        <th>Regularność w 7 dni przed</th><th>Typowa godzina w tym tygodniu</th>
+        <th>Suma tabletek</th><th>Uwagi</th></tr></thead><tbody>
+      ${inrKeys.map(k=>{
+        const v=inr[k].value, ok=v>=cfg.inrMin&&v<=cfg.inrMax, c=inrContext(k,7);
+        return `<tr class="${ok?"":"out"}"><td>${k}</td><td>${nf(v)}</td>
+        <td>${ok?"w zakresie":(v<cfg.inrMin?"poniżej":"powyżej")}</td>
+        <td>${c.adherence==null?"—":c.adherence+"% ("+c.taken+"/"+c.total+")"}</td>
+        <td>${hm(c.avgTime)}</td><td>${nf(c.doseSum)}</td>
+        <td>${esc(inr[k].note||"")}</td></tr>`;}).join("")}
+      </tbody></table>
+      <div class="sum" style="font-size:9pt;color:#555">
+        Kolumny „7 dni przed" opisują tydzień bezpośrednio poprzedzający pobranie krwi —
+        okres, w którym warfaryna kształtuje wynik INR. Godziny pochodzą wyłącznie
+        z automatycznej rejestracji otwarć pojemnika.
+      </div>` : `<div class="sum">Brak pomiarów w tym okresie.</div>`}
+
+    <h3>Dzienny rejestr przyjmowania</h3>
+    <table><thead><tr><th>Data</th><th>Status</th><th>Tabletek</th><th>Godzina</th>
+      <th>Źródło</th><th>INR</th><th>Uwagi</th></tr></thead><tbody>
+      ${rows.map(r=>`<tr class="${r.status==="missed"?"miss":""}">
+        <td>${r.key}</td><td>${ST_PL[r.status]??r.status}</td><td>${r.dose}</td>
+        <td>${r.time}</td><td>${r.src}</td><td>${r.inr}</td><td>${esc(r.note)}</td></tr>`).join("")}
+    </tbody></table>`;
+  setTimeout(()=>window.print(), 120);
+};
+
+window.exportCsv = async () => {
+  const days = +document.getElementById("repRange").value;
+  const rows = collectRows(days);
+  const csv = "﻿" + ["Data;Status;Tabletek;Godzina;Zrodlo;INR;Uwagi"]
+    .concat(rows.map(r=>[r.key, ST_PL[r.status]??r.status, r.dose, r.time, r.src, r.inr,
+                         (r.note||"").replace(/;/g,",")].join(";"))).join("\n");
+  const file = new File([csv], `leki_${todayKey()}.csv`, { type:"text/csv" });
+  if (navigator.canShare && navigator.canShare({ files:[file] })){
+    try { await navigator.share({ files:[file], title:"Raport przyjmowania leku" }); return; }
+    catch(e){ if (e.name === "AbortError") return; }
+  }
+  const url = URL.createObjectURL(file), a = document.createElement("a");
+  a.href = url; a.download = file.name; a.click();
+  setTimeout(()=>URL.revokeObjectURL(url), 3000);
+};
+
+/* ═══════════════ NAWIGACJA ═══════════════ */
+let curTab = "cal";
+window.showTab = t => {
+  curTab = t;
+  ["cal","inr","ana","set"].forEach(x=>{
+    document.getElementById("tab-"+x).classList.toggle("hide", x!==t);
+    document.getElementById("nav-"+x).classList.toggle("act", x===t);
+  });
+  document.getElementById("hTitle").textContent =
+    { cal:"Kalendarz", inr:"Pomiary INR", ana:"Analiza", set:"Ustawienia" }[t];
+  if (t === "ana") renderAnalysis();
+  window.scrollTo({ top:0, behavior:"smooth" });
+};
+
+if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(()=>{});
+</script>
+</body>
+</html>
