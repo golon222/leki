@@ -512,6 +512,9 @@ nav button.act{color:var(--acc)}
     <div id="diagErr" class="hide" style="margin-bottom:10px;padding:10px;border-radius:12px;
          border:1px solid var(--bad);background:rgba(248,113,113,.10);font-size:13px"></div>
     <div id="diagList" style="font-size:12.5px;line-height:1.6"></div>
+    <button class="primary" style="width:100%;margin-top:12px" onclick="testPolaczenia()">
+      Sprawdź połączenie krok po kroku</button>
+    <div id="diagTest" class="hide" style="margin-top:10px;font-size:12.5px;line-height:1.5"></div>
     <button class="ghost" style="width:100%;margin-top:10px" onclick="reconcile()">
       Uzupełnij kalendarz ze zdarzeń</button>
   </div>
@@ -588,7 +591,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-01.11";
+const APP_VERSION = "2026-08-01.13";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -613,6 +616,7 @@ let doses = {};      // { "2026-07-31": { "0": {dose, status, source, ts, note} 
 let inr   = {};      // { "2026-07-20": { value, ts, note } }
 let events = [];
 let viewYear, viewMonth, sheetDate = null, pendingDose = null;
+let staleRules = false;   // baza odrzuca nowe pola -> reguly do odswiezenia
 
 /* ───────── narzędzia ───────── */
 
@@ -709,6 +713,103 @@ window.doLogin = async () => {
       document.getElementById("email").value.trim(),
       document.getElementById("pass").value);
   } catch(e){ err.textContent = "Nie udało się zalogować."; }
+};
+
+/* ═══════════════════════════════════════════════════════════════
+ *  TEST POŁĄCZENIA — przechodzi całą drogę danych krok po kroku
+ *  i pokazuje, na którym dokładnie kroku się zatrzymuje.
+ *
+ *  Powstał, bo „w aplikacji nic nie ma” może znaczyć sześć różnych
+ *  rzeczy — złe konto, brak praw do odczytu zdarzeń, brak samych
+ *  zdarzeń, odrzucony zapis, ręczna korekta blokująca nadpisanie
+ *  albo zły dzień. Z ekranu kalendarza wszystkie wyglądają tak samo.
+ * ═══════════════════════════════════════════════════════════════ */
+window.testPolaczenia = async () => {
+  const out = document.getElementById("diagTest");
+  out.classList.remove("hide");
+  out.innerHTML = "Sprawdzam…";
+  const lines = [];
+  const say = (good, txt, detail = "") => {
+    lines.push(`<div style="padding:6px 0;border-bottom:1px solid var(--line)">
+      <b style="color:${good ? "var(--ok)" : "var(--bad)"}">${good ? "✓" : "✗"}</b>
+      ${esc(txt)}${detail ? `<br><span class="dim2" style="font-size:11.5px;
+      word-break:break-all">${esc(detail)}</span>` : ""}</div>`);
+    out.innerHTML = lines.join("");
+  };
+
+  /* 1. Konto */
+  if (!uid){ say(false, "Nie jesteś zalogowany"); return; }
+  say(true, "Zalogowany", "uid: " + uid);
+
+  /* 2. Czy to konto jest właścicielem pudełka — od tego zależą prawa
+        do wszystkiego, co pudełko zapisuje. */
+  try {
+    const o = (await get(ref(db, `devices/${DEVICE_ID}/owner`))).val();
+    if (o === uid) say(true, "To konto jest właścicielem pudełka");
+    else say(false, "To konto NIE jest właścicielem pudełka",
+             `w bazie: ${o ?? "(pusto)"} · twoje: ${uid}`);
+  } catch (e) {
+    say(false, "Nie mogę odczytać właściciela — brak praw", e?.message || String(e));
+  }
+
+  /* 3. Zdarzenia z pudełka */
+  let evs = [];
+  try {
+    const s = await get(query(ref(db, `devices/${DEVICE_ID}/events`),
+                              orderByChild("ts"), limitToLast(400)));
+    s.forEach(c => { evs.push(Object.assign({ id:c.key }, c.val())); });
+    say(evs.length > 0, `Zdarzeń z pudełka: ${evs.length}`,
+        evs.length ? "" : "Baza jest pusta albo zapytanie nic nie zwraca.");
+  } catch (e) {
+    say(false, "Odczyt zdarzeń ODRZUCONY — to jest przyczyna", e?.message || String(e));
+    return;
+  }
+
+  /* 4. Najnowsze otwarcie */
+  const opens = evs.filter(e => e.type === "open" && e.ts).sort((a,b) => b.ts - a.ts);
+  if (!opens.length){
+    say(false, "Brak zdarzeń typu „otwarcie”",
+        `Są tylko: ${[...new Set(evs.map(e => e.type))].join(", ") || "żadne"}. ` +
+        "Otwórz pudełko i odczekaj pół minuty.");
+    return;
+  }
+  const last = opens[0], key = devKey(last.ts);
+  say(true, `Ostatnie otwarcie: ${devDayMon(last.ts)} ${devHM(last.ts)}`,
+      `trafia do doby lekowej ${key}`);
+
+  /* 5. Czy coś już blokuje nadpisanie */
+  const cur = (doses[key] || {})[0];
+  if (cur && cur.source === "manual"){
+    say(false, "Ten dzień masz poprawiony ręcznie",
+        "Ręczna korekta ma pierwszeństwo, więc pudełko jej nie nadpisze. " +
+        "To nie jest błąd — ale wyjaśnia, czemu nic się nie zmienia.");
+    return;
+  }
+
+  /* 6. Prawdziwy zapis do kalendarza */
+  const path = `users/${uid}/doses/${key}/0`;
+  try {
+    await update(ref(db), { [path]: { status:"taken", dose: cfg.defaultDose ?? 1,
+                                      source:"device", ts: last.ts, openTs: last.ts } });
+    say(true, "Zapis do kalendarza przeszedł", path);
+  } catch (e) {
+    say(false, "ZAPIS ODRZUCONY — to jest przyczyna",
+        `${path}\n${e?.message || e}\nSprawdź reguły bezpieczeństwa w Firebase.`);
+    return;
+  }
+
+  /* 7. Odczyt zwrotny — dopiero to dowodzi, że dane naprawdę siedzą w bazie */
+  try {
+    const v = (await get(ref(db, path))).val();
+    say(!!v, v ? "Odczytane z powrotem z bazy" : "Zapisane, ale nie da się odczytać",
+        v ? JSON.stringify(v) : "");
+  } catch (e) {
+    say(false, "Odczyt kalendarza odrzucony", e?.message || String(e));
+    return;
+  }
+
+  say(true, "Wszystko przeszło — kalendarz powinien już pokazywać ten dzień.");
+  if (window.odswiez) await window.odswiez();
 };
 
 /* Awaryjne czyszczenie pamięci podręcznej.
@@ -885,12 +986,40 @@ async function doReconcile(silent = true){
   if (n) {
     try {
       await update(ref(db), updates);
+      staleRules = false;
     } catch (e) {
-      /* Cichy blad zapisu wygladal jak "aplikacja nic nie robi". Teraz mowi. */
+      /* Najczęstsza przyczyna odrzucenia: w bazie siedzą STARE reguły
+         bezpieczeństwa. Reguła dla pojedynczej dawki ma "$other": false,
+         czyli odrzuca cały wpis, jeśli trafi w nim choć jedno pole, którego
+         nie zna. Pole openTs (prawdziwa godzina otwarcia) doszło później niż
+         pierwsze wgranie reguł — więc kto ich nie odświeżył, temu każdy zapis
+         leci w kosz. Po stronie aplikacji wyglądało to jak kompletna cisza.
+
+         Zamiast poddać się, próbujemy jeszcze raz bez pól dodanych później.
+         Kalendarz zaczyna działać od razu, a użytkownik dostaje wyraźną
+         informację, że reguły trzeba zaktualizować.                       */
       console.error("zapis kalendarza:", e);
-      alert("Nie udało się zapisać do bazy.\n\n" + (e?.message || e) +
-            "\n\nSprawdź reguły bezpieczeństwa w Firebase.");
-      return;
+      const slim = {};
+      for (const [p, v] of Object.entries(updates)) {
+        const { openTs, ...rest } = v;
+        slim[p] = rest;
+      }
+      try {
+        await update(ref(db), slim);
+        staleRules = true;
+        renderDiag();
+        console.warn("zapisano bez openTs — reguly w bazie sa przestarzale");
+        if (!silent)
+          alert("Kalendarz uzupełniony, ale reguły bezpieczeństwa w Firebase są " +
+                "przestarzałe.\n\nPrzez to gubiona jest dokładna godzina otwarcia " +
+                "(potrzebna w Analizie).\n\nWgraj na nowo plik database.rules.json " +
+                "w konsoli Firebase → Realtime Database → Rules → Publish.");
+      } catch (e2) {
+        console.error("zapis kalendarza (druga proba):", e2);
+        alert("Nie udało się zapisać do bazy.\n\n" + (e2?.message || e2) +
+              "\n\nSprawdź reguły bezpieczeństwa w Firebase.");
+        return;
+      }
     }
   }
   if (!silent) {
@@ -1231,8 +1360,17 @@ function renderDiag(){
   const el = document.getElementById("diagList");
   if (!el) return;
 
+  const warn = staleRules
+    ? `<div style="margin-bottom:10px;padding:10px;border-radius:12px;
+         border:1px solid var(--warn);background:rgba(251,191,36,.10)">
+         <b style="color:var(--warn)">Reguły bezpieczeństwa są przestarzałe</b><br>
+         <span class="dim2">Baza odrzuca pole z godziną otwarcia, więc zapisuję bez niego.
+         Kalendarz działa, ale Analiza traci dokładne godziny. Wgraj na nowo
+         database.rules.json w konsoli Firebase → Realtime Database → Rules → Publish.</span>
+       </div>` : "";
+
   if (!events.length){
-    el.innerHTML = `<span class="dim2">Pudełko nie przysłało jeszcze żadnych zdarzeń.<br>
+    el.innerHTML = warn + `<span class="dim2">Pudełko nie przysłało jeszcze żadnych zdarzeń.<br>
       Jeśli w logu z komputera widzisz „push event HTTP 200”, a tutaj jest pusto,
       to znaczy, że aplikacja nie ma prawa czytać tych danych — sprawdź reguły
       bezpieczeństwa w Firebase.</span>`;
@@ -1252,7 +1390,7 @@ function renderDiag(){
       <span class="dim2">doba lekowa: ${key || "—"}</span> · ${mark}</div>`;
   }).join("");
 
-  el.innerHTML = rows + `<div class="dim2" style="margin-top:8px">Pokazano
+  el.innerHTML = warn + rows + `<div class="dim2" style="margin-top:8px">Pokazano
     ${Math.min(15, events.length)} z ${events.length} zdarzeń.</div>`;
 }
 
