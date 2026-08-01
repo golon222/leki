@@ -492,6 +492,11 @@ nav button.act{color:var(--acc)}
     <div class="muted" id="devInfo" style="margin-top:6px"></div>
     <button class="ghost" style="margin-top:14px;width:100%" onclick="reconcile()">Przelicz kalendarz ze zdarzeń</button>
     <button class="ghost" style="margin-top:8px;width:100%" onclick="fbSignOut()">Wyloguj</button>
+    <button class="ghost" style="margin-top:8px;width:100%" onclick="wyczyscCache()">
+      Wyczyść pamięć i pobierz na nowo</button>
+    <div class="dim2" style="margin-top:6px;font-size:12px">
+      Użyj, jeśli aplikacja pokazuje starą wersję albo coś zupełnie nie tego.
+    </div>
     <div class="dim2" style="margin-top:14px;text-align:center">
       Wersja aplikacji: <span id="appVersion">—</span>
     </div>
@@ -583,7 +588,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-01.10";
+const APP_VERSION = "2026-08-01.11";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -704,6 +709,32 @@ window.doLogin = async () => {
       document.getElementById("email").value.trim(),
       document.getElementById("pass").value);
   } catch(e){ err.textContent = "Nie udało się zalogować."; }
+};
+
+/* Awaryjne czyszczenie pamięci podręcznej.
+
+   Potrzebne, bo service worker potrafi utknąć na starej (albo zupełnie
+   błędnej) zawartości, jeśli publikacja strony padnie i sieć zwróci błąd —
+   wtedy podaje z pamięci to, co zapamiętał ostatnio, choćby to były
+   bzdury. Zwykłe odświeżenie tego nie przebija; trzeba wyrzucić cache
+   i wyrejestrować workera. */
+window.wyczyscCache = async () => {
+  if (!confirm("Wyczyścić pamięć aplikacji i pobrać ją na nowo?\n\n" +
+               "Dane w bazie (kalendarz, INR, licznik tabletek) zostają nietknięte.")) return;
+  try {
+    if ("serviceWorker" in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map(r => r.unregister()));
+    }
+    if (window.caches) {
+      const ks = await caches.keys();
+      await Promise.all(ks.map(k => caches.delete(k)));
+    }
+  } catch (e) {
+    console.error("czyszczenie cache:", e);
+  }
+  /* Znacznik czasu w adresie omija każdą pamięć pośrednią. */
+  location.replace(location.pathname + "?swiezo=" + Date.now());
 };
 
 window.fbSignOut = async () => {
