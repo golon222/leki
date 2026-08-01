@@ -3,7 +3,7 @@
 /* WAŻNE: ta wartość musi zgadzać się z APP_VERSION w index.html.
    Jej zmiana to sygnał dla iPhone'a, że jest nowa wersja aplikacji —
    stary cache zostaje wtedy skasowany, a strona sama się przeładuje. */
-const CACHE = "pillbox-2026-08-01.10";
+const CACHE = "pillbox-2026-08-01.13";
 const SHELL = ["./", "./index.html", "./manifest.json"];
 
 self.addEventListener("install", e => {
@@ -18,6 +18,24 @@ self.addEventListener("activate", e => {
   );
 });
 
+/* Czy tę odpowiedź wolno w ogóle zapamiętać?
+
+   Historia z życia: do repozytorium trafił kiedyś przez pomyłkę kod
+   firmware zamiast index.html. Service worker grzecznie go zapamiętał,
+   a gdy publikacja strony potem padła, w kółko podawał z pamięci kod
+   w C++ zamiast aplikacji. Wyglądało to jak zepsuta aplikacja, choć plik
+   na serwerze był już od dawna poprawny.
+
+   Stąd dwa warunki: zapamiętujemy tylko odpowiedzi udane (nie 404, nie
+   strony błędu), a stronę tylko wtedy, gdy serwer twierdzi, że to HTML. */
+function worthCaching(req, res) {
+  if (!res || !res.ok || res.type === "opaque") return false;
+  const type = res.headers.get("content-type") || "";
+  const isPage = req.mode === "navigate" || new URL(req.url).pathname.endsWith(".html");
+  if (isPage && !type.includes("text/html")) return false;
+  return true;
+}
+
 self.addEventListener("fetch", e => {
   const url = new URL(e.request.url);
   if (e.request.method !== "GET") return;
@@ -26,10 +44,27 @@ self.addEventListener("fetch", e => {
   e.respondWith(
     fetch(e.request)
       .then(r => {
-        const copy = r.clone();
-        caches.open(CACHE).then(c => c.put(e.request, copy));
+        if (worthCaching(e.request, r)) {
+          const copy = r.clone();
+          caches.open(CACHE).then(c => c.put(e.request, copy));
+        }
         return r;
       })
       .catch(() => caches.match(e.request).then(r => r || caches.match("./index.html")))
   );
+});
+
+/* Awaryjne wyczyszczenie pamięci podręcznej z poziomu aplikacji.
+   Używane przez przycisk „Wyczyść pamięć i przeładuj" w Ustawieniach —
+   ratunek, gdy w cache utknie coś, czego nie da się wyprzeć odświeżaniem. */
+self.addEventListener("message", e => {
+  if (e.data === "wyczysc-cache") {
+    e.waitUntil(
+      caches.keys()
+        .then(ks => Promise.all(ks.map(k => caches.delete(k))))
+        .then(() => self.registration.unregister())
+        .then(() => self.clients.matchAll())
+        .then(cs => cs.forEach(c => c.navigate(c.url)))
+    );
+  }
 });
