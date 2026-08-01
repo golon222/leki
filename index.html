@@ -73,10 +73,21 @@ button.ghost{background:transparent;border:1px solid var(--line);color:var(--dim
 button.danger{background:rgba(248,113,113,.16);color:#fecaca}
 button[disabled]{opacity:.4;pointer-events:none}
 input,select{font:inherit;background:var(--card2);color:var(--txt);border:1px solid var(--line);
-      border-radius:12px;padding:11px 12px;width:100%;outline:none}
+      border-radius:12px;padding:11px 12px;width:100%;min-width:0;outline:none;
+      -webkit-appearance:none;appearance:none}
+/* Pole daty na iOS ma własną, dużą szerokość minimalną i potrafi rozepchnąć
+   sąsiada poza kartę. Poniższe wymusza, żeby respektowało kontener.       */
+input[type=date]{min-height:44px;line-height:20px;text-align:left}
 input:focus,select:focus{border-color:var(--acc)}
 label{font-size:12px;color:var(--dim2);display:block;margin:12px 0 5px;
       text-transform:uppercase;letter-spacing:.06em;font-weight:600}
+
+/* Dwa pola obok siebie. Siatka z minmax(0,…) nie da się rozepchnąć
+   zawartością, w odróżnieniu od flexboxa.                                */
+.pair{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);
+      gap:10px;margin-top:12px;align-items:end}
+.pair > div{min-width:0}
+.pair label{margin:0 0 5px}
 
 .chip{font-size:11.5px;padding:5px 10px;border-radius:999px;background:var(--card2);
       color:var(--dim);white-space:nowrap;border:1px solid var(--line)}
@@ -310,12 +321,12 @@ nav button.act{color:var(--acc)}
 
   <div class="card">
     <div class="row between" style="align-items:flex-start">
-      <div>
+      <div style="min-width:0">
         <div class="dim2" style="text-transform:uppercase;letter-spacing:.06em;font-weight:600">Ostatni pomiar</div>
         <div class="inrbig" id="inrLast">–</div>
         <div id="inrLastWhen" class="muted"></div>
       </div>
-      <div style="text-align:right">
+      <div style="text-align:right;flex:none">
         <div class="chip" id="inrBadge">—</div>
         <div class="dim2" style="margin-top:8px" id="inrRangeLbl"></div>
       </div>
@@ -328,10 +339,11 @@ nav button.act{color:var(--acc)}
       <h3 style="margin:0">Dodaj pomiar</h3>
       <span class="dim2">data + wynik</span>
     </div>
-    <div class="row" style="margin-top:12px;align-items:flex-end">
-      <div style="flex:1.35"><label style="margin-top:0">Data pomiaru</label><input type="date" id="inrDate"></div>
-      <div style="flex:1"><label style="margin-top:0">Wynik INR</label>
-        <input type="number" id="inrVal" step="0.1" min="0.5" max="12" inputmode="decimal" placeholder="2,4"></div>
+    <div class="pair">
+      <div><label>Data pomiaru</label><input type="date" id="inrDate"></div>
+      <div><label>Wynik INR</label>
+        <input type="number" id="inrVal" step="0.1" min="0.5" max="12"
+               inputmode="decimal" placeholder="2,4"></div>
     </div>
     <input id="inrNote" placeholder="Notatka, np. dzień po antybiotyku" style="margin-top:10px">
     <button class="primary" style="width:100%;margin-top:14px;padding:14px;font-size:15px"
@@ -424,11 +436,9 @@ nav button.act{color:var(--acc)}
   <div class="card">
     <h3>Zakres terapeutyczny INR</h3>
     <div class="muted">Ustala go lekarz prowadzący. Najczęściej 2,0–3,0.</div>
-    <div class="row" style="margin-top:10px">
-      <div style="flex:1"><label style="margin-top:0">Od</label>
-        <input id="inrMin" type="number" step="0.1" inputmode="decimal"></div>
-      <div style="flex:1"><label style="margin-top:0">Do</label>
-        <input id="inrMax" type="number" step="0.1" inputmode="decimal"></div>
+    <div class="pair" style="grid-template-columns:minmax(0,1fr) minmax(0,1fr)">
+      <div><label>Od</label><input id="inrMin" type="number" step="0.1" inputmode="decimal"></div>
+      <div><label>Do</label><input id="inrMax" type="number" step="0.1" inputmode="decimal"></div>
     </div>
     <button class="primary" style="width:100%;margin-top:12px" onclick="saveInrRange()">Zapisz zakres</button>
   </div>
@@ -533,7 +543,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-01.2";
+const APP_VERSION = "2026-08-01.3";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
