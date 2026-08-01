@@ -114,6 +114,19 @@ label{font-size:12px;color:var(--dim2);display:block;margin:12px 0 5px;
 .day.partial{background:rgba(251,191,36,.13);border-color:rgba(251,191,36,.5);color:#fde68a}
 .day.missed {background:rgba(248,113,113,.13);border-color:rgba(248,113,113,.5);color:#fecaca}
 .day.future {opacity:.45}
+/* Brak danych to NIE to samo co pominieta dawka - musi byc widocznie inny:
+   szary, wyblakly, z przerywanym obrysem. */
+.day.nodata {opacity:.32;border-style:dashed;color:var(--dim2)}
+
+#rotateLock{display:none}
+@media screen and (orientation:landscape) and (max-height:520px){
+  #rotateLock{
+    display:flex;position:fixed;inset:0;z-index:9999;
+    flex-direction:column;align-items:center;justify-content:center;
+    background:var(--bg);color:var(--txt);padding:20px;
+  }
+  main,nav,header{display:none !important}
+}
 .day.today{box-shadow:0 0 0 2px var(--acc);opacity:1}
 .day .dose{position:absolute;bottom:4px;font-size:9px;font-weight:700;opacity:.9}
 .day .inr{position:absolute;top:3px;right:4px;width:11px;height:11px}
@@ -287,6 +300,7 @@ nav button.act{color:var(--acc)}
       <span><i style="background:var(--ok)"></i>pełna dawka</span>
       <span><i style="background:var(--warn)"></i>mniejsza dawka</span>
       <span><i style="background:var(--bad)"></i>nie wzięte</span>
+      <span><i style="background:var(--dim2);opacity:.5"></i>brak danych</span>
       <span><svg width="10" height="10" viewBox="0 0 10 10"><circle cx="5" cy="5" r="4"
         fill="rgba(167,139,250,.25)" stroke="#a78bfa" stroke-width="1.6"/></svg>pomiar INR</span>
     </div>
@@ -454,8 +468,16 @@ nav button.act{color:var(--acc)}
       <button class="ghost" onclick="addSlot()">+ Dodaj godzinę</button>
       <button class="primary" style="flex:1" onclick="saveConfig()">Zapisz</button>
     </div>
-    <label>Strefa czasowa (minuty od UTC)</label>
-    <input id="tzInput" type="number" step="15" inputmode="numeric">
+    <label>Strefa czasowa</label>
+    <select id="tzSelect" onchange="tzChanged()"></select>
+    <div class="dim2" id="tzInfo" style="margin-top:6px;font-size:12px"></div>
+
+    <label style="margin-top:14px">Pudełko działa od</label>
+    <input id="trackFrom" type="date">
+    <div class="dim2" style="margin-top:6px;font-size:12px">
+      Dni wcześniejsze zostaną opisane jako „brak danych”, a nie jako pominięte —
+      i nie będą zaniżać skuteczności w raporcie dla lekarza.
+    </div>
   </div>
 
   <div class="card">
@@ -520,6 +542,20 @@ nav button.act{color:var(--acc)}
   </div>
 </section>
 </main>
+
+<!-- Blokada poziomu. iOS ignoruje pole "orientation" w manifescie i nie ma
+     API do zablokowania obrotu, więc jedyne pewne wyjście to zasłonić ekran
+     i poprosić o obrót. Tylko na telefonach - tablet ma dość miejsca. -->
+<div id="rotateLock">
+  <svg width="54" height="54" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+       stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="7" y="2" width="10" height="20" rx="2.5"/><path d="M11 18h2"/>
+    <path d="M20.5 9a9 9 0 0 0-3.2-4.4"/><path d="M18 4.2l-.7 2.6 2.6.7"/></svg>
+  <b style="margin-top:14px;font-size:17px">Obróć telefon do pionu</b>
+  <span class="dim2" style="margin-top:6px;max-width:260px;text-align:center">
+    PillBox działa w pionie — kalendarz i wykresy są zaprojektowane pod jedną rękę.
+  </span>
+</div>
 
 <nav>
   <button id="nav-cal" class="act" onclick="showTab('cal')">
@@ -591,7 +627,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-01.13";
+const APP_VERSION = "2026-08-02.1";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -610,7 +646,8 @@ const authReady = setPersistence(auth, indexedDBLocalPersistence)
 if (navigator.storage?.persist) navigator.storage.persist().catch(()=>{});
 
 let uid = null;
-let cfg = { schedule:["08:00"], tzOffsetMin:120, defaultDose:1,
+let cfg = { schedule:["08:00"], tz:"Europe/Warsaw", tzOffsetMin:120,
+            trackingSince:"2026-08-01", defaultDose:1,
             drugName:"Warfin", drugStrength:5, inrMin:2.0, inrMax:3.0 };
 let doses = {};      // { "2026-07-31": { "0": {dose, status, source, ts, note} } }
 let inr   = {};      // { "2026-07-20": { value, ts, note } }
@@ -641,6 +678,81 @@ const todayKey = () => dateKey(medDate(new Date()));
 const inNightWindow = () => new Date().getHours() < DAY_START_HOUR;
 const nf = n => (Math.round(n*100)/100).toString().replace(".", ",");
 const esc = s => String(s??"").replace(/[<>&"]/g, c => ({"<":"&lt;",">":"&gt;","&":"&amp;",'"':"&quot;"}[c]));
+
+/* ═══════════════════════════════════════════════════════════════
+ *  STREFY CZASOWE
+ *
+ *  Pudełko nie zna nazw stref — przechowuje samo przesunięcie w minutach,
+ *  bo tak jest najprościej i najpewniej po stronie mikrokontrolera.
+ *  Aplikacja trzyma więc jedno i drugie: nazwę strefy (dla Ciebie) oraz
+ *  wyliczone z niej przesunięcie (dla pudełka).
+ *
+ *  Dzięki temu czas letni załatwia się sam: po zmianie czasu aplikacja
+ *  widzi, że dla wybranej strefy przesunięcie jest już inne niż zapisane,
+ *  i poprawia je przy najbliższym uruchomieniu.
+ * ═══════════════════════════════════════════════════════════════ */
+const TZ_LIST = [
+  ["Europe/Warsaw",      "Polska (Warszawa)"],
+  ["Europe/London",      "Wielka Brytania (Londyn)"],
+  ["Europe/Berlin",      "Niemcy (Berlin)"],
+  ["Europe/Paris",       "Francja (Paryż)"],
+  ["Europe/Madrid",      "Hiszpania (Madryt)"],
+  ["Europe/Rome",        "Włochy (Rzym)"],
+  ["Europe/Amsterdam",   "Holandia (Amsterdam)"],
+  ["Europe/Brussels",    "Belgia (Bruksela)"],
+  ["Europe/Vienna",      "Austria (Wiedeń)"],
+  ["Europe/Zurich",      "Szwajcaria (Zurych)"],
+  ["Europe/Prague",      "Czechy (Praga)"],
+  ["Europe/Stockholm",   "Szwecja (Sztokholm)"],
+  ["Europe/Oslo",        "Norwegia (Oslo)"],
+  ["Europe/Dublin",      "Irlandia (Dublin)"],
+  ["Europe/Lisbon",      "Portugalia (Lizbona)"],
+  ["Europe/Athens",      "Grecja (Ateny)"],
+  ["Europe/Helsinki",    "Finlandia (Helsinki)"],
+  ["Europe/Kyiv",        "Ukraina (Kijów)"],
+  ["Europe/Istanbul",    "Turcja (Stambuł)"],
+  ["Europe/Moscow",      "Rosja (Moskwa)"],
+  ["Atlantic/Canary",    "Wyspy Kanaryjskie"],
+  ["Africa/Cairo",       "Egipt (Kair)"],
+  ["Asia/Jerusalem",     "Izrael (Jerozolima)"],
+  ["Asia/Dubai",         "ZEA (Dubaj)"],
+  ["Asia/Bangkok",       "Tajlandia (Bangkok)"],
+  ["Asia/Tokyo",         "Japonia (Tokio)"],
+  ["Australia/Sydney",   "Australia (Sydney)"],
+  ["America/New_York",   "USA — wschód (Nowy Jork)"],
+  ["America/Chicago",    "USA — środek (Chicago)"],
+  ["America/Denver",     "USA — góry (Denver)"],
+  ["America/Los_Angeles","USA — zachód (Los Angeles)"],
+  ["America/Sao_Paulo",  "Brazylia (São Paulo)"],
+  ["UTC",                "UTC (czas uniwersalny)"]
+];
+const TZ_DEFAULT = "Europe/Warsaw";
+
+/* Aktualne przesunięcie strefy w minutach — liczone z prawdziwego kalendarza
+   przeglądarki, więc uwzględnia czas letni bez żadnych tabel z datami. */
+function tzOffsetFor(zone, when = new Date()){
+  try {
+    const f = new Intl.DateTimeFormat("en-US", { timeZone: zone, hour12:false,
+      year:"numeric", month:"2-digit", day:"2-digit",
+      hour:"2-digit", minute:"2-digit", second:"2-digit" });
+    const p = {};
+    for (const x of f.formatToParts(when)) p[x.type] = x.value;
+    const asUTC = Date.UTC(+p.year, +p.month - 1, +p.day,
+                           (+p.hour) % 24, +p.minute, +p.second);
+    return Math.round((asUTC - when.getTime()) / 60000);
+  } catch (e) {
+    console.error("nieznana strefa:", zone, e);
+    return null;
+  }
+}
+
+function tzName(){ return cfg.tz || TZ_DEFAULT; }
+function tzLabel(zone){ return (TZ_LIST.find(z => z[0] === zone) || [zone, zone])[1]; }
+function tzOffsetTxt(min){
+  const sign = min < 0 ? "−" : "+";
+  const a = Math.abs(min);
+  return `UTC${sign}${pad(Math.floor(a/60))}:${pad(a%60)}`;
+}
 
 function devDate(ts){ return new Date((ts + cfg.tzOffsetMin*60) * 1000); }
 
@@ -878,6 +990,17 @@ function boot(){
 
   onValue(ref(db, `devices/${DEVICE_ID}/config`), s => {
     if (s.val()) cfg = Object.assign(cfg, s.val());
+    /* Czas letni: jeśli dla wybranej strefy przesunięcie jest już inne niż
+       zapisane, poprawiamy je sami. Bez tego po ostatniej niedzieli marca
+       i października pudełko dzwoniłoby o godzinę obok, dopóki ktoś by tego
+       nie zauważył i nie poprawił ręcznie. */
+    const zone = tzName(), now = tzOffsetFor(zone);
+    if (now != null && now !== cfg.tzOffsetMin) {
+      console.log(`strefa ${zone}: ${cfg.tzOffsetMin} -> ${now} min (zmiana czasu)`);
+      cfg.tzOffsetMin = now;
+      update(ref(db, `devices/${DEVICE_ID}/config`), { tzOffsetMin: now, tz: zone })
+        .catch(e => console.error("zapis strefy:", e));
+    }
     renderSettings(); renderAll();
   }, onErr("odczyt ustawień urządzenia"));
 
@@ -1051,10 +1174,20 @@ function dayDose(key){
   return { sum, any };
 }
 
+/* Od kiedy dane w ogóle mogą być prawdziwe. Dni wcześniejsze pudełka jeszcze
+   nie widziało, więc pusta kratka nie oznacza pominiętej dawki — oznacza, że
+   nikt tego nie mierzył. Malowanie ich na czerwono zaniżałoby adherencję
+   w raporcie dla lekarza, czyli kłamałoby na niekorzyść. */
+function trackingSince(){ return cfg.trackingSince || "2026-08-01"; }
+function beforeTracking(key){ return key < trackingSince(); }
+
 function dayStatus(key){
   const { sum, any } = dayDose(key);
   const target = (cfg.defaultDose ?? 1) * (cfg.schedule.length || 1);
   const past = key < todayKey();
+  /* Wpis ręczny wygrywa nawet przed datą startu — skoro coś tam wpisałeś,
+     to znaczy, że wiesz lepiej niż domyślna reguła. */
+  if (!any && beforeTracking(key)) return "nodata";
   if (!any && !past) return "future";
   if (!any && past)  return "missed";
   if (sum <= 0)      return "missed";
@@ -1535,25 +1668,47 @@ function renderSettings(){
        <input type="time" value="${h}" onchange="cfgTime(${i},this.value)">
        ${cfg.schedule.length>1?`<button class="danger" onclick="delSlot(${i})">✕</button>`:""}
      </div>`).join("");
-  document.getElementById("tzInput").value  = cfg.tzOffsetMin ?? 120;
+  /* Lista stref + opis, ile to znaczy w minutach (bo tyle dostaje pudełko). */
+  const sel = document.getElementById("tzSelect");
+  const zone = tzName();
+  if (sel.options.length !== TZ_LIST.length)
+    sel.innerHTML = TZ_LIST.map(([id, name]) =>
+      `<option value="${id}">${esc(name)}</option>`).join("");
+  sel.value = zone;
+  const off = tzOffsetFor(zone);
+  document.getElementById("tzInfo").textContent = off == null
+    ? "Nie mogę odczytać tej strefy."
+    : `${tzOffsetTxt(off)} · pudełko dostaje ${off} min. Czas letni uwzględniany sam.`;
+
+  const ts = document.getElementById("trackFrom");
+  if (ts) ts.value = trackingSince();
   document.getElementById("defDose").value  = cfg.defaultDose ?? 1;
   document.getElementById("drugName").value = cfg.drugName || "Warfin";
   document.getElementById("drugStrength").value = String(cfg.drugStrength ?? 3);
   document.getElementById("inrMin").value = cfg.inrMin ?? 2;
   document.getElementById("inrMax").value = cfg.inrMax ?? 3;
 }
+/* Zmiana w liście od razu pokazuje przesunięcie - bez zapisywania. */
+window.tzChanged = () => {
+  cfg.tz = document.getElementById("tzSelect").value || TZ_DEFAULT;
+  renderSettings();
+};
+
 window.cfgTime = (i,v) => { cfg.schedule[i] = v; };
 window.addSlot = () => { cfg.schedule.push("20:00"); renderSettings(); };
 window.delSlot = i => { cfg.schedule.splice(i,1); renderSettings(); };
 
 window.saveConfig = async () => {
   cfg.schedule     = [...new Set(cfg.schedule)].sort();
-  cfg.tzOffsetMin  = +document.getElementById("tzInput").value || 120;
+  cfg.tz           = document.getElementById("tzSelect").value || TZ_DEFAULT;
+  cfg.tzOffsetMin  = tzOffsetFor(cfg.tz) ?? 120;
+  cfg.trackingSince = document.getElementById("trackFrom")?.value || trackingSince();
   cfg.defaultDose  = +document.getElementById("defDose").value || 1;
   cfg.drugName     = document.getElementById("drugName").value.trim() || "Warfin";
   cfg.drugStrength = +document.getElementById("drugStrength").value;
   await update(ref(db, `devices/${DEVICE_ID}/config`), {
-    schedule: cfg.schedule, tzOffsetMin: cfg.tzOffsetMin, defaultDose: cfg.defaultDose,
+    schedule: cfg.schedule, tz: cfg.tz, tzOffsetMin: cfg.tzOffsetMin,
+    trackingSince: cfg.trackingSince, defaultDose: cfg.defaultDose,
     drugName: cfg.drugName, drugStrength: cfg.drugStrength });
   renderAll();
   alert("Zapisano. Pudełko pobierze ustawienia przy najbliższym połączeniu.");
@@ -1598,6 +1753,10 @@ function analyze(days){
     const d = new Date(end); d.setDate(end.getDate()-i);
     const key = A_dateKey(d);
     if (key > todayKey()) continue;
+    /* Dni sprzed uruchomienia pudelka nie liczymy w ogole - ani jako wziete,
+       ani jako pominiete. Inaczej adherencja spadalaby tym mocniej, im dluzej
+       dzialaloby urzadzenie, co jest odwrotnoscia prawdy. */
+    if (beforeTracking(key) && !dayDose(key).any) continue;
     const rec = (doses[key]||{})[0];
     const { sum, any } = dayDose(key);
     const dow = (d.getDay()+6)%7;
@@ -1646,6 +1805,10 @@ function inrContext(dateStr, window = 7){
     const d = new Date(dateStr+"T12:00:00"); d.setDate(d.getDate()-i);
     const key = A_dateKey(d);
     if (key > todayKey()) continue;
+    /* Dni sprzed uruchomienia pudelka nie liczymy w ogole - ani jako wziete,
+       ani jako pominiete. Inaczej adherencja spadalaby tym mocniej, im dluzej
+       dzialaloby urzadzenie, co jest odwrotnoscia prawdy. */
+    if (beforeTracking(key) && !dayDose(key).any) continue;
     const rec = (doses[key]||{})[0];
     const { sum, any } = dayDose(key);
     total++;
@@ -1752,9 +1915,11 @@ function collectRows(days){
   for (let i = days-1; i >= 0; i--){
     const d = new Date(end); d.setDate(end.getDate()-i);
     const key = dateKey(d), rec = (doses[key]||{})[0], { sum, any } = dayDose(key);
+    const noData = !any && beforeTracking(key);
     rows.push({ key,
-      status: !any ? (key < todayKey() ? "missed" : "") : (sum > 0 ? "taken" : "missed"),
-      dose: any && sum > 0 ? nf(sum) : (key < todayKey() ? "0" : ""),
+      status: noData ? "nodata"
+            : !any ? (key < todayKey() ? "missed" : "") : (sum > 0 ? "taken" : "missed"),
+      dose: noData ? "" : (any && sum > 0 ? nf(sum) : (key < todayKey() ? "0" : "")),
       time: openTimeOf(rec) != null ? devHM(openTimeOf(rec)) : "",
       src:  rec ? (rec.source === "device" ? "pudełko" : "ręcznie") : "",
       note: rec?.note || "",
@@ -1762,7 +1927,7 @@ function collectRows(days){
   }
   return rows;
 }
-const ST_PL = { taken:"wzięte", missed:"nie wzięte", "":"—" };
+const ST_PL = { taken:"wzięte", missed:"nie wzięte", nodata:"brak danych", "":"—" };
 
 window.makeReport = () => {
   const days = +document.getElementById("repRange").value;
