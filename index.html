@@ -32,21 +32,32 @@ html,body{overscroll-behavior-y:none}
 body{margin:0;background:
       radial-gradient(1200px 600px at 50% -10%, #16233c 0%, transparent 60%), var(--bg);
      color:var(--txt);font:16px/1.5 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,sans-serif;
-     padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom);-webkit-font-smoothing:antialiased}
+     padding:0 0 env(safe-area-inset-bottom);-webkit-font-smoothing:antialiased}
 
-/* ---------- szkielet ---------- */
-header{display:flex;align-items:center;gap:10px;padding:12px 18px 10px;position:sticky;top:0;z-index:20;
-       background:rgba(11,18,32,.82);backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
+/* ---------- szkielet ----------
+   Pasek statusu iOS: to NAGŁÓWEK rezerwuje na niego miejsce własnym
+   paddingiem. Gdyby robiło to body, przyklejony nagłówek wjeżdżałby
+   pod zegarek i wskaźnik baterii przy przewijaniu.                    */
+header{display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:20;
+       padding:calc(10px + env(safe-area-inset-top)) 18px 10px;
+       background:rgba(11,18,32,.92);backdrop-filter:blur(16px);border-bottom:1px solid var(--line)}
 header .ttl{flex:1;min-width:0}
-header h1{font-size:17px;margin:0;font-weight:650;letter-spacing:-.01em}
-header .sub{font-size:11.5px;color:var(--dim2);margin-top:1px}
+header h1{font-size:17px;margin:0;font-weight:650;letter-spacing:-.01em;
+          white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+header .sub{font-size:11.5px;color:var(--dim2);margin-top:1px;
+            white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 main{padding:16px 16px 96px;max-width:580px;margin:0 auto}
 section{animation:fade .28s ease}
 @keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 
 .card{background:linear-gradient(180deg,var(--card) 0%,#131c2e 100%);
       border:1px solid var(--line);border-radius:var(--r);padding:16px;margin-bottom:14px;
-      box-shadow:0 1px 0 rgba(255,255,255,.03) inset, 0 8px 24px -18px #000}
+      box-shadow:0 1px 0 rgba(255,255,255,.03) inset, 0 8px 24px -18px #000;
+      overflow-wrap:anywhere}
+/* Bez min-width:0 elementy w kontenerach flex nie chcą się kurczyć poniżej
+   swojej treści i wypychają zawartość poza kartę.                        */
+.card .row > *{min-width:0}
+.stat, .inrrow > span{min-width:0}
 .card h3{margin:0 0 4px;font-size:15px;font-weight:650}
 .muted{color:var(--dim);font-size:13px}
 .dim2{color:var(--dim2);font-size:12px}
@@ -91,8 +102,13 @@ label{font-size:12px;color:var(--dim2);display:block;margin:12px 0 5px;
 .day.today{box-shadow:0 0 0 2px var(--acc);opacity:1}
 .day .dose{position:absolute;bottom:4px;font-size:9px;font-weight:700;opacity:.9}
 .day .inr{position:absolute;top:3px;right:4px;width:11px;height:11px}
-.legend{display:flex;gap:12px;font-size:11.5px;color:var(--dim2);margin-top:14px;flex-wrap:wrap}
-.legend i{display:inline-block;width:9px;height:9px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+/* Legenda w dwóch równych kolumnach — przy zawijaniu flexem znaczniki
+   rozjeżdżały się w pionie i wyglądało to niechlujnie.               */
+.legend{display:grid;grid-template-columns:1fr 1fr;gap:9px 10px;
+        font-size:11.5px;color:var(--dim2);margin-top:14px}
+.legend span{display:flex;align-items:center;gap:6px;min-width:0}
+.legend i{display:inline-block;width:9px;height:9px;border-radius:3px;flex:none}
+.legend svg{flex:none}
 
 /* ---------- bateria ---------- */
 .batt{width:52px;height:25px;border:2px solid var(--dim2);border-radius:6px;position:relative;padding:2.5px;flex:none}
@@ -121,6 +137,15 @@ label{font-size:12px;color:var(--dim2);display:block;margin:12px 0 5px;
 .pillrow{display:flex;gap:8px;justify-content:center;align-items:center;min-height:66px;margin:8px 0 2px}
 .changed{border:1px solid rgba(94,234,212,.4);background:rgba(94,234,212,.07);
          border-radius:12px;padding:10px 12px;font-size:13px;margin-top:12px}
+
+/* Sześć przycisków licznika. Flex je rozpychał — „−100" ma szerszą treść
+   niż „+1", więc ostatni wychodził poza kartę. Grid z minmax(0,1fr)
+   wymusza równe kolumny niezależnie od zawartości.                    */
+.pillpad{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:5px;margin-top:12px}
+.pillpad button{padding:11px 2px;font-size:13.5px;font-weight:600;min-width:0;
+                white-space:nowrap;overflow:hidden}
+.pillpad .minus{background:rgba(248,113,113,.16);color:#fecaca}
+.pillpad .plus {background:rgba(52,211,153,.16);color:#a7f3d0}
 
 /* ---------- kafelki statystyk ---------- */
 .stats{display:grid;grid-template-columns:repeat(2,1fr);gap:9px;margin-top:14px}
@@ -167,8 +192,17 @@ nav button.act{color:var(--acc)}
 </head>
 <body>
 
+<!-- ═══════════════ EKRAN POWITALNY ═══════════════
+     Widoczny przez ułamek sekundy, zanim Firebase odtworzy zapisaną sesję.
+     Bez niego przy każdym uruchomieniu mrugałby ekran logowania i wyglądałoby
+     to, jakby aplikacja Cię wylogowała.                                     -->
+<div id="splash" style="padding:calc(140px + env(safe-area-inset-top)) 24px 0;text-align:center">
+  <div id="splashPill"></div>
+  <div style="margin-top:18px;font-size:15px;color:var(--dim2)">PillBox</div>
+</div>
+
 <!-- ═══════════════ LOGOWANIE ═══════════════ -->
-<div id="login" style="padding:70px 24px;max-width:420px;margin:0 auto">
+<div id="login" class="hide" style="padding:calc(56px + env(safe-area-inset-top)) 24px 40px;max-width:420px;margin:0 auto">
   <div style="text-align:center;margin-bottom:26px" id="loginPill"></div>
   <!-- NAZWA-EKRAN-LOGOWANIA -->
   <h1 style="font-size:24px;margin:0 0 6px;text-align:center;font-weight:700">PillBox</h1>
@@ -198,7 +232,7 @@ nav button.act{color:var(--acc)}
     <div class="row between" style="align-items:flex-start">
       <div>
         <div class="dim2" style="text-transform:uppercase;letter-spacing:.06em;font-weight:600">Dzisiaj</div>
-        <div id="todayState" style="font-size:19px;font-weight:650;margin-top:3px">—</div>
+        <div id="todayState" style="font-size:19px;font-weight:650;margin-top:3px;line-height:1.25">—</div>
         <div class="muted" id="todayWhen"></div>
       </div>
       <div class="pillrow" id="todayPill" style="min-height:0;margin:0"></div>
@@ -217,7 +251,8 @@ nav button.act{color:var(--acc)}
       <span><i style="background:var(--ok)"></i>pełna dawka</span>
       <span><i style="background:var(--warn)"></i>mniejsza dawka</span>
       <span><i style="background:var(--bad)"></i>nie wzięte</span>
-      <span><svg width="10" height="12" style="vertical-align:-2px;margin-right:4px"><circle cx="5" cy="6" r="4" fill="none" stroke="#a78bfa" stroke-width="1.6"/></svg>pomiar INR</span>
+      <span><svg width="10" height="10" viewBox="0 0 10 10"><circle cx="5" cy="5" r="4"
+        fill="rgba(167,139,250,.25)" stroke="#a78bfa" stroke-width="1.6"/></svg>pomiar INR</span>
     </div>
     <hr class="sep">
     <div class="row between">
@@ -239,13 +274,13 @@ nav button.act{color:var(--acc)}
       </div>
     </div>
     <div class="bar" style="margin-top:12px"><div id="pillsBar"></div></div>
-    <div class="row" style="margin-top:12px;gap:6px">
-      <button style="flex:1" onclick="addPills(-100)">−100</button>
-      <button style="flex:1" onclick="addPills(-10)">−10</button>
-      <button style="flex:1" onclick="addPills(-1)">−1</button>
-      <button style="flex:1" onclick="addPills(1)">+1</button>
-      <button style="flex:1" onclick="addPills(10)">+10</button>
-      <button style="flex:1" onclick="addPills(100)">+100</button>
+    <div class="pillpad">
+      <button class="minus" onclick="addPills(-10)">−10</button>
+      <button class="minus" onclick="addPills(-1)">−1</button>
+      <button class="minus" onclick="addPills(-0.5)">−½</button>
+      <button class="plus"  onclick="addPills(1)">+1</button>
+      <button class="plus"  onclick="addPills(10)">+10</button>
+      <button class="plus"  onclick="addPills(100)">+100</button>
     </div>
     <button class="ghost" style="width:100%;margin-top:8px" onclick="setPills()">Ustaw dokładną liczbę</button>
   </div>
@@ -261,6 +296,7 @@ nav button.act{color:var(--acc)}
       <div class="batt"><div class="battfill" id="battFill"></div></div>
     </div>
     <div class="bar" style="margin-top:12px"><div id="batBar"></div></div>
+    <div class="dim2" id="batEta" style="margin-top:8px"></div>
     <hr class="sep">
     <div class="row between"><span class="muted">Ostatnia aktualizacja</span>
       <b id="lastSync" style="font-size:13.5px">–</b></div>
@@ -471,7 +507,8 @@ nav button.act{color:var(--acc)}
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut }
+import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut,
+         setPersistence, indexedDBLocalPersistence, browserLocalPersistence }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { getDatabase, ref, onValue, set, update, remove, query, orderByChild, limitToLast }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
@@ -494,6 +531,17 @@ const DEVICE_ID = "pillbox01";
 const app  = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db   = getDatabase(app);
+
+/* ───────── Trwałe logowanie ─────────
+   Sesja ma przeżyć zamknięcie aplikacji i restart telefonu. IndexedDB jest
+   na iOS najtrwalsze; localStorage to zapas, gdyby było niedostępne.
+   Dodatkowo prosimy system, żeby nie kasował naszych danych przy
+   sprzątaniu pamięci — bez tego iOS potrafi je usunąć po dłuższej przerwie. */
+const authReady = setPersistence(auth, indexedDBLocalPersistence)
+  .catch(() => setPersistence(auth, browserLocalPersistence))
+  .catch(() => {});
+
+if (navigator.storage?.persist) navigator.storage.persist().catch(()=>{});
 
 let uid = null;
 let cfg = { schedule:["08:00"], tzOffsetMin:120, defaultDose:1,
@@ -562,19 +610,29 @@ function doseGraphic(dose, size=54){
 }
 
 /* ═══════════════ LOGOWANIE ═══════════════ */
-document.getElementById("loginPill").innerHTML = tabletSVG(1, 76, 99);
+document.getElementById("loginPill").innerHTML  = tabletSVG(1, 76, 99);
+document.getElementById("splashPill").innerHTML = tabletSVG(1, 64, 98);
 
 window.doLogin = async () => {
-  document.getElementById("loginErr").textContent = "";
+  const err = document.getElementById("loginErr");
+  err.textContent = "";
   try {
+    await authReady;                      // najpierw ustaw trwałą sesję
     await signInWithEmailAndPassword(auth,
       document.getElementById("email").value.trim(),
       document.getElementById("pass").value);
-  } catch(e){ document.getElementById("loginErr").textContent = "Nie udało się zalogować."; }
+  } catch(e){ err.textContent = "Nie udało się zalogować."; }
 };
-window.fbSignOut = () => signOut(auth);
+
+window.fbSignOut = async () => {
+  const ok = await askConfirm("Wylogować się?",
+    "Przy następnym uruchomieniu trzeba będzie podać e-mail i hasło. " +
+    "Normalnie nie musisz się wylogowywać — sesja jest zapamiętana.");
+  if (ok) signOut(auth);
+};
 
 onAuthStateChanged(auth, u => {
+  document.getElementById("splash").classList.add("hide");
   if (!u){ uid=null; document.getElementById("login").classList.remove("hide");
            document.getElementById("app").classList.add("hide"); return; }
   uid = u.uid;
@@ -953,7 +1011,25 @@ function relTime(sec){
 
 function renderStatus(st){
   const chip = document.getElementById("batChip");
-  if (!st){ chip.textContent = "brak danych"; return; }
+
+  /* Pudełko jeszcze się nie odezwało — zamiast samotnej kreski i pustego
+     paska pokazujemy zrozumiały komunikat.                             */
+  if (!st){
+    chip.textContent = "brak połączenia"; chip.className = "chip";
+    document.getElementById("batBig").textContent = "—";
+    document.getElementById("batBig").style.color = "var(--dim2)";
+    document.getElementById("batVolt").textContent = "Pudełko jeszcze się nie połączyło";
+    document.getElementById("battFill").style.width = "0";
+    document.getElementById("batBar").style.width = "0";
+    document.getElementById("batEta").textContent =
+      "Dane pojawią się po pierwszej synchronizacji z WiFi.";
+    document.getElementById("lastSync").textContent = "nigdy";
+    document.getElementById("lastSyncRel").textContent = "";
+    document.getElementById("queueInfo").innerHTML = "";
+    document.getElementById("devInfo").innerHTML =
+      `ID: <b>${DEVICE_ID}</b><br>Urządzenie nie wysłało jeszcze żadnych danych.`;
+    return;
+  }
   const pct = st.battery ?? 0;
   const col = pct > 40 ? "var(--ok)" : pct > 15 ? "var(--warn)" : "var(--bad)";
 
@@ -964,6 +1040,14 @@ function renderStatus(st){
   const b = document.getElementById("batBar");  b.style.width = pct+"%"; b.style.background = col;
   chip.textContent = pct + "%";
   chip.className = "chip " + (pct > 40 ? "on" : pct > 15 ? "warn" : "off");
+
+  /* Szacunek: pełne ogniwo 470 mAh starczy około 90 dni przy obecnym poborze,
+     więc jeden punkt procentowy to mniej więcej 0,9 dnia.               */
+  const eta = document.getElementById("batEta");
+  eta.textContent = pct > 15
+    ? `Szacunkowo ok. ${Math.round(pct * 0.9)} dni do ładowania.`
+    : "Czas naładować pudełko przez USB-C.";
+  eta.style.color = pct > 15 ? "" : "var(--bad)";
 
   const ls = st.lastSeen || 0, ago = Math.round(Date.now()/1000 - ls);
   document.getElementById("lastSync").textContent = ls
