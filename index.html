@@ -543,7 +543,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-01.3";
+const APP_VERSION = "2026-08-01.4";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -673,7 +673,7 @@ function boot(){
   onValue(query(ref(db, `devices/${DEVICE_ID}/events`), orderByChild("ts"), limitToLast(400)), s => {
     events = []; s.forEach(c => events.push(Object.assign({id:c.key}, c.val())));
     events.sort((a,b)=>b.ts-a.ts);
-    reconcile();
+    doReconcile(true);          // automatycznie, bez komunikatow
   });
   onValue(ref(db, `users/${uid}/doses`), s => {
     doses = s.val() || {}; renderAll(); settlePills();
@@ -689,9 +689,16 @@ function renderAll(){
   if (sheetDate && document.getElementById("sheet").classList.contains("show")) renderSheet();
 }
 
-/* ═══════════════ REKONCYLIACJA ═══════════════ */
-window.reconcile = async () => {
-  if (!uid || !events.length) return;
+/* ═══════════════ REKONCYLIACJA ═══════════════
+   Wywoływana automatycznie (cicho) po każdej zmianie zdarzeń oraz ręcznie
+   przyciskiem w Ustawieniach — wtedy z komunikatem, żeby było widać,
+   że coś się wydarzyło.                                                */
+async function doReconcile(silent = true){
+  if (!uid){ if (!silent) alert("Najpierw zaloguj się w aplikacji."); return; }
+  if (!events.length){
+    if (!silent) alert("Pudełko nie przysłało jeszcze żadnych zdarzeń.");
+    return;
+  }
   const updates = {};
   for (const ev of events){
     if (!ev.ts) continue;
@@ -725,8 +732,15 @@ window.reconcile = async () => {
         { status:"missed", dose:0, source:"device", ts: ev.ts };
     }
   }
-  if (Object.keys(updates).length) await update(ref(db), updates);
-};
+  const n = Object.keys(updates).length;
+  if (n) await update(ref(db), updates);
+  if (!silent) {
+    alert(n ? `Gotowe — uzupełniono ${n} ${n === 1 ? "dzień" : "dni"} w kalendarzu.`
+            : `Kalendarz jest już aktualny.\n\nPrzeanalizowano ${events.length} zdarzeń `
+              + `z pudełka, nic nie wymagało zmiany.`);
+  }
+}
+window.reconcile = () => doReconcile(false);
 
 /* ═══════════════ KALENDARZ ═══════════════ */
 const DOW = ["Pn","Wt","Śr","Cz","Pt","So","Nd"];
