@@ -118,6 +118,78 @@ label{font-size:12px;color:var(--dim2);display:block;margin:12px 0 5px;
    szary, wyblakly, z przerywanym obrysem. */
 .day.nodata {opacity:.32;border-style:dashed;color:var(--dim2)}
 
+/* ═══════════════ INFORMACJA ZWROTNA ═══════════════
+   Najważniejsza rzecz w całej tej sekcji: użytkownik ma ZAWSZE wiedzieć,
+   czy jego dotknięcie zostało przyjęte. Aplikacja, która po kliknięciu
+   milczy przez sekundę, jest odbierana jako zepsuta - niezależnie od tego,
+   co robi w środku.                                                      */
+
+/* Cienki pasek postępu pod nagłówkiem - widoczny tylko podczas pracy. */
+#topbar{position:fixed;left:0;right:0;height:2px;z-index:30;pointer-events:none;
+        background:transparent;overflow:hidden;
+        top:calc(52px + env(safe-area-inset-top));opacity:0;transition:opacity .2s}
+#topbar.on{opacity:1}
+#topbar i{display:block;height:100%;width:40%;border-radius:2px;
+          background:linear-gradient(90deg,transparent,var(--acc),transparent);
+          animation:sunie 1.1s ease-in-out infinite}
+@keyframes sunie{0%{transform:translateX(-100%)}100%{transform:translateX(350%)}}
+
+/* Komunikaty na dole - nie blokują ekranu, w odróżnieniu od okienek alert. */
+#toasts{position:fixed;left:0;right:0;z-index:60;display:flex;flex-direction:column;
+        align-items:center;gap:8px;pointer-events:none;
+        bottom:calc(78px + env(safe-area-inset-bottom))}
+.toast{max-width:min(420px,92vw);padding:11px 15px;border-radius:14px;font-size:13.5px;
+       display:flex;align-items:center;gap:9px;line-height:1.35;
+       background:rgba(29,41,66,.97);border:1px solid var(--line);color:var(--txt);
+       box-shadow:0 12px 32px -12px #000;backdrop-filter:blur(12px);
+       animation:wjedz .26s cubic-bezier(.2,.9,.3,1.3)}
+.toast.ok  {border-color:rgba(52,211,153,.5)}
+.toast.err {border-color:rgba(248,113,113,.55)}
+.toast.gone{animation:zjedz .22s ease forwards}
+.toast svg{flex:none}
+@keyframes wjedz{from{opacity:0;transform:translateY(14px) scale(.96)}
+                 to{opacity:1;transform:none}}
+@keyframes zjedz{to{opacity:0;transform:translateY(8px) scale(.97)}}
+
+/* Kręcące się kółko w przycisku odświeżania. */
+.spin{animation:obrot .75s linear infinite;transform-origin:50% 50%}
+@keyframes obrot{to{transform:rotate(360deg)}}
+
+/* Pociągnięcie w dół, żeby odświeżyć - gest, którego iPhone uczy od lat. */
+#pull{height:0;overflow:hidden;display:flex;align-items:center;justify-content:center;
+      color:var(--dim2);font-size:12px;gap:7px;transition:height .18s ease}
+#pull svg{transition:transform .18s ease}
+#pull.gotowe svg{transform:rotate(180deg);color:var(--acc)}
+
+/* Liczby w interfejsie: stała szerokość cyfr. Bez tego licznik tabletek
+   i procenty "skaczą" w bok przy każdej zmianie wartości.               */
+.num,#batBig,#pillsBig,#adherence,.stat b,.day{font-variant-numeric:tabular-nums}
+
+/* Szkielet zamiast pustki, dopóki dane nie dojdą. */
+.skel{background:linear-gradient(90deg,var(--card2) 25%,#243352 37%,var(--card2) 63%);
+      background-size:400% 100%;animation:polysk 1.4s ease infinite;
+      border-radius:8px;color:transparent !important}
+@keyframes polysk{0%{background-position:100% 50%}100%{background-position:0 50%}}
+
+/* Pierścień skuteczności - czytelniejszy niz sama liczba i ladniejszy. */
+.ring{--p:0;width:62px;height:62px;flex:none;position:relative}
+.ring svg{transform:rotate(-90deg)}
+.ring circle{fill:none;stroke-width:7;stroke-linecap:round}
+.ring .tlo{stroke:var(--card2)}
+.ring .wyp{stroke:var(--ok);transition:stroke-dashoffset .7s cubic-bezier(.3,1,.4,1),stroke .3s}
+.ring b{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+        font-size:14px;font-weight:700;font-variant-numeric:tabular-nums}
+
+/* Delikatna seria - motywuje bez krzyku. */
+.streak{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;
+        padding:4px 9px;border-radius:999px;margin-top:8px;
+        background:rgba(94,234,212,.10);color:var(--acc);border:1px solid rgba(94,234,212,.28)}
+
+button:focus-visible,.day:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{animation-duration:.01ms !important;transition-duration:.01ms !important}
+}
+
 #rotateLock{display:none}
 @media screen and (orientation:landscape) and (max-height:520px){
   #rotateLock{
@@ -250,8 +322,8 @@ nav button.act{color:var(--acc)}
   </div>
   <button id="refreshBtn" onclick="odswiez()" aria-label="Odśwież"
           style="padding:8px 10px;background:transparent;border:1px solid var(--line)">
-    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-         stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <svg id="refreshIco" width="17" height="17" viewBox="0 0 24 24" fill="none"
+         stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 3v6h-6"/></svg>
   </button>
   <span class="chip" id="batChip">–</span>
@@ -260,6 +332,13 @@ nav button.act{color:var(--acc)}
 <main>
 
 <!-- ─────────── KALENDARZ ─────────── -->
+<div id="pull">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+       stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 5v14"/><path d="M19 12l-7 7-7-7"/></svg>
+  <span id="pullTxt">Pociągnij, aby odświeżyć</span>
+</div>
+
 <section id="tab-cal">
 
   <!-- Ostrzeżenie: wieczko zostało otwarte. Ukryte, dopóki pudełko nie
@@ -281,6 +360,7 @@ nav button.act{color:var(--acc)}
         <div class="dim2" style="text-transform:uppercase;letter-spacing:.06em;font-weight:600">Dzisiaj</div>
         <div id="todayState" style="font-size:19px;font-weight:650;margin-top:3px;line-height:1.25">—</div>
         <div class="muted" id="todayWhen"></div>
+        <div id="streak"></div>
       </div>
       <div class="pillrow" id="todayPill" style="min-height:0;margin:0"></div>
     </div>
@@ -305,9 +385,19 @@ nav button.act{color:var(--acc)}
         fill="rgba(167,139,250,.25)" stroke="#a78bfa" stroke-width="1.6"/></svg>pomiar INR</span>
     </div>
     <hr class="sep">
-    <div class="row between">
-      <span class="muted">Skuteczność w tym miesiącu</span>
-      <b id="adherence" style="font-size:17px">–</b>
+    <div class="row between" style="align-items:center">
+      <div style="min-width:0">
+        <div class="muted">Skuteczność w tym miesiącu</div>
+        <div class="dim2" id="adhSub" style="margin-top:2px"></div>
+      </div>
+      <div class="ring" id="adhRing">
+        <svg width="62" height="62" viewBox="0 0 62 62">
+          <circle class="tlo" cx="31" cy="31" r="26"/>
+          <circle class="wyp" cx="31" cy="31" r="26" id="adhArc"
+                  stroke-dasharray="163.4" stroke-dashoffset="163.4"/>
+        </svg>
+        <b id="adherence">–</b>
+      </div>
     </div>
   </div>
 
@@ -556,6 +646,9 @@ nav button.act{color:var(--acc)}
 <!-- Blokada poziomu. iOS ignoruje pole "orientation" w manifescie i nie ma
      API do zablokowania obrotu, więc jedyne pewne wyjście to zasłonić ekran
      i poprosić o obrót. Tylko na telefonach - tablet ma dość miejsca. -->
+<div id="topbar"><i></i></div>
+<div id="toasts"></div>
+
 <div id="rotateLock">
   <svg width="54" height="54" viewBox="0 0 24 24" fill="none" stroke="currentColor"
        stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
@@ -637,7 +730,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-02.3";
+const APP_VERSION = "2026-08-03.1";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -666,6 +759,53 @@ let viewYear, viewMonth, sheetDate = null, pendingDose = null;
 let staleRules = false;   // baza odrzuca nowe pola -> reguly do odswiezenia
 let boxLog = [];          // czarna skrzynka pudelka
 let lastRec = null;       // slad po ostatnim uzupelnieniu kalendarza
+
+/* ═══════════════════════════════════════════════════════════════
+ *  INFORMACJA ZWROTNA
+ *
+ *  Kliknięcie, po którym nic się nie dzieje, jest gorsze niż kliknięcie
+ *  zakończone błędem - bo nie wiadomo nawet, czy zostało przyjęte.
+ *  Stąd trzy poziomy: pasek postępu (coś trwa), kręcąca się ikona
+ *  (dotknięty przycisk pracuje) i komunikat na dole (jak się skończyło).
+ * ═══════════════════════════════════════════════════════════════ */
+const IKONY = {
+  ok:  `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--ok)"
+         stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+         <path d="M20 6L9 17l-5-5"/></svg>`,
+  err: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--bad)"
+         stroke-width="2.4" stroke-linecap="round"><path d="M12 8v5"/><path d="M12 16.5v.01"/>
+         <circle cx="12" cy="12" r="9"/></svg>`,
+  info:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--dim)"
+         stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/>
+         <path d="M12 11v5"/><path d="M12 7.5v.01"/></svg>`
+};
+
+let toastTimer = null;
+function toast(tekst, typ = "info", ms = 2600){
+  const box = document.getElementById("toasts");
+  if (!box) return;
+  /* Jeden komunikat naraz - kolejka nachodzących się dymków bardziej
+     przeszkadza, niż pomaga. Nowy zastępuje poprzedni.                 */
+  box.innerHTML = `<div class="toast ${typ}">${IKONY[typ] || ""}<span>${esc(tekst)}</span></div>`;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => {
+    const t = box.firstElementChild;
+    if (!t) return;
+    t.classList.add("gone");
+    setTimeout(() => { if (box.firstElementChild === t) box.innerHTML = ""; }, 220);
+  }, ms);
+}
+
+let zajete = 0;
+function busy(wlacz){
+  zajete = Math.max(0, zajete + (wlacz ? 1 : -1));
+  const pasek = document.getElementById("topbar");
+  const ico   = document.getElementById("refreshIco");
+  const btn   = document.getElementById("refreshBtn");
+  if (pasek) pasek.classList.toggle("on", zajete > 0);
+  if (ico)   ico.classList.toggle("spin", zajete > 0);
+  if (btn)   btn.style.opacity = zajete > 0 ? ".55" : "";
+}
 
 /* ───────── narzędzia ───────── */
 
@@ -1046,8 +1186,14 @@ function boot(){
      iOS usypia JavaScript, gdy schowasz aplikację, i zrywa połączenie
      z Firebase. Po powrocie trzeba je jawnie wznowić — bez tego trzeba
      było zamykać i otwierać aplikację, żeby zobaczyć nowe dane.        */
-  const wakeUp = async () => {
+  /* recznie = true, gdy odswiezenie wywolal czlowiek (przycisk lub gest).
+     Wtedy MUSI zobaczyc wynik. Odswiezenia w tle robia to po cichu.     */
+  const wakeUp = async (recznie = false) => {
     if (document.hidden || !uid) return;
+    if (recznie && zajete > 0) return;          // juz trwa, nie dubluj
+    const przedDawki = JSON.stringify(doses);
+    const przedZdarz = events.length;
+    if (recznie) busy(true);
     try {
       goOnline(db);                       // wznów nasłuch w czasie rzeczywistym
 
@@ -1085,13 +1231,78 @@ function boot(){
       renderStatus(val(st) ? val(st).val() : null);
       renderSettings(); renderAll(); renderDiag(); renderBoxLog();
       await doReconcile(true);
-    } catch (e) { console.error("odswiezanie:", e); }
+
+      if (recznie) {
+        const bledy = [st, ev, ds, ir, cf].filter(r => r.status === "rejected").length;
+        if (bledy) {
+          toast(`Odświeżono częściowo — ${bledy} z 5 odczytów nie przeszło`, "err", 4000);
+        } else {
+          /* Mówimy KONKRETNIE, co się zmieniło. „Odświeżono" bez treści
+             niczego nie rozstrzyga, gdy człowiek czeka na swoją dawkę.  */
+          const noweZdarz = events.length - przedZdarz;
+          const zmianaDawek = JSON.stringify(doses) !== przedDawki;
+          const godz = new Date().toLocaleTimeString("pl-PL",
+                        { hour:"2-digit", minute:"2-digit" });
+          if (noweZdarz > 0)
+            toast(`Nowe zdarzenia z pudełka: ${noweZdarz}`, "ok");
+          else if (zmianaDawek)
+            toast("Kalendarz zaktualizowany", "ok");
+          else
+            toast(`Wszystko aktualne · ${godz}`, "ok", 1900);
+        }
+      }
+    } catch (e) {
+      console.error("odswiezanie:", e);
+      if (recznie) toast("Nie udało się odświeżyć: " + (e?.message || e), "err", 4500);
+    } finally {
+      if (recznie) busy(false);
+    }
   };
   document.addEventListener("visibilitychange", wakeUp);
   window.addEventListener("focus", wakeUp);
   window.addEventListener("pageshow", wakeUp);
   setInterval(wakeUp, 5 * 60 * 1000);     // siatka bezpieczeństwa
-  window.odswiez = wakeUp;
+
+  /* Odliczanie do dawki musi faktycznie odliczać - inaczej pokazuje stan
+     sprzed godziny i wprowadza w błąd akurat wtedy, gdy jest potrzebne. */
+  setInterval(() => { if (!document.hidden) renderToday(); }, 30 * 1000);
+  window.odswiez = () => wakeUp(true);
+
+  /* ───────── Pociągnięcie w dół, żeby odświeżyć ─────────
+     Gest, którego iPhone uczy od kilkunastu lat. Działa tylko przy samej
+     górze strony, żeby nie kolidował ze zwykłym przewijaniem.          */
+  {
+    const wsk = document.getElementById("pull");
+    const txt = document.getElementById("pullTxt");
+    let start = null, dystans = 0;
+    const PROG = 64;
+
+    addEventListener("touchstart", e => {
+      start = (window.scrollY <= 0 && e.touches.length === 1) ? e.touches[0].clientY : null;
+      dystans = 0;
+    }, { passive: true });
+
+    addEventListener("touchmove", e => {
+      if (start === null || zajete > 0) return;
+      dystans = Math.max(0, e.touches[0].clientY - start);
+      if (dystans <= 0) return;
+      /* Opór rosnący z odległością - tak zachowują się natywne listy. */
+      const h = Math.min(72, dystans * 0.45);
+      wsk.style.height = h + "px";
+      const gotowe = dystans > PROG;
+      wsk.classList.toggle("gotowe", gotowe);
+      txt.textContent = gotowe ? "Puść, aby odświeżyć" : "Pociągnij, aby odświeżyć";
+    }, { passive: true });
+
+    addEventListener("touchend", () => {
+      if (start === null) return;
+      const odswiez = dystans > PROG && zajete === 0;
+      wsk.style.height = "0px";
+      wsk.classList.remove("gotowe");
+      start = null; dystans = 0;
+      if (odswiez) wakeUp(true);
+    }, { passive: true });
+  }
 }
 
 function renderAll(){
@@ -1107,9 +1318,9 @@ function renderAll(){
    przyciskiem w Ustawieniach — wtedy z komunikatem, żeby było widać,
    że coś się wydarzyło.                                                */
 async function doReconcile(silent = true){
-  if (!uid){ if (!silent) alert("Najpierw zaloguj się w aplikacji."); return; }
+  if (!uid){ if (!silent) toast("Najpierw zaloguj się w aplikacji.", "err"); return; }
   if (!events.length){
-    if (!silent) alert("Pudełko nie przysłało jeszcze żadnych zdarzeń.");
+    if (!silent) toast("Pudełko nie przysłało jeszcze żadnych zdarzeń.", "info");
     return;
   }
   const updates = {};
@@ -1130,18 +1341,36 @@ async function doReconcile(silent = true){
     const cur = doses?.[key]?.[slot];
     if (cur && cur.source === "manual") continue;      // ręczna korekta wygrywa zawsze
 
+    const sciezka = `users/${uid}/doses/${key}/${slot}`;
+
+    /* UWAGA na kolejność.
+
+       Wcześniej decyzja zależała wyłącznie od tego, które zdarzenie trafiło
+       do pętli później — bo wpis do `updates` po prostu nadpisywał poprzedni.
+       Zdarzenia przychodzą posortowane od najnowszego, więc STARSZE
+       „pominięte" nadpisywało NOWSZE „wzięte" i dzień robił się czerwony,
+       mimo że pudełko zarejestrowało otwarcie.
+
+       Reguła jest teraz jawna i niezależna od kolejności:
+         • otwarcie zawsze bije pominięcie,
+         • wśród otwarć wygrywa NAJWCZEŚNIEJSZE — to ono jest dawką,
+           kolejne tego dnia to zaglądanie do pudełka.                   */
+    const juz = updates[sciezka];
+
     if (ev.type === "open"){
       if (cur && cur.status === "taken") continue;
+      if (juz && juz.status === "taken" && juz.openTs <= ev.ts) continue;
       /* openTs = rzeczywista godzina otwarcia pudełka. Trzymamy ją osobno
          od ts, bo ts po ręcznej korekcie przestaje być wiarygodny, a
          statystyki por przyjmowania muszą opierać się wyłącznie na
          pomiarach z urządzenia.                                        */
-      updates[`users/${uid}/doses/${key}/${slot}`] =
+      updates[sciezka] =
         { status:"taken", dose: cfg.defaultDose ?? 1, source:"device",
           ts: ev.ts, openTs: ev.ts };
     } else if (ev.type === "missed"){
       if (cur && cur.status === "taken") continue;
-      updates[`users/${uid}/doses/${key}/${slot}`] =
+      if (juz) continue;                    // cokolwiek już ustalono, zostaje
+      updates[sciezka] =
         { status:"missed", dose:0, source:"device", ts: ev.ts };
     }
   }
@@ -1190,9 +1419,8 @@ async function doReconcile(silent = true){
   }
   renderDiag();
   if (!silent) {
-    alert(n ? `Gotowe — uzupełniono ${n} ${n === 1 ? "dzień" : "dni"} w kalendarzu.`
-            : `Kalendarz jest już aktualny.\n\nPrzeanalizowano ${events.length} zdarzeń `
-              + `z pudełka, nic nie wymagało zmiany.`);
+    if (n) toast(`Uzupełniono ${n} ${n === 1 ? "dzień" : "dni"} w kalendarzu`, "ok");
+    else   toast(`Kalendarz aktualny · przeanalizowano ${events.length} zdarzeń`, "ok");
   }
 }
 window.reconcile = () => doReconcile(false);
@@ -1258,7 +1486,13 @@ function renderCalendar(){
   for (let d = 1; d <= days; d++){
     const key = `${viewYear}-${pad(viewMonth+1)}-${pad(d)}`;
     const st = dayStatus(key), { sum } = dayDose(key);
-    if (st !== "future"){ total++; if (st === "taken") taken++; else if (st === "partial") taken += .5; }
+    /* "nodata" to dni sprzed uruchomienia pudelka. Wczesniej wpadaly do
+       mianownika i zanizaly skutecznosc miesiaca - dokladnie ten sam blad,
+       ktory poprawilismy w Analizie, tylko tutaj przeoczony.            */
+    if (st !== "future" && st !== "nodata"){
+      total++;
+      if (st === "taken") taken++; else if (st === "partial") taken += .5;
+    }
     html += `<div class="day ${st} ${key===todayKey()?"today":""}" data-k="${key}">
         ${inr[key] ? INR_MARK : ""}${d}
         ${sum>0 ? `<span class="dose">${nf(sum)}</span>` : ""}
@@ -1267,7 +1501,64 @@ function renderCalendar(){
   const grid = document.getElementById("calGrid");
   grid.innerHTML = html;
   grid.querySelectorAll(".day[data-k]").forEach(el => el.onclick = () => openSheet(el.dataset.k));
-  document.getElementById("adherence").textContent = total ? Math.round(taken/total*100)+"%" : "–";
+  /* Pierścień zamiast samej liczby: procent widać jednym spojrzeniem,
+     a kolor od razu mówi, czy jest dobrze.                              */
+  const proc = total ? Math.round(taken / total * 100) : null;
+  document.getElementById("adherence").textContent = proc === null ? "–" : proc + "%";
+  const sub = document.getElementById("adhSub");
+  if (sub) sub.textContent = total
+    ? `${nf(taken)} z ${total} ${total === 1 ? "dnia" : "dni"}`
+    : "brak danych w tym miesiącu";
+
+  const arc = document.getElementById("adhArc");
+  if (arc){
+    const OBWOD = 2 * Math.PI * 26;
+    arc.style.strokeDasharray  = OBWOD.toFixed(1);
+    arc.style.strokeDashoffset = (OBWOD * (1 - (proc ?? 0) / 100)).toFixed(1);
+    arc.style.stroke = proc === null ? "var(--card2)"
+                     : proc >= 90 ? "var(--ok)"
+                     : proc >= 70 ? "var(--warn)" : "var(--bad)";
+  }
+}
+
+/* Ile dni z rzędu bez pominięcia, licząc wstecz od ostatniego rozliczonego
+   dnia. Dzisiaj celowo pomijamy - dzień jeszcze trwa i zerwanie serii
+   o poranku byłoby demotywujące oraz nieprawdziwe.                      */
+function seriaDni(){
+  let n = 0;
+  const d = medDate(new Date());
+  for (let i = 1; i <= 400; i++){
+    const dd = new Date(d); dd.setDate(dd.getDate() - i);
+    const k = dateKey(dd);
+    if (beforeTracking(k)) break;             // przed uruchomieniem nic nie wiemy
+    const st = dayStatus(k);
+    if (st === "taken" || st === "partial") n++;
+    else break;
+  }
+  return n;
+}
+
+/* Ile zostało do najbliższego przypomnienia. */
+function doNastepnej(){
+  const godziny = (Array.isArray(cfg.schedule) ? cfg.schedule : [])
+    .filter(h => typeof h === "string" && h.length === 5);
+  if (!godziny.length) return null;
+  const teraz = new Date();
+  const minTeraz = teraz.getHours() * 60 + teraz.getMinutes();
+  let naj = null;
+  for (const h of godziny){
+    const m = slotMin(h);
+    const za = m > minTeraz ? m - minTeraz : m + 1440 - minTeraz;
+    if (naj === null || za < naj.za) naj = { za, h };
+  }
+  return naj;
+}
+
+function opisCzasu(min){
+  if (min < 1)  return "za chwilę";
+  if (min < 60) return `za ${min} min`;
+  const g = Math.floor(min / 60), m = min % 60;
+  return m ? `za ${g} h ${m} min` : `za ${g} h`;
 }
 
 function renderToday(){
@@ -1388,7 +1679,8 @@ window.saveNote = async txt => {
   /* Notatka na dniu bez wpisu i w przyszłości nie może tworzyć wpisu
      „nie wzięte" — inaczej jutrzejszy dzień robiłby się czerwony. */
   if (!rec && sheetDate > todayKey() && !txt.trim()) return;
-  if (!rec && sheetDate > todayKey()){ alert("Notatkę można dodać dopiero w dniu przyjęcia."); return; }
+  if (!rec && sheetDate > todayKey()){
+    toast("Notatkę można dodać dopiero w dniu przyjęcia.", "info"); return; }
   await set(ref(db, `users/${uid}/doses/${sheetDate}/0`), {
     status: rec?.status || (dayDose(sheetDate).sum > 0 ? "taken" : "missed"),
     dose:   rec?.dose ?? dayDose(sheetDate).sum,
@@ -1443,8 +1735,17 @@ window.delInr = async date => {
   if (ok) await remove(ref(db, `users/${uid}/inr/${date}`));
 };
 
+/* Firebase potrafi oddać pusty węzeł (null) albo wpis bez wartości —
+   np. po nieudanym zapisie. Jeden taki wpis wywalał całą zakładkę INR,
+   razem z wykresem i listą. Filtrujemy je raz, u źródła.              */
+function inrKeysOk(){
+  return Object.keys(inr)
+    .filter(k => inr[k] && Number.isFinite(+inr[k].value))
+    .sort();
+}
+
 function renderInr(){
-  const keys = Object.keys(inr).sort();
+  const keys = inrKeysOk();
   const lastK = keys[keys.length-1];
   const el = document.getElementById("inrLast");
   const badge = document.getElementById("inrBadge");
@@ -1665,12 +1966,17 @@ function renderStatus(st){
       `ID: <b>${DEVICE_ID}</b><br>Urządzenie nie wysłało jeszcze żadnych danych.`;
     return;
   }
-  const pct = st.battery ?? 0;
+  /* Wszystko, co przychodzi z bazy, moze byc czymkolwiek - tekstem po
+     nieudanym zapisie, brakiem pola, liczba spoza zakresu. Karta stanu
+     nie ma prawa przez to zniknac, bo to na niej widac, czy pudelko zyje. */
+  const num = (v, dom = 0) => Number.isFinite(+v) ? +v : dom;
+  const pct = Math.max(0, Math.min(100, Math.round(num(st.battery))));
   const col = pct > 40 ? "var(--ok)" : pct > 15 ? "var(--warn)" : "var(--bad)";
 
   document.getElementById("batBig").textContent = pct + "%";
   document.getElementById("batBig").style.color = col;
-  document.getElementById("batVolt").textContent = `${(st.volt||0).toFixed(2)} V · ogniwo 470 mAh`;
+  document.getElementById("batVolt").textContent =
+    `${num(st.volt).toFixed(2)} V · ogniwo 470 mAh`;
   const f = document.getElementById("battFill"); f.style.width = Math.max(6,pct)+"%"; f.style.background = col;
   const b = document.getElementById("batBar");  b.style.width = pct+"%"; b.style.background = col;
   chip.textContent = pct + "%";
@@ -1686,13 +1992,13 @@ function renderStatus(st){
     : "Czas naładować pudełko przez USB-C.";
   eta.style.color = pct > 15 ? "" : "var(--bad)";
 
-  const ls = st.lastSeen || 0, ago = Math.round(Date.now()/1000 - ls);
+  const ls = num(st.lastSeen), ago = Math.round(Date.now()/1000 - ls);
   document.getElementById("lastSync").textContent = ls
     ? new Date(ls*1000).toLocaleString("pl-PL",{day:"2-digit",month:"2-digit",year:"numeric",
         hour:"2-digit",minute:"2-digit"}) : "nigdy";
   document.getElementById("lastSyncRel").textContent = ls ? relTime(ago) : "";
 
-  const q = st.queued || 0, qi = document.getElementById("queueInfo");
+  const q = num(st.queued), qi = document.getElementById("queueInfo");
   qi.innerHTML = q ? `<span style="color:var(--warn)">⏳ ${q} zdarzeń czeka w pamięci pudełka.</span>` : "";
 
   /* battRaw = odczyt prosto z krzywej, przed wygładzeniem. Gdy różni się
@@ -1805,7 +2111,7 @@ window.saveConfig = async () => {
     trackingSince: cfg.trackingSince, defaultDose: cfg.defaultDose,
     drugName: cfg.drugName, drugStrength: cfg.drugStrength });
   renderAll();
-  alert("Zapisano. Pudełko pobierze ustawienia przy najbliższym połączeniu.");
+  toast("Zapisano · pudełko pobierze przy najbliższym połączeniu", "ok", 3200);
 };
 
 window.saveInrRange = async () => {
@@ -1981,7 +2287,7 @@ function renderAnalysis(){
 
   const ic = document.getElementById("anInr");
   if (ic){
-    const keys = Object.keys(inr).sort().reverse().slice(0, 8);
+    const keys = inrKeysOk().reverse().slice(0, 8);
     ic.innerHTML = keys.length ? keys.map(k => {
       const v = inr[k].value, s = inrState(v), c = inrContext(k, 7);
       return `<div class="inrrow">
@@ -2031,7 +2337,7 @@ window.makeReport = () => {
   const total  = taken + missed;
   const sumDose = rows.reduce((a,r)=>a+(parseFloat(String(r.dose).replace(",","."))||0),0);
 
-  const inrKeys = Object.keys(inr).filter(k => k >= rows[0].key).sort();
+  const inrKeys = inrKeysOk().filter(k => k >= rows[0].key);
   const inRange = inrKeys.filter(k => inr[k].value >= cfg.inrMin && inr[k].value <= cfg.inrMax).length;
   const an = analyze(days);
 
