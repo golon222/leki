@@ -637,7 +637,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-02.2";
+const APP_VERSION = "2026-08-02.3";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -665,6 +665,7 @@ let events = [];
 let viewYear, viewMonth, sheetDate = null, pendingDose = null;
 let staleRules = false;   // baza odrzuca nowe pola -> reguly do odswiezenia
 let boxLog = [];          // czarna skrzynka pudelka
+let lastRec = null;       // slad po ostatnim uzupelnieniu kalendarza
 
 /* ───────── narzędzia ───────── */
 
@@ -1027,6 +1028,11 @@ function boot(){
 
   onValue(ref(db, `users/${uid}/doses`), s => {
     doses = s.val() || {}; renderAll(); renderDiag(); settlePills();
+    /* Nasłuchy przychodzą w nieprzewidywalnej kolejności. Jeśli zdarzenia
+       dotarły przed kalendarzem, uzupełnianie liczyło na pustym stanie -
+       to bezpieczne, ale mogło minąć się z danymi. Powtarzamy po każdej
+       zmianie kalendarza; jest bezczynne, gdy nie ma czego dopisać.     */
+    doReconcile(true);
   }, onErr("odczyt kalendarza dawek"));
 
   onValue(ref(db, `users/${uid}/inr`), s => { inr = s.val() || {}; renderAll(); },
@@ -1044,22 +1050,41 @@ function boot(){
     if (document.hidden || !uid) return;
     try {
       goOnline(db);                       // wznów nasłuch w czasie rzeczywistym
-      /* Jednorazowy odczyt „na już" — nie czekamy, aż serwer sam się odezwie. */
-      const [st, ev, ds, ir, cf] = await Promise.all([
+
+      /* allSettled, a NIE all.
+
+         Wcześniej jeden nieudany odczyt z pięciu przerywał całą funkcję —
+         a razem z nią uzupełnianie kalendarza, bo doReconcile stało na
+         samym końcu. Wystarczyło, że chwilowo nie dało się pobrać np.
+         wyników INR, i dawka z pudełka nie trafiała do kalendarza, mimo że
+         zdarzenie pobrało się bez problemu. Teraz każdy odczyt żyje własnym
+         życiem, a to, co się udało, zostaje wykorzystane.                */
+      const [st, ev, ds, ir, cf] = await Promise.allSettled([
         get(ref(db, `devices/${DEVICE_ID}/status`)),
         get(query(ref(db, `devices/${DEVICE_ID}/events`), orderByChild("ts"), limitToLast(400))),
         get(ref(db, `users/${uid}/doses`)),
         get(ref(db, `users/${uid}/inr`)),
         get(ref(db, `devices/${DEVICE_ID}/config`))
       ]);
-      if (cf.val()) cfg = Object.assign(cfg, cf.val());
-      events = []; ev.forEach(c => events.push(Object.assign({ id:c.key }, c.val())));
-      events.sort((a,b) => b.ts - a.ts);
-      doses = ds.val() || {};
-      inr   = ir.val() || {};
-      renderStatus(st.val());
+      const val = r => (r.status === "fulfilled" ? r.value : null);
+
+      const cfS = val(cf); if (cfS?.val()) cfg = Object.assign(cfg, cfS.val());
+      const evS = val(ev);
+      if (evS){
+        events = [];
+        evS.forEach(c => events.push(Object.assign({ id:c.key }, c.val())));
+        events.sort((a,b) => b.ts - a.ts);
+      }
+      const dsS = val(ds); if (dsS) doses = dsS.val() || {};
+      const irS = val(ir); if (irS) inr   = irS.val() || {};
+
+      for (const [nazwa, r] of [["stan", st], ["zdarzenia", ev], ["kalendarz", ds],
+                                ["INR", ir], ["ustawienia", cf]])
+        if (r.status === "rejected") console.error("odswiezanie -", nazwa, r.reason);
+
+      renderStatus(val(st) ? val(st).val() : null);
       renderSettings(); renderAll(); renderDiag(); renderBoxLog();
-      doReconcile(true);
+      await doReconcile(true);
     } catch (e) { console.error("odswiezanie:", e); }
   };
   document.addEventListener("visibilitychange", wakeUp);
@@ -1121,6 +1146,7 @@ async function doReconcile(silent = true){
     }
   }
   const n = Object.keys(updates).length;
+  lastRec = { at: Date.now(), n, err: null, events: events.length };
   if (n) {
     try {
       await update(ref(db), updates);
@@ -1154,12 +1180,15 @@ async function doReconcile(silent = true){
                 "w konsoli Firebase → Realtime Database → Rules → Publish.");
       } catch (e2) {
         console.error("zapis kalendarza (druga proba):", e2);
+        lastRec.err = e2?.message || String(e2);
+        renderDiag();
         alert("Nie udało się zapisać do bazy.\n\n" + (e2?.message || e2) +
               "\n\nSprawdź reguły bezpieczeństwa w Firebase.");
         return;
       }
     }
   }
+  renderDiag();
   if (!silent) {
     alert(n ? `Gotowe — uzupełniono ${n} ${n === 1 ? "dzień" : "dni"} w kalendarzu.`
             : `Kalendarz jest już aktualny.\n\nPrzeanalizowano ${events.length} zdarzeń `
@@ -1542,6 +1571,22 @@ function renderDiag(){
   const el = document.getElementById("diagList");
   if (!el) return;
 
+  /* Widoczny ślad po automatycznym uzupełnianiu. Bez tego "samo się nie
+     zrobiło" i "zrobiło się, ale nie było czego dopisać" wyglądają
+     identycznie - a to zupełnie różne sytuacje.                        */
+  const rec = !lastRec
+    ? `<div class="dim2" style="margin-bottom:10px">Kalendarz nie był jeszcze
+         uzupełniany w tej sesji.</div>`
+    : `<div class="dim2" style="margin-bottom:10px">
+         Ostatnie automatyczne uzupełnienie: <b>${new Date(lastRec.at)
+           .toLocaleTimeString("pl-PL",{hour:"2-digit",minute:"2-digit",second:"2-digit"})}</b>
+         · przeanalizowano ${lastRec.events} zdarzeń ·
+         ${lastRec.err
+            ? `<span style="color:var(--bad)">błąd zapisu: ${esc(lastRec.err)}</span>`
+            : (lastRec.n ? `dopisano ${lastRec.n} dni`
+                         : "nic nie wymagało zmiany")}
+       </div>`;
+
   const warn = staleRules
     ? `<div style="margin-bottom:10px;padding:10px;border-radius:12px;
          border:1px solid var(--warn);background:rgba(251,191,36,.10)">
@@ -1552,7 +1597,7 @@ function renderDiag(){
        </div>` : "";
 
   if (!events.length){
-    el.innerHTML = warn + `<span class="dim2">Pudełko nie przysłało jeszcze żadnych zdarzeń.<br>
+    el.innerHTML = rec + warn + `<span class="dim2">Pudełko nie przysłało jeszcze żadnych zdarzeń.<br>
       Jeśli w logu z komputera widzisz „push event HTTP 200”, a tutaj jest pusto,
       to znaczy, że aplikacja nie ma prawa czytać tych danych — sprawdź reguły
       bezpieczeństwa w Firebase.</span>`;
@@ -1572,7 +1617,7 @@ function renderDiag(){
       <span class="dim2">doba lekowa: ${key || "—"}</span> · ${mark}</div>`;
   }).join("");
 
-  el.innerHTML = warn + rows + `<div class="dim2" style="margin-top:8px">Pokazano
+  el.innerHTML = rec + warn + rows + `<div class="dim2" style="margin-top:8px">Pokazano
     ${Math.min(15, events.length)} z ${events.length} zdarzeń.</div>`;
 }
 
