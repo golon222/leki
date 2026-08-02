@@ -540,6 +540,16 @@ nav button.act{color:var(--acc)}
     <button class="ghost" style="width:100%;margin-top:10px" onclick="reconcile()">
       Uzupełnij kalendarz ze zdarzeń</button>
   </div>
+
+  <!-- CZARNA SKRZYNKA -->
+  <div class="card">
+    <h3>Historia pudełka</h3>
+    <p class="muted" style="margin:6px 0 12px">
+      Co pudełko robiło przy każdym wybudzeniu — także wtedy, gdy nie miało
+      zasięgu. Zapisuje to u siebie, więc przetrwa noc bez WiFi.
+    </p>
+    <div id="boxLog" style="font-size:12.5px;line-height:1.55"></div>
+  </div>
 </section>
 </main>
 
@@ -627,7 +637,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-02.1";
+const APP_VERSION = "2026-08-02.2";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -654,6 +664,7 @@ let inr   = {};      // { "2026-07-20": { value, ts, note } }
 let events = [];
 let viewYear, viewMonth, sheetDate = null, pendingDose = null;
 let staleRules = false;   // baza odrzuca nowe pola -> reguly do odswiezenia
+let boxLog = [];          // czarna skrzynka pudelka
 
 /* ───────── narzędzia ───────── */
 
@@ -1021,6 +1032,10 @@ function boot(){
   onValue(ref(db, `users/${uid}/inr`), s => { inr = s.val() || {}; renderAll(); },
           onErr("odczyt wyników INR"));
 
+  onValue(ref(db, `devices/${DEVICE_ID}/log`), s => {
+    boxLog = s.val() || []; renderBoxLog();
+  }, onErr("odczyt historii pudełka"));
+
   /* ───────── Odświeżanie po powrocie do aplikacji ─────────
      iOS usypia JavaScript, gdy schowasz aplikację, i zrywa połączenie
      z Firebase. Po powrocie trzeba je jawnie wznowić — bez tego trzeba
@@ -1043,7 +1058,7 @@ function boot(){
       doses = ds.val() || {};
       inr   = ir.val() || {};
       renderStatus(st.val());
-      renderSettings(); renderAll(); renderDiag();
+      renderSettings(); renderAll(); renderDiag(); renderBoxLog();
       doReconcile(true);
     } catch (e) { console.error("odswiezanie:", e); }
   };
@@ -1488,6 +1503,40 @@ function devDayMon(ts){ const d = devDate(ts);
  * ═══════════════════════════════════════════════════════════════ */
 const EVENT_NAMES = { open:"otwarcie pudełka", missed:"dawka pominięta",
                       boot:"uruchomienie", batt:"raport baterii" };
+
+/* Historia z pudełka. Format jednej linii ustala firmware:
+   czas|powod|co sie stalo|bateria|kolejka                              */
+const WAKE_PL = {
+  "reset/wlaczenie": "uruchomienie",
+  "KONTAKTRON (otwarto pudelko)": "otwarcie pudełka",
+  "przycisk": "przycisk",
+  "timer": "budzik",
+  "zamkniecie wieczka": "zamknięcie wieczka"
+};
+const WYNIK_ZLE = ["brak wifi", "baza nie odpowiada", "bateria odcieta",
+                   "meldunek bez sieci", "dawka pominieta"];
+
+function renderBoxLog(){
+  const el = document.getElementById("boxLog");
+  if (!el) return;
+  if (!boxLog.length){
+    el.innerHTML = `<span class="dim2">Pudełko nie przysłało jeszcze historii.
+      Pojawi się przy najbliższej synchronizacji.</span>`;
+    return;
+  }
+  el.innerHTML = boxLog.slice().reverse().map(w => {
+    const [ts, powod, co, bat, kol] = String(w).split("|");
+    const kiedy = +ts > 0 ? `${devDayMon(+ts)} ${devHM(+ts)}` : "czas nieznany";
+    const zle = WYNIK_ZLE.includes(co);
+    const kolejka = +kol > 0
+      ? ` <span style="color:var(--warn)">· ${kol} w kolejce</span>` : "";
+    return `<div style="padding:6px 0;border-bottom:1px solid var(--line)">
+      <b>${esc(kiedy)}</b> <span class="dim2">· ${esc(WAKE_PL[powod] || powod)}</span><br>
+      <span style="color:${zle ? "var(--bad)" : "var(--ok)"}">${esc(co)}</span>
+      <span class="dim2">· bateria ${esc(bat)}%</span>${kolejka}</div>`;
+  }).join("") +
+  `<div class="dim2" style="margin-top:8px">Pudełko pamięta 32 ostatnie wybudzenia.</div>`;
+}
 
 function renderDiag(){
   const el = document.getElementById("diagList");
