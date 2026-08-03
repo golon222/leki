@@ -152,6 +152,15 @@ label{font-size:12px;color:var(--dim2);display:block;margin:12px 0 5px;
 @keyframes zjedz{to{opacity:0;transform:translateY(8px) scale(.97)}}
 
 /* Kręcące się kółko w przycisku odświeżania. */
+/* Kropka stanu połączenia. Zielona i pulsująca = dane lecą na żywo.
+   Szara = aplikacja pokazuje to, co zapamiętała, a nie stan bieżący.
+   Bez tego rozróżnienia stary ekran wygląda dokładnie jak aktualny.  */
+#netDot{width:8px;height:8px;border-radius:50%;flex:none;background:var(--dim2);
+        transition:background .3s}
+#netDot.zywe{background:var(--ok);animation:tetno 2.4s ease-in-out infinite}
+@keyframes tetno{0%,100%{box-shadow:0 0 0 0 rgba(52,211,153,.55)}
+                 70%{box-shadow:0 0 0 6px rgba(52,211,153,0)}}
+
 .spin{animation:obrot .75s linear infinite;transform-origin:50% 50%}
 @keyframes obrot{to{transform:rotate(360deg)}}
 
@@ -188,6 +197,40 @@ label{font-size:12px;color:var(--dim2);display:block;margin:12px 0 5px;
 button:focus-visible,.day:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
 @media (prefers-reduced-motion: reduce){
   *,*::before,*::after{animation-duration:.01ms !important;transition-duration:.01ms !important}
+}
+
+/* ═══════════════ TABLETKA W 3D ═══════════════
+   Prawdziwa bryła, nie obrazek: dwie ścianki (awers i rewers) rozsunięte
+   na grubość tabletki, a między nimi wieniec z 36 wąskich pasków, które
+   razem tworzą walcowy bok. Wszystko na przekształceniach CSS - żadnej
+   biblioteki, żadnego WebGL-a, kilka kilobajtów kodu.
+
+   Przechylenie w osi X pokazuje, że to krążek, a nie moneta widziana
+   płasko. Obrót leci wokół własnej osi pionowej.                       */
+.tab3d{perspective:520px;display:inline-block;flex:none;cursor:pointer;
+       -webkit-tap-highlight-color:transparent}
+.tab3d-in{position:relative;width:100%;height:100%;transform-style:preserve-3d;
+          transform:rotateX(-16deg) rotateY(-24deg);
+          transition:transform .5s cubic-bezier(.2,.8,.3,1)}
+.tab3d.kreci .tab3d-in{animation:obrotTabletki var(--czas,7s) linear infinite}
+.tab3d.pchniete .tab3d-in{animation:obrotTabletki 1.1s cubic-bezier(.25,.9,.3,1) 1}
+@keyframes obrotTabletki{
+  from{transform:rotateX(-16deg) rotateY(0deg)}
+  to  {transform:rotateX(-16deg) rotateY(360deg)}
+}
+.tab3d .sc{position:absolute;inset:0;backface-visibility:hidden}
+.tab3d .sc.przod{transform:translateZ(var(--gr))}
+.tab3d .sc.tyl  {transform:rotateY(180deg) translateZ(var(--gr))}
+.tab3d .obr{position:absolute;inset:0;transform-style:preserve-3d}
+.tab3d .obr i{position:absolute;left:50%;top:50%;display:block;
+              margin-left:calc(var(--sw) / -2);margin-top:calc(var(--gr) * -1);
+              width:var(--sw);height:calc(var(--gr) * 2);background:var(--kol)}
+/* Delikatny cień pod tabletką - bez niego bryła wygląda, jakby lewitowała. */
+.tab3d::after{content:"";position:absolute;left:12%;right:12%;bottom:-6px;height:7px;
+              border-radius:50%;background:radial-gradient(ellipse,rgba(0,0,0,.5),transparent 70%);
+              filter:blur(2px);z-index:-1}
+@media (prefers-reduced-motion: reduce){
+  .tab3d.kreci .tab3d-in,.tab3d.pchniete .tab3d-in{animation:none}
 }
 
 #rotateLock{display:none}
@@ -327,6 +370,7 @@ nav button.act{color:var(--acc)}
       <path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 3v6h-6"/></svg>
   </button>
   <span class="chip" id="batChip">–</span>
+  <span id="netDot" title="Połączenie z bazą"></span>
 </header>
 
 <main>
@@ -631,6 +675,41 @@ nav button.act{color:var(--acc)}
       Uzupełnij kalendarz ze zdarzeń</button>
   </div>
 
+  <!-- WYNIKI AUTOTESTU -->
+  <div class="card">
+    <h3>Autotest pudełka</h3>
+    <p class="muted" style="margin:6px 0 10px">
+      Otwórz wieczko i naciśnij ukryty przycisk <b>trzy razy</b>.
+    </p>
+
+    <div style="background:var(--card2);border-radius:12px;padding:12px;
+                font-size:12.5px;line-height:1.55;margin-bottom:14px">
+      <b style="font-size:13px">Piknięcia mówią, który etap trwa</b>
+      <div class="dim2" style="margin:4px 0 10px">
+        Jedno piknięcie = etap 1, dwa = etap 2 i tak dalej. Tylko dwa etapy
+        wymagają Twojej reakcji.
+      </div>
+      <div style="display:grid;grid-template-columns:auto 1fr;gap:5px 10px">
+        <b>1×</b><span>zasilanie i bateria <span class="dim2">— nic nie robisz</span></span>
+        <b>2×</b><span style="color:var(--acc)">kontaktron — <b>rusz wieczkiem</b></span>
+        <b>3×</b><span style="color:var(--acc)">przycisk — <b>naciśnij raz</b></span>
+        <b>4×</b><span>pamięć nieulotna <span class="dim2">— nic nie robisz</span></span>
+        <b>5×</b><span>połączenie WiFi <span class="dim2">— nic nie robisz</span></span>
+        <b>6×</b><span>synchronizacja zegara <span class="dim2">— nic nie robisz</span></span>
+        <b>7×</b><span>zapis do bazy <span class="dim2">— nic nie robisz</span></span>
+      </div>
+      <div class="dim2" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--line)">
+        Na koniec krótka opadająca sygnatura — to nie jest numer etapu, tylko
+        koniec testu.<br>
+        <b style="color:var(--warn)">Łagodne pulsowanie przez 5 sekund</b> oznacza brak sieci:
+        wynik został w pamięci pudełka i <b>nie pojawi się poniżej</b>, dopóki
+        pudełko nie złapie WiFi.
+      </div>
+    </div>
+
+    <div id="testList" style="font-size:12.5px;line-height:1.6"></div>
+  </div>
+
   <!-- CZARNA SKRZYNKA -->
   <div class="card">
     <h3>Historia pudełka</h3>
@@ -730,7 +809,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-03.1";
+const APP_VERSION = "2026-08-03.5";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -954,6 +1033,63 @@ function tabletSVG(fraction, size=54, idx=0){
 }
 
 /* Rysuje dawkę jako zestaw tabletek (max 4, potem "×N"). */
+/* ═══════════════════════════════════════════════════════════════
+ *  TABLETKA JAKO BRYŁA
+ *
+ *  Walec składany z trzech części: awers, rewers i wieniec pasków
+ *  tworzących bok. Każdy pasek stoi obrócony o swój kąt i odsunięty
+ *  na promień - razem dają powierzchnię walca.
+ *
+ *  Boczne paski są cieniowane zależnie od kąta: te zwrócone ku światłu
+ *  jaśniejsze, te w głębi ciemniejsze. Bez tego wieniec wygląda jak
+ *  płaska obręcz i cały efekt bryły się rozsypuje.
+ * ═══════════════════════════════════════════════════════════════ */
+const TAB3D_SEGMENTOW = 36;
+
+function tablet3D(fraction, size = 62, kreci = false){
+  const c  = pillColors();
+  const R  = size / 2;
+  const gr = Math.max(4, Math.round(size * 0.13));       // połowa grubości
+  const segW = (2 * Math.PI * R) / TAB3D_SEGMENTOW + 1.2; // +zapas na styki
+
+  let wieniec = "";
+  for (let i = 0; i < TAB3D_SEGMENTOW; i++){
+    const kat = 360 / TAB3D_SEGMENTOW * i;
+    /* Światło pada z lewej góry - stąd przesunięcie o 35 stopni. */
+    const jasnosc = 0.55 + 0.45 * Math.cos((kat - 35) * Math.PI / 180);
+    wieniec += `<i style="--kol:${cieniuj(c.edge, jasnosc)};
+        transform:rotateY(${kat.toFixed(2)}deg) translateZ(${R.toFixed(2)}px)"></i>`;
+  }
+
+  return `<div class="tab3d ${kreci ? "kreci" : ""}" onclick="pchnijTabletke(this)"
+       style="width:${size}px;height:${size}px;--gr:${gr}px;--sw:${segW.toFixed(2)}px;
+              --czas:${(6 + Math.random() * 2).toFixed(1)}s">
+    <div class="tab3d-in">
+      <div class="obr">${wieniec}</div>
+      <div class="sc przod">${tabletSVG(fraction, size, 21)}</div>
+      <div class="sc tyl">${tabletSVG(fraction, size, 22)}</div>
+    </div>
+  </div>`;
+}
+
+/* Przyciemnia lub rozjaśnia kolor zapisany jako #rrggbb. */
+function cieniuj(hex, mnoznik){
+  const m = /^#?([0-9a-f]{6})$/i.exec(String(hex));
+  if (!m) return hex;
+  const n = parseInt(m[1], 16);
+  const k = v => Math.max(0, Math.min(255, Math.round(v * mnoznik)));
+  return `rgb(${k(n >> 16 & 255)},${k(n >> 8 & 255)},${k(n & 255)})`;
+}
+
+/* Dotknięcie daje jeden szybki obrót - drobiazg, ale sprawia, że rzecz
+   na ekranie wydaje się prawdziwa, bo reaguje.                        */
+window.pchnijTabletke = el => {
+  if (el.classList.contains("kreci")) return;      // i tak się kręci
+  el.classList.remove("pchniete");
+  void el.offsetWidth;                             // wymuszenie restartu animacji
+  el.classList.add("pchniete");
+};
+
 function doseGraphic(dose, size=54){
   if (dose <= 0) return tabletSVG(0, size, 9) +
     `<span class="dim2" style="align-self:center;margin-left:6px">brak</span>`;
@@ -1179,7 +1315,7 @@ function boot(){
           onErr("odczyt wyników INR"));
 
   onValue(ref(db, `devices/${DEVICE_ID}/log`), s => {
-    boxLog = s.val() || []; renderBoxLog();
+    boxLog = s.val() || []; renderBoxLog(); renderTesty();
   }, onErr("odczyt historii pudełka"));
 
   /* ───────── Odświeżanie po powrocie do aplikacji ─────────
@@ -1229,7 +1365,7 @@ function boot(){
         if (r.status === "rejected") console.error("odswiezanie -", nazwa, r.reason);
 
       renderStatus(val(st) ? val(st).val() : null);
-      renderSettings(); renderAll(); renderDiag(); renderBoxLog();
+      renderSettings(); renderAll(); renderDiag(); renderBoxLog(); renderTesty();
       await doReconcile(true);
 
       if (recznie) {
@@ -1261,6 +1397,44 @@ function boot(){
   document.addEventListener("visibilitychange", wakeUp);
   window.addEventListener("focus", wakeUp);
   window.addEventListener("pageshow", wakeUp);
+  /* ───────── Stałe połączenie z bazą ─────────
+
+     iOS potrafi uśpić gniazdo aplikacji schowanej w tle i nie zawsze je
+     samo podnosi. Objawia się to najgorzej z możliwych stron: ekran
+     wygląda normalnie, tylko pokazuje stan sprzed godziny. Baner
+     "pudełko jest otwarte" wisiał tak, choć wieczko dawno zamknięte.
+
+     Dlatego pilnujemy połączenia jawnie: widać jego stan, a zerwanie
+     jest natychmiast prostowane.                                      */
+  let bylPolaczony = null;
+  onValue(ref(db, ".info/connected"), s => {
+    const teraz = s.val() === true;
+    const kropka = document.getElementById("netDot");
+    if (kropka) kropka.classList.toggle("zywe", teraz);
+
+    if (bylPolaczony === false && teraz) {
+      /* Wróciliśmy do żywych - dociągamy wszystko, co przespaliśmy. */
+      console.log("polaczenie z baza wznowione");
+      wakeUp();
+    }
+    if (bylPolaczony === true && !teraz) {
+      console.warn("polaczenie z baza zerwane");
+      goOnline(db);                       // prośba o natychmiastowy powrót
+    }
+    bylPolaczony = teraz;
+  });
+
+  /* Lekki dozór stanu pudełka. Pięć pełnych odczytów co pół minuty byłoby
+     rozrzutne, ale SAM status to jeden mały węzeł - a to właśnie w nim
+     siedzi informacja o otwartym wieczku, która musi być świeża.       */
+  setInterval(async () => {
+    if (document.hidden || !uid) return;
+    try {
+      const st = await get(ref(db, `devices/${DEVICE_ID}/status`));
+      renderStatus(st.val());
+    } catch (e) { console.error("dozor stanu:", e); }
+  }, 30 * 1000);
+
   setInterval(wakeUp, 5 * 60 * 1000);     // siatka bezpieczeństwa
 
   /* Odliczanie do dawki musi faktycznie odliczać - inaczej pokazuje stan
@@ -1565,7 +1739,10 @@ function renderToday(){
   const key = todayKey(), { sum, any } = dayDose(key);
   const target = (cfg.defaultDose ?? 1) * (cfg.schedule.length || 1);
   const el = document.getElementById("todayState");
-  document.getElementById("todayPill").innerHTML = doseGraphic(sum, 44);
+  /* Na ekranie głównym tabletka jest bryłą. Kręci się dopiero wtedy, gdy
+     dawka jest wzięta - ruch ma coś znaczyć, a nie być tapetą.        */
+  document.getElementById("todayPill").innerHTML =
+    tablet3D(any && sum > 0 ? Math.min(1, sum) : 0, 58, any && sum > 0);
   if (!any){
     el.textContent = "Jeszcze nie wzięte";  el.style.color = "var(--warn)";
     document.getElementById("todayWhen").textContent = `Przypomnienie o ${cfg.schedule[0] || "—"}`;
@@ -1846,6 +2023,61 @@ const WAKE_PL = {
 const WYNIK_ZLE = ["brak wifi", "baza nie odpowiada", "bateria odcieta",
                    "meldunek bez sieci", "dawka pominieta"];
 
+/* Wyniki autotestu z ostatniego przebiegu. Pudełko zapisuje je jako zwykłe
+   wpisy historii z przedrostkiem "test:", więc nie trzeba było wymyślać
+   drugiego kanału - wystarczy je tutaj odsiać i pokazać jak listę kontrolną. */
+const TEST_PL = {
+  bateria:"zasilanie i pomiar baterii", kontaktron:"kontaktron (magnes)",
+  przycisk:"ukryty przycisk", pamiec:"pamięć nieulotna",
+  wifi:"połączenie WiFi", zegar:"synchronizacja zegara", baza:"zapis do bazy"
+};
+
+function renderTesty(){
+  const el = document.getElementById("testList");
+  if (!el) return;
+
+  const wpisy = (Array.isArray(boxLog) ? boxLog : [])
+    .map(w => String(w).split("|"))
+    .filter(cz => cz[2] && cz[2].startsWith("test:"));
+
+  if (!wpisy.length){
+    el.innerHTML = `<span class="dim2">Autotest nie był jeszcze uruchamiany.</span>`;
+    return;
+  }
+
+  /* Bierzemy tylko ostatni przebieg - wszystko od ostatniego "START". */
+  let od = 0;
+  wpisy.forEach((cz, i) => { if (cz[2] === "test:START") od = i; });
+  const przebieg = wpisy.slice(od);
+  const kiedy = +przebieg[0][0] > 0
+    ? `${devDayMon(+przebieg[0][0])} ${devHM(+przebieg[0][0])}` : "czas nieznany";
+
+  let koniec = null, rows = "";
+  for (const cz of przebieg){
+    const t = cz[2].slice(5);                      // bez "test:"
+    if (t === "START") continue;
+    if (t.startsWith("KONIEC")){ koniec = t.replace("KONIEC", "").trim(); continue; }
+    const [nazwa, wynik] = t.split(" ");
+    const ok = wynik === "OK";
+    rows += `<div style="display:flex;align-items:center;gap:9px;padding:6px 0;
+        border-bottom:1px solid var(--line)">
+      <b style="color:${ok ? "var(--ok)" : "var(--bad)"};width:14px">${ok ? "✓" : "✗"}</b>
+      <span>${esc(TEST_PL[nazwa] || nazwa)}</span></div>`;
+  }
+
+  const bledy = parseInt(koniec, 10);
+  const nag = koniec === null
+    ? `<div class="dim2" style="margin-bottom:8px">Przebieg z ${kiedy} — przerwany.</div>`
+    : `<div style="margin-bottom:10px;padding:10px;border-radius:12px;
+         border:1px solid ${bledy ? "var(--bad)" : "var(--ok)"};
+         background:${bledy ? "rgba(248,113,113,.10)" : "rgba(52,211,153,.10)"}">
+         <b style="color:${bledy ? "var(--bad)" : "var(--ok)"}">
+           ${bledy ? `${bledy} ${bledy === 1 ? "błąd" : "błędy"}` : "Wszystko sprawne"}</b>
+         <span class="dim2"> · ${esc(kiedy)}</span></div>`;
+
+  el.innerHTML = nag + rows;
+}
+
 function renderBoxLog(){
   const el = document.getElementById("boxLog");
   if (!el) return;
@@ -1854,7 +2086,9 @@ function renderBoxLog(){
       Pojawi się przy najbliższej synchronizacji.</span>`;
     return;
   }
-  el.innerHTML = boxLog.slice().reverse().map(w => {
+  el.innerHTML = boxLog.slice()
+    .filter(w => !String(w).split("|")[2]?.startsWith("test:"))
+    .reverse().map(w => {
     const [ts, powod, co, bat, kol] = String(w).split("|");
     const kiedy = +ts > 0 ? `${devDayMon(+ts)} ${devHM(+ts)}` : "czas nieznany";
     const zle = WYNIK_ZLE.includes(co);
