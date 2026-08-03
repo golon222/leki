@@ -1,70 +1,322 @@
-/* Minimalny service worker - wymagany, aby iOS traktowal strone jak PWA.
-   Cache'ujemy tylko wlasna powloke; dane Firebase zawsze z sieci.        */
-/* WAŻNE: ta wartość musi zgadzać się z APP_VERSION w index.html.
-   Jej zmiana to sygnał dla iPhone'a, że jest nowa wersja aplikacji —
-   stary cache zostaje wtedy skasowany, a strona sama się przeładuje. */
-const CACHE = "pillbox-2026-08-03.1";
-const SHELL = ["./", "./index.html", "./manifest.json"];
+/* =====================================================================
+ *  config.h  -  Inteligentne pudelko na leki (XIAO ESP32-C3)
+ *
+ *  TO JEST PLIK USTAWIEN. Drugi plik to PillBox.ino - kod programu.
+ *  Jesli widzisz tu "#include <WiFi.h>" albo "void setup()", to znaczy
+ *  ze pliki sie pomieszaly - pobierz oba na nowo.
+ * ===================================================================== */
+#pragma once
 
-self.addEventListener("install", e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));
-});
+/*  Znacznik dla PillBox.ino - pozwala wykryc, ze config.h ma wlasciwa
+ *  tresc. Nie usuwaj tej linii.                                       */
+#define PILLBOX_CONFIG_VERSION 2
 
-self.addEventListener("activate", e => {
-  e.waitUntil(
-    caches.keys()
-      .then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k))))
-      .then(() => self.clients.claim())
-  );
-});
+/* ---------------------------------------------------------------------
+ * 1. IDENTYFIKATOR URZADZENIA
+ * ------------------------------------------------------------------ */
+#define DEVICE_ID           "pillbox01"     // klucz w /devices/<DEVICE_ID>
+#define FW_VERSION          "1.8.0"   // widoczna w aplikacji - po wgraniu sprawdz, czy sie zmienila
 
-/* Czy tę odpowiedź wolno w ogóle zapamiętać?
+/* ---------------------------------------------------------------------
+ * 2. FIREBASE  (Realtime Database + Auth email/haslo)
+ *    - RTDB_HOST : bez https:// i bez ukosnika na koncu
+ *    - WEB_API_KEY: Firebase Console -> Ustawienia projektu -> Web API Key
+ *    - DEVICE_EMAIL/PASS: konto utworzone w Authentication tylko dla plytki
+ * ------------------------------------------------------------------ */
+#define RTDB_HOST           "pudelko-na-leki-default-rtdb.europe-west1.firebasedatabase.app"
+#define WEB_API_KEY         "AIzaSyD7YwKvgn8PmqNKcxUEPdc8i6oJShgOkKg"
+#define DEVICE_EMAIL        "pillbox01@device.local"
 
-   Historia z życia: do repozytorium trafił kiedyś przez pomyłkę kod
-   firmware zamiast index.html. Service worker grzecznie go zapamiętał,
-   a gdy publikacja strony potem padła, w kółko podawał z pamięci kod
-   w C++ zamiast aplikacji. Wyglądało to jak zepsuta aplikacja, choć plik
-   na serwerze był już od dawna poprawny.
+/*  <<<<<<<<<<  DO UZUPELNIENIA  >>>>>>>>>>
+ *  Wpisz haslo [C] - to, ktore wymysliles zakladajac konto pillbox01@device.local
+ *  w Firebase Authentication. Bez niego plytka sie nie zaloguje (HTTP 400).      */
+#define DEVICE_PASSWORD     "TUTAJ_WPISZ_HASLO_C"
 
-   Stąd dwa warunki: zapamiętujemy tylko odpowiedzi udane (nie 404, nie
-   strony błędu), a stronę tylko wtedy, gdy serwer twierdzi, że to HTML. */
-function worthCaching(req, res) {
-  if (!res || !res.ok || res.type === "opaque") return false;
-  const type = res.headers.get("content-type") || "";
-  const isPage = req.mode === "navigate" || new URL(req.url).pathname.endsWith(".html");
-  if (isPage && !type.includes("text/html")) return false;
-  return true;
-}
+/* ---------------------------------------------------------------------
+ * 3. PINY  (nazwy D0..D3 sa zdefiniowane przez plytke "XIAO_ESP32C3")
+ *    D0 = GPIO2 (ADC1_CH2)  - pomiar baterii przez dzielnik 100k/100k
+ *    D1 = GPIO3             - kontaktron (wake z deep sleep)
+ *    D2 = GPIO4             - pasywny buzzer piezo (LEDC PWM)
+ *    D3 = GPIO5             - przycisk (portal WiFi: trzymaj przy RESECIE)
+ *    UWAGA: na ESP32-C3 z deep sleep moga budzic TYLKO GPIO0..GPIO5.
+ * ------------------------------------------------------------------ */
+#define PIN_BATTERY         D0
+#define PIN_REED            D1
+#define PIN_BUZZER          D2
+#define PIN_BUTTON          D3
 
-self.addEventListener("fetch", e => {
-  const url = new URL(e.request.url);
-  if (e.request.method !== "GET") return;
-  if (url.origin !== self.location.origin) return;      // Firebase / CDN - bez cache
+#define GPIO_REED           3               // numer GPIO dla maski wybudzania
+#define GPIO_BUTTON         5
 
-  e.respondWith(
-    fetch(e.request)
-      .then(r => {
-        if (worthCaching(e.request, r)) {
-          const copy = r.clone();
-          caches.open(CACHE).then(c => c.put(e.request, copy));
-        }
-        return r;
-      })
-      .catch(() => caches.match(e.request).then(r => r || caches.match("./index.html")))
-  );
-});
+/* ---------------------------------------------------------------------
+ * 4. POLARYZACJA WEJSC  -  zgodna z Twoim zlutowanym schematem
+ *
+ *      REED   : D1 --[kontaktron]-- GND, podciagniecie do 3V3
+ *               magnes przy zakretce (pudelko ZAMKNIETE) -> styk zwarty -> LOW
+ *               pudelko OTWARTE -> styk rozwarty -> HIGH  => wybudzenie
+ *      BUTTON : D3 --[przycisk]-- GND, podciagniecie do 3V3
+ *               zwolniony -> HIGH,  wcisniety -> LOW      => wybudzenie
+ *
+ *    Ze snu budzi WYLACZNIE kontaktron. Maska wybudzania ma jeden wspolny
+ *    poziom wyzwalania, a te dwa piny potrzebuja przeciwnych (kontaktron
+ *    stanu WYSOKIEGO, przycisk NISKIEGO), wiec obu naraz uzbroic sie nie da.
+ *    Portal WiFi ma zamiast tego wlasny gest: przytrzymaj przycisk i nacisnij
+ *    RESET - dziala bez deep sleep, wiec nie potrzebuje wybudzania.
+ * ------------------------------------------------------------------ */
+#define REED_OPEN_LEVEL     HIGH            // stan pinu gdy pudelko OTWARTE
+#define BUTTON_PRESS_LEVEL  LOW             // stan pinu gdy przycisk WCISNIETY
 
-/* Awaryjne wyczyszczenie pamięci podręcznej z poziomu aplikacji.
-   Używane przez przycisk „Wyczyść pamięć i przeładuj" w Ustawieniach —
-   ratunek, gdy w cache utknie coś, czego nie da się wyprzeć odświeżaniem. */
-self.addEventListener("message", e => {
-  if (e.data === "wyczysc-cache") {
-    e.waitUntil(
-      caches.keys()
-        .then(ks => Promise.all(ks.map(k => caches.delete(k))))
-        .then(() => self.registration.unregister())
-        .then(() => self.clients.matchAll())
-        .then(cs => cs.forEach(c => c.navigate(c.url)))
-    );
-  }
-});
+/*    USE_INTERNAL_PULLS:
+ *      1 = wewnetrzne pull-up (~45 kOhm). Dziala od reki, ale przy
+ *          ZAMKNIETYM pudelku kontaktron zwiera je do masy -> ~73 uA non stop.
+ *      0 = zewnetrzny rezystor 1 MOhm z D1 do 3V3 (i opcjonalnie z D3 do 3V3).
+ *          Pobor spada do ~3 uA. Jeden rezystor = ok. 2x dluzsza praca.
+ * ------------------------------------------------------------------ */
+/*    UWAGA do wybudzania ze snu: rdzen ESP32-C3 tuz przed zasnieciem sam
+ *    przestawia podciagniecia na pinie wybudzania - dla pinu czekajacego na
+ *    stan WYSOKI wlacza rezystor ~10 kOhm DO MASY. To zabijalo kontaktron:
+ *    wewnetrzne 10 kOhm wygrywalo z zewnetrznymi 100 kOhm i pin zostawal na
+ *    ~0,4 V zamiast 3,3 V, wiec pudelko nigdy sie nie budzilo.
+ *    PillBox.ino obchodzi to przez gpio_hold_en() tuz przed snem - patrz
+ *    komentarz w goToSleep() i zgloszenie espressif/esp-idf#12183.
+ *    Dzieki temu ponizsze ustawienie dziala tak, jak sie tego spodziewasz. */
+#define USE_INTERNAL_PULLS  1
+#if USE_INTERNAL_PULLS
+  #define REED_MODE         INPUT_PULLUP
+  #define BUTTON_MODE       INPUT_PULLUP
+#else
+  #define REED_MODE         INPUT           // rezystory 1M zewnetrzne
+  #define BUTTON_MODE       INPUT_PULLUP    // przycisk moze zostac wewnetrzny:
+#endif                                      // rozwarty w spoczynku = 0 uA
+
+/* ---------------------------------------------------------------------
+ * 5. ALARM
+ * ------------------------------------------------------------------ */
+#define BUZZER_FREQ_HZ      2700            // rezonans typowego piezo 23mm
+#define BEEP_MS             180
+#define BEEPS_PER_BURST     3
+#define BURST_GAP_MS        4000            // przerwa miedzy seriami piknięć
+#define ALARM_WINDOW_S      120             // ile sekund dzwoni jedna proba
+#define SNOOZE_S            300             // przerwa miedzy probami (5 min)
+#define MAX_ALARM_RETRIES   3               // po tylu probach -> "missed"
+
+/* ---------------------------------------------------------------------
+ * 6. HARMONOGRAM DOMYSLNY (uzywany zanim aplikacja przysle wlasny)
+ *    Format "HH:MM", oddzielone '|'.  Ty bierzesz raz dziennie.
+ * ------------------------------------------------------------------ */
+#define DEFAULT_SCHEDULE    "20:00"
+#define DEFAULT_TZ_OFFSET   120             // minuty od UTC (PL lato = 120)
+
+/* ---------------------------------------------------------------------
+ * 6b. TRYB "RAZ DZIENNIE"
+ *     ONE_DOSE_PER_DAY = 1 -> liczy sie TYLKO pierwsze otwarcie w danym dniu.
+ *     Kazde kolejne otwarcie tego samego dnia = ostrzegawcze pikniecie
+ *     ("juz brales, nie bierz drugi raz") i ZERO zapisu do Firebase.
+ * ------------------------------------------------------------------ */
+#define ONE_DOSE_PER_DAY    1
+#define LOW_STOCK_WARN      7               // ostrzegaj, gdy zostalo < X tabletek
+
+/* ---------------------------------------------------------------------
+ * 6c. GRANICA DOBY LEKOWEJ
+ *     O ktorej godzinie zaczyna sie "nowy dzien" z punktu widzenia leku.
+ *     3 oznacza: otwarcie o 01:30 czy 02:00 liczy sie jeszcze do dnia
+ *     POPRZEDNIEGO. Dzieki temu tabletka wzieta po polnocy nie wyglada
+ *     jak podwojna dawka nastepnego dnia, a wczorajszy dzien nie zostaje
+ *     oznaczony jako pominiety, dopoki naprawde nie minie okno.
+ *
+ *     UWAGA: ta sama liczba musi byc ustawiona w aplikacji
+ *     (app/index.html, stala DAY_START_HOUR). Inaczej pudelko i telefon
+ *     liczylyby doby inaczej i kalendarz by sie rozjechal.
+ *
+ *     Dopuszczalny zakres 0-6. Wartosc 0 = klasyczna polnoc.
+ * ------------------------------------------------------------------ */
+#define DAY_START_HOUR      3
+
+/* ---------------------------------------------------------------------
+ * 6d. PUDELKO ZOSTAWIONE OTWARTE
+ *     Po OPEN_WARN_FIRST_S od otwarcia pudelko daje jeden dluzszy sygnal,
+ *     a potem powtarza go co OPEN_WARN_REPEAT_S, dopoki wieczko nie
+ *     zostanie zamkniete. Ton jest rowny i pojedynczy, wiec nie da sie go
+ *     pomylic z potwierdzeniem dawki ani z ostrzezeniem "juz brales".
+ *
+ *     OPEN_WARN_MAX chroni przed sytuacja, w ktorej magnes sie przesunal
+ *     albo kontaktron sie zaklinowal: po tylu sygnalach pudelko milknie,
+ *     ale dalej sprawdza stan i informuje aplikacje. Domyslnie 24 razy
+ *     po 30 minut, czyli okolo 12 godzin dzwonienia.
+ * ------------------------------------------------------------------ */
+#define OPEN_WARN_FIRST_S   900             // pierwszy sygnal po 15 min
+#define OPEN_WARN_REPEAT_S  1800            // potem co 30 min
+#define OPEN_WARN_MAX       24              // po tylu sygnalach juz tylko cisza
+#define OPEN_WARN_TONE_HZ   2000            // rowny ton, inny niz pozostale
+#define OPEN_WARN_MS        500             // dlugosc sygnalu
+#define OPEN_REPORT_APP     1               // pokazywac otwarcie w aplikacji
+
+/* ---------------------------------------------------------------------
+ * 7. OKNA CZASOWE
+ * ------------------------------------------------------------------ */
+#define MATCH_WINDOW_MIN    90              // +/- minut: otwarcie liczy sie do dawki
+#define WIFI_TIMEOUT_MS     15000           // dluzej nie czekamy - idziemy spac
+/* ---------------------------------------------------------------------
+ * 7a. PORTAL KONFIGURACJI WiFi
+ *     Po wcisnieciu ukrytego przycisku pudelko tworzy wlasna siec WiFi.
+ *     Laczysz sie z nia telefonem, otwiera sie strona z lista sieci.
+ *     Haslo musi miec MINIMUM 8 znakow - wymog WPA2.
+ * ------------------------------------------------------------------ */
+#define AP_SSID             "PillBox-setup"
+#define AP_PASS             "pillbox123"
+#define PORTAL_TIMEOUT_S    300             // 5 minut na wpisanie hasla
+
+#define HOUSEKEEP_MAX_S     43200           // max 12h snu (sync czasu i baterii)
+                                            // mniej = dokladniejszy zegar, wiecej pradu
+
+/* Twardy limit czuwania. Gdyby cokolwiek sie zablokowalo, petle oczekiwania
+   przerywaja sie i uklad idzie spac zamiast zjadac bateria.               */
+#define AWAKE_LIMIT_MS      150000          // 2,5 minuty
+
+/* ---------------------------------------------------------------------
+ * 7b. PONAWIANIE WYSYLKI PO AWARII WiFi
+ *     Gdy w kolejce sa zaleglosci, pudelko budzi sie wczesniej niz
+ *     wynikaloby z harmonogramu: 15 min, 30, 60, 120, 240 min (max).
+ * ------------------------------------------------------------------ */
+#define RETRY_BASE_S        900             // pierwsza ponowna proba po 15 min
+#define RETRY_MAX_S         14400           // nie rzadziej niz co 4 h
+
+/* ---------------------------------------------------------------------
+ * 7c. ROLOWANIE DOBY
+ *     Wybudzenie minute po polnocy: jesli wczorajsza dawka nie zostala
+ *     wzieta, do kolejki trafia zdarzenie "missed". BEZ wlaczania WiFi -
+ *     poleci przy najblizszym polaczeniu. Koszt: ~0,006 mAh na dobe.
+ * ------------------------------------------------------------------ */
+#define MIDNIGHT_CHECK      1
+
+/* ---------------------------------------------------------------------
+ * 7d. OCHRONA OGNIWA LiPo
+ *     Ponizej BATT_SAFE_V pudelko przestaje wlaczac WiFi (loguje offline).
+ *     Ponizej BATT_CUTOFF_V zasypia na dobre - budzi tylko przycisk.
+ *     Odczyty < 2,0 V traktowane sa jako "brak baterii / zasilanie z USB".
+ * ------------------------------------------------------------------ */
+#define BATT_SAFE_V         3.35f
+#define BATT_CUTOFF_V       3.20f
+#define BATT_RECOVER_V      3.50f           // powyzej tego wracamy do normalnej pracy
+#define CUTOFF_RECHECK_S    900             // co 15 min sprawdzamy, czy podlaczono ladowarke
+#define CHARGE_RISE_V       0.08f           // wzrost napiecia = wykryte ladowanie
+
+/* ---------------------------------------------------------------------
+ * 7e. DZWIEKOWE OSTRZEZENIE O BATERII (bez zagladania do aplikacji)
+ *     Po kazdym potwierdzeniu dawki, jesli stan spadl ponizej progu,
+ *     pudelko dodaje charakterystyczny sygnal. Ponizej progu krytycznego
+ *     sygnal jest dluzszy i powtarzany takze przy alarmie.
+ *
+ *     UWAGA: te progi znacza cos zupelnie innego niz przed wprowadzeniem
+ *     krzywej LiPo. Przy dawnym liniowym przeliczaniu 10% wypadalo przy
+ *     3,39 V - czyli tuz nad napieciem odciecia, gdy do konca zostawal
+ *     mniej wiecej dzien. Teraz 10% to ok. 3,69 V i realnie okolo tygodnia
+ *     zapasu, a 25% to ok. 3,75 V, czyli jakies trzy tygodnie.
+ * ------------------------------------------------------------------ */
+#define BATT_WARN_PCT       25              // ok. 3,75 V - "naladuj w tych dniach"
+#define BATT_CRIT_PCT       10              // ok. 3,69 V - "naladuj teraz"
+
+/* Maksymalna zmiana wskazania miedzy dwoma wybudzeniami. Realne zuzycie
+   to okolo 1 punkt na dobe, wiec 5 w dol zostawia spory zapas, a odcina
+   skoki z pojedynczego zaklocenia. Ruch w gore o 1 punkt pozwala takiemu
+   zakloceniu samemu sie zagoic, zamiast zostac w pamieci na stale.     */
+#define BATT_STEP_DOWN      5
+#define BATT_STEP_UP        1
+
+/* Martwa strefa: roznica mniejsza niz tyle punktow to szum, a nie zmiana.
+   Bez niej wskazanie drgalo o jeden punkt przy KAZDYM wybudzeniu, bo szum
+   odczytu raz podbijal, raz obnizal wynik wzgledem tego, co pokazywalismy.
+   BATT_RISE_STREAK mowi, ile razy Z RZEDU odczyt musi byc wyraznie wyzszy,
+   zanim uznamy wzrost za prawdziwy - jeden wysoki pomiar to przypadek,
+   trzy pod rzad to juz ladowanie albo odpoczynek ogniwa.               */
+#define BATT_DEADBAND       3
+#define BATT_RISE_STREAK    3
+
+/* ---------------------------------------------------------------------
+ * 7f. OKNO TESTOWE PO RESECIE
+ *     Deep sleep odlacza port USB, wiec wybudzenia kontaktronem nie widac
+ *     w monitorze portu szeregowego. Zaraz po resecie pudelko czuwa przez
+ *     BOOT_HOLD_MS i wypisuje kazda zmiane stanu stykow - wtedy mozna
+ *     sprawdzic okablowanie na oczy. Kazda zmiana przedluza okno, ale nie
+ *     dluzej niz BOOT_TEST_MAX_MS.
+ * ------------------------------------------------------------------ */
+#define BOOT_TEST_MAX_MS    60000           // sufit okna testowego (1 min)
+
+/* ---------------------------------------------------------------------
+ * 7g. CO TRAFIA DO HISTORII I DO BAZY
+ *
+ *     Pudelko budzi sie kilka razy dziennie i wiekszosc tych wybudzen jest
+ *     zupelnie nieciekawa: obudzilo sie, zameldowalo, poszlo spac. Zapisy-
+ *     wanie ich wszystkich zasmieca historie tak, ze nie widac w niej tego,
+ *     co naprawde ma znaczenie - czyli dawek i awarii.
+ *
+ *     LOGBOOK_VERBOSE = 0 -> historia zawiera tylko rzeczy istotne:
+ *        dawki, ostrzezenia, brak sieci, odciecie baterii, portal WiFi,
+ *        zostawione otwarte wieczko, nieoczekiwane restarty.
+ *     LOGBOOK_VERBOSE = 1 -> wszystko, lacznie z rutynowymi meldunkami.
+ *        Przydatne tylko przy szukaniu bledu.
+ *
+ *     REPORT_BOOT_EVENT decyduje, czy uruchomienie plytki ma trafiac do
+ *     listy zdarzen w bazie. Ta lista sluzy do odtwarzania kalendarza
+ *     DAWEK, a restart nie jest dawka - przy kazdym wgrywaniu programu
+ *     robil sie tam smietnik. Restarty i tak widac w historii pudelka.
+ * ------------------------------------------------------------------ */
+/* ---------------------------------------------------------------------
+ * 7h. GESTY SERWISOWE  (dostepne bez odkrecania pudelka)
+ *
+ *     Przycisk NIE MOZE budzic ukladu z glebokiego snu razem z kontaktronem
+ *     - maska wybudzania ma jeden wspolny poziom, a te dwa piny potrzebuja
+ *     przeciwnych. Ale to nie problem: kontaktron budzi pudelko przy KAZDYM
+ *     otwarciu wieczka, a potem plytka i tak czuwa, czekajac az je zamkniesz.
+ *     W tym oknie przycisk dziala normalnie.
+ *
+ *     Stad gesty zaczynaja sie od otwarcia wieczka:
+ *       otworz wieczko + 3 x nacisnij przycisk   -> autotest
+ *       otworz wieczko + przytrzymaj przycisk    -> portal WiFi
+ *
+ *     Nic to nie kosztuje: pudelko i tak czekalo w tym czasie na zamkniecie.
+ * ------------------------------------------------------------------ */
+/* Jak dlugo pudelko CZUWA przy otwartym wieczku, zamiast isc spac.
+   Dzieki temu w chwili zamkniecia od razu wysyla wszystko i aplikacja
+   pokazuje prawde bez opoznienia. Rownolegle liczy sie czas do pierwszego
+   ostrzezenia o zostawionym wieczku - wiec te dwie rzeczy sa celowo tej
+   samej dlugosci: jesli w 15 minut nie zamkniesz, przechodzimy w tryb
+   przypominania i dalej juz spimy miedzy sygnalami.                    */
+#define CZEKAJ_ZAMKNIECIE_MS (OPEN_WARN_FIRST_S * 1000UL)
+#define GEST_KLIKNIEC       3               // tyle nacisniec = autotest
+#define GEST_PRZYTRZYM_MS   1800            // tyle trzymania = portal WiFi
+
+#define LOGBOOK_VERBOSE     0
+#define REPORT_BOOT_EVENT   0
+
+/* ---------------------------------------------------------------------
+ * 8. KOLEJKA OFFLINE
+ *     120 wpisow = ok. 2 miesiace przy jednej dawce dziennie.
+ * ------------------------------------------------------------------ */
+#define QUEUE_CAPACITY      120             // ile zdarzen miesci sie w NVS
+#define NVS_NAMESPACE       "pillbox"
+
+/* ---------------------------------------------------------------------
+ * 9. DIAGNOSTYKA
+ *    Ustaw 0 przed finalnym montazem - Serial przy USB kosztuje prad.
+ * ------------------------------------------------------------------ */
+#define DEBUG_SERIAL        1
+
+/* ---------------------------------------------------------------------
+ * 9b. OKNO NA WGRYWANIE PROGRAMU
+ *     Po RESECIE (przycisk R, podlaczenie zasilania) pudelko zostaje
+ *     wybudzone przez tyle milisekund, zanim zasnie. Port COM zdazy sie
+ *     pojawic i Arduino IDE go zobaczy.
+ *     NIE dotyczy zwyklych wybudzen z deep sleep - te dzialaja normalnie,
+ *     wiec bateria na tym nie traci (reset zdarza sie kilka razy w zyciu).
+ *     Ustaw 0, zeby wylaczyc.
+ * ------------------------------------------------------------------ */
+#define BOOT_HOLD_MS        10000
+
+#if DEBUG_SERIAL
+  #define LOG(...)   Serial.printf(__VA_ARGS__)
+  #define LOGLN(x)   Serial.println(x)
+#else
+  #define LOG(...)
+  #define LOGLN(x)
+#endif
