@@ -815,7 +815,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-04.2";
+const APP_VERSION = "2026-08-04.5";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -1296,6 +1296,13 @@ function boot(){
     }
     renderSettings(); renderAll();
   }, onErr("odczyt ustawień urządzenia"));
+
+  /* Odliczanie musi tykac samo. Pudelko melduje sie rzadko - i słusznie,
+     bo to jego bateria - wiec bez wlasnego zegara liczba staloby w
+     miejscu i wygladalaby na zepsuta.                                */
+  setInterval(() => {
+    if (ostatniStatus && ostatniStatus.charging === true) renderStatus(ostatniStatus);
+  }, 30000);
 
   onValue(ref(db, `devices/${DEVICE_ID}/status`), s => renderStatus(s.val()),
           onErr("odczyt stanu pudełka"));
@@ -2289,7 +2296,73 @@ function renderOpenWarn(st){
   }
 }
 
+/* Szacunek czasu ladowania.
+
+   Ogniwo 470 mAh, prad ladowania plytki ok. 350 mA, z czego plytka z
+   wlaczonym radiem zjada dla siebie kilkadziesiat - do ogniwa idzie wiec
+   grubo ponad polowe mniej, niz mowi katalog.
+
+   Ladowanie litowo-polimerowe ma dwie fazy. Do jakichs 85% leci stalym
+   pradem i czas jest wprost proporcjonalny do brakujacej pojemnosci.
+   Powyzej tego prad maleje i ostatnie kilkanascie procent trwa
+   nieproporcjonalnie dlugo - stad osobny skladnik. Liniowy wzor
+   pokazywalby "10 minut" przez ostatnie pol godziny.                 */
+const OGNIWO_MAH = 470, PRAD_NETTO_MA = 250, PROG_CV = 85, MINUT_CV = 45;
+
+function minutyDoPelna(pctStart){
+  const p = Math.max(0, Math.min(100, pctStart));
+  if (p >= 100) return 0;
+  const doCC  = Math.max(0, PROG_CV - p);
+  const minCC = OGNIWO_MAH * doCC / 100 / PRAD_NETTO_MA * 60;
+  const brakCV = Math.min(100 - p, 100 - PROG_CV);
+  const minCV = MINUT_CV * (brakCV / (100 - PROG_CV));
+  return Math.round(minCC + minCV);
+}
+
+/* Tekst odliczania. Zwraca null, gdy nie ma z czego liczyc - lepiej nie
+   napisac nic, niz napisac liczbe wzieta z powietrza.                */
+function opisLadowania(st){
+  const od = Number(st?.chargeSince) || 0;
+  const odPct = Number(st?.chargeFromPct);
+  if (!od || !Number.isFinite(odPct) || odPct < 0) return null;
+  const calosc = minutyDoPelna(odPct);
+  if (!calosc) return "Powinno być już naładowane.";
+  const minelo = Math.max(0, Math.round((Date.now()/1000 - od) / 60));
+  const zostalo = calosc - minelo;
+  if (zostalo <= 0) return `Powinno być naładowane (szacowano ${calosc} min).`;
+  const h = Math.floor(zostalo/60), m = zostalo % 60;
+  const czas = h ? `${h} h ${m} min` : `${m} min`;
+  return `Szacunkowo jeszcze ok. ${czas} do pełna (start z ${odPct}%).`;
+}
+
+let ostatniStatus = null;
+
+/* Ile dni od ostatniego ładowania i ile starczyło poprzednim razem.
+
+   Deklarowane „trzy miesiące" to wyliczenie z poboru prądu. Ta linijka
+   pokazuje, ile wychodzi NAPRAWDĘ — z dat, a nie z arkusza.          */
+function dni(odTs, doTs){
+  return Math.floor((doTs - odTs) / 86400);
+}
+function opisLadowan(st){
+  const ost = Number(st?.lastCharge) || 0;
+  const poprz = Number(st?.prevCharge) || 0;
+  if (!ost) return "<br><span class=\"dim2\">Ładowania jeszcze nie zanotowano.</span>";
+  const teraz = Math.floor(Date.now()/1000);
+  if (ost > teraz + 86400) return "";          // data z przyszłości = śmieć
+  const odKiedy = dni(ost, teraz);
+  const kiedy = new Date(ost*1000).toLocaleDateString("pl-PL",
+                  {day:"2-digit", month:"2-digit", year:"numeric"});
+  let txt = `<br>Od ostatniego ładowania: <b>${odKiedy} ${odKiedy === 1 ? "dzień" : "dni"}</b> (${kiedy})`;
+  if (poprz && poprz < ost) {
+    const starczylo = dni(poprz, ost);
+    txt += `<br><span class="dim2">Poprzednie ładowanie starczyło na ${starczylo} dni.</span>`;
+  }
+  return txt;
+}
+
 function renderStatus(st){
+  ostatniStatus = st;
   const chip = document.getElementById("batChip");
   renderOpenWarn(st);
 
@@ -2324,9 +2397,14 @@ function renderStatus(st){
   const col = pct > 40 ? "var(--ok)" : pct > 15 ? "var(--warn)" : "var(--bad)";
 
   document.getElementById("batBig").textContent = pct + "%";
-  document.getElementById("batBig").style.color = col;
-  document.getElementById("batVolt").textContent =
-    `${num(st.volt).toFixed(2)} V · ` + (laduje ? "ładowanie w toku" : "ogniwo 470 mAh");
+  /* Podczas ładowania procent jest ostatnim wiarygodnym odczytem SPRZED
+     podłączenia kabla, nie stanem bieżącym — układ ładujący trzyma na
+     ogniwie swoje napięcie, więc każdy pomiar wychodziłby 100%. Dlatego
+     wyszarzamy liczbę: ma być widoczna, ale nie ma udawać aktualnej.  */
+  document.getElementById("batBig").style.color = laduje ? "var(--dim2)" : col;
+  document.getElementById("batVolt").textContent = laduje
+    ? "Ładowanie — napięcie pokazuje ładowarkę, nie ogniwo"
+    : `${num(st.volt).toFixed(2)} V · ogniwo 470 mAh`;
   const f = document.getElementById("battFill"); f.style.width = Math.max(6,pct)+"%"; f.style.background = col;
   const b = document.getElementById("batBar");  b.style.width = pct+"%"; b.style.background = col;
   f.classList.toggle("laduje", laduje);
@@ -2339,10 +2417,13 @@ function renderStatus(st){
      mniej więcej realnie pozostałemu ładunkowi — więc mnożenie razy 0,9
      dnia ma sens także w dolnej połowie skali, gdzie wcześniej zawyżało. */
   const eta = document.getElementById("batEta");
+  const odlicz = laduje ? opisLadowania(st) : null;
   eta.textContent = laduje
-    ? (pct >= 98
-        ? "Naładowane — możesz odłączyć kabel."
-        : "Ładuje się. Odświeża się samo co minutę, dopóki jest na kablu.")
+    ? (odlicz ? odlicz + " Procent powyżej jest sprzed ładowania — przy " +
+                "podłączonym kablu nie da się go zmierzyć."
+              : "Stanu naładowania nie da się zmierzyć przy podłączonym kablu. " +
+                "Powyżej widać odczyt sprzed ładowania — prawdziwy pojawi się " +
+                "kilkanaście sekund po odłączeniu.")
     : pct > 15
       ? `Szacunkowo ok. ${Math.round(pct * 0.9)} dni do ładowania.`
       : "Czas naładować pudełko przez USB-C.";
@@ -2363,7 +2444,7 @@ function renderStatus(st){
     ? `<br>Pomiar surowy: ${st.battRaw}% (wskazanie wygładzone)` : "";
   document.getElementById("devInfo").innerHTML =
     `ID: <b>${DEVICE_ID}</b><br>Firmware: ${st.fw||"?"}<br>WiFi: ${esc(st.ssid)||"?"} (${st.rssi||"?"} dBm)<br>` +
-    `Wybudzeń: ${st.boots||0} · w kolejce: ${q}${rawTxt}`;
+    `Wybudzeń: ${st.boots||0} · w kolejce: ${q}${rawTxt}` + opisLadowan(st);
 }
 
 /* ═══════════════ ZAPAS TABLETEK ═══════════════ */
