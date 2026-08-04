@@ -233,6 +233,12 @@ button:focus-visible,.day:focus-visible{outline:2px solid var(--acc);outline-off
   .tab3d.kreci .tab3d-in,.tab3d.pchniete .tab3d-in{animation:none}
 }
 
+/* Podczas ladowania pasek pulsuje - widac z drugiego konca pokoju,
+   ze pudelko stoi na kablu, bez czytania czegokolwiek.            */
+@keyframes ladowanie{0%,100%{opacity:1}50%{opacity:.45}}
+.laduje{animation:ladowanie 1.6s ease-in-out infinite}
+@media (prefers-reduced-motion: reduce){ .laduje{animation:none} }
+
 #rotateLock{display:none}
 @media screen and (orientation:landscape) and (max-height:520px){
   #rotateLock{
@@ -809,7 +815,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-03.5";
+const APP_VERSION = "2026-08-04.2";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -1286,8 +1292,7 @@ function boot(){
     if (now != null && now !== cfg.tzOffsetMin) {
       console.log(`strefa ${zone}: ${cfg.tzOffsetMin} -> ${now} min (zmiana czasu)`);
       cfg.tzOffsetMin = now;
-      update(ref(db, `devices/${DEVICE_ID}/config`), { tzOffsetMin: now, tz: zone })
-        .catch(e => console.error("zapis strefy:", e));
+      zapiszCfg({ tzOffsetMin: now, tz: zone }, "Strefa czasowa");
     }
     renderSettings(); renderAll();
   }, onErr("odczyt ustawień urządzenia"));
@@ -1415,6 +1420,7 @@ function boot(){
     if (bylPolaczony === false && teraz) {
       /* Wróciliśmy do żywych - dociągamy wszystko, co przespaliśmy. */
       console.log("polaczenie z baza wznowione");
+      oczekWyslij();          // najpierw zaleglosci, potem odswiezenie
       wakeUp();
     }
     if (bylPolaczony === true && !teraz) {
@@ -1840,14 +1846,14 @@ window.commitDose = async () => {
   if (!ok) return;
 
   const rec = (doses[sheetDate] || {})[0] || {};
-  await set(ref(db, `users/${uid}/doses/${sheetDate}/0`), {
+  await zapiszPewnie({ [`users/${uid}/doses/${sheetDate}/0`]: {
     status: pendingDose > 0 ? "taken" : "missed",
     dose: pendingDose,
     source: "manual",
     ts: rec.ts || Math.floor(new Date(sheetDate+"T12:00:00").getTime()/1000),
     ...(rec.openTs ? { openTs: rec.openTs } : {}),   // godzina z pudełka zostaje
     ...(rec.note ? { note: rec.note } : {})
-  });
+  }}, "Zmiana dawki");
   renderSheet();
 };
 
@@ -1858,14 +1864,14 @@ window.saveNote = async txt => {
   if (!rec && sheetDate > todayKey() && !txt.trim()) return;
   if (!rec && sheetDate > todayKey()){
     toast("Notatkę można dodać dopiero w dniu przyjęcia.", "info"); return; }
-  await set(ref(db, `users/${uid}/doses/${sheetDate}/0`), {
+  await zapiszPewnie({ [`users/${uid}/doses/${sheetDate}/0`]: {
     status: rec?.status || (dayDose(sheetDate).sum > 0 ? "taken" : "missed"),
     dose:   rec?.dose ?? dayDose(sheetDate).sum,
     source: rec?.source || "manual",
     ts:     rec?.ts || Math.floor(new Date(sheetDate+"T12:00:00").getTime()/1000),
     ...(rec?.openTs ? { openTs: rec.openTs } : {}),
     note:   txt
-  });
+  }}, "Notatka");
 };
 
 /* ───────── potwierdzenie ───────── */
@@ -1896,11 +1902,11 @@ window.addInr = async () => {
     msg.textContent = "Podaj datę i wynik (np. 2,4)."; msg.style.color = "var(--bad)"; return;
   }
   const note = document.getElementById("inrNote").value.trim();
-  await set(ref(db, `users/${uid}/inr/${date}`), {
+  await zapiszPewnie({ [`users/${uid}/inr/${date}`]: {
     value: Math.round(val*100)/100,
     ts: Math.floor(new Date(date+"T12:00:00").getTime()/1000),
     ...(note ? { note } : {})
-  });
+  }}, "Wynik INR");
   document.getElementById("inrVal").value = "";
   document.getElementById("inrNote").value = "";
   msg.textContent = `Zapisano ${nf(val)} na ${date}.`; msg.style.color = "var(--ok)";
@@ -2102,6 +2108,100 @@ function renderBoxLog(){
   `<div class="dim2" style="margin-top:8px">Pudełko pamięta 32 ostatnie wybudzenia.</div>`;
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   KOLEJKA ZAPISÓW — to samo, co pudełko ma w pamięci nieulotnej.
+
+   Pudełko, gdy nie ma sieci, odkłada zdarzenie do NVS i dosyła je
+   później. Telefon nie miał nic takiego: zapis szedł prosto do bazy,
+   a jeśli nie doszedł, znikał bez śladu. Biblioteka Firebase w trybie
+   offline nie zgłasza błędu — po prostu trzyma obietnicę w
+   nieskończoność. Zamykasz aplikację i zapis przepada po cichu.
+
+   Teraz każdy zapis najpierw ląduje w kolejce w pamięci telefonu,
+   a znika z niej dopiero po potwierdzeniu z bazy. Kolejka przeżywa
+   zamknięcie aplikacji i restart telefonu.
+   ═══════════════════════════════════════════════════════════════ */
+const OCZEK_KEY = "pillbox-oczekujace";
+
+/* localStorage bywa niedostępny (tryb prywatny, brak zgody). Wtedy
+   kolejka działa w pamięci - gorzej, ale nadal lepiej niż nic.      */
+const magazyn = (() => {
+  try { localStorage.setItem("pillbox-test", "1");
+        localStorage.removeItem("pillbox-test"); return localStorage; }
+  catch { const m = {}; return { getItem: k => (k in m ? m[k] : null),
+            setItem: (k,v) => { m[k] = String(v); },
+            removeItem: k => { delete m[k]; } }; }
+})();
+
+function oczekWczytaj(){
+  try { const j = JSON.parse(magazyn.getItem(OCZEK_KEY) || "[]");
+        return Array.isArray(j) ? j.filter(o => o && o.updates) : []; }
+  catch { return []; }
+}
+function oczekZapisz(lista){
+  try { magazyn.setItem(OCZEK_KEY, JSON.stringify(lista.slice(-200))); } catch {}
+}
+function oczekIle(){ return oczekWczytaj().length; }
+
+/* Zapis z gwarancją: albo baza potwierdzi, albo zostaje w kolejce.
+
+   Wyścig z zegarem jest tu konieczny. Firebase w trybie offline nie
+   odrzuca zapisu - obietnica po prostu nigdy się nie rozstrzyga, więc
+   samo await zawiesiłoby interfejs na zawsze. Po ośmiu sekundach
+   uznajemy, że nie doszło, i zostawiamy wpis w kolejce. Jeśli zapis
+   jednak przejdzie później, ponowienie wyśle te same wartości -
+   a to jest bezpieczne, bo zapisujemy stan, nie zmianę.             */
+async function zapiszPewnie(updates, opis = "Zapis"){
+  const id = Date.now() + "-" + Math.random().toString(36).slice(2, 8);
+  oczekZapisz([...oczekWczytaj(), { id, ts: Date.now(), opis, updates }]);
+  try {
+    await Promise.race([
+      update(ref(db), updates),
+      new Promise((_, odrzuc) =>
+        setTimeout(() => odrzuc(new Error("brak potwierdzenia z bazy")), 8000))
+    ]);
+    oczekZapisz(oczekWczytaj().filter(o => o.id !== id));
+    if (typeof renderDiag === "function") renderDiag();
+    return true;
+  } catch (e) {
+    console.error("zapis '" + opis + "':", e);
+    toast(opis + " — czeka na połączenie, nie zginie", "warn", 3600);
+    if (typeof renderDiag === "function") renderDiag();
+    return false;
+  }
+}
+
+/* Ustawienia zapisujemy polami, nie całym obiektem - dzięki temu
+   ponowienie z kolejki nie skasuje pola zmienionego w międzyczasie. */
+function zapiszCfg(obj, opis){
+  const u = {};
+  for (const [k, v] of Object.entries(obj)) u[`devices/${DEVICE_ID}/config/${k}`] = v;
+  return zapiszPewnie(u, opis);
+}
+
+/* Wysyłka zaległości. Przerywamy na pierwszym niepowodzeniu - skoro
+   baza nie odpowiada, kolejne próby tylko zabierałyby czas.         */
+async function oczekWyslij(){
+  const lista = oczekWczytaj();
+  if (!lista.length) return 0;
+  let wyslane = 0;
+  for (const o of lista) {
+    try {
+      await Promise.race([
+        update(ref(db), o.updates),
+        new Promise((_, odrzuc) =>
+          setTimeout(() => odrzuc(new Error("brak potwierdzenia")), 8000))
+      ]);
+      oczekZapisz(oczekWczytaj().filter(x => x.id !== o.id));
+      wyslane++;
+    } catch (e) { console.warn("kolejka zapisow:", e); break; }
+  }
+  if (wyslane) toast(`Dosłano ${wyslane} zaległych ${wyslane === 1 ? "zapis" : "zapisów"}`, "ok", 3000);
+  if (typeof renderDiag === "function") renderDiag();
+  return wyslane;
+}
+window.oczekWyslij = oczekWyslij;
+
 function renderDiag(){
   const el = document.getElementById("diagList");
   if (!el) return;
@@ -2122,6 +2222,17 @@ function renderDiag(){
                          : "nic nie wymagało zmiany")}
        </div>`;
 
+  const ile = oczekIle();
+  const kolejka = ile
+    ? `<div style="margin-bottom:10px;padding:10px;border-radius:12px;
+         border:1px solid var(--warn);background:rgba(251,191,36,.10)">
+         <b>${ile}</b> ${ile === 1 ? "zapis czeka" : "zapisów czeka"} na połączenie
+         z bazą. Nic nie zginęło — aplikacja dośle je sama, gdy wróci sieć.
+         <button class="btn" style="margin-top:8px"
+           onclick="oczekWyslij()">Spróbuj teraz</button>
+       </div>`
+    : "";
+
   const warn = staleRules
     ? `<div style="margin-bottom:10px;padding:10px;border-radius:12px;
          border:1px solid var(--warn);background:rgba(251,191,36,.10)">
@@ -2132,7 +2243,7 @@ function renderDiag(){
        </div>` : "";
 
   if (!events.length){
-    el.innerHTML = rec + warn + `<span class="dim2">Pudełko nie przysłało jeszcze żadnych zdarzeń.<br>
+    el.innerHTML = kolejka + rec + warn + `<span class="dim2">Pudełko nie przysłało jeszcze żadnych zdarzeń.<br>
       Jeśli w logu z komputera widzisz „push event HTTP 200”, a tutaj jest pusto,
       to znaczy, że aplikacja nie ma prawa czytać tych danych — sprawdź reguły
       bezpieczeństwa w Firebase.</span>`;
@@ -2152,7 +2263,7 @@ function renderDiag(){
       <span class="dim2">doba lekowa: ${key || "—"}</span> · ${mark}</div>`;
   }).join("");
 
-  el.innerHTML = rec + warn + rows + `<div class="dim2" style="margin-top:8px">Pokazano
+  el.innerHTML = kolejka + rec + warn + rows + `<div class="dim2" style="margin-top:8px">Pokazano
     ${Math.min(15, events.length)} z ${events.length} zdarzeń.</div>`;
 }
 
@@ -2204,27 +2315,38 @@ function renderStatus(st){
      nieudanym zapisie, brakiem pola, liczba spoza zakresu. Karta stanu
      nie ma prawa przez to zniknac, bo to na niej widac, czy pudelko zyje. */
   const num = (v, dom = 0) => Number.isFinite(+v) ? +v : dom;
+  /* Podczas ładowania pudełko melduje się co minutę, więc te dane są
+     świeże i nie trzeba nic klikać. Porównanie do === true jest tu
+     celowe: w bazie może siedzieć cokolwiek, a "cokolwiek" nie może
+     zapalić wskaźnika ładowania.                                     */
+  const laduje = st.charging === true;
   const pct = Math.max(0, Math.min(100, Math.round(num(st.battery))));
   const col = pct > 40 ? "var(--ok)" : pct > 15 ? "var(--warn)" : "var(--bad)";
 
   document.getElementById("batBig").textContent = pct + "%";
   document.getElementById("batBig").style.color = col;
   document.getElementById("batVolt").textContent =
-    `${num(st.volt).toFixed(2)} V · ogniwo 470 mAh`;
+    `${num(st.volt).toFixed(2)} V · ` + (laduje ? "ładowanie w toku" : "ogniwo 470 mAh");
   const f = document.getElementById("battFill"); f.style.width = Math.max(6,pct)+"%"; f.style.background = col;
   const b = document.getElementById("batBar");  b.style.width = pct+"%"; b.style.background = col;
-  chip.textContent = pct + "%";
-  chip.className = "chip " + (pct > 40 ? "on" : pct > 15 ? "warn" : "off");
+  f.classList.toggle("laduje", laduje);
+  b.classList.toggle("laduje", laduje);
+  chip.textContent = (laduje ? "ładuje · " : "") + pct + "%";
+  chip.className = "chip " + (laduje ? "on" : pct > 40 ? "on" : pct > 15 ? "warn" : "off");
 
   /* Szacunek: pełne ogniwo 470 mAh starczy około 90 dni przy obecnym poborze.
      Odkąd procent liczony jest z krzywej LiPo, a nie z prostej, odpowiada
      mniej więcej realnie pozostałemu ładunkowi — więc mnożenie razy 0,9
      dnia ma sens także w dolnej połowie skali, gdzie wcześniej zawyżało. */
   const eta = document.getElementById("batEta");
-  eta.textContent = pct > 15
-    ? `Szacunkowo ok. ${Math.round(pct * 0.9)} dni do ładowania.`
-    : "Czas naładować pudełko przez USB-C.";
-  eta.style.color = pct > 15 ? "" : "var(--bad)";
+  eta.textContent = laduje
+    ? (pct >= 98
+        ? "Naładowane — możesz odłączyć kabel."
+        : "Ładuje się. Odświeża się samo co minutę, dopóki jest na kablu.")
+    : pct > 15
+      ? `Szacunkowo ok. ${Math.round(pct * 0.9)} dni do ładowania.`
+      : "Czas naładować pudełko przez USB-C.";
+  eta.style.color = laduje ? "var(--ok)" : pct > 15 ? "" : "var(--bad)";
 
   const ls = num(st.lastSeen), ago = Math.round(Date.now()/1000 - ls);
   document.getElementById("lastSync").textContent = ls
@@ -2261,8 +2383,8 @@ async function settlePills(){
     for (const r of Object.values(doses[d])) if (r.status === "taken") used += (r.dose ?? 1); }
   cfg.pillsLeft = Math.max(0, Math.round((cfg.pillsLeft - used)*100)/100);
   cfg.pillsCountedUntil = newest;
-  await update(ref(db, `devices/${DEVICE_ID}/config`),
-    { pillsLeft: cfg.pillsLeft, pillsCountedUntil: cfg.pillsCountedUntil });
+  await zapiszCfg({ pillsLeft: cfg.pillsLeft,
+                    pillsCountedUntil: cfg.pillsCountedUntil }, "Stan opakowania");
 }
 
 function renderPills(){
@@ -2285,8 +2407,8 @@ function renderPills(){
 async function savePills(n){
   cfg.pillsLeft = Math.max(0, Math.round(n*100)/100);
   cfg.pillsCountedUntil = cfg.pillsCountedUntil || yesterdayKey();
-  await update(ref(db, `devices/${DEVICE_ID}/config`),
-    { pillsLeft: cfg.pillsLeft, pillsCountedUntil: cfg.pillsCountedUntil });
+  await zapiszCfg({ pillsLeft: cfg.pillsLeft,
+                    pillsCountedUntil: cfg.pillsCountedUntil }, "Stan opakowania");
   renderPills();
 }
 window.addPills = n => savePills(Math.max(0,(cfg.pillsLeft ?? 0) + n));
@@ -2340,10 +2462,10 @@ window.saveConfig = async () => {
   cfg.defaultDose  = +document.getElementById("defDose").value || 1;
   cfg.drugName     = document.getElementById("drugName").value.trim() || "Warfin";
   cfg.drugStrength = +document.getElementById("drugStrength").value;
-  await update(ref(db, `devices/${DEVICE_ID}/config`), {
+  await zapiszCfg({
     schedule: cfg.schedule, tz: cfg.tz, tzOffsetMin: cfg.tzOffsetMin,
     trackingSince: cfg.trackingSince, defaultDose: cfg.defaultDose,
-    drugName: cfg.drugName, drugStrength: cfg.drugStrength });
+    drugName: cfg.drugName, drugStrength: cfg.drugStrength }, "Ustawienia");
   renderAll();
   toast("Zapisano · pudełko pobierze przy najbliższym połączeniu", "ok", 3200);
 };
@@ -2351,7 +2473,7 @@ window.saveConfig = async () => {
 window.saveInrRange = async () => {
   cfg.inrMin = +document.getElementById("inrMin").value || 2;
   cfg.inrMax = +document.getElementById("inrMax").value || 3;
-  await update(ref(db, `devices/${DEVICE_ID}/config`), { inrMin: cfg.inrMin, inrMax: cfg.inrMax });
+  await zapiszCfg({ inrMin: cfg.inrMin, inrMax: cfg.inrMax }, "Zakres INR");
   renderInr();
 };
 
