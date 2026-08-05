@@ -239,6 +239,12 @@ button:focus-visible,.day:focus-visible{outline:2px solid var(--acc);outline-off
 .laduje{animation:ladowanie 1.6s ease-in-out infinite}
 @media (prefers-reduced-motion: reduce){ .laduje{animation:none} }
 
+/* Nieruchoma tabletka, dopoki dawki nie ma - klatka pierwsza wystarczy.
+   Zatrzymujemy animacje filtrem, bo GIF-a nie da sie spauzowac z CSS;
+   wyszarzenie samo w sobie niesie informacje "jeszcze nie wzieta".  */
+.tabgif{display:block;image-rendering:auto}
+.tabgif:not(.zazyta){filter:grayscale(.75) opacity(.55)}
+
 #rotateLock{display:none}
 @media screen and (orientation:landscape) and (max-height:520px){
   #rotateLock{
@@ -690,19 +696,21 @@ nav button.act{color:var(--acc)}
 
     <div style="background:var(--card2);border-radius:12px;padding:12px;
                 font-size:12.5px;line-height:1.55;margin-bottom:14px">
-      <b style="font-size:13px">Piknięcia mówią, który etap trwa</b>
+      <b style="font-size:13px">Jak to przebiega</b>
       <div class="dim2" style="margin:4px 0 10px">
-        Jedno piknięcie = etap 1, dwa = etap 2 i tak dalej. Tylko dwa etapy
-        wymagają Twojej reakcji.
+        Potrzebny jesteś tylko na początku. Reszta dzieje się sama.
       </div>
       <div style="display:grid;grid-template-columns:auto 1fr;gap:5px 10px">
-        <b>1×</b><span>zasilanie i bateria <span class="dim2">— nic nie robisz</span></span>
-        <b>2×</b><span style="color:var(--acc)">kontaktron — <b>rusz wieczkiem</b></span>
-        <b>3×</b><span style="color:var(--acc)">przycisk — <b>naciśnij raz</b></span>
-        <b>4×</b><span>pamięć nieulotna <span class="dim2">— nic nie robisz</span></span>
-        <b>5×</b><span>połączenie WiFi <span class="dim2">— nic nie robisz</span></span>
-        <b>6×</b><span>synchronizacja zegara <span class="dim2">— nic nie robisz</span></span>
-        <b>7×</b><span>zapis do bazy <span class="dim2">— nic nie robisz</span></span>
+        <b>1×</b><span>start testu <span class="dim2">— to piknięcie jest zarazem
+          dowodem, że buzzer działa</span></span>
+        <b>↳</b><span style="color:var(--acc)"><b>rusz wieczkiem</b> — masz na to 20 sekund</span>
+        <b>2×</b><span>kontaktron sprawdzony <span class="dim2">— możesz odłożyć
+          pudełko, dalej radzi sobie samo</span></span>
+        <b>·</b><span class="dim2">bateria, pamięć, WiFi, zegar, zapis do bazy — po cichu</span>
+      </div>
+      <div class="dim2" style="margin-top:8px">
+        Przycisku nie sprawdzamy: skoro uruchomiłeś test trzema kliknięciami,
+        to on już się udowodnił.
       </div>
       <div class="dim2" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--line)">
         Na koniec krótka opadająca sygnatura — to nie jest numer etapu, tylko
@@ -815,7 +823,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-04.5";
+const APP_VERSION = "2026-08-05.2";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -1579,6 +1587,12 @@ async function doReconcile(silent = true){
          Kalendarz zaczyna działać od razu, a użytkownik dostaje wyraźną
          informację, że reguły trzeba zaktualizować.                       */
       console.error("zapis kalendarza:", e);
+      /* Cicha porazka jest tu najgorsza z mozliwych. Automat dziala w tle,
+         wiec gdy zapis nie przechodzi, kalendarz po prostu zostaje pusty i
+         wyglada to jak "nie zsynchronizowalo sie" - bez slowa wyjasnienia.
+         Komunikat pokazujemy TAKZE w trybie cichym.                    */
+      lastRec = { ...(lastRec || {}), err: String(e?.message || e) };
+      toast("Kalendarz nie przyjął danych z pudełka — sprawdź Diagnostykę", "err", 4500);
       const slim = {};
       for (const [p, v] of Object.entries(updates)) {
         const { openTs, ...rest } = v;
@@ -1754,8 +1768,12 @@ function renderToday(){
   const el = document.getElementById("todayState");
   /* Na ekranie głównym tabletka jest bryłą. Kręci się dopiero wtedy, gdy
      dawka jest wzięta - ruch ma coś znaczyć, a nie być tapetą.        */
+  /* Tabletka na ekranie glownym to teraz Twoje zdjecie. Rozmiar 58 px -
+     dokladnie taki, jaki miala bryla CSS, ktora tu wczesniej stala.
+     Kreci sie dopiero, gdy dawka jest wzieta: ruch ma cos znaczyc.   */
   document.getElementById("todayPill").innerHTML =
-    tablet3D(any && sum > 0 ? Math.min(1, sum) : 0, 58, any && sum > 0);
+    `<img src="tabletka.gif" alt="Warfin" width="58" height="58"
+          class="tabgif${any && sum > 0 ? " zazyta" : ""}">`;
   if (!any){
     el.textContent = "Jeszcze nie wzięte";  el.style.color = "var(--warn)";
     document.getElementById("todayWhen").textContent = `Przypomnienie o ${cfg.schedule[0] || "—"}`;
@@ -2041,7 +2059,7 @@ const WYNIK_ZLE = ["brak wifi", "baza nie odpowiada", "bateria odcieta",
    drugiego kanału - wystarczy je tutaj odsiać i pokazać jak listę kontrolną. */
 const TEST_PL = {
   bateria:"zasilanie i pomiar baterii", kontaktron:"kontaktron (magnes)",
-  przycisk:"ukryty przycisk", pamiec:"pamięć nieulotna",
+  pamiec:"pamięć nieulotna",
   wifi:"połączenie WiFi", zegar:"synchronizacja zegara", baza:"zapis do bazy"
 };
 
