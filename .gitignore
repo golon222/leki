@@ -1,0 +1,12 @@
+# Artefakty testow - powstaja przy kazdym `bash tests/run_all.sh`
+# i sa odtwarzane od zera. Nie commitowac.
+tests/logic.inc
+tests/app_module.mjs
+tests/crosscheck_bin
+
+# Ustawienia urzadzenia - zawieraja DEVICE_PASSWORD i klucz Firebase.
+# UWAGA: plik jest na razie WCIAZ SLEDZONY przez gita, wiec ten wpis go nie
+# ukrywa. Zeby zadzialal, trzeba osobno wykonac:
+#     git rm --cached firmware/PillBox/config.h
+# Wymaga to wczesniejszego dodania config.example.h, bo testy czytaja config.h.
+firmware/PillBox/config.h

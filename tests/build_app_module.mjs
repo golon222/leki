@@ -1,4 +1,4 @@
-/* Wyciaga <script type="module"> z app/index.html, podmienia importy
+/* Wyciaga <script type="module"> z index.html, podmienia importy
    Firebase na atrapy i dokleja eksport wewnetrznych funkcji, zeby testy
    dzialaly na PRAWDZIWYM kodzie aplikacji, a nie na jego kopii.        */
 import { readFileSync, writeFileSync } from "node:fs";
@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const html = readFileSync(join(here, "..", "app", "index.html"), "utf8");
+const html = readFileSync(join(here, "..", "index.html"), "utf8");
 
 const m = html.match(/<script type="module">([\s\S]*?)<\/script>/);
 if (!m) { console.error("Nie znaleziono modulu w index.html"); process.exit(1); }

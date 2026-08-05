@@ -58,11 +58,11 @@ root = pathlib.Path(__file__).resolve().parent.parent if '__file__' in dir() els
 root = pathlib.Path('..')
 bad = 0
 
-for f in ['database.rules.json', 'app/manifest.json']:
+for f in ['database.rules.json', 'manifest.json']:
     json.load(open(root/f, encoding='utf-8'))
     print(f'  OK   {f} — poprawny JSON')
 
-html = (root/'app/index.html').read_text(encoding='utf-8')
+html = (root/'index.html').read_text(encoding='utf-8')
 js = re.search(r'<script type="module">(.*?)</script>', html, re.S).group(1)
 missing = sorted(set(re.findall(r'getElementById\("([\w-]+)"\)', js))
                  - set(re.findall(r'id="([\w-]+)"', html)))

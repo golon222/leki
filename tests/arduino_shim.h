@@ -2,6 +2,10 @@
    z PillBox.ino na komputerze i uruchomic na nich testy.
    Nie przepisujemy logiki - wycinamy ja skryptem prosto z .ino.        */
 #pragma once
+/* cstdint MUSI byc jawnie - uint8_t/uint32_t przychodzily tu kiedys tranzytywnie
+   przez cstdio, ale od g++ 13 juz nie. Bez tego kompilacja sypie sie lawina
+   ~150 bledow "does not name a type", wygladajaca na awarie logiki.          */
+#include <cstdint>
 #include <cstdio>
 #include <cstring>
 #include <cstdlib>

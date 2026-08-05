@@ -521,7 +521,7 @@ ok('"' in re.search(r'#define AP_PASS\s+("[^"]*")', cfg).group(1)
    "haslo punktu dostepowego spelnia wymog WPA2 (min. 8 znakow)")
 
 # ---------- 9b. Granica doby: firmware i aplikacja musza sie zgadzac ----------
-app = (pathlib.Path(__file__).parent.parent / "app" / "index.html").read_text(encoding="utf-8")
+app = (pathlib.Path(__file__).parent.parent / "index.html").read_text(encoding="utf-8")
 m_fw  = re.search(r"#\s*define\s+DAY_START_HOUR\s+(\d+)", cfg)
 m_app = re.search(r"const\s+DAY_START_HOUR\s*=\s*(\d+)", app)
 ok(bool(m_fw),  "config.h definiuje DAY_START_HOUR")
