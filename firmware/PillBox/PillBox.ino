@@ -1309,7 +1309,14 @@ bool pushStatus() {
      Kolejnosc jest tu istotna: gdyby kasowanie szlo przed potwierdzeniem,
      jedna nieudana wysylka niszczylaby caly pomiar bezpowrotnie.       */
   if (ok && lidLogCount() > 0) {
-    if (rtdbSend("PUT", "/devices/" DEVICE_ID "/lidlog.json", lidLogJson()) / 100 == 2)
+    /* KAZDA paczka ma wlasny klucz, a nie wspolny wezel.
+       Pudelko kasuje dziennik po wyslaniu, wiec przy zwyklym PUT druga
+       synchronizacja nadpisalaby pierwsza - po kilku dniach wyjazdu
+       zostalby tylko ostatni dzien. Osobne klucze sie sumuja.         */
+    String sciezka = "/devices/" DEVICE_ID "/lidlog/";
+    sciezka += rtcTimeValid ? String((uint32_t)time(nullptr)) : String("b" + String(rtcBootCount));
+    sciezka += ".json";
+    if (rtdbSend("PUT", sciezka, lidLogJson()) / 100 == 2)
       lidLogClear();
     else
       LOGLN("[LID] dziennik NIE doszedl - zostaje w pamieci do nastepnego razu");
