@@ -59,7 +59,6 @@ RTC_DATA_ATTR uint32_t rtcTakenDay      = 0;    // YYYYMMDD ostatniej zapisanej 
 RTC_DATA_ATTR int16_t  rtcPillsLeft     = -1;   // z Firebase; -1 = nieznane
 RTC_DATA_ATTR uint32_t rtcRolloverDay   = 0;    // ostatnia rozliczona doba
 RTC_DATA_ATTR uint8_t  rtcRetryCount    = 0;    // nieudane proby wyslania
-RTC_DATA_ATTR uint8_t  rtcStuckOpen     = 0;    // ile razy z rzedu pudelko bylo otwarte
 RTC_DATA_ATTR uint8_t  rtcStuckButton   = 0;    // ile razy z rzedu przycisk byl wcisniety
 RTC_DATA_ATTR float    rtcLastVoltage   = 0.0f; // do wykrycia podlaczenia ladowarki
 RTC_DATA_ATTR bool     rtcCutoff        = false;// tryb ochrony rozladowanego ogniwa
@@ -669,6 +668,111 @@ uint32_t openWarnSecondsLeft() {
   return rtcOpenWarnCount == 0 ? OPEN_WARN_FIRST_S : OPEN_WARN_REPEAT_S;
 }
 
+/* =====================================================================
+ *  4c.  DZIENNIK WIECZKA  -  narzedzie do testu terenowego
+ *
+ *  Zapisuje KAZDA zmiane stanu kontaktronu: kiedy wieczko sie otworzylo,
+ *  kiedy zamknelo. Po co: nie wiemy jeszcze, czy pudelko w plecaku melduje
+ *  otwarcia, ktorych nikt nie zrobil. Bez pomiaru mozemy tylko zgadywac,
+ *  a zgadywanie w tym projekcie juz raz kosztowalo godziny.
+ *
+ *  DLACZEGO OSOBNY BUFOR, A NIE ZWYKLA KOLEJKA:
+ *  queuePush() przy zapelnieniu NADPISUJE NAJSTARSZY wpis (patrz linia z
+ *  "pelno -> nadpisz najstarszy"). Wieczko trzesace sie w plecaku
+ *  wygenerowaloby setki zdarzen i po cichu wyrzucilo z kolejki zapisy
+ *  DAWEK. Dziennik wieczka nie moze zaszkodzic danym o leku, wiec ma
+ *  wlasne miejsce i wlasny limit.
+ *
+ *  Po zapelnieniu NIE nadpisujemy - zostawiamy najstarsze wpisy i tylko
+ *  liczymy, ile przepadlo. Do diagnozy wazniejszy jest POCZATEK zjawiska
+ *  ("od ktorej godziny zaczelo swirowac") niz jego koniec, a sam licznik
+ *  strat mowi o skali: "64 zapisane + 900 zgubionych" to zupelnie inna
+ *  historia niz "6 zapisanych".
+ *
+ *  Cale to rozwiazanie jest TYMCZASOWE - do wyjecia, gdy juz bedziemy
+ *  wiedziec, czy problem istnieje.
+ * ===================================================================== */
+/* Wartosc awaryjna, gdy config.h jest starszy niz ta funkcja. Blok jest
+   wyciagany do testow razem z kodem, zeby testy sprawdzaly DOKLADNIE ten
+   sam limit, ktory zadziala na plytce.                                  */
+/* @extract-begin */
+#ifndef LIDLOG_SLOTS
+  #define LIDLOG_SLOTS 64
+#endif
+/* @extract-end */
+
+void lidLogAdd(bool otwarte) {
+  prefs.begin(NVS_NAMESPACE, false);
+  uint16_t cnt = prefs.getUShort("llCnt", 0);
+  if (cnt < LIDLOG_SLOTS) {
+    char klucz[8];
+    snprintf(klucz, sizeof(klucz), "ll%u", cnt);
+    /* Format: czas;stan;powod_wybudzenia   (czas 0 = zegar jeszcze nieznany) */
+    char linia[40];
+    snprintf(linia, sizeof(linia), "%lu;%u;%s",
+             (unsigned long)(rtcTimeValid ? time(nullptr) : 0),
+             otwarte ? 1u : 0u, wakeName(wakeReason));
+    prefs.putString(klucz, linia);
+    prefs.putUShort("llCnt", cnt + 1);
+    LOG("[LID] %s (wpis %u/%d)\n", otwarte ? "OTWARTE" : "zamkniete",
+        cnt + 1, LIDLOG_SLOTS);
+  } else {
+    uint16_t zgubione = prefs.getUShort("llLost", 0);
+    if (zgubione < 65000) prefs.putUShort("llLost", zgubione + 1);
+    LOG("[LID] dziennik pelny - zgubionych %u\n", zgubione + 1);
+  }
+  prefs.end();
+}
+
+uint16_t lidLogCount() {
+  prefs.begin(NVS_NAMESPACE, true);
+  uint16_t c = prefs.getUShort("llCnt", 0);
+  prefs.end();
+  return c;
+}
+
+/* Dziennik jako JSON do wyslania. {"zgubione":N,"wpisy":["ts;stan;powod",...]} */
+String lidLogJson() {
+  prefs.begin(NVS_NAMESPACE, true);
+  uint16_t cnt = prefs.getUShort("llCnt", 0);
+  uint16_t zgubione = prefs.getUShort("llLost", 0);
+  String out = "{\"zgubione\":";
+  out += zgubione;
+  out += ",\"wpisy\":[";
+  bool pierwszy = true;
+  for (uint16_t i = 0; i < cnt; i++) {
+    char klucz[8];
+    snprintf(klucz, sizeof(klucz), "ll%u", i);
+    String l = prefs.getString(klucz, "");
+    if (!l.length()) continue;
+    if (!pierwszy) out += ",";
+    pierwszy = false;
+    out += "\"";
+    out += l;
+    out += "\"";
+  }
+  out += "]}";
+  prefs.end();
+  return out;
+}
+
+/* Kasujemy DOPIERO po potwierdzonym zapisie w bazie - ta sama zasada, co
+   przy pushStatus(). Wyczyszczenie na wiare oznaczaloby, ze nieudana
+   wysylka po cichu niszczy jedyna kopie pomiaru.                        */
+void lidLogClear() {
+  prefs.begin(NVS_NAMESPACE, false);
+  uint16_t cnt = prefs.getUShort("llCnt", 0);
+  for (uint16_t i = 0; i < cnt; i++) {
+    char klucz[8];
+    snprintf(klucz, sizeof(klucz), "ll%u", i);
+    prefs.remove(klucz);
+  }
+  prefs.putUShort("llCnt", 0);
+  prefs.putUShort("llLost", 0);
+  prefs.end();
+  LOG("[LID] dziennik wyslany i skasowany (%u wpisow)\n", cnt);
+}
+
 /* Wywolywane przy KAZDYM wybudzeniu, przed reszta logiki.
    Zwraca true, jesli wlasnie zabrzmial sygnal "zostawiles mnie otwarte". */
 bool trackBoxOpen() {
@@ -679,9 +783,10 @@ bool trackBoxOpen() {
     if (rtcOpenSinceTs || rtcOpenWarnCount) {
       LOG("[OPN] pudelko zamkniete (bylo otwarte, %u sygnalow)\n", rtcOpenWarnCount);
       if (rtcOpenReported) rtcOpenClearPend = true;   // aplikacja czeka na odwolanie
+      lidLogAdd(false);                               // przejscie otwarte -> zamkniete
     }
     rtcOpenSinceTs = 0; rtcNextWarnTs = 0; rtcOpenWarnCount = 0;
-    rtcOpenReported = false; rtcStuckOpen = 0;
+    rtcOpenReported = false;
     return false;
   }
 
@@ -690,6 +795,7 @@ bool trackBoxOpen() {
     rtcOpenSinceTs = now ? now : 1;                   // 1 = "otwarte, czas nieznany"
     rtcNextWarnTs  = now ? now + OPEN_WARN_FIRST_S : 0;
     LOG("[OPN] pudelko otwarte - przypomne za %d min\n", OPEN_WARN_FIRST_S / 60);
+    lidLogAdd(true);                                  // przejscie zamkniete -> otwarte
     return false;
   }
 
@@ -1196,6 +1302,17 @@ bool pushStatus() {
   if (ok && idx != rtcLogWyslanyIdx) {
     if (rtdbSend("PUT", "/devices/" DEVICE_ID "/log.json", logbookJson()) / 100 == 2)
       rtcLogWyslanyIdx = idx;
+  }
+
+  /* Dziennik wieczka - test terenowy. Wysylamy CALOSC i dopiero po
+     potwierdzeniu kasujemy z pamieci pudelka, zeby nie zapychac NVS.
+     Kolejnosc jest tu istotna: gdyby kasowanie szlo przed potwierdzeniem,
+     jedna nieudana wysylka niszczylaby caly pomiar bezpowrotnie.       */
+  if (ok && lidLogCount() > 0) {
+    if (rtdbSend("PUT", "/devices/" DEVICE_ID "/lidlog.json", lidLogJson()) / 100 == 2)
+      lidLogClear();
+    else
+      LOGLN("[LID] dziennik NIE doszedl - zostaje w pamieci do nastepnego razu");
   }
   return ok;
 }
@@ -2011,7 +2128,6 @@ void goToSleep(uint32_t seconds) {
   esp_deepsleep_gpio_wake_up_mode_t reedMode;
 
   if (boxIsOpen()) {
-    rtcStuckOpen++;
     /* Pin jest juz w stanie "otwarte", wiec uzbrojenie go na ten sam poziom
        obudziloby uklad natychmiast, w petli. Odwracamy poziom i czekamy na
        ZAMKNIECIE - dzieki temu zamkniecie wieczka od razu konczy stan
@@ -2025,7 +2141,6 @@ void goToSleep(uint32_t seconds) {
     LOG("[SLP] pudelko otwarte - obudze sie za %lu s albo przy zamknieciu\n",
         (unsigned long)cap);
   } else {
-    rtcStuckOpen = 0;
     reedMode = (REED_OPEN_LEVEL == HIGH) ? ESP_GPIO_WAKEUP_GPIO_HIGH
                                          : ESP_GPIO_WAKEUP_GPIO_LOW;
   }

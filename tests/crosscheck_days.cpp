@@ -50,7 +50,6 @@ uint16_t rtcOpenWarnCount = 0;
 bool     rtcOpenReported  = false;
 bool     rtcOpenClearPend = false;
 bool     rtcStatusDirty   = false;
-uint8_t  rtcStuckOpen     = 0;
 enum WakeReason { WAKE_BOOT, WAKE_REED, WAKE_BUTTON, WAKE_TIMER, WAKE_CLOSED };
 WakeReason wakeReason = WAKE_TIMER;
 bool FAKE_BOX_OPEN = false;

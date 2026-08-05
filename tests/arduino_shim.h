@@ -83,6 +83,11 @@ public:
   short getShort(const char* k, short d = 0) {
     auto it = sh.find(k); return it == sh.end() ? d : it->second; }
   void putShort(const char* k, short v) { sh[k] = v; }
+  /* Kasowanie pojedynczego klucza - uzywa go lidLogClear(). Musi czyscic
+     WSZYSTKIE mapy, bo prawdziwe NVS nie wie, jakiego typu byl wpis.    */
+  bool remove(const char* k) {
+    bool bylo = str.erase(k) || us.erase(k) || sh.erase(k) || ul.erase(k) || ui.erase(k);
+    return bylo; }
   void wipe() { str.clear(); us.clear(); sh.clear(); ul.clear(); ui.clear(); }
 };
 

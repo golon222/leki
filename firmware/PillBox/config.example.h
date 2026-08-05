@@ -20,7 +20,7 @@
  * 1. IDENTYFIKATOR URZADZENIA
  * ------------------------------------------------------------------ */
 #define DEVICE_ID           "pillbox01"     // klucz w /devices/<DEVICE_ID>
-#define FW_VERSION          "1.21.1"   // widoczna w aplikacji - po wgraniu sprawdz, czy sie zmienila
+#define FW_VERSION          "1.22.0"   // widoczna w aplikacji - po wgraniu sprawdz, czy sie zmienila
 
 /* ---------------------------------------------------------------------
  * 2. FIREBASE  (Realtime Database + Auth email/haslo)
@@ -342,6 +342,23 @@
 
 #define LOGBOOK_VERBOSE     0
 #define REPORT_BOOT_EVENT   0
+
+/* ---------------------------------------------------------------------
+ * 7f. DZIENNIK WIECZKA  -  TYMCZASOWE, do testu terenowego
+ *
+ *     Zapisuje kazda zmiane stanu kontaktronu (otwarcie i zamkniecie),
+ *     zeby sprawdzic, czy pudelko melduje otwarcia, ktorych nikt nie
+ *     zrobil - np. gdy magnes przesunie sie w plecaku.
+ *
+ *     Wysylany przy pierwszej synchronizacji i dopiero PO potwierdzeniu
+ *     kasowany z pamieci pudelka, zeby nie zapychac NVS.
+ *
+ *     Po zakonczeniu testu cala ta funkcja moze zniknac.
+ *
+ *     Firmware ma wlasna wartosc awaryjna (#ifndef), wiec starszy config.h
+ *     bez tego wpisu nadal sie skompiluje.
+ * ------------------------------------------------------------------ */
+#define LIDLOG_SLOTS        64              // ile zmian stanu miesci sie w NVS
 
 /* ---------------------------------------------------------------------
  * 8. KOLEJKA OFFLINE
