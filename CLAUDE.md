@@ -32,7 +32,14 @@ Jeśli zmieniasz nazwę wyciąganej funkcji, popraw też `extract.py`.
 
 1. **Firmware to dokładnie dwa pliki**: `PillBox.ino` + `config.h`. Scalanie odrzucone.
 2. **Żadnych zmian sprzętowych.** Płytka jest zlutowana i docelowo zaklejona.
-3. **`config.h` nigdy w repo** — jest w `.gitignore`. Wzorzec: `config.example.h`.
+3. **`config.h` JEST w repo — celowo, i tak ma zostać.**
+   Trzyma wyłącznie placeholder `TUTAJ_WPISZ_HASLO`, nigdy prawdziwego hasła.
+   Powód: Kuba pracuje tak, że pobiera folder `firmware/` z GitHuba i otwiera
+   go wprost w Arduino IDE. Bez `config.h` w komplecie szkic się nie otwiera,
+   a on musi zmieniać nazwy plików na telefonie albo MacBooku przed wyjazdem.
+   Krótka próba trzymania tu tylko `config.example.h` **została cofnięta na
+   jego wyraźną prośbę** — nie przywracaj jej.
+   Prawdziwe hasło żyje wyłącznie na jego dysku i **nigdy nie wraca do repo**.
 4. **Blok pomiaru napięcia zostaje dosłownie taki, jaki jest**
    (`CALIBRATION_FACTOR = 0.921`). Wolno zmieniać tylko przeliczenie na procent.
 5. **`DAY_START_HOUR = 3`** identycznie w firmware i aplikacji.
@@ -43,7 +50,7 @@ Jeśli zmieniasz nazwę wyciąganej funkcji, popraw też `extract.py`.
 
 ```
 firmware/PillBox/PillBox.ino     główny kod (~2600 linii)
-firmware/PillBox/config.example.h  ustawienia — skopiuj do config.h
+firmware/PillBox/config.h        ustawienia (w repo, bez hasła)
 firmware/PillBoxTest/            osobny szkic diagnostyczny
 index.html                   cała PWA w jednym pliku
 sw.js, tabletka.gif      service worker + tabletka na ekranie głównym
