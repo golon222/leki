@@ -244,6 +244,30 @@ Uczciwie, bo to ma znaczenie przy ocenie ryzyka:
 
 ## 8. Otwarte sprawy
 
+0. **Wiele sieci WiFi z hierarchią, zarządzane z aplikacji** — *poproszone
+   wprost, świadomie odłożone na później.* Kuba: „może do zrobienia kiedyś".
+
+   Stan obecny: pudełko pamięta **dokładnie jedną** sieć. `PillBox.ino:861`
+   to `WiFi.begin()` bez argumentów, czyli „użyj tego jednego kompletu z NVS",
+   a portal (`~1565`) ten komplet nadpisuje.
+
+   Docelowo: lista sieci w NVS + `WiFiMulti` albo własna pętla po kolejności,
+   portal **dopisuje** zamiast nadpisywać, a w aplikacji panel z kolejnością
+   priorytetów i usuwaniem.
+
+   **Dwie rzeczy do przemyślenia, zanim ktoś to napisze:**
+
+   - **Paradoks kury i jajka.** Pudełko czyta ustawienia z Firebase, a żeby
+     tam sięgnąć, musi już mieć internet. Listę da się więc zmieniać
+     z telefonu tylko wtedy, gdy pudełko **jeszcze ma połączenie**. Dla
+     zupełnie nowej sieci i tak zostaje portal. Realna wartość funkcji to
+     „dodaj hotspot z telefonu, póki jesteś w domu" — nie „skonfiguruj
+     pudełko zdalnie z drugiego końca Polski".
+   - **Hasła WiFi w bazie.** Lista sieci trzymana w Firebase to hasła do
+     domowej sieci leżące w bazie i wędrujące do urządzenia. Reguły
+     ograniczają dostęp do właściciela i pudełka, ale to i tak decyzja,
+     którą trzeba podjąć świadomie, a nie przy okazji.
+
 1. **Powiadomienia push na telefon** — odłożone do hasła **„dawaj kod"**.
    Rekomendacja: bot Telegram (jedno zapytanie HTTP z pudełka, darmowe,
    natywne powiadomienia na iPhonie).
