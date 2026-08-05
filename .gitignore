@@ -4,9 +4,7 @@ tests/logic.inc
 tests/app_module.mjs
 tests/crosscheck_bin
 
-# Ustawienia urzadzenia - zawieraja DEVICE_PASSWORD i klucz Firebase.
-# UWAGA: plik jest na razie WCIAZ SLEDZONY przez gita, wiec ten wpis go nie
-# ukrywa. Zeby zadzialal, trzeba osobno wykonac:
-#     git rm --cached firmware/PillBox/config.h
-# Wymaga to wczesniejszego dodania config.example.h, bo testy czytaja config.h.
+# Ustawienia urzadzenia - zawiera DEVICE_PASSWORD. Wzorzec to config.example.h,
+# ktory JEST w repo. Jesli config.h nie istnieje, tests/run_all.sh odtwarza go
+# z wzorca, wiec swiezy klon uruchamia testy bez zadnego recznego kroku.
 firmware/PillBox/config.h
