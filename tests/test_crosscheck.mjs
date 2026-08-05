@@ -4,7 +4,7 @@
  *  Bierze te same znaczniki czasu i przepuszcza je przez DWIE niezalezne
  *  implementacje tej samej reguly:
  *     - localDayNumber() z PillBox.ino  (skompilowany kod C++)
- *     - devKey() z app/index.html       (prawdziwy kod aplikacji)
+ *     - devKey() z index.html           (prawdziwy kod aplikacji)
  *
  *  Jesli kiedykolwiek sie rozjada, tabletka trafi w kalendarzu na inny
  *  dzien niz zapisalo ja pudelko. Ten blad nie daje o sobie znac od razu:

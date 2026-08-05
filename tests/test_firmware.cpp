@@ -44,7 +44,6 @@ uint16_t rtcOpenWarnCount = 0;
 bool     rtcOpenReported  = false;
 bool     rtcOpenClearPend = false;
 bool     rtcStatusDirty   = false;
-uint8_t  rtcStuckOpen     = 0;
 enum WakeReason { WAKE_BOOT, WAKE_REED, WAKE_BUTTON, WAKE_TIMER, WAKE_CLOSED };
 WakeReason wakeReason = WAKE_TIMER;
 
@@ -56,7 +55,7 @@ void beepBoxOpen() { FAKE_BEEPS++; }
 /* Ustawia stan wyjsciowy dla testow otwartego pudelka. */
 void resetOpenState(bool open){
   rtcOpenSinceTs = 0; rtcNextWarnTs = 0; rtcOpenWarnCount = 0;
-  rtcOpenReported = false; rtcOpenClearPend = false; rtcStuckOpen = 0;
+  rtcOpenReported = false; rtcOpenClearPend = false;
   FAKE_BOX_OPEN = open; FAKE_BEEPS = 0; wakeReason = WAKE_TIMER;
 }
 
@@ -632,6 +631,70 @@ wakeReason = WAKE_TIMER;
 CHECK(trackBoxOpen() == true, "kolejne wybudzenie z timera -> sygnal");
 wakeReason = WAKE_REED;
 CHECK(trackBoxOpen() == false, "wybudzenie z kontaktronu nie jest odmierzeniem czasu");
+rtcTimeValid = true;
+
+/* ═══════════ DZIENNIK WIECZKA (test terenowy) ═══════════ */
+head("Dziennik wieczka");
+
+prefs.wipe();
+resetOpenState(false);
+FAKE_NOW = local(2026,8,6,9,0);
+CHECK(lidLogCount() == 0, "na start dziennik pusty");
+
+/* Otwarcie i zamkniecie zapisuja sie jako dwa osobne przejscia. */
+FAKE_BOX_OPEN = true;  trackBoxOpen();
+CHECK(lidLogCount() == 1, "otwarcie zapisane (%u)", lidLogCount());
+FAKE_BOX_OPEN = false; trackBoxOpen();
+CHECK(lidLogCount() == 2, "zamkniecie zapisane (%u)", lidLogCount());
+
+/* KLUCZOWE: kolejne wybudzenia BEZ zmiany stanu nie moga smiecic.
+   Pudelko budzi sie co kilka minut - gdyby kazde wybudzenie dopisywalo
+   wpis, dziennik zapelnilby sie w godzine i nie powiedzialby nic.     */
+for (int i = 0; i < 10; i++) trackBoxOpen();
+CHECK(lidLogCount() == 2, "10 wybudzen przy zamknietym wieczku nic nie dopisuje (%u)",
+      lidLogCount());
+FAKE_BOX_OPEN = true; trackBoxOpen();
+for (int i = 0; i < 10; i++) { FAKE_NOW += 60; trackBoxOpen(); }
+CHECK(lidLogCount() == 3, "przy otwartym wieczku tez tylko jedno przejscie (%u)",
+      lidLogCount());
+
+/* Dziennik NIE MOZE ruszac kolejki dawek - to byl caly powod, dla ktorego
+   ma wlasny bufor zamiast korzystac z queuePush().                      */
+prefs.wipe();
+resetOpenState(false);
+queuePush("100;open;80;4.0;0");
+uint16_t dawekPrzed = queueCount();
+for (int i = 0; i < 40; i++) {
+  FAKE_BOX_OPEN = !FAKE_BOX_OPEN; FAKE_NOW += 30; trackBoxOpen();
+}
+CHECK(queueCount() == dawekPrzed,
+      "40 ruchow wieczka nie tyka kolejki dawek (%u == %u)", queueCount(), dawekPrzed);
+CHECK(lidLogCount() > 0, "ale dziennik wieczka je zapisal (%u)", lidLogCount());
+
+/* Przepelnienie: zostawiamy najstarsze, liczymy zgubione. */
+prefs.wipe();
+resetOpenState(false);
+for (int i = 0; i < LIDLOG_SLOTS + 20; i++) {
+  FAKE_BOX_OPEN = !FAKE_BOX_OPEN; FAKE_NOW += 30; trackBoxOpen();
+}
+CHECK(lidLogCount() == LIDLOG_SLOTS,
+      "dziennik zatrzymuje sie na %d wpisach (%u)", LIDLOG_SLOTS, lidLogCount());
+{
+  String j = lidLogJson();
+  CHECK(j.indexOf("\"zgubione\":20") >= 0,
+        "policzone dokladnie 20 zgubionych: %s", j.substring(0, 24).c_str());
+  CHECK(j.indexOf("\"wpisy\":[") >= 0, "JSON ma liste wpisow");
+}
+
+/* Kasowanie po potwierdzonej wysylce. */
+lidLogClear();
+CHECK(lidLogCount() == 0, "po wyslaniu dziennik pusty (%u)", lidLogCount());
+{
+  String j = lidLogJson();
+  CHECK(j.indexOf("\"zgubione\":0") >= 0, "licznik zgubionych tez wyzerowany");
+}
+prefs.wipe();
+resetOpenState(false);
 rtcTimeValid = true;
 
 head("Ile spac, gdy wieczko jest otwarte");

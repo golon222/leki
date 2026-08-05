@@ -3,6 +3,17 @@
 set -e
 cd "$(dirname "$0")"
 
+# config.h nie jest w repo - zawiera DEVICE_PASSWORD. Na swiezym klonie go nie
+# ma, a testy czytaja z niego ustawienia (DAY_START_HOUR, progi napiecia).
+# Odtwarzamy go z wzorca, czyli robimy dokladnie to, co CLAUDE.md kaze zrobic
+# recznie. Istniejacego config.h NIE ruszamy - lokalnie jest w nim haslo.
+CFG="../firmware/PillBox/config.h"
+if [ ! -f "$CFG" ]; then
+  cp "../firmware/PillBox/config.example.h" "$CFG"
+  echo "  (config.h utworzony z config.example.h — wpisz DEVICE_PASSWORD przed wgraniem na plytke)"
+  echo
+fi
+
 echo "════════ 1/7  Testy logiki firmware (C++) ════════"
 python3 extract.py
 g++ -O0 -std=c++17 test_firmware.cpp -o /tmp/pillbox_tests
@@ -58,11 +69,11 @@ root = pathlib.Path(__file__).resolve().parent.parent if '__file__' in dir() els
 root = pathlib.Path('..')
 bad = 0
 
-for f in ['database.rules.json', 'app/manifest.json']:
+for f in ['database.rules.json', 'manifest.json']:
     json.load(open(root/f, encoding='utf-8'))
     print(f'  OK   {f} — poprawny JSON')
 
-html = (root/'app/index.html').read_text(encoding='utf-8')
+html = (root/'index.html').read_text(encoding='utf-8')
 js = re.search(r'<script type="module">(.*?)</script>', html, re.S).group(1)
 missing = sorted(set(re.findall(r'getElementById\("([\w-]+)"\)', js))
                  - set(re.findall(r'id="([\w-]+)"', html)))

@@ -1,7 +1,7 @@
 # PillBox — pełny kontekst projektu
 
 **Dokument przekazania.** Wgraj go do wiedzy projektu w Claude razem z plikami
-z katalogu `firmware/` i `app/`. Wtedy Claude na dowolnym urządzeniu wie to,
+z katalogu `firmware/` i z korzenia repo. Wtedy Claude na dowolnym urządzeniu wie to,
 co wiedział Claude prowadzący ten projekt — łącznie z przyczynami decyzji,
 które kosztowały godziny szukania.
 
@@ -28,6 +28,21 @@ przeciwzakrzepowy, więc pominięta albo podwójna dawka to nie jest drobiazg.
 **Aplikacja**: PWA na iPhone, GitHub Pages + Firebase Realtime Database.
 Bez konta Apple Developer, wszystko darmowe.
 
+**Układ repo.** Katalog `app/` **już nie istnieje** — pliki strony leżą
+w korzeniu repozytorium i stamtąd serwuje je GitHub Pages:
+
+```
+firmware/PillBox/PillBox.ino        główny kod (~2600 linii)
+firmware/PillBox/config.example.h   wzorzec ustawień — kopiowany do config.h
+firmware/PillBoxTest/               osobny szkic diagnostyczny
+index.html                          cała PWA w jednym pliku
+sw.js                               service worker
+manifest.json, icon-192.png, icon-512.png   manifest i ikony PWA
+tabletka.gif                        tabletka na ekranie głównym
+tests/                              testy + audyt
+database.rules.json                 reguły Firebase
+```
+
 ---
 
 ## 2. Twarde ograniczenia — NIE ŁAMAĆ
@@ -37,7 +52,12 @@ Bez konta Apple Developer, wszystko darmowe.
 2. **Żadnych zmian sprzętowych**: *„ja nie będę zmieniał ani dodawał rezystorów"*.
    Każde rozwiązanie musi działać na powyższym schemacie.
 3. **`config.h` nigdy nie trafia na GitHuba** — zawiera `DEVICE_PASSWORD`.
-   Na stronę idzie wyłącznie zawartość `app/`.
+   Jest w `.gitignore`, a wzorcem trzymanym w repo jest `config.example.h`.
+   Gdy `config.h` nie istnieje, `tests/run_all.sh` odtwarza go z wzorca —
+   świeży klon uruchamia testy bez ręcznego kroku, a istniejącego `config.h`
+   skrypt nie rusza, więc lokalne hasło przeżywa uruchomienie testów.
+   `WEB_API_KEY` zostaje we wzorcu świadomie: ten sam klucz jest publiczny
+   w `index.html` na GitHub Pages, a barierą jest `database.rules.json`.
 4. **Blok pomiaru napięcia zostaje dosłownie taki, jaki jest**:
    `CALIBRATION_FACTOR = 0.921`, `(rawValue / 4095.0) * 3.3`, `pinVoltage * 2.0`.
    Wolno było zmienić wyłącznie przeliczenie napięcia na procent. Audyt tego pilnuje.
@@ -118,6 +138,26 @@ do pełna liczony z `chargeSince` i `chargeFromPct`. Prawdziwy pomiar następuje
 
 Morał: narzędziu weryfikującemu też trzeba nie ufać.
 
+### 3.10 Cały zestaw testów nie startował — z dwóch powodów naraz
+Objaw: `bash tests/run_all.sh` kończyło się lawiną **189 błędów kompilacji**
+w kroku 1/7, wyglądającą na rozsypane firmware. Logika była nietknięta.
+
+- **`tests/arduino_shim.h` nie włączał `<cstdint>`.** `uint8_t` i `uint32_t`
+  przychodziły tam tranzytywnie przez `<cstdio>`; od g++ 13 już nie przychodzą.
+  Jedna brakująca linia dawała 150 błędów „does not name a type".
+- **Katalog `app/` został usunięty**, a `index.html`, `sw.js` i `manifest.json`
+  przeniesione do korzenia (commity *„Delete app directory"* + *„Add files via
+  upload"*). Testy nadal szukały ich w `app/` — w pięciu plikach.
+
+Pułapka przy naprawie: sprawdzanie poprawki na **kopii repo z podstawionym
+katalogiem `app/`** pokazało zielono, bo podstawienie zamaskowało piątą, ostatnią
+zepsutą ścieżkę — tę w `audit_firmware.py`. Ujawniła się dopiero przy teście na
+prawdziwym `git checkout-index`.
+
+Morał: poprawkę ścieżek sprawdzaj na tym, co faktycznie jest w repo, a nie na
+spreparowanym katalogu. Środowisko testowe potrafi zataić dokładnie ten błąd,
+którego szukasz.
+
 ---
 
 ## 4. Zachowanie pudełka — stan obecny
@@ -171,7 +211,9 @@ Morał: narzędziu weryfikującemu też trzeba nie ufać.
   parowanie `prefs.begin/end`, pętle bez ogranicznika, kolejność operacji
   w `setup()`.
 - `tests/crosscheck_days.cpp` + `test_crosscheck.mjs` — zgodność liczenia dób.
-- `bash tests/run_all.sh` uruchamia całość.
+- `bash tests/run_all.sh` uruchamia całość. Na starcie odtwarza `config.h`
+  z `config.example.h`, jeśli pliku nie ma — bez tego świeży klon nie miałby
+  skąd wziąć `DAY_START_HOUR` ani progów napięcia.
 
 **Stan: 201 + 51 firmware, 442 + 81 aplikacja (×6 pór doby), 17 zgodności,
 190 kontroli audytu — 0 błędów.**
@@ -202,8 +244,17 @@ Uczciwie, bo to ma znaczenie przy ocenie ryzyka:
    czyli w najbardziej wrażliwym miejscu w całym kodzie.
 3. **Gesty przyciskiem nie działają** podczas ładowania i podczas portalu.
    Świadomy kompromis.
-4. **Reguły bazy** (`database.rules.json`) wymagają ponownej publikacji
-   po dodaniu pól `tz` i `trackingSince`.
+4. **Reguły bazy** (`database.rules.json`) — **plik jest kompletny**. Pola
+   `tz` i `trackingSince` są w nim zwalidowane, a reguły `config/` pokrywają
+   dokładnie te 11 pól, które zapisuje aplikacja (firmware `config/` wyłącznie
+   czyta, przez GET). Otwarte zostaje **wyłącznie opublikowanie ich w Firebase**
+   i tego nie da się sprawdzić z poziomu repo — trzeba zajrzeć do konsoli.
+   Firebase Console → Realtime Database → Rules → wklej zawartość pliku → Publish.
+
+   Waga tej sprawy jest mniejsza, niż sugerowała poprzednia wersja tego punktu:
+   `config` ma `"$other": { ".validate": true }`, więc stare, nieopublikowane
+   reguły **nie odrzucały** zapisów `tz` ani `trackingSince` — po prostu ich nie
+   walidowały. Publikacja dokłada walidację, nie odblokowuje zapisu.
 5. **Log z autotestu** — użytkownik zgłaszał przerywanie testu; w 1.21.1 dodano
    `etapTestu()` logujące każdy etap z czasem. Czeka na log z monitora portu.
 

@@ -1,0 +1,10 @@
+# Artefakty testow - powstaja przy kazdym `bash tests/run_all.sh`
+# i sa odtwarzane od zera. Nie commitowac.
+tests/logic.inc
+tests/app_module.mjs
+tests/crosscheck_bin
+
+# Ustawienia urzadzenia - zawiera DEVICE_PASSWORD. Wzorzec to config.example.h,
+# ktory JEST w repo. Jesli config.h nie istnieje, tests/run_all.sh odtwarza go
+# z wzorca, wiec swiezy klon uruchamia testy bez zadnego recznego kroku.
+firmware/PillBox/config.h

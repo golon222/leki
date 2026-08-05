@@ -1,5 +1,5 @@
 /* =====================================================================
- *  Testy aplikacji. Uruchamiaja PRAWDZIWY kod z app/index.html
+ *  Testy aplikacji. Uruchamiaja PRAWDZIWY kod z index.html
  *  na atrapach Firebase i DOM.
  *      node build_app_module.mjs && node test_app.mjs
  * ===================================================================== */
@@ -359,7 +359,7 @@ check(A.collectRows(3).find(r=>r.key===shift(-1)).time==="",
 /* ═══════════ 11. TRWALE LOGOWANIE ═══════════ */
 head("Sesja i ekran powitalny");
 const html = (await import("node:fs")).readFileSync(
-  new URL("../app/index.html", import.meta.url), "utf8");
+  new URL("../index.html", import.meta.url), "utf8");
 check(html.includes("indexedDBLocalPersistence"), "sesja zapisywana w IndexedDB");
 check(html.includes("browserLocalPersistence"), "localStorage jako zapas");
 check(html.includes("navigator.storage?.persist"), "prosba o nieusuwanie danych przez iOS");
@@ -453,7 +453,7 @@ check(!/id="inrDate"[\s\S]{0,200}flex:1/.test(html), "stary uklad flex przy daci
 head("Wersja aplikacji");
 const vApp = html.match(/APP_VERSION = "([^"]+)"/)[1];
 const swjs = (await import("node:fs")).readFileSync(
-  new URL("../app/sw.js", import.meta.url), "utf8");
+  new URL("../sw.js", import.meta.url), "utf8");
 const vSw = swjs.match(/CACHE = "pillbox-([^"]+)"/)[1];
 check(vApp === vSw, `numer wersji zgodny w index.html i sw.js (${vApp} / ${vSw})`);
 check(html.includes('id="appVersion"'), "wersja widoczna w Ustawieniach");
@@ -601,7 +601,7 @@ check(/orientation:landscape/.test(css), "wlacza sie tylko w poziomie");
 check(/max-height:520px/.test(css), "i tylko na telefonach, nie na tablecie");
 check(/#rotateLock\{display:none\}/.test(css), "w pionie ukryta");
 check(/main,nav,header\{display:none/.test(css), "reszta aplikacji chowana, zeby sie nie rozjezdzala");
-const mf = JSON.parse(readFileSync(new URL("../app/manifest.json", import.meta.url), "utf8"));
+const mf = JSON.parse(readFileSync(new URL("../manifest.json", import.meta.url), "utf8"));
 check(mf.orientation === "portrait", "manifest tez prosi o pion (dziala poza iOS)");
 
 head("Diagnostyka: co przyslalo pudelko");
@@ -655,7 +655,7 @@ check(/getRegistrations\(\)[\s\S]{0,200}unregister/.test(html),
 check(/caches\.keys\(\)[\s\S]{0,200}caches\.delete/.test(html), "kasuje wszystkie pamieci");
 check(/location\.replace/.test(html), "i przeladowuje z pominieciem pamieci posredniej");
 
-const swSrc = readFileSync(new URL("../app/sw.js", import.meta.url), "utf8");
+const swSrc = readFileSync(new URL("../sw.js", import.meta.url), "utf8");
 check(swSrc.includes("worthCaching"), "service worker filtruje, co wolno zapamietac");
 check(/res\.ok/.test(swSrc), "nie zapamietuje odpowiedzi bledu (404, strona awarii)");
 check(/text\/html/.test(swSrc), "strony zapamietuje tylko gdy serwer mowi, ze to HTML");
@@ -1105,7 +1105,7 @@ check(/alert\("Nie udało się zapisać do bazy/.test(html),
 head("Zgodnosc wersji aplikacji");
 check(/const APP_VERSION = "([\d.\-]+)"/.test(html), "index.html deklaruje wersje");
 const av = html.match(/const APP_VERSION = "([\d.\-]+)"/)?.[1];
-const sw = readFileSync(new URL("../app/sw.js", import.meta.url), "utf8");
+const sw = readFileSync(new URL("../sw.js", import.meta.url), "utf8");
 const cv = sw.match(/const CACHE = "pillbox-([\d.\-]+)"/)?.[1];
 check(av === cv, `wersja w index.html (${av}) zgadza sie z sw.js (${cv})`);
 
