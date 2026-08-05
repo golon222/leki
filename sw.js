@@ -3,8 +3,9 @@
 /* WAŻNE: ta wartość musi zgadzać się z APP_VERSION w index.html.
    Jej zmiana to sygnał dla iPhone'a, że jest nowa wersja aplikacji —
    stary cache zostaje wtedy skasowany, a strona sama się przeładuje. */
-const CACHE = "pillbox-2026-08-04.5";
-const SHELL = ["./", "./index.html", "./manifest.json"];
+const CACHE = "pillbox-2026-08-05.2";
+const SHELL = ["./", "./index.html",
+  "./tabletka.gif", "./manifest.json"];
 
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));
