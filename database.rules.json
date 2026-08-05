@@ -1,0 +1,151 @@
+{
+  "rules": {
+    "devices": {
+      "$deviceId": {
+        ".read": "auth != null && (auth.uid === data.child('owner').val() || auth.uid === data.child('deviceUid').val())",
+        ".write": "auth != null && (auth.uid === root.child('devices').child($deviceId).child('owner').val() || auth.uid === root.child('devices').child($deviceId).child('deviceUid').val())",
+        "owner": {
+          ".validate": "newData.isString()"
+        },
+        "deviceUid": {
+          ".validate": "newData.isString()"
+        },
+        "config": {
+          ".validate": "newData.hasChildren(['schedule'])",
+          "schedule": {
+            ".validate": "newData.hasChildren()"
+          },
+          "tzOffsetMin": {
+            ".validate": "newData.isNumber() && newData.val() >= -720 && newData.val() <= 840"
+          },
+          "pillsLeft": {
+            ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100000"
+          },
+          "pillsCountedUntil": {
+            ".validate": "newData.isString() && newData.val().length <= 10"
+          },
+          "defaultDose": {
+            ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() <= 10"
+          },
+          "drugName": {
+            ".validate": "newData.isString() && newData.val().length <= 40"
+          },
+          "drugStrength": {
+            ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100"
+          },
+          "inrMin": {
+            ".validate": "newData.isNumber() && newData.val() >= 0.5 && newData.val() <= 10"
+          },
+          "inrMax": {
+            ".validate": "newData.isNumber() && newData.val() >= 0.5 && newData.val() <= 12"
+          },
+          "$other": {
+            ".validate": true
+          },
+          "tz": {
+            ".validate": "newData.isString() && newData.val().length <= 40"
+          },
+          "trackingSince": {
+            ".validate": "newData.isString() && newData.val().length <= 10"
+          }
+        },
+        "status": {
+          "battery": {
+            ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100"
+          },
+          "volt": {
+            ".validate": "newData.isNumber()"
+          },
+          "lastSeen": {
+            ".validate": "newData.isNumber()"
+          },
+          "$other": {
+            ".validate": true
+          }
+        },
+        "events": {
+          ".indexOn": [
+            "ts"
+          ],
+          "$eventId": {
+            ".validate": "newData.hasChildren(['ts','type'])",
+            "ts": {
+              ".validate": "newData.isNumber()"
+            },
+            "type": {
+              ".validate": "newData.isString() && newData.val().length <= 16"
+            },
+            "battery": {
+              ".validate": "newData.isNumber()"
+            },
+            "volt": {
+              ".validate": "newData.isNumber()"
+            },
+            "slot": {
+              ".validate": "newData.isNumber()"
+            },
+            "fw": {
+              ".validate": "newData.isString()"
+            },
+            "$other": {
+              ".validate": false
+            }
+          }
+        }
+      }
+    },
+    "users": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid",
+        "doses": {
+          "$date": {
+            "$slot": {
+              ".validate": "newData.hasChildren(['status'])",
+              "status": {
+                ".validate": "newData.val() === 'taken' || newData.val() === 'missed' || newData.val() === 'skipped'"
+              },
+              "dose": {
+                ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 10"
+              },
+              "source": {
+                ".validate": "newData.val() === 'device' || newData.val() === 'manual'"
+              },
+              "ts": {
+                ".validate": "newData.isNumber()"
+              },
+              "openTs": {
+                ".validate": "newData.isNumber()"
+              },
+              "note": {
+                ".validate": "newData.isString() && newData.val().length <= 300"
+              },
+              "$other": {
+                ".validate": false
+              }
+            }
+          }
+        },
+        "inr": {
+          "$date": {
+            ".validate": "newData.hasChildren(['value'])",
+            "value": {
+              ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() <= 15"
+            },
+            "ts": {
+              ".validate": "newData.isNumber()"
+            },
+            "note": {
+              ".validate": "newData.isString() && newData.val().length <= 300"
+            },
+            "$other": {
+              ".validate": false
+            }
+          }
+        }
+      }
+    },
+    ".read": false,
+    ".write": false
+  }
+}
