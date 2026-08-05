@@ -5,7 +5,7 @@ z katalogu `firmware/` i z korzenia repo. Wtedy Claude na dowolnym urządzeniu w
 co wiedział Claude prowadzący ten projekt — łącznie z przyczynami decyzji,
 które kosztowały godziny szukania.
 
-Stan na: **5 sierpnia 2026** · firmware **1.21.1** · aplikacja **2026-08-05.3**
+Stan na: **5 sierpnia 2026** · firmware **1.22.0** · aplikacja **2026-08-05.4**
 
 ---
 
@@ -33,7 +33,7 @@ w korzeniu repozytorium i stamtąd serwuje je GitHub Pages:
 
 ```
 firmware/PillBox/PillBox.ino        główny kod (~2600 linii)
-firmware/PillBox/config.example.h   wzorzec ustawień — kopiowany do config.h
+firmware/PillBox/config.h           ustawienia (w repo, bez hasła)
 firmware/PillBoxTest/               osobny szkic diagnostyczny
 index.html                          cała PWA w jednym pliku
 sw.js                               service worker
@@ -51,13 +51,24 @@ database.rules.json                 reguły Firebase
    Scalanie zostało wprost odrzucone: *„nie nie zostanimy przy dwoch plikach"*.
 2. **Żadnych zmian sprzętowych**: *„ja nie będę zmieniał ani dodawał rezystorów"*.
    Każde rozwiązanie musi działać na powyższym schemacie.
-3. **`config.h` nigdy nie trafia na GitHuba** — zawiera `DEVICE_PASSWORD`.
-   Jest w `.gitignore`, a wzorcem trzymanym w repo jest `config.example.h`.
-   Gdy `config.h` nie istnieje, `tests/run_all.sh` odtwarza go z wzorca —
-   świeży klon uruchamia testy bez ręcznego kroku, a istniejącego `config.h`
-   skrypt nie rusza, więc lokalne hasło przeżywa uruchomienie testów.
-   `WEB_API_KEY` zostaje we wzorcu świadomie: ten sam klucz jest publiczny
-   w `index.html` na GitHub Pages, a barierą jest `database.rules.json`.
+3. **`config.h` JEST w repo — celowo.** Trzyma wyłącznie placeholder
+   `TUTAJ_WPISZ_HASLO`; prawdziwe hasło nigdy tu nie wraca.
+
+   Była próba wyjęcia go z repo na rzecz `config.example.h`. **Cofnięta na
+   wyraźną prośbę Kuby** — i to jest dobra lekcja o tym, czyj komfort się liczy.
+   On nie klonuje repo: pobiera folder `firmware/` i otwiera go wprost
+   w Arduino IDE. Bez `config.h` w komplecie szkic się nie otwiera, więc przed
+   każdym wgraniem musiałby zmieniać nazwy plików — raz na komputerze, raz na
+   MacBooku, raz w pośpiechu przed wyjazdem. Zabezpieczenie chroniło przed
+   ryzykiem, które **nigdy się nie zmaterializowało** (w historii repo hasło
+   zawsze było placeholderem), a kosztowało przy każdym pobraniu.
+
+   `WEB_API_KEY` zostaje świadomie: ten sam klucz jest publiczny w `index.html`
+   na GitHub Pages, a barierą jest `database.rules.json`, nie jego tajność.
+
+   Jedyna realna zasada do pilnowania: **nie wrzucać `config.h` z wpisanym
+   hasłem**. `.gitignore` przed tym nie obroni przy wrzucaniu przez stronę
+   GitHuba, więc to kwestia uwagi, nie mechanizmu.
 4. **Blok pomiaru napięcia zostaje dosłownie taki, jaki jest**:
    `CALIBRATION_FACTOR = 0.921`, `(rawValue / 4095.0) * 3.3`, `pinVoltage * 2.0`.
    Wolno było zmienić wyłącznie przeliczenie napięcia na procent. Audyt tego pilnuje.
@@ -211,9 +222,7 @@ którego szukasz.
   parowanie `prefs.begin/end`, pętle bez ogranicznika, kolejność operacji
   w `setup()`.
 - `tests/crosscheck_days.cpp` + `test_crosscheck.mjs` — zgodność liczenia dób.
-- `bash tests/run_all.sh` uruchamia całość. Na starcie odtwarza `config.h`
-  z `config.example.h`, jeśli pliku nie ma — bez tego świeży klon nie miałby
-  skąd wziąć `DAY_START_HOUR` ani progów napięcia.
+- `bash tests/run_all.sh` uruchamia całość.
 
 **Stan: 201 + 51 firmware, 442 + 81 aplikacja (×6 pór doby), 17 zgodności,
 190 kontroli audytu — 0 błędów.**

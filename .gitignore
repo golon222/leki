@@ -4,7 +4,5 @@ tests/logic.inc
 tests/app_module.mjs
 tests/crosscheck_bin
 
-# Ustawienia urzadzenia - zawiera DEVICE_PASSWORD. Wzorzec to config.example.h,
-# ktory JEST w repo. Jesli config.h nie istnieje, tests/run_all.sh odtwarza go
-# z wzorca, wiec swiezy klon uruchamia testy bez zadnego recznego kroku.
-firmware/PillBox/config.h
+# UWAGA: firmware/PillBox/config.h jest CELOWO sledzony przez gita - patrz
+# komentarz na gorze tego pliku. Trzymamy w nim wylacznie placeholder hasla.
