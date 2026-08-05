@@ -45,13 +45,13 @@ Jeśli zmieniasz nazwę wyciąganej funkcji, popraw też `extract.py`.
 firmware/PillBox/PillBox.ino     główny kod (~2600 linii)
 firmware/PillBox/config.example.h  ustawienia — skopiuj do config.h
 firmware/PillBoxTest/            osobny szkic diagnostyczny
-app/index.html                   cała PWA w jednym pliku
-app/sw.js, app/tabletka.gif      service worker + tabletka na ekranie głównym
+index.html                   cała PWA w jednym pliku
+sw.js, tabletka.gif      service worker + tabletka na ekranie głównym
 tests/                           testy + audyt
 database.rules.json              reguły Firebase
 ```
 
-Po zmianie w `app/` **podbij `APP_VERSION` i `CACHE` w `sw.js`** — inaczej
+Po zmianie w plikach aplikacji **podbij `APP_VERSION` i `CACHE` w `sw.js`** — inaczej
 telefon zostanie na starej wersji. Po zmianie firmware podbij `FW_VERSION`.
 
 ---
