@@ -255,6 +255,11 @@ button:focus-visible,.day:focus-visible{outline:2px solid var(--acc);outline-off
   main,nav,header{display:none !important}
 }
 .day.today{box-shadow:0 0 0 2px var(--acc);opacity:1}
+/* Dzien, w ktorym mija odstep miedzy pomiarami INR. Obramowanie przerywane,
+   a nie tlo - dzien ma juz kolor od stanu dawki i nie wolno go zaslonic.
+   outline nie kłóci się z box-shadow, wiec "dzis" i "termin" moga wypasc
+   tego samego dnia i oba beda widoczne.                                  */
+.day.inrdue{outline:2px dashed var(--warn);outline-offset:-2px;opacity:1}
 .day .dose{position:absolute;bottom:4px;font-size:9px;font-weight:700;opacity:.9}
 .day .inr{position:absolute;top:3px;right:4px;width:11px;height:11px}
 /* Legenda w dwóch równych kolumnach — przy zawijaniu flexem znaczniki
@@ -510,6 +515,7 @@ nav button.act{color:var(--acc)}
         <div class="dim2" style="text-transform:uppercase;letter-spacing:.06em;font-weight:600">Ostatni pomiar</div>
         <div class="inrbig" id="inrLast">–</div>
         <div id="inrLastWhen" class="muted"></div>
+        <div id="inrNext" class="dim2" style="margin-top:6px"></div>
       </div>
       <div style="text-align:right;flex:none">
         <div class="chip" id="inrBadge">—</div>
@@ -634,6 +640,19 @@ nav button.act{color:var(--acc)}
       <div><label>Do</label><input id="inrMax" type="number" step="0.1" inputmode="decimal"></div>
     </div>
     <button class="primary" style="width:100%;margin-top:12px" onclick="saveInrRange()">Zapisz zakres</button>
+  </div>
+
+  <div class="card">
+    <h3>Jak często mierzysz INR</h3>
+    <div class="muted">Odstęp ustala lekarz — aplikacja tylko odlicza dni
+      i zaznacza termin w kalendarzu. Niczego nie sugeruje.</div>
+    <div class="pair" style="grid-template-columns:minmax(0,1fr) minmax(0,1.2fr)">
+      <div><label>Co ile dni</label>
+        <input id="inrEvery" type="number" step="1" min="0" max="365" inputmode="numeric"></div>
+      <div style="align-self:end"><div class="dim2" id="inrEveryHint"></div></div>
+    </div>
+    <div class="dim2" style="margin-top:6px">0 wyłącza przypominanie.</div>
+    <button class="primary" style="width:100%;margin-top:12px" onclick="saveInrEvery()">Zapisz odstęp</button>
   </div>
 
   <div class="card">
@@ -858,7 +877,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-06.1";
+const APP_VERSION = "2026-08-06.2";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -1759,6 +1778,10 @@ function renderCalendar(){
   document.getElementById("monthLbl").textContent =
     first.toLocaleDateString("pl-PL", { month:"long", year:"numeric" });
 
+  /* Dzień, w którym mija Twój odstęp między pomiarami INR. Liczony raz,
+     przed pętlą - to ten sam dzień dla całego miesiąca.                */
+  const termKey = inrTerminKey();
+
   let html = "", taken = 0, total = 0;
   for (let i = 0; i < lead; i++) html += `<div class="day blank"></div>`;
   for (let d = 1; d <= days; d++){
@@ -1771,7 +1794,9 @@ function renderCalendar(){
       total++;
       if (st === "taken") taken++; else if (st === "partial") taken += .5;
     }
-    html += `<div class="day ${st} ${key===todayKey()?"today":""}" data-k="${key}">
+    html += `<div class="day ${st} ${key===todayKey()?"today":""}${
+        key===termKey?" inrdue":""}" data-k="${key}"${
+        key===termKey?` title="Tego dnia mija ${inrOdstep()} dni od ostatniego pomiaru INR"`:""}>
         ${inr[key] ? INR_MARK : ""}${d}
         ${sum>0 ? `<span class="dose">${nf(sum)}</span>` : ""}
       </div>`;
@@ -2029,6 +2054,46 @@ function inrKeysOk(){
     .sort();
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   ODSTĘP MIĘDZY POMIARAMI INR
+
+   Aplikacja NIE decyduje, jak często masz mierzyć — to ustala lekarz,
+   a Ty wpisujesz liczbę w Ustawieniach. Tutaj tylko liczymy dni i
+   pokazujemy, kiedy odstęp mija. Żadnej porady, sama arytmetyka.
+
+   0 = przypominanie wyłączone. Brak wartości = 21 dni (3 tygodnie).
+   ═══════════════════════════════════════════════════════════════ */
+function inrOdstep(){
+  if (cfg.inrEveryDays === 0) return 0;              // świadomie wyłączone
+  const n = +cfg.inrEveryDays;
+  return Number.isFinite(n) && n > 0 ? Math.round(n) : 21;
+}
+
+/* Klucz dnia, w którym mija odstęp od OSTATNIEGO pomiaru.
+   Nowy pomiar automatycznie przesuwa termin — nie trzeba nic kasować. */
+function inrTerminKey(){
+  const odstep = inrOdstep();
+  if (!odstep) return null;
+  const keys = inrKeysOk();
+  const last = keys[keys.length - 1];
+  if (!last) return null;
+  const d = new Date(last + "T12:00:00");
+  d.setDate(d.getDate() + odstep);
+  return dateKey(d);
+}
+
+/* Ile dni do terminu. Ujemne = po terminie. null = nie ma czego liczyć. */
+function inrDoTerminu(){
+  const k = inrTerminKey();
+  if (!k) return null;
+  const dzis = new Date(todayKey() + "T12:00:00");
+  const term = new Date(k + "T12:00:00");
+  return Math.round((term - dzis) / 86400000);
+}
+
+/* „1 dzień" zamiast „1 dni" — drobiazg, ale rzuca się w oczy. */
+function dniTxt(n){ return n === 1 ? "1 dzień" : `${n} dni`; }
+
 function renderInr(){
   const keys = inrKeysOk();
   const lastK = keys[keys.length-1];
@@ -2048,6 +2113,29 @@ function renderInr(){
     document.getElementById("inrLastWhen").textContent =
       new Date(lastK+"T12:00:00").toLocaleDateString("pl-PL",{day:"numeric",month:"long",year:"numeric"})
       + (dd > 0 ? ` · ${dd} dni temu` : " · dzisiaj");
+  }
+
+  /* Termin następnego pomiaru. Stwierdzenie faktu, nie zalecenie —
+     odstęp podałeś Ty, my tylko odejmujemy daty.                     */
+  const nx = document.getElementById("inrNext");
+  if (nx){
+    const d = inrDoTerminu();
+    if (d === null){
+      nx.textContent = "";
+    } else {
+      const kiedy = new Date(inrTerminKey()+"T12:00:00")
+        .toLocaleDateString("pl-PL",{day:"numeric",month:"long"});
+      if (d > 0){
+        nx.style.color = "";
+        nx.textContent = `Następny pomiar za ${dniTxt(d)} · ${kiedy}`;
+      } else if (d === 0){
+        nx.style.color = "var(--warn)";
+        nx.textContent = `Dziś mija ${dniTxt(inrOdstep())} od ostatniego pomiaru`;
+      } else {
+        nx.style.color = "var(--warn)";
+        nx.textContent = `Termin minął ${dniTxt(-d)} temu · ${kiedy}`;
+      }
+    }
   }
 
   document.getElementById("inrChart").innerHTML = inrChart(keys.slice(-16));
@@ -2724,6 +2812,12 @@ function renderSettings(){
   document.getElementById("drugStrength").value = String(cfg.drugStrength ?? 3);
   document.getElementById("inrMin").value = cfg.inrMin ?? 2;
   document.getElementById("inrMax").value = cfg.inrMax ?? 3;
+  const ev = document.getElementById("inrEvery");
+  if (ev){
+    ev.value = inrOdstep();
+    ev.oninput = odswiezPodpowiedzInr;      // podpowiedź zmienia się w trakcie pisania
+    odswiezPodpowiedzInr();
+  }
 }
 /* Zmiana w liście od razu pokazuje przesunięcie - bez zapisywania. */
 window.tzChanged = () => {
@@ -2757,6 +2851,31 @@ window.saveInrRange = async () => {
   await zapiszCfg({ inrMin: cfg.inrMin, inrMax: cfg.inrMax }, "Zakres INR");
   renderInr();
 };
+
+/* Odstęp między pomiarami INR. Pusty klucz = wróć do domyślnych 21 dni;
+   jawne 0 = wyłącz przypominanie i zapamiętaj, że to była decyzja.     */
+window.saveInrEvery = async () => {
+  const pole = document.getElementById("inrEvery");
+  const surowe = String(pole?.value ?? "").trim();
+  const n = surowe === "" ? 21 : Math.max(0, Math.min(365, Math.round(+surowe) || 0));
+  cfg.inrEveryDays = n;
+  if (pole) pole.value = n;
+  odswiezPodpowiedzInr();
+  await zapiszCfg({ inrEveryDays: n }, "Odstęp pomiarów INR");
+  renderInr(); renderCalendar();
+};
+
+/* „21 dni = 3 tygodnie" — bo Kuba myśli tygodniami, a pole jest w dniach. */
+function odswiezPodpowiedzInr(){
+  const h = document.getElementById("inrEveryHint");
+  if (!h) return;
+  const n = +(document.getElementById("inrEvery")?.value ?? inrOdstep());
+  if (!Number.isFinite(n) || n <= 0){ h.textContent = "przypominanie wyłączone"; return; }
+  const tyg = n / 7;
+  h.textContent = Number.isInteger(tyg)
+    ? `= ${tyg} ${tyg === 1 ? "tydzień" : (tyg < 5 ? "tygodnie" : "tygodni")}`
+    : `≈ ${tyg.toFixed(1).replace(".", ",")} tygodnia`;
+}
 
 /* ═══════════════════════════════════════════════════════════════
  *  ANALIZA
