@@ -49,6 +49,19 @@ public:
   bool startsWith(const String& p) const { return s.rfind(p.s, 0) == 0; }
   String operator+(const String& o) const { return String(s + o.s); }
   String& operator+=(const String& o) { s += o.s; return *this; }
+  /* Prawdziwy Arduino ma OSOBNE przeciazenia dla kazdego typu i to ma
+     znaczenie: 'char' dokleja ZNAK, a liczby doklejaja swoj zapis dziesietny.
+     Sam operator+=(char) nie wystarczy - uint16_t wolalby wtedy konwersje do
+     char (wbudowana) niz do String (uzytkownika) i liczba doklejalaby sie
+     jako smiec. Dlatego wyliczamy typy jawnie.                            */
+  String& operator+=(char c)           { s += c; return *this; }
+  String& operator+=(unsigned char v)  { s += std::to_string((unsigned)v); return *this; }
+  String& operator+=(short v)          { s += std::to_string((int)v); return *this; }
+  String& operator+=(unsigned short v) { s += std::to_string((unsigned)v); return *this; }
+  String& operator+=(int v)            { s += std::to_string(v); return *this; }
+  String& operator+=(unsigned int v)   { s += std::to_string(v); return *this; }
+  String& operator+=(long v)           { s += std::to_string(v); return *this; }
+  String& operator+=(unsigned long v)  { s += std::to_string(v); return *this; }
   bool operator==(const String& o) const { return s == o.s; }
   bool operator!=(const String& o) const { return s != o.s; }
 };

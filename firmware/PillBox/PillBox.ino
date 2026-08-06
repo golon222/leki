@@ -1718,7 +1718,9 @@ void startWifiPortal() {
  *  linijki wypisuja sie po resecie i lecą do aplikacji, wiec historie
  *  mozna przeczytac z telefonu, bez komputera.
  * ===================================================================== */
+/* @extract-begin */
 #define LOGBOOK_SLOTS 32
+/* @extract-end */
 
 RTC_DATA_ATTR char rtcNote[24] = {0};    // co sie wydarzylo w tym wybudzeniu
 
@@ -1775,18 +1777,42 @@ void logbookPrint() {
   prefs.end();
 }
 
+/* Ucieczka znakow, ktore lamia JSON.
+
+   Dziennik byl dotad sklejany bez tego. Dzialalo, bo zaden z tekstow nie ma
+   cudzyslowu ani backslasha - ale to nie jest zabezpieczenie, tylko szczescie.
+   Jeden taki znak w notatce zamienia caly dziennik w niepoprawny JSON, baza
+   odrzuca zapis i historia znika CALA, nie tylko ten jeden wpis. Awaria cicha:
+   w aplikacji wyglada jak "pudelko nic nie przyslalo".                      */
+static String jsonEscape(const String& in) {
+  String o;
+  for (int i = 0; i < in.length(); i++) {
+    char c = in.charAt(i);
+    if      (c == '"')  o += "\\\"";
+    else if (c == '\\') o += "\\\\";
+    else if (c == '\n') o += "\\n";
+    else if (c == '\r') o += "\\r";
+    else if (c == '\t') o += "\\t";
+    else if ((unsigned char)c < 0x20) continue;   // znaki sterujace pomijamy
+    else o += c;
+  }
+  return o;
+}
+
 /* Cala historia jako tablica JSON - do wyslania do aplikacji. */
 String logbookJson() {
   prefs.begin(NVS_NAMESPACE, true);
   uint16_t idx = prefs.getUShort("lbIdx", 0);
   String out = "[";
+  bool pierwszy = true;
   for (int i = 0; i < LOGBOOK_SLOTS; i++) {
     char klucz[8];
     snprintf(klucz, sizeof(klucz), "lb%u", (idx + i) % LOGBOOK_SLOTS);
     String l = prefs.getString(klucz, "");
     if (!l.length()) continue;
-    if (out.length() > 1) out += ",";
-    out += "\"" + l + "\"";
+    if (!pierwszy) out += ",";
+    pierwszy = false;
+    out += "\"" + jsonEscape(l) + "\"";
   }
   prefs.end();
   return out + "]";

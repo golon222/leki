@@ -633,6 +633,56 @@ wakeReason = WAKE_REED;
 CHECK(trackBoxOpen() == false, "wybudzenie z kontaktronu nie jest odmierzeniem czasu");
 rtcTimeValid = true;
 
+/* ═══════════ CZARNA SKRZYNKA — poprawnosc JSON ═══════════ */
+head("Czarna skrzynka");
+
+prefs.wipe();
+FAKE_NOW = local(2026,8,6,12,0);
+rtcTimeValid = true;
+wakeReason = WAKE_REED;
+batteryPercentage = 77;
+
+CHECK(logbookJson() == "[]", "pusty dziennik to poprawna pusta tablica: %s",
+      logbookJson().c_str());
+
+logbookAdd("wyslane");
+{
+  String j = logbookJson();
+  CHECK(j.indexOf("wyslane") >= 0, "wpis trafil do dziennika: %s", j.c_str());
+  CHECK(j.charAt(0) == '[' && j.charAt(j.length()-1) == ']', "to tablica JSON");
+}
+
+/* Rutyna NIE moze zajmowac miejsca - inaczej jedna noc bez sieci wypycha
+   z historii wszystko, co bylo wczesniej.                                */
+{
+  int przed = logbookJson().length();
+  logbookAdd("-");
+  logbookAdd("meldunek OK");
+  logbookAdd("wieczko zamkniete");
+  logbookAdd("drgniecie styku");
+  CHECK(logbookJson().length() == przed, "rutynowe wpisy nie zajmuja miejsca");
+}
+
+/* TU BYLA MINA: sklejanie bez ucieczki znakow. Jeden cudzyslow w notatce
+   zamienial CALY dziennik w niepoprawny JSON i historia znikala w calosci. */
+prefs.wipe();
+logbookAdd("ma \"cudzyslow\" i \\ backslash");
+{
+  String j = logbookJson();
+  CHECK(j.indexOf("\\\"") >= 0, "cudzyslow uciekniety: %s", j.c_str());
+  CHECK(j.indexOf("\\\\") >= 0, "backslash uciekniety");
+  /* Policz cudzyslowy NIEpoprzedzone backslashem - musza byc dokladnie dwa,
+     czyli otwierajacy i zamykajacy jedyny element tablicy.                */
+  int gole = 0;
+  for (int i = 0; i < j.length(); i++)
+    if (j.charAt(i) == '"' && (i == 0 || j.charAt(i-1) != '\\')) gole++;
+  CHECK(gole == 2, "dokladnie dwa gole cudzyslowy = poprawny JSON (%d)", gole);
+}
+
+prefs.wipe();
+resetOpenState(false);
+rtcTimeValid = true;
+
 /* ═══════════ DZIENNIK WIECZKA (test terenowy) ═══════════ */
 head("Dziennik wieczka");
 
