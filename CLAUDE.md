@@ -23,7 +23,7 @@ bash tests/run_all.sh
 ```
 
 Musi przejść przed zmianą i po zmianie. Stan wyjściowy:
-**201 + 51 firmware, 442 + 81 aplikacja (×6 pór doby), 17 zgodności,
+**213 + 51 firmware, 442 + 81 aplikacja (×6 pór doby), 17 zgodności,
 190 kontroli audytu — 0 błędów.**
 
 Testy pracują na **prawdziwym kodzie**, nie na kopii: `tests/extract.py` wycina
@@ -56,8 +56,8 @@ Jeśli zmieniasz nazwę wyciąganej funkcji, popraw też `extract.py`.
 8. **Narzędzie diagnostyczne nie może uszkodzić danych o leku.**
    Stąd dziennik wieczka ma własny bufor zamiast kolejki dawek.
 
-Blok pomiaru napięcia **wolno** zmieniać (zakaz zniesiony) — ale audyt nadal
-sprawdza te linie, więc świadoma zmiana wymaga poprawki w `audit_firmware.py`.
+Blok pomiaru napięcia **wolno** zmieniać (zakaz zniesiony). Audyt nie blokuje —
+zgłasza tylko uwagę, żeby zmiana przypadkowa nie wyglądała jak świadoma.
 
 ---
 
