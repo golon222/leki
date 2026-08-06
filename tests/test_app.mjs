@@ -355,6 +355,28 @@ check(A.inrDoTerminu() === -9,
 check(A.dniTxt(1) === "1 dzień", "odmiana: 1 dzien");
 check(A.dniTxt(5) === "5 dni",   "odmiana: 5 dni");
 
+/* TU BYL BLAD: pierwsza wersja oznaczala termin sama przerywana ramka wokol
+   kratki. Technicznie dzialalo, praktycznie Kuba tego NIE ZAUWAZYL - szukal
+   ikonki, bo tak oznaczone sa dni z pomiarem. Test pilnuje teraz IKONKI,
+   a nie samej klasy CSS, bo to ikonka jest tym, co widac.               */
+D({ cfg:{ inrEveryDays:21 }, inr:{ [today]:{ value:2.5, ts:at(0,12,0) } } });
+A.renderCalendar();
+{
+  const kal = document.getElementById("calGrid").innerHTML;
+  check(kal.includes("inrdue-i"), "dzien terminu ma widoczna IKONKE, nie samo obramowanie");
+  check((kal.match(/inrdue-i/g)||[]).length === 1, "dokladnie jeden dzien terminu");
+  const kratki = kal.split('<div class="day');
+  const dzisiaj = kratki.find(k => k.includes('data-k="'+today+'"')) || "";
+  check(/class="inr"/.test(dzisiaj) && !/inrdue-i/.test(dzisiaj),
+        "dzien Z POMIAREM ma swoj znacznik, nie ikonke terminu");
+}
+
+/* Wylaczone przypominanie nie moze zostawiac znacznika na kalendarzu. */
+D({ cfg:{ inrEveryDays:0 }, inr:{ [today]:{ value:2.5, ts:at(0,12,0) } } });
+A.renderCalendar();
+check(!document.getElementById("calGrid").innerHTML.includes("inrdue"),
+      "przy wylaczonym przypominaniu kalendarz jest czysty");
+
 head("INR a regularnosc z poprzedzajacego tygodnia");
 D({ cfg:{ schedule:["08:00"] }, doses:{
   [shift(-1)]: dose(1,8,0), [shift(-2)]: dose(2,8,30), [shift(-3)]: dose(3,7,30),
