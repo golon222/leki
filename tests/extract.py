@@ -19,7 +19,7 @@ WANTED = [
     "loadDayMarkers", "setTakenDay", "setRolloverDay",
     "checkDayRollover",
     "awakeTooLong", "extendAwake",
-    "wartoZapisac",
+    "wartoZapisac", "logbookAdd", "jsonEscape", "logbookJson",
 ]
 
 def grab(src, name):
