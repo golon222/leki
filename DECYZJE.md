@@ -28,6 +28,7 @@ czego nie próbować drugi raz.
 |---|---|---|---|
 | **B1** | Otwarte wieczko w porze dawki zapisuje „wzięte" bez udziału człowieka | `runAlarmWindow()` pyta „czy jest otwarte", nie „czy ktoś je otworzył". Przy przesuniętym magnesie pudełko **codziennie** zapisuje dawkę, której nie było, i **nie dzwoni**. W telefonie zielone „wzięte". | Trzy warianty naprawy, każdy z realnym kosztem (niżej). Czekamy na pomiar z sekcji 1. Alarm to najwrażliwsze miejsce w projekcie. |
 | **B2** | Autotest (3 kliknięcia) nie dochodzi do końca | Kuba: *„czekało na synchronizację, a jak już była, to nic się nie pojawiało"*. Nie wiadomo, czy winne zasypianie, czy co innego. | Niezbadane. |
+| **B3** | Odrzucony wpis zatyka kolejkę dawek na zawsze | `flushQueue()` przy niepowodzeniu wychodzi **nie zdejmując wpisu z kolejki**. Wpis odrzucony przez reguły (HTTP 400) nigdy nie zostanie przyjęty, więc blokuje wszystko za sobą — dawki piętrzą się, aż pierścień 120 wpisów zacznie nadpisywać najstarsze. | Dziś nie boli: firmware wysyła dokładnie te 6 pól, które reguły znają. Mina uzbraja się przy pierwszym dodanym polu. Naprawa: odróżnić 400 (nigdy nie przejdzie → odłóż na bok) od 401/403 (token → ponawiaj). |
 
 **Warianty naprawy B1** — każdy zamienia jeden błąd na inny:
 
