@@ -82,9 +82,9 @@ database.rules.json                 reguły Firebase
 8. **Narzędzie diagnostyczne nie może uszkodzić danych o leku.**
 
 **Zniesione ograniczenie:** blok pomiaru napięcia (`CALIBRATION_FACTOR = 0.921`
-i przeliczenia) **wolno** zmieniać — Kuba znieść tę zasadę 2026-08-05. Audyt
-nadal sprawdza te linie jako tripwire przed przypadkową zmianą, więc świadoma
-modyfikacja wymaga poprawki w `tests/audit_firmware.py`.
+i przeliczenia) **wolno** zmieniać — Kuba zniósł tę zasadę 2026-08-05. Audyt
+nie blokuje: zgłasza uwagę i przechodzi dalej. Te liczby były kalibrowane na
+sprzęcie, a w diffie zmiana przypadkowa wygląda identycznie jak świadoma.
 
 ---
 
@@ -235,7 +235,7 @@ którego szukasz.
 - `tests/crosscheck_days.cpp` + `test_crosscheck.mjs` — zgodność liczenia dób.
 - `bash tests/run_all.sh` uruchamia całość.
 
-**Stan: 201 + 51 firmware, 442 + 81 aplikacja (×6 pór doby), 17 zgodności,
+**Stan: 213 + 51 firmware, 442 + 81 aplikacja (×6 pór doby), 17 zgodności,
 190 kontroli audytu — 0 błędów.**
 
 ---
