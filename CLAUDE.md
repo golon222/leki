@@ -9,6 +9,10 @@ pominięta albo podwójna dawka to nie jest drobiazg.
 > **Przeczytaj `PROJEKT-PillBox-kontekst.md`** przed pierwszą zmianą.
 > Są tam przyczyny dziewięciu błędów, które kosztowały godziny szukania.
 > Nie cofaj poprawki, nie znając powodu jej powstania.
+>
+> **Przeczytaj `DECYZJE.md`** — dziennik decyzji: co jest tymczasowe i kiedy
+> to usunąć, co zostało zrobione dlaczego, co już raz **cofnięto** i czego
+> nie próbować drugi raz. Każdą własną decyzję dopisz tam od razu, nie potem.
 
 ---
 
