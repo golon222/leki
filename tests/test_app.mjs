@@ -310,6 +310,51 @@ check(an.n===0 && an.median===null && an.sd===null, "brak danych nie wywala stat
 check(an.hist.every(v=>v===0), "histogram wyzerowany");
 check(!isNaN(an.taken) && !isNaN(an.missed), "liczniki nie sa NaN");
 
+/* ═══════════ ODSTEP MIEDZY POMIARAMI INR ═══════════
+   Aplikacja NIE decyduje, jak czesto mierzyc - odstep podaje uzytkownik.
+   Tu sprawdzamy sama arytmetyke dat i to, ze nowy pomiar przesuwa termin. */
+head("Odstep miedzy pomiarami INR");
+
+D({ cfg:{}, inr:{} });
+check(A.inrOdstep() === 21, "domyslnie 3 tygodnie (" + A.inrOdstep() + ")");
+check(A.inrTerminKey() === null, "bez pomiarow nie ma terminu");
+check(A.inrDoTerminu() === null, "i nie ma czego odliczac");
+
+D({ cfg:{ inrEveryDays:0 }, inr:{ [shift(-5)]:{ value:2.4, ts:at(5,12,0) } } });
+check(A.inrOdstep() === 0, "zero wylacza przypominanie");
+check(A.inrTerminKey() === null, "wylaczone = brak terminu mimo pomiaru");
+
+/* Pomiar 10 dni temu, odstep 21 -> termin za 11 dni. */
+D({ cfg:{ inrEveryDays:21 }, inr:{ [shift(-10)]:{ value:2.4, ts:at(10,12,0) } } });
+check(A.inrDoTerminu() === 11, "10 dni po pomiarze zostaje 11 dni (" + A.inrDoTerminu() + ")");
+
+/* Dokladnie w dniu terminu: zero, nie liczba ujemna. */
+D({ cfg:{ inrEveryDays:21 }, inr:{ [shift(-21)]:{ value:2.4, ts:at(21,12,0) } } });
+check(A.inrDoTerminu() === 0, "w dniu terminu dokladnie 0 (" + A.inrDoTerminu() + ")");
+
+/* Po terminie liczba UJEMNA - na tym opiera sie ostrzezenie w kafelku. */
+D({ cfg:{ inrEveryDays:21 }, inr:{ [shift(-30)]:{ value:2.4, ts:at(30,12,0) } } });
+check(A.inrDoTerminu() === -9, "9 dni po terminie to -9 (" + A.inrDoTerminu() + ")");
+
+/* NAJWAZNIEJSZE: nowy pomiar przesuwa termin sam z siebie. Gdyby liczyl sie
+   od pierwszego zamiast od ostatniego, termin zostawalby w przeszlosci na
+   zawsze i ostrzezenie nigdy by nie zgaslo.                              */
+D({ cfg:{ inrEveryDays:21 }, inr:{
+  [shift(-30)]:{ value:2.4, ts:at(30,12,0) },
+  [shift(-2)] :{ value:2.6, ts:at(2,12,0)  } } });
+check(A.inrDoTerminu() === 19,
+      "liczy od OSTATNIEGO pomiaru, nie pierwszego (" + A.inrDoTerminu() + ")");
+
+/* Wpis bez liczbowego wyniku nie moze udawac pomiaru i przesuwac terminu. */
+D({ cfg:{ inrEveryDays:21 }, inr:{
+  [shift(-30)]:{ value:2.4, ts:at(30,12,0) },
+  [shift(-1)] :{ ts:at(1,12,0) } } });
+check(A.inrDoTerminu() === -9,
+      "wpis bez pola value nie przesuwa terminu (" + A.inrDoTerminu() + ")");
+
+check(A.dniTxt(1) === "1 dzień", "odmiana: 1 dzien");
+check(A.dniTxt(5) === "5 dni",   "odmiana: 5 dni");
+
 head("INR a regularnosc z poprzedzajacego tygodnia");
 D({ cfg:{ schedule:["08:00"] }, doses:{
   [shift(-1)]: dose(1,8,0), [shift(-2)]: dose(2,8,30), [shift(-3)]: dose(3,7,30),
@@ -447,7 +492,16 @@ check(css.includes("minmax(0,1.25fr) minmax(0,1fr)"), "kolumny nie daja sie roze
 check(/input\[type=date\]/.test(css), "pole daty ma wlasne reguly dla iOS");
 check(css.includes("min-width:0;outline:none") || /input,select\{[^}]*min-width:0/.test(css),
       "kazde pole moze sie zwezic ponizej swojej tresci");
-check((html.match(/class="pair"/g)||[]).length === 2, "obie pary pol przerobione (INR + zakres)");
+/* Bylo tu twarde "dokladnie dwie pary". Kazde nowe pole w ustawieniach lamalo
+   ten test bez zadnego zwiazku z tym, czego mial pilnowac. Sprawdzamy wiec
+   INTENCJE: par jest co najmniej tyle co bylo, a zadna nie ma kolumn, ktore
+   dalyby sie rozepchnac trescia.                                          */
+{
+  const pary = html.match(/class="pair"[^>]*/g) || [];
+  check(pary.length >= 2, "pary pol sa uzyte (" + pary.length + ")");
+  check(pary.every(p => !/grid-template-columns/.test(p) || /minmax\(0,/.test(p)),
+        "kazda para ma kolumny minmax(0,...) - nie da sie ich rozepchnac");
+}
 check(!/id="inrDate"[\s\S]{0,200}flex:1/.test(html), "stary uklad flex przy dacie usuniety");
 
 head("Wersja aplikacji");
