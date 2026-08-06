@@ -858,7 +858,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-05.4";
+const APP_VERSION = "2026-08-06.1";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -2221,10 +2221,26 @@ function renderBoxLog(){
    pudełka — gałąź events ma w regułach "$other": false, więc dopisanie
    tam własnego pola skończyłoby się odrzuceniem całego wpisu.
    ═══════════════════════════════════════════════════════════════ */
+/* Czyta OBA formaty, jakie potrafi przysłać pudełko.
+
+   Pierwsza wersja firmware robiła PUT na wspólny węzeł, więc w bazie leżało
+   wprost {zgubione, wpisy:[...]}. Poprawiona wysyła paczki pod osobnymi
+   kluczami: {klucz:{zgubione, wpisy:[...]}, ...}. Obie wersje nosiły ten sam
+   numer 1.22.0 — nie podbiłem go przy zmianie — więc z samego numeru nie da
+   się poznać, co siedzi w pudełku.
+
+   Zamiast kazać komukolwiek zgadywać albo wgrywać firmware pod presją,
+   aplikacja przyjmuje jedno i drugie. Kosztuje trzy linijki.              */
+function lidPaczki(){
+  if (!lidLog || typeof lidLog !== "object") return [];
+  if (Array.isArray(lidLog.wpisy)) return [["jedna", lidLog]];  // stary format
+  return Object.entries(lidLog);                                 // nowy format
+}
+
 function lidWpisy(){
   const out = [];
-  for (const [paczka, dane] of Object.entries(lidLog || {})){
-    const wpisy = dane?.wpisy || [];
+  for (const [paczka, dane] of lidPaczki()){
+    const wpisy = Array.isArray(dane?.wpisy) ? dane.wpisy : [];
     wpisy.forEach((w, i) => {
       const [ts, stan, powod] = String(w).split(";");
       out.push({ klucz: `${paczka}_${i}`, ts:+ts||0,
@@ -2240,8 +2256,8 @@ function renderLidLog(){
   if (!el || !sum) return;
 
   const wpisy = lidWpisy();
-  const zgubione = Object.values(lidLog || {})
-                         .reduce((s,d) => s + (+d?.zgubione || 0), 0);
+  const zgubione = lidPaczki()
+                     .reduce((s, [, d]) => s + (+d?.zgubione || 0), 0);
 
   if (!wpisy.length){
     sum.textContent = "";
