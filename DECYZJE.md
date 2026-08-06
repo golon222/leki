@@ -44,6 +44,7 @@ czego nie próbować drugi raz.
 
 | # | Decyzja | Co by było bez tego |
 |---|---|---|
+| **D9** | Aplikacja czyta **oba** formaty dziennika wieczka | Zmienilem sciezke `lidlog` (wspolny wezel -> osobne paczki) i **nie podbilem `FW_VERSION`** — obie wersje noszą 1.22.0. Z numeru nie da sie poznac, co siedzi w pudelku. Aplikacja przyjmuje jedno i drugie, wiec nikt nie musi wgrywac firmware pod presja.<br>**Morał: zmiana zachowania firmware bez podbicia wersji zabiera jedyny sposob na sprawdzenie, co jest wgrane.** |
 | **D8** | `CHARGE_AWAKE_MAX_S` = 4 h | Pudełko na kablu czuwa, żeby dało się w tym czasie coś dograć. 4 h to bezpiecznik na wypadek, gdyby nie zauważyło odłączenia — z włączonym radiem zjadłoby ogniwo |
 | **D7** | `config.h` **jest** w repo, z placeholderem hasła | Kuba pobiera folder i otwiera wprost w Arduino IDE. Bez `config.h` szkic się nie otwiera — ręczna zmiana nazwy przed każdym wgraniem, na każdym komputerze osobno |
 | **D6** | Znaczniki „to ja" w `users/<uid>/lidMarks`, nie przy zdarzeniu | `events` ma w regułach `$other: false` — nieznane pole = odrzucenie **całego** zdarzenia. Ugryzło już raz, przy `openTs` |
