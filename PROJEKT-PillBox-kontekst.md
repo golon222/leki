@@ -5,7 +5,7 @@ z katalogu `firmware/` i z korzenia repo. Wtedy Claude na dowolnym urządzeniu w
 co wiedział Claude prowadzący ten projekt — łącznie z przyczynami decyzji,
 które kosztowały godziny szukania.
 
-Stan na: **5 sierpnia 2026** · firmware **1.22.0** · aplikacja **2026-08-05.4**
+Stan na: **5 sierpnia 2026** · firmware **1.22.1** · aplikacja **2026-08-05.4**
 
 ---
 
@@ -69,11 +69,22 @@ database.rules.json                 reguły Firebase
    Jedyna realna zasada do pilnowania: **nie wrzucać `config.h` z wpisanym
    hasłem**. `.gitignore` przed tym nie obroni przy wrzucaniu przez stronę
    GitHuba, więc to kwestia uwagi, nie mechanizmu.
-4. **Blok pomiaru napięcia zostaje dosłownie taki, jaki jest**:
-   `CALIBRATION_FACTOR = 0.921`, `(rawValue / 4095.0) * 3.3`, `pinVoltage * 2.0`.
-   Wolno było zmienić wyłącznie przeliczenie napięcia na procent. Audyt tego pilnuje.
-5. **`DAY_START_HOUR = 3`** musi być identyczne w firmware i w aplikacji.
+4. **`DAY_START_HOUR = 3`** musi być identyczne w firmware i w aplikacji.
    Osobny test przepuszcza ~177 000 znaczników czasu przez kod obu stron.
+5. **Każdy zapis użytkownika w aplikacji idzie przez `zapiszPewnie()`** —
+   nigdy gołe `set()`. Firebase offline nie odrzuca obietnicy, tylko wisi
+   w nieskończoność: ekran pokazuje sukces, a dane nie docierają.
+6. **Nic nie kasujemy z pamięci pudełka przed potwierdzonym 2xx.**
+   Kolejka, flagi statusu, dziennik wieczka — rodzina błędu 3.5.
+7. **Do gałęzi `events` nie dokładamy pól.** Reguła `$other: false` odrzuca
+   **cały** wpis, gdy trafi w nim nieznane pole, więc otwarcie pudełka
+   przepada w całości. Nowe dane idą do nowej gałęzi.
+8. **Narzędzie diagnostyczne nie może uszkodzić danych o leku.**
+
+**Zniesione ograniczenie:** blok pomiaru napięcia (`CALIBRATION_FACTOR = 0.921`
+i przeliczenia) **wolno** zmieniać — Kuba znieść tę zasadę 2026-08-05. Audyt
+nadal sprawdza te linie jako tripwire przed przypadkową zmianą, więc świadoma
+modyfikacja wymaga poprawki w `tests/audit_firmware.py`.
 
 ---
 
@@ -182,7 +193,7 @@ którego szukasz.
 - **Zamknięcie** → natychmiastowy `pushLidState()` (PATCH, trzy pola),
   potem pełny `pushStatus()`. Czas mierzony i zapisywany jako `zamkn->wyslane N ms`.
 - **Po 15 minutach** otwarcia → pierwszy sygnał, potem co 30 min (`OPEN_WARN_*`).
-- **Na ładowarce** pudełko czuwa bez usypiania do 6 h (`CHARGE_AWAKE_MAX_S`),
+- **Na ładowarce** pudełko czuwa bez usypiania do 4 h (`CHARGE_AWAKE_MAX_S`),
   co 30 s mierzy i **pobiera ustawienia** (zmiana godziny wchodzi w ~30 s).
   Otwarcie wieczka albo pora dawki → `goToSleep(1)`, czyli oddanie sterowania
   normalnej ścieżce (kontaktron stoi w stanie wybudzenia → natychmiastowy WAKE_REED).

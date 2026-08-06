@@ -20,7 +20,7 @@
  * 1. IDENTYFIKATOR URZADZENIA
  * ------------------------------------------------------------------ */
 #define DEVICE_ID           "pillbox01"     // klucz w /devices/<DEVICE_ID>
-#define FW_VERSION          "1.22.0"   // widoczna w aplikacji - po wgraniu sprawdz, czy sie zmienila
+#define FW_VERSION          "1.22.1"   // widoczna w aplikacji - po wgraniu sprawdz, czy sie zmienila
 
 /* ---------------------------------------------------------------------
  * 2. FIREBASE  (Realtime Database + Auth email/haslo)
@@ -328,7 +328,7 @@
  *     ogniwo w kilka godzin. Po tym czasie wracamy do zwyklego cyklu snu,
  *     ktory i tak wykryje ladowanie ponownie, jesli kabel nadal tkwi.
  *     CHARGE_SAMPLE_S - co ile mierzymy napiecie podczas czuwania.       */
-#define CHARGE_AWAKE_MAX_S  21600           // 6 h
+#define CHARGE_AWAKE_MAX_S  14400           // 4 h
 #define CHARGE_SAMPLE_S     30
 
 /*     CHARGE_SETTLE_S - po odlaczeniu kabla napiecie ogniwa opada do

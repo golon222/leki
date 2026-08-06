@@ -9,6 +9,10 @@ pominięta albo podwójna dawka to nie jest drobiazg.
 > **Przeczytaj `PROJEKT-PillBox-kontekst.md`** przed pierwszą zmianą.
 > Są tam przyczyny dziewięciu błędów, które kosztowały godziny szukania.
 > Nie cofaj poprawki, nie znając powodu jej powstania.
+>
+> **Przeczytaj `DECYZJE.md`** — dziennik decyzji: co jest tymczasowe i kiedy
+> to usunąć, co zostało zrobione dlaczego, co już raz **cofnięto** i czego
+> nie próbować drugi raz. Każdą własną decyzję dopisz tam od razu, nie potem.
 
 ---
 
@@ -40,9 +44,20 @@ Jeśli zmieniasz nazwę wyciąganej funkcji, popraw też `extract.py`.
    Krótka próba trzymania tu tylko `config.example.h` **została cofnięta na
    jego wyraźną prośbę** — nie przywracaj jej.
    Prawdziwe hasło żyje wyłącznie na jego dysku i **nigdy nie wraca do repo**.
-4. **Blok pomiaru napięcia zostaje dosłownie taki, jaki jest**
-   (`CALIBRATION_FACTOR = 0.921`). Wolno zmieniać tylko przeliczenie na procent.
-5. **`DAY_START_HOUR = 3`** identycznie w firmware i aplikacji.
+4. **`DAY_START_HOUR = 3`** identycznie w firmware i aplikacji.
+5. **Każdy zapis użytkownika w aplikacji idzie przez `zapiszPewnie()`.**
+   Nigdy gołe `set()`. Firebase offline nie odrzuca obietnicy, tylko wisi —
+   ekran pokazuje sukces, dane nie docierają. Test tego pilnuje.
+6. **Nic nie kasujemy z pamięci pudełka przed potwierdzonym 2xx.**
+   Kolejka, flagi statusu, dziennik wieczka. Rodzina błędu 3.5.
+7. **Do gałęzi `events` nie dokładamy pól.** Reguła `$other: false` odrzuca
+   **cały** wpis, gdy trafi w nim nieznane pole — czyli otwarcie pudełka
+   przepada w całości. Nowe dane idą do nowej gałęzi.
+8. **Narzędzie diagnostyczne nie może uszkodzić danych o leku.**
+   Stąd dziennik wieczka ma własny bufor zamiast kolejki dawek.
+
+Blok pomiaru napięcia **wolno** zmieniać (zakaz zniesiony) — ale audyt nadal
+sprawdza te linie, więc świadoma zmiana wymaga poprawki w `audit_firmware.py`.
 
 ---
 
