@@ -455,11 +455,6 @@ nav button.act{color:var(--acc)}
         <path d="M6 3.6v3.1" stroke="#101828" stroke-width="1.5" stroke-linecap="round"/>
         <circle cx="6" cy="8.7" r=".85" fill="#101828"/></svg>czas na pomiar INR</span>
     </div>
-    <div class="dim2" style="margin-top:8px">
-      Pomarańczowy znak pokazuje dzień, w którym mija Twój odstęp między
-      pomiarami INR — ustawiasz go w Ustawieniach. Liczy się od ostatniego
-      wyniku, więc nowy pomiar przesuwa go sam.
-    </div>
     <hr class="sep">
     <div class="row between" style="align-items:center">
       <div style="min-width:0">
@@ -659,8 +654,12 @@ nav button.act{color:var(--acc)}
 
   <div class="card">
     <h3>Jak często mierzysz INR</h3>
-    <div class="muted">Odstęp ustala lekarz — aplikacja tylko odlicza dni
-      i zaznacza termin w kalendarzu. Niczego nie sugeruje.</div>
+    <!-- Wyjasnienie stoi TUTAJ, a nie pod kalendarzem. Tam byl akapit, ktory
+         zabieral miejsce przy kazdym spojrzeniu na kalendarz, a potrzebny jest
+         raz - w chwili ustawiania odstepu.                                  -->
+    <div class="muted">Odstęp ustala lekarz — aplikacja tylko odlicza dni.
+      Termin liczy się od ostatniego wyniku i pojawia się w kalendarzu jako
+      pomarańczowy znak.</div>
     <div class="pair" style="grid-template-columns:minmax(0,1fr) minmax(0,1.2fr)">
       <div><label>Co ile dni</label>
         <input id="inrEvery" type="number" step="1" min="0" max="365" inputmode="numeric"></div>
@@ -892,7 +891,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-07.1";
+const APP_VERSION = "2026-08-07.2";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);

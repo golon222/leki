@@ -5,7 +5,7 @@ z katalogu `firmware/` i z korzenia repo. Wtedy Claude na dowolnym urządzeniu w
 co wiedział Claude prowadzący ten projekt — łącznie z przyczynami decyzji,
 które kosztowały godziny szukania.
 
-Stan na: **5 sierpnia 2026** · firmware **1.22.2** · aplikacja **2026-08-07.1**
+Stan na: **5 sierpnia 2026** · firmware **1.22.2** · aplikacja **2026-08-07.2**
 
 ---
 
@@ -235,7 +235,7 @@ którego szukasz.
 - `tests/crosscheck_days.cpp` + `test_crosscheck.mjs` — zgodność liczenia dób.
 - `bash tests/run_all.sh` uruchamia całość.
 
-**Stan: 220 + 51 firmware, 462 + 81 aplikacja (×6 pór doby), 17 zgodności,
+**Stan: 220 + 51 firmware, 463 + 81 aplikacja (×6 pór doby), 17 zgodności,
 190 kontroli audytu — 0 błędów.**
 
 ---
