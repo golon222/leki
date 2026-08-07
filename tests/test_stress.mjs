@@ -16,7 +16,8 @@ const head  = t => console.log("\n=== " + t + " ===");
 
 const bazowyCfg = { schedule:["20:00"], tz:"Europe/Warsaw", tzOffsetMin:120,
   trackingSince:"2000-01-01", defaultDose:1, drugName:"Warfin", drugStrength:5,
-  inrMin:2.0, inrMax:3.0, pillsLeft:undefined, pillsCountedUntil:undefined };
+  inrMin:2.0, inrMax:3.0, pillsLeft:undefined, pillsCountedUntil:undefined,
+  pillsBase:undefined, pillsBaseFrom:undefined };
 const D = (o={}) => A.__setState({ cfg:{...bazowyCfg}, doses:{}, inr:{}, events:[], ...o });
 
 /* Uruchamia funkcje i melduje, czy przezyla. */

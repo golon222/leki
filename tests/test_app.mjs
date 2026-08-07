@@ -12,10 +12,15 @@ const head  = t => console.log("\n=== " + t + " ===");
 
 /* trackingSince ustawiamy daleko w przeszlosci, zeby testy sprzed tej funkcji
    dalej sprawdzaly to, co mialy sprawdzac. Granice testujemy osobno. */
-const D = (o={}) => A.__setState({ cfg:{ schedule:["08:00"], tz:"Europe/Warsaw",
+/* cfg z testu DOKLADA sie do domyslnego, a nie zastepuje go w calosci -
+   inaczej pola pominiete w tescie zostawaly z testu poprzedniego i wynik
+   zalezal od kolejnosci uruchomienia.                                    */
+const DEF_CFG = { schedule:["08:00"], tz:"Europe/Warsaw",
   tzOffsetMin:120, trackingSince:"2000-01-01", defaultDose:1,
   drugName:"Warfin", drugStrength:5, inrMin:2.0, inrMax:3.0, pillsLeft:undefined,
-  pillsCountedUntil:undefined }, doses:{}, inr:{}, events:[], ...o });
+  pillsCountedUntil:undefined, pillsBase:undefined, pillsBaseFrom:undefined };
+const D = (o={}) => A.__setState({ doses:{}, inr:{}, events:[], ...o,
+                                   cfg:{ ...DEF_CFG, ...(o.cfg||{}) } });
 
 const today = A.todayKey();
 /* Przesuniecie liczone od DOBY LEKOWEJ, nie od zegara - inaczej testy
@@ -157,6 +162,32 @@ D({ cfg:{ pillsLeft:0.5, pillsCountedUntil:shift(-3) },
     doses:{ [shift(-2)]:{0:{status:"taken",dose:1}} } });
 await A.settlePills();
 check(A.cfg.pillsLeft===0, "licznik nie schodzi ponizej zera (" + A.cfg.pillsLeft + ")");
+
+/* B4: dzien doslany WSTECZ, starszy od juz rozliczonych. Przy liczeniu
+   roznicowym przepadal na zawsze i licznik pokazywal wiecej niz w pudelku. */
+A.__resetDb();
+D({ cfg:{ pillsLeft:100, pillsCountedUntil:shift(-4) },
+    doses:{ [shift(-1)]:{0:{status:"taken",dose:1}} } });
+await A.settlePills();
+check(A.cfg.pillsLeft===99, "recznie dopisany wczorajszy dzien odjety (" + A.cfg.pillsLeft + ")");
+check(A.cfg.pillsBase===100 && A.cfg.pillsBaseFrom===shift(-3),
+      "migracja: baza 100 od " + A.cfg.pillsBaseFrom);
+/* Teraz pudelko wraca z wyjazdu i dosyla dzien STARSZY niz wczoraj. */
+A.__setState({ doses:{ [shift(-3)]:{0:{status:"taken",dose:1}},
+                       [shift(-1)]:{0:{status:"taken",dose:1}} } });
+await A.settlePills();
+check(A.cfg.pillsLeft===98, "dzien doslany wstecz tez sie odejmuje (" + A.cfg.pillsLeft + ")");
+
+/* Recznie policzone tabletki = stan TERAZ. Dni zamkniete wczesniej sa juz
+   w tej liczbie, wiec pudelko dosylajac je pozniej nie moze odjac drugi raz. */
+A.__resetDb();
+D();
+await globalThis.addPills(50);
+check(A.cfg.pillsBaseFrom===today, "reczny wpis ustawia baze na dzis");
+A.__setState({ doses:{ [shift(-2)]:{0:{status:"taken",dose:1}},
+                       [shift(-1)]:{0:{status:"taken",dose:1}} } });
+await A.settlePills();
+check(A.cfg.pillsLeft===50, "dawki sprzed reczonego przeliczenia nie odejmuja sie (" + A.cfg.pillsLeft + ")");
 
 /* ═══════════ 6. INR ═══════════ */
 head("Ocena wyniku INR");
