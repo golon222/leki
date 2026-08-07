@@ -3,23 +3,23 @@
 set -e
 cd "$(dirname "$0")"
 
-echo "════════ 1/7  Testy logiki firmware (C++) ════════"
+echo "════════ 1/10  Testy logiki firmware (C++) ════════"
 python3 extract.py
 g++ -O0 -std=c++17 test_firmware.cpp -o /tmp/pillbox_tests
 /tmp/pillbox_tests
 
 echo
-echo "════════ 1b/7  Testy odpornosci firmware (C++) ════════"
+echo "════════ 1b/10  Testy odpornosci firmware (C++) ════════"
 g++ -O0 -std=c++17 test_firmware_stress.cpp -o /tmp/pillbox_stress
 /tmp/pillbox_stress
 
 echo
-echo "════════ 2/7  Testy logiki aplikacji (Node) ════════"
+echo "════════ 2/10  Testy logiki aplikacji (Node) ════════"
 node build_app_module.mjs
 node test_app.mjs
 
 echo
-echo "════════ 2b/7  Aplikacja o roznych porach doby ════════"
+echo "════════ 2b/10  Aplikacja o roznych porach doby ════════"
 # Granica doby lekowej (DAY_START_HOUR) sprawia, ze aplikacja zachowuje sie
 # inaczej miedzy polnoca a 3:00 niz w ciagu dnia. Bledy w tym oknie sa
 # niewidoczne, jesli testy zawsze uruchamiaja sie po poludniu - dlatego
@@ -35,11 +35,18 @@ for TARGET in 1 2 3 8 20 23; do
 done
 
 echo
-echo "════════ 2c/7  Testy odpornosci aplikacji (Node) ════════"
+echo "════════ 2c/10  Testy odpornosci aplikacji (Node) ════════"
 node test_stress.mjs
 
 echo
-echo "════════ 2d/7  Zgodnosc pudelka i aplikacji ════════"
+echo "════════ 2d/10  Kolejka zapisow w telefonie (Node) ════════"
+# Najgrozniejszy tryb awarii aplikacji: Firebase offline nie odrzuca
+# obietnicy, tylko wisi. Te testy URUCHAMIAJA kolejke, zamiast czytac jej
+# kod wyrazeniami regularnymi.
+node test_kolejka.mjs
+
+echo
+echo "════════ 2e/10  Zgodnosc pudelka i aplikacji ════════"
 # Ten sam znacznik czasu przepuszczony przez PRAWDZIWY kod obu stron.
 # Rozjazd tutaj oznacza tabletke zapisana na innym dniu w kalendarzu niz
 # w pudelku - blad, ktory ujawnia sie dopiero tydzien pozniej.
@@ -47,11 +54,17 @@ g++ -O2 -std=c++17 crosscheck_days.cpp -o crosscheck_bin
 node test_crosscheck.mjs
 
 echo
-echo "════════ 3/7  Kontrola firmware (audyt) ════════"
+echo "════════ 2f/10  Reguly bazy kontra to, co naprawde wysylamy ════════"
+# "$other": false odrzuca CALY wpis, gdy trafi w nim nieznane pole.
+# Sprawdzamy prawdziwy database.rules.json przeciw prawdziwym payloadom.
+node test_rules.mjs
+
+echo
+echo "════════ 3/10  Kontrola firmware (audyt) ════════"
 python3 audit_firmware.py
 
 echo
-echo "════════ 4/7  Kontrola statyczna ════════"
+echo "════════ 4/10  Kontrola statyczna ════════"
 python3 - <<'PY'
 import re, json, pathlib, sys
 root = pathlib.Path(__file__).resolve().parent.parent if '__file__' in dir() else pathlib.Path('.')

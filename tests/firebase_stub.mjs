@@ -1,7 +1,39 @@
 /* Atrapa Firebase: zapisy trafiaja do zwyklego obiektu, zeby testy
-   mogly sprawdzic, CO aplikacja naprawde zapisuje do bazy.            */
-export const __db = { data: {}, writes: [] };
-export function __resetDb(){ __db.data = {}; __db.writes = []; }
+   mogly sprawdzic, CO aplikacja naprawde zapisuje do bazy.
+
+   Dwie rzeczy poza samym zapamietywaniem:
+
+   1. KAZDY zapis jest przepuszczany przez PRAWDZIWY database.rules.json.
+      Dzieki temu wszystkie testy aplikacji sprawdzaja przy okazji, czy
+      to, co pisza, w ogole przeszloby przez reguly bazy. Pole dolozone
+      do dawki albo do zdarzenia wywala test od razu, a nie dopiero
+      w telefonie Kuby - gdzie objawia sie cisza.
+
+   2. Da sie kazac jej ZAWIESC albo ZAWISNAC. Bez tego nie da sie
+      przetestowac kolejki zapisow, a to wlasnie ona chroni przed
+      najgorszym trybem awarii tej aplikacji: ekran pokazuje sukces,
+      dane nie docieraja (D1).                                        */
+import { wczytajReguly, sprawdzZapis, opiszBledy } from "./rules_engine.mjs";
+
+const REGULY = wczytajReguly();
+
+export const __db = {
+  data: {},
+  writes: [],
+  /* "ok" - zapis przechodzi
+     "blad" - baza odrzuca (jak przy zlych regulach)
+     "wisi" - obietnica nigdy sie nie rozstrzyga (Firebase offline!) */
+  tryb: "ok",
+  /* Reguly sprawdzamy domyslnie. Testy, ktore CELOWO pisza smieci,
+     moga to na chwile wylaczyc.                                     */
+  sprawdzajReguly: true,
+  odrzucone: []
+};
+
+export function __resetDb(){
+  __db.data = {}; __db.writes = []; __db.tryb = "ok";
+  __db.sprawdzajReguly = true; __db.odrzucone = [];
+}
 
 const setPath = (obj, path, val) => {
   const parts = path.split("/").filter(Boolean);
@@ -13,6 +45,23 @@ const setPath = (obj, path, val) => {
   if (val === undefined) delete cur[parts[parts.length-1]];
   else cur[parts[parts.length-1]] = val;
 };
+
+/* Zachowanie bazy wedlug __db.tryb. Tryb "wisi" odwzorowuje Firebase
+   offline: obietnica NIE jest odrzucana, tylko nigdy sie nie konczy. */
+function wedlugTrybu(){
+  if (__db.tryb === "wisi") return new Promise(() => {});
+  if (__db.tryb === "blad") return Promise.reject(new Error("PERMISSION_DENIED: baza odrzucila zapis"));
+  return Promise.resolve();
+}
+
+function waliduj(path, val){
+  if (!__db.sprawdzajReguly) return;
+  const w = sprawdzZapis(REGULY, path, val);
+  if (!w.ok) {
+    __db.odrzucone.push({ path, val, bledy: w.bledy });
+    throw new Error("REGULY ODRZUCILY ZAPIS -> " + opiszBledy(w.bledy));
+  }
+}
 
 export const initializeApp = () => ({});
 export const getAuth = () => ({ currentUser: { uid:"testuid", email:"test@example.com" } });
@@ -41,14 +90,23 @@ export const orderByChild = () => ({});
 export const limitToLast = () => ({});
 
 export const set = async (r, val) => {
+  waliduj(r.path, val);
+  await wedlugTrybu();
   __db.writes.push({ op:"set", path:r.path, val });
   setPath(__db.data, r.path, val);
 };
 export const remove = async (r) => {
+  await wedlugTrybu();
   __db.writes.push({ op:"remove", path:r.path });
   setPath(__db.data, r.path, undefined);
 };
 export const update = async (r, val) => {
+  /* Aktualizacja wielosciezkowa jest w Firebase ATOMOWA: jedno pole
+     odrzucone przez reguly kasuje calosc. Dlatego walidujemy wszystko
+     PRZED zapisaniem czegokolwiek.                                    */
+  for (const [k, v] of Object.entries(val))
+    waliduj(r.path ? `${r.path}/${k}` : k, v);
+  await wedlugTrybu();
   __db.writes.push({ op:"update", path:r.path, val });
   for (const [k, v] of Object.entries(val)){
     setPath(__db.data, r.path ? `${r.path}/${k}` : k, v);

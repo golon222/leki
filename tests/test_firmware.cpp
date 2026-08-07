@@ -48,6 +48,11 @@ uint16_t rtcOpenWarnCount = 0;
 bool     rtcOpenReported  = false;
 bool     rtcOpenClearPend = false;
 bool     rtcStatusDirty   = false;
+
+/* --- atrapy dla planowania snu --- */
+int8_t   rtcPendingSlot  = -1;
+uint8_t  rtcAlarmRetries = 0;
+uint8_t  rtcRetryCount   = 0;
 enum WakeReason { WAKE_BOOT, WAKE_REED, WAKE_BUTTON, WAKE_TIMER, WAKE_CLOSED };
 WakeReason wakeReason = WAKE_TIMER;
 
@@ -969,6 +974,150 @@ CHECK(REPORT_BOOT_EVENT == 0,
     CHECK(!trackCharging(0.0f, 4.20f), "pomiar bez sensu nie udaje ladowania");
     CHECK(rtcVoltMax == 0.0f, "i kasuje zapamietany szczyt");
   }
+
+/* ================= 18. ILE SPAC (planNextSleep) =====================
+   Jedyna funkcja decydujaca o tym, czy pudelko obudzi sie na 20:00.
+   Szesc warunkow konkuruje tu ze soba i kazdy potrafi sen skrocic.
+   Do tej pory pilnowal jej wylacznie audyt tekstowy - sprawdzal, ze
+   pewne napisy sa w zrodle, nie ze wynik jest poprawny.            */
+{
+  /* Stan wyjsciowy: harmonogram 20:00, poludnie, nic sie nie pali. */
+  auto spokoj = [&](int godz, int minuta){
+    prefs.wipe();
+    parseSchedule("20:00");
+    rtcTimeValid = true; rtcTzOffsetMin = 120;
+    rtcPendingSlot = -1; rtcAlarmRetries = 0; rtcRetryCount = 0;
+    rtcCharging = false; rtcStatusDirty = false; rtcOpenClearPend = false;
+    resetOpenState(false);
+    rtcOpenReported = false;                 // zgodnie z FAKE_BOX_OPEN
+    FAKE_NOW = local(2026,8,1,godz,minuta);
+  };
+
+  head("Ile spac: zwykly dzien");
+  spokoj(12, 0);
+  CHECK(planNextSleep() == 8*3600u - 30u,
+        "poludnie -> do dawki minus 30 s zapasu (%lu)", (unsigned long)planNextSleep());
+  spokoj(19, 55);
+  CHECK(planNextSleep() == 300u - 30u,
+        "piec minut przed dawka -> %lu s", (unsigned long)planNextSleep());
+
+  head("Ile spac: drzemka alarmu ma pierwszenstwo");
+  spokoj(20, 0);
+  rtcPendingSlot = 0; rtcAlarmRetries = 0;
+  CHECK(planNextSleep() == (uint32_t)SNOOZE_S, "alarm czeka -> drzemka");
+  /* Drzemka bije WSZYSTKO. Gdyby ladowarka albo kolejka potrafily ja
+     skrocic, pudelko wrociloby do dzwonienia szybciej niz co 5 min i
+     zjadloby okno alarmu na darmo.                                   */
+  rtcCharging = true; rtcStatusDirty = true;
+  for (int i = 0; i < 3; i++) queuePush(makeRecordAt("open", 0, 1750000000u + i));
+  CHECK(planNextSleep() == (uint32_t)SNOOZE_S,
+        "ladowarka ani kolejka nie skracaja drzemki (%lu)", (unsigned long)planNextSleep());
+
+  spokoj(20, 0);
+  rtcPendingSlot = 0; rtcAlarmRetries = MAX_ALARM_RETRIES;
+  CHECK(planNextSleep() != (uint32_t)SNOOZE_S,
+        "po wyczerpaniu prob drzemka sie konczy");
+
+  head("Ile spac: backoff przy zaleglosciach w kolejce");
+  /* 15 min, 30, 60, 120, 240 - potem juz nie rzadziej. Za krotko zjada
+     bateria przy zerwanej sieci, za dlugo opoznia dawke w kalendarzu. */
+  {
+    const uint32_t oczek[] = { 900u, 1800u, 3600u, 7200u, 14400u, 14400u, 14400u };
+    for (int i = 0; i < 7; i++) {
+      spokoj(12, 0);
+      queuePush(makeRecordAt("open", 0, 1750000000u));
+      rtcRetryCount = (uint8_t)i;
+      CHECK(planNextSleep() == oczek[i],
+            "proba %d -> %lu s (oczekiwano %lu)", i,
+            (unsigned long)planNextSleep(), (unsigned long)oczek[i]);
+    }
+    CHECK(oczek[4] == (uint32_t)RETRY_MAX_S, "sufit backoffu to RETRY_MAX_S");
+  }
+  /* Backoff wolno sen SKRACAC, nigdy wydluzac. Inaczej zalegly wpis
+     w kolejce przesunalby pobudke na dawke o cztery godziny.        */
+  spokoj(19, 50);
+  queuePush(makeRecordAt("open", 0, 1750000000u));
+  rtcRetryCount = 4;                          // backoff = 4 h
+  CHECK(planNextSleep() == 600u - 30u,
+        "backoff nie wydluza snu ponad termin dawki (%lu)", (unsigned long)planNextSleep());
+
+  head("Ile spac: aplikacja bez aktualnego stanu");
+  /* Bez tego punktu nieudany status czekal do najblizszej dawki albo
+     12 h - a telefon przez ten czas pokazywalby nieprawde.          */
+  spokoj(12, 0);
+  rtcStatusDirty = true;
+  CHECK(planNextSleep() == 900u, "nieudany status -> ponowna proba za 15 min");
+  spokoj(12, 0);
+  rtcOpenClearPend = true;
+  CHECK(planNextSleep() == 900u, "odwolanie alarmu tez wymusza ponowienie");
+  spokoj(12, 0);
+  rtcOpenReported = true;                     // baza mysli ze otwarte, a jest zamkniete
+  CHECK(planNextSleep() == 900u, "rozjazd stanu wieczka tez wymusza ponowienie");
+  spokoj(12, 0);
+  rtcStatusDirty = true; rtcRetryCount = 3;
+  CHECK(planNextSleep() == 7200u, "ponowienia statusu ida tym samym backoffem");
+
+  head("Ile spac: ladowarka i granica doby");
+  spokoj(12, 0);
+  rtcCharging = true;
+  CHECK(planNextSleep() == (uint32_t)CHARGE_POLL_S,
+        "na kablu meldunek co minute (%lu)", (unsigned long)planNextSleep());
+#if MIDNIGHT_CHECK
+  /* 02:30 lokalnego: do granicy doby 30 min + minuta, do dawki 17,5 h. */
+  spokoj(2, 30);
+  CHECK(planNextSleep() == 30u*60u + 60u,
+        "granica doby blizej niz dawka -> %lu s", (unsigned long)planNextSleep());
+#endif
+
+  head("Ile spac: otwarte wieczko przycina sen");
+  spokoj(12, 0);
+  resetOpenState(true);
+  rtcOpenReported = true;                     // zeby nie mieszal rozjazd stanu
+  FAKE_NOW = local(2026,8,1,12,0);
+  trackBoxOpen();                             // ustawia rtcNextWarnTs
+  CHECK(planNextSleep() == (uint32_t)OPEN_WARN_FIRST_S,
+        "budzimy sie dokladnie na sygnal (%lu)", (unsigned long)planNextSleep());
+
+  head("Ile spac: sufit i wlasnosci ogolne");
+  /* Bez zegara i bez harmonogramu wszystko zwraca HOUSEKEEP_MAX_S -
+     sen musi zostac przyciety do 12 h, bo to jedyna okazja na sync. */
+  spokoj(12, 0);
+  rtcTimeValid = false;
+  CHECK(planNextSleep() <= (uint32_t)HOUSEKEEP_MAX_S,
+        "bez zegara nie spimy dluzej niz 12 h (%lu)", (unsigned long)planNextSleep());
+
+  /* Wlasnosc zbiorcza: przez wszystkie kombinacje flag sen NIGDY nie
+     moze wyjsc zerowy (natychmiastowe wybudzenie = petla i pusta
+     bateria) ani przekroczyc czasu do najblizszej dawki.            */
+  {
+    int zero = 0, zaDlugo = 0, ponadSufit = 0, prob = 0;
+    for (int godz = 0; godz < 24; godz++)
+    for (int mask = 0; mask < 32; mask++)
+    for (int rc = 0; rc <= 5; rc++) {
+      spokoj(godz, 17);
+      rtcRetryCount   = (uint8_t)rc;
+      rtcCharging     = mask & 1;
+      rtcStatusDirty  = mask & 2;
+      rtcOpenClearPend= mask & 4;
+      if (mask & 8)  { resetOpenState(true); rtcOpenReported = true;
+                       FAKE_NOW = local(2026,8,1,godz,17); trackBoxOpen(); }
+      if (mask & 16) queuePush(makeRecordAt("open", 0, 1750000000u));
+      uint32_t s = planNextSleep();
+      uint32_t doDawki = secondsToNextSlot(FAKE_NOW);
+      prob++;
+      if (s == 0) zero++;
+      if (s > doDawki) zaDlugo++;
+      if (s > (uint32_t)HOUSEKEEP_MAX_S) ponadSufit++;
+    }
+    CHECK(zero == 0, "zaden z %d wariantow nie zasypia na 0 s (%d takich)", prob, zero);
+    CHECK(zaDlugo == 0, "zaden nie przesypia dawki (%d takich)", zaDlugo);
+    CHECK(ponadSufit == 0, "zaden nie przekracza sufitu 12 h (%d takich)", ponadSufit);
+  }
+
+  /* sprzatanie po sekcji */
+  spokoj(12, 0);
+  prefs.wipe();
+}
 
 printf("\n──────────────────────────────────────\n");
 printf("  ZALICZONE: %d    BLEDY: %d\n", PASS, FAIL);
