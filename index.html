@@ -447,6 +447,18 @@ nav button.act{color:var(--acc)}
       <span><i style="background:var(--dim2);opacity:.5"></i>brak danych</span>
       <span><svg width="10" height="10" viewBox="0 0 10 10"><circle cx="5" cy="5" r="4"
         fill="rgba(167,139,250,.25)" stroke="#a78bfa" stroke-width="1.6"/></svg>pomiar INR</span>
+      <!-- Ta sama ikonka co INR_DUE_MARK w kodzie. Kropka wypelniona, nie
+           obrysowana - „pomiar byl" i „pomiar wypada" musza sie roznic
+           jednym spojrzeniem, a nie odcieniem.                            -->
+      <span><svg width="10" height="10" viewBox="0 0 12 12">
+        <circle cx="6" cy="6" r="4.4" fill="var(--warn)" opacity=".9"/>
+        <path d="M6 3.6v3.1" stroke="#101828" stroke-width="1.5" stroke-linecap="round"/>
+        <circle cx="6" cy="8.7" r=".85" fill="#101828"/></svg>czas na pomiar INR</span>
+    </div>
+    <div class="dim2" style="margin-top:8px">
+      Pomarańczowy znak pokazuje dzień, w którym mija Twój odstęp między
+      pomiarami INR — ustawiasz go w Ustawieniach. Liczy się od ostatniego
+      wyniku, więc nowy pomiar przesuwa go sam.
     </div>
     <hr class="sep">
     <div class="row between" style="align-items:center">
@@ -880,7 +892,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-06.3";
+const APP_VERSION = "2026-08-07.1";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
