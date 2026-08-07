@@ -57,6 +57,12 @@ int  FAKE_BEEPS    = 0;
 bool boxIsOpen()   { return FAKE_BOX_OPEN; }
 void beepBoxOpen() { FAKE_BEEPS++; }
 
+uint16_t rtcNvsFail      = 0;
+uint16_t rtcQueueDropped = 0;
+/* flushQueue() jest teraz wyciagane do testow, wiec potrzebuje atrapy
+   wysylki. Tu nikt jej nie wola - wystarczy, ze istnieje.            */
+int pushEventRecord(const String&) { return 200; }
+
 #include "logic.inc"
 
 int PASS = 0, FAIL = 0;

@@ -602,6 +602,23 @@ A.renderOstrzezenia();
   check(!w.innerHTML.trim(), "przy czystym stanie ostrzezenia sa puste");
 }
 
+/* Straty zgloszone przez pudelko (B3/B5). Bez tego komunikatu odrzucony
+   albo niezapisany wpis znika bez sladu - kalendarz wyglada normalnie. */
+check(A.ostrzStraty()==="", "gdy pudelko nic nie zglasza, nie strasza nikogo");
+A.renderStatus({ battery:80, dropped:2, nvsFail:0 });
+{
+  const w = document.getElementById("setWarn").innerHTML;
+  check(/utrat[eę] danych/.test(w), "odrzucone zdarzenia widoczne w Ustawieniach");
+  check(/<b>2<\/b>/.test(w), "liczba odrzuconych podana wprost");
+}
+A.renderStatus({ battery:80, dropped:0, nvsFail:1 });
+check(/pami[eę]ci pude[lł]ka si[eę] nie uda[lł]/.test(
+        document.getElementById("setWarn").innerHTML),
+      "nieudany zapis do pamieci tez widoczny");
+A.renderStatus({ battery:80 });
+check(!document.getElementById("setWarn").innerHTML.trim(),
+      "status bez licznikow strat nie zostawia ostrzezenia");
+
 head("Legenda kalendarza");
 /* Ikonka bez podpisu to zagadka. Legenda pod kalendarzem musi ja tlumaczyc,
    i to tym samym ksztaltem, ktorego uzywa INR_DUE_MARK - inaczej te dwa

@@ -7,6 +7,8 @@
 #include <cstring>
 #include "../firmware/PillBox/config.h"
 
+#include <vector>
+
 time_t FAKE_NOW = 0;
 int    FAKE_ADC = 0;
 unsigned long FAKE_MILLIS = 0;
@@ -33,6 +35,8 @@ int16_t rtcTzOffsetMin = 120;
 uint32_t rtcTakenDay = 0;
 uint32_t rtcRolloverDay = 0;
 uint32_t awakeDeadlineMs = AWAKE_LIMIT_MS;
+uint16_t rtcNvsFail      = 0;
+uint16_t rtcQueueDropped = 0;
 
 /* --- atrapy dla pilnowania otwartego wieczka --- */
 uint32_t rtcLastOpenTs    = 0;
@@ -57,6 +61,15 @@ void resetOpenState(bool open){
   rtcOpenSinceTs = 0; rtcNextWarnTs = 0; rtcOpenWarnCount = 0;
   rtcOpenReported = false; rtcOpenClearPend = false;
   FAKE_BOX_OPEN = open; FAKE_BEEPS = 0; wakeReason = WAKE_TIMER;
+}
+
+/* --- atrapa wysylki, zeby dalo sie testowac flushQueue() bez sieci ---
+   FAKE_HTTP steruje odpowiedzia serwera, FAKE_SENT zbiera to, co poszlo. */
+int FAKE_HTTP = 200;
+std::vector<std::string> FAKE_SENT;
+int pushEventRecord(const String& rec) {
+  FAKE_SENT.push_back(rec.s);
+  return FAKE_HTTP;
 }
 
 #include "logic.inc"
@@ -198,6 +211,69 @@ CHECK(oldest==1750000000UL+25, "najstarszy po nadpisaniu: %lu (oczekiwano %lu)",
 int guard = 0;
 while (queueCount() > 0 && guard++ < 500) queuePop();
 CHECK(queueCount()==0, "kolejka opróżniona: %u", queueCount());
+
+/* ================= 5b. ODRZUCONY WPIS NIE ZATYKA KOLEJKI (B3) ======= */
+head("Odrzucony wpis nie zatyka kolejki");
+prefs.wipe();
+awakeDeadlineMs = AWAKE_LIMIT_MS; FAKE_MILLIS = 0;
+rtcQueueDropped = 0; FAKE_SENT.clear(); FAKE_HTTP = 200;
+
+CHECK(trwaleOdrzucony(400), "HTTP 400 - reguly odrzucily, nigdy nie przejdzie");
+CHECK(trwaleOdrzucony(413), "HTTP 413 - pakiet za duzy, nigdy nie przejdzie");
+CHECK(!trwaleOdrzucony(401), "HTTP 401 - wygasly token, ponawiamy");
+CHECK(!trwaleOdrzucony(403), "HTTP 403 - brak uprawnien, ponawiamy");
+CHECK(!trwaleOdrzucony(404), "HTTP 404 - zly adres bazy, NIE kasujemy calej kolejki");
+CHECK(!trwaleOdrzucony(500), "HTTP 500 - awaria serwera, ponawiamy");
+CHECK(!trwaleOdrzucony(-1),  "brak sieci - ponawiamy");
+
+for (int i = 0; i < 3; i++) queuePush(makeRecordAt("open", 0, 1750000000u + i));
+CHECK(flushQueue() && queueCount()==0, "wszystko wyslane: %u zostalo", queueCount());
+CHECK(FAKE_SENT.size()==3, "poszly 3 wpisy (%d)", (int)FAKE_SENT.size());
+
+/* Sedno bledu: przy HTTP 400 stary kod wychodzil NIE zdejmujac wpisu,
+   wiec ten sam rekord blokowal wszystkie dawki za soba - na zawsze.  */
+prefs.wipe(); FAKE_SENT.clear(); rtcQueueDropped = 0;
+for (int i = 0; i < 3; i++) queuePush(makeRecordAt("open", 0, 1750000000u + i));
+FAKE_HTTP = 400;
+CHECK(flushQueue(), "odrzucenie nie melduje sie jako awaria sieci");
+CHECK(queueCount()==0, "zatkany wpis zdjety, kolejka drozna (%u)", queueCount());
+CHECK(rtcQueueDropped==3, "strata policzona i widoczna: %u", rtcQueueDropped);
+
+/* Awaria chwilowa dziala odwrotnie: NIC nie wolno wyrzucic. */
+prefs.wipe(); FAKE_SENT.clear(); rtcQueueDropped = 0;
+for (int i = 0; i < 3; i++) queuePush(makeRecordAt("open", 0, 1750000000u + i));
+FAKE_HTTP = 500;
+CHECK(!flushQueue(), "awaria serwera melduje niepowodzenie");
+CHECK(queueCount()==3, "przy awarii nie tracimy nic (%u)", queueCount());
+CHECK(rtcQueueDropped==0, "licznik strat nietkniety: %u", rtcQueueDropped);
+
+/* Rekord uszkodzony tez nigdy nie przejdzie - nie moze blokowac. */
+CHECK(rekordKompletny(makeRecordAt("open", 0, 1750000000u)), "pelny rekord przechodzi");
+CHECK(!rekordKompletny(String("cos;bez;pieciu;pol")), "brak piatego pola wykryty");
+CHECK(!rekordKompletny(String("")), "pusty rekord wykryty");
+
+/* ================= 5c. NIEUDANY ZAPIS DO NVS (B5) ================= */
+head("Nieudany zapis do pamieci nie udaje udanego");
+prefs.wipe(); rtcNvsFail = 0;
+prefs.failKeys.insert("q0");
+CHECK(!queuePush(makeRecordAt("open", 0, 1750000000u)), "queuePush melduje niepowodzenie");
+CHECK(queueCount()==0, "licznik nie podniesiony - brak wpisu-widma (%u)", queueCount());
+CHECK(rtcNvsFail==1, "awaria policzona: %u", rtcNvsFail);
+prefs.failKeys.clear();
+CHECK(queuePush(makeRecordAt("open", 0, 1750000001u)), "po ustaniu awarii zapis wchodzi");
+CHECK(queueCount()==1, "i tym razem licznik rosnie (%u)", queueCount());
+
+/* Wpis-widmo z czasow przed poprawka: licznik mowi "1", tresci brak.
+   Nieczytelny wpis na czele blokowalby wysylke w nieskonczonosc.     */
+prefs.wipe(); rtcQueueDropped = 0; FAKE_HTTP = 200; FAKE_SENT.clear();
+queuePush(makeRecordAt("open", 0, 1750000000u));
+prefs.str.erase("q0");                            /* tresc znika, licznik zostaje */
+CHECK(queueCount()==1, "przygotowanie: licznik mowi 1 (%u)", queueCount());
+CHECK(flushQueue(), "nieczytelny wpis nie zawiesza wysylki");
+CHECK(queueCount()==0, "i zostaje zdjety (%u)", queueCount());
+CHECK(rtcQueueDropped==1, "strata policzona: %u", rtcQueueDropped);
+
+prefs.failKeys.clear(); rtcNvsFail = 0; rtcQueueDropped = 0; FAKE_HTTP = 200;
 
 /* ================= 6. KOREKTA DRYFU ZEGARA ================= */
 head("Korekta znacznikow czasu po synchronizacji NTP");

@@ -85,10 +85,37 @@ RTC_DATA_ATTR bool     rtcArmedForClose = false;// spimy czekajac na ZAMKNIECIE
 RTC_DATA_ATTR uint8_t  rtcBattPct       = 255;  // wygladzony procent; 255 = brak historii
 RTC_DATA_ATTR uint8_t  rtcBattUp        = 0;    // ile odczytow z rzedu bylo wyzszych
 
+/* Dwa liczniki cichych strat. Ida do statusu, wiec aplikacja moze o nich
+   krzyknac - inaczej byloby to jedyne miejsce w projekcie, gdzie dane
+   znikaja w sposob z zalozenia niewykrywalny.                          */
+RTC_DATA_ATTR uint16_t rtcNvsFail       = 0;    // nieudane zapisy do pamieci trwalej
+RTC_DATA_ATTR uint16_t rtcQueueDropped  = 0;    // wpisy zdjete z kolejki bez wyslania
+
 /* =====================================================================
  *  STAN GLOBALNY
  * ===================================================================== */
 Preferences prefs;
+
+/* --- Zapisy do NVS, ktore nie udaja, ze sie udaly ---------------------
+   putString() i putUShort() zwracaja liczbe zapisanych bajtow, a ZERO gdy
+   zapis przepadl (pamiec pelna, uszkodzony wpis). Kod wyrzucal te wartosc
+   do kosza, wiec nieudany zapis wygladal dokladnie tak samo jak udany -
+   a w kolejce oznaczal cicha utrate dawki. Rodzina bledu 3.5.
+
+   Stoja TUTAJ, przed pierwszym uzyciem - reszta pliku czyta je od gory.  */
+bool nvsPutStr(const char* key, const String& val) {
+  if (prefs.putString(key, val) > 0) return true;
+  if (rtcNvsFail < 65535) rtcNvsFail++;
+  LOG("[NVS] ZAPIS NIEUDANY: %s\n", key);
+  return false;
+}
+
+bool nvsPutU16(const char* key, uint16_t val) {
+  if (prefs.putUShort(key, val) > 0) return true;
+  if (rtcNvsFail < 65535) rtcNvsFail++;
+  LOG("[NVS] ZAPIS NIEUDANY: %s\n", key);
+  return false;
+}
 
 int    batteryPercentage    = 0;    // po wygladzeniu - to trafia do aplikacji
 int    batteryRawPercentage = 0;    // prosto z krzywej, do diagnostyki
@@ -592,7 +619,7 @@ void loadSchedule() {
 
 void saveSchedule(const String& s, int16_t tz) {
   prefs.begin(NVS_NAMESPACE, false);
-  prefs.putString("sched", s);
+  nvsPutStr("sched", s);
   prefs.putShort("tz", tz);
   prefs.end();
   strncpy(rtcSchedule, s.c_str(), sizeof(rtcSchedule) - 1);
@@ -712,13 +739,14 @@ void lidLogAdd(bool otwarte) {
     snprintf(linia, sizeof(linia), "%lu;%u;%s",
              (unsigned long)(rtcTimeValid ? time(nullptr) : 0),
              otwarte ? 1u : 0u, wakeName(wakeReason));
-    prefs.putString(klucz, linia);
-    prefs.putUShort("llCnt", cnt + 1);
+    /* Licznik do gory tylko wtedy, gdy tresc naprawde weszla - inaczej
+       w dzienniku siedzialby pusty slot udajacy zapis.               */
+    if (nvsPutStr(klucz, linia)) nvsPutU16("llCnt", cnt + 1);
     LOG("[LID] %s (wpis %u/%d)\n", otwarte ? "OTWARTE" : "zamkniete",
         cnt + 1, LIDLOG_SLOTS);
   } else {
     uint16_t zgubione = prefs.getUShort("llLost", 0);
-    if (zgubione < 65000) prefs.putUShort("llLost", zgubione + 1);
+    if (zgubione < 65000) nvsPutU16("llLost", zgubione + 1);
     LOG("[LID] dziennik pelny - zgubionych %u\n", zgubione + 1);
   }
   prefs.end();
@@ -767,8 +795,8 @@ void lidLogClear() {
     snprintf(klucz, sizeof(klucz), "ll%u", i);
     prefs.remove(klucz);
   }
-  prefs.putUShort("llCnt", 0);
-  prefs.putUShort("llLost", 0);
+  nvsPutU16("llCnt", 0);
+  nvsPutU16("llLost", 0);
   prefs.end();
   LOG("[LID] dziennik wyslany i skasowany (%u wpisow)\n", cnt);
 }
@@ -843,20 +871,27 @@ uint32_t secondsToNextSlot(time_t utc) {
  *  5.  KOLEJKA OFFLINE  (Preferences / NVS - pierscien)
  *      Rekord: "ts;type;batt;volt;slot"
  * ===================================================================== */
-void queuePush(const String& rec) {
+bool queuePush(const String& rec) {
   prefs.begin(NVS_NAMESPACE, false);
   uint16_t head  = prefs.getUShort("qh", 0);
   uint16_t count = prefs.getUShort("qc", 0);
   char key[8];
   snprintf(key, sizeof(key), "q%u", (unsigned)((head + count) % QUEUE_CAPACITY));
-  prefs.putString(key, rec);
-  if (count < QUEUE_CAPACITY) {
-    prefs.putUShort("qc", count + 1);
-  } else {                                  // pelno -> nadpisz najstarszy
-    prefs.putUShort("qh", (head + 1) % QUEUE_CAPACITY);
+  /* Licznik podnosimy TYLKO wtedy, gdy tresc naprawde weszla. Inaczej w
+     kolejce siedzialby wpis-widmo: queuePeek() nie ma czego odczytac,
+     wysylka staje w miejscu, a licznik nigdy nie schodzi do zera.     */
+  const bool ok = nvsPutStr(key, rec);
+  if (ok) {
+    if (count < QUEUE_CAPACITY) {
+      nvsPutU16("qc", count + 1);
+    } else {                                // pelno -> nadpisz najstarszy
+      nvsPutU16("qh", (head + 1) % QUEUE_CAPACITY);
+    }
   }
   prefs.end();
-  LOG("[QUE] zapisano offline: %s (w kolejce %u)\n", rec.c_str(), count + 1);
+  if (ok) LOG("[QUE] zapisano offline: %s (w kolejce %u)\n", rec.c_str(), count + 1);
+  else    LOG("[QUE] NIE UDALO SIE zapisac: %s\n", rec.c_str());
+  return ok;
 }
 
 uint16_t queueCount() {
@@ -886,10 +921,23 @@ void queuePop() {
   uint16_t head = prefs.getUShort("qh", 0);
   uint16_t count = prefs.getUShort("qc", 0);
   if (count > 0) {
-    prefs.putUShort("qh", (head + 1) % QUEUE_CAPACITY);
-    prefs.putUShort("qc", count - 1);
+    nvsPutU16("qh", (head + 1) % QUEUE_CAPACITY);
+    nvsPutU16("qc", count - 1);
   }
   prefs.end();
+}
+
+/* Zdejmuje wpis, ktorego NIGDY nie da sie wyslac.
+
+   Swiadomie lamie zasade "nic nie kasujemy przed potwierdzonym 2xx".
+   Zasada chroni przed utrata danych przy chwilowej awarii - a tu chodzi
+   o wpis, ktorego baza nie przyjmie ani teraz, ani za tydzien. Zostawiony
+   na czele blokuje WSZYSTKO za soba: dawki pietrza sie, az pierscien 120
+   wpisow zacznie nadpisywac najstarsze. Tracimy jeden wpis zamiast calej
+   kolejki - i tracimy go GLOSNO, bo licznik jedzie do statusu.        */
+void queueDrop() {
+  queuePop();
+  if (rtcQueueDropped < 65535) rtcQueueDropped++;
 }
 
 /* --- Korekta dryfu zegara po dlugim okresie offline ---------------------
@@ -941,7 +989,7 @@ void queueShiftTimestamps(int32_t delta) {
     if (p <= 0) continue;
     uint32_t ts = (uint32_t)rec.substring(0, p).toInt();
     if (ts < 1700000000UL) continue;                 // brak czasu - nie ruszamy
-    prefs.putString(key, String((unsigned long)(ts + delta)) + rec.substring(p));
+    nvsPutStr(key, String((unsigned long)(ts + delta)) + rec.substring(p));
     fixed++;
   }
   prefs.end();
@@ -1132,7 +1180,7 @@ bool firebaseSignIn() {
   if (rtcTimeValid) {
     rtcTokenExp = (uint32_t)time(nullptr) + zyje;
     prefs.begin(NVS_NAMESPACE, false);
-    prefs.putString("tok", idToken);
+    nvsPutStr("tok", idToken);
     prefs.end();
   }
   LOG("[FB ] zalogowano, token ma %d znakow\n", idToken.length());
@@ -1186,13 +1234,24 @@ int rtdbSend(const char* method, const String& path, const String& body, String*
   return code;
 }
 
-/* Wysyla pojedyncze zdarzenie. rec = "ts;type;batt;volt;slot" */
-bool pushEventRecord(const String& rec) {
+/* Czy rekord ma komplet pieciu pol? Bez tego nie ma czego wyslac, a
+   ponawianie go w nieskonczonosc niczego nie naprawi.                  */
+bool rekordKompletny(const String& rec) {
+  int p = -1;
+  for (int i = 0; i < 4; i++) { p = rec.indexOf(';', p + 1); if (p < 0) return false; }
+  return true;
+}
+
+/* Wysyla pojedyncze zdarzenie. rec = "ts;type;batt;volt;slot"
+   Zwraca kod HTTP, a nie samo tak/nie - dzwoniacy musi umiec odroznic
+   "sprobuj pozniej" od "to nie przejdzie nigdy".                       */
+int pushEventRecord(const String& rec) {
+  /* Uszkodzony rekord melduje sie tak samo jak odrzucenie przez baze. */
+  if (!rekordKompletny(rec)) return 400;
   int p1 = rec.indexOf(';');
   int p2 = rec.indexOf(';', p1 + 1);
   int p3 = rec.indexOf(';', p2 + 1);
   int p4 = rec.indexOf(';', p3 + 1);
-  if (p4 < 0) return false;
 
   JsonDocument doc;
   doc["ts"]      = (uint32_t)rec.substring(0, p1).toInt();
@@ -1206,7 +1265,7 @@ bool pushEventRecord(const String& rec) {
   serializeJson(doc, body);
   int code = rtdbSend("POST", "/devices/" DEVICE_ID "/events.json", body);
   LOG("[FB ] push event HTTP %d : %s\n", code, body.c_str());
-  return code == 200;
+  return code;
 }
 
 /* Sam stan wieczka, wysylany natychmiast.
@@ -1245,6 +1304,9 @@ bool pushStatus() {
   doc["fw"]       = FW_VERSION;
   doc["boots"]    = rtcBootCount;
   doc["queued"]   = queueCount();
+  /* Ciche straty przestaja byc ciche. Aplikacja krzyczy, gdy > 0.      */
+  doc["dropped"]  = rtcQueueDropped;
+  doc["nvsFail"]  = rtcNvsFail;
   doc["charging"] = rtcCharging;            // zywy podglad ladowania w aplikacji
   /* Na tych dwoch polach aplikacja opiera szacunek "ile jeszcze". Sam
      procent podczas ladowania nic nie mowi - napiecie pokazuje wtedy
@@ -1359,16 +1421,39 @@ void fetchConfig() {
    Kazdy wpis kasujemy dopiero po potwierdzeniu HTTP 200, wiec zerwane
    polaczenie w polowie nie gubi danych. Przerwiemy tez, gdy czuwanie
    trwa juz za dlugo - reszta poleci przy nastepnym wybudzeniu.        */
+/* Czy ten kod HTTP znaczy "ten wpis nie zostanie przyjety NIGDY"?
+   400 - reguly odrzucily tresc, 413 - pakiet za duzy. Swiadomie NIE ma
+   tu 401/403 (wygasly token - po odswiezeniu przejdzie), ani 404 (zly
+   adres bazy odrzucalby CALA kolejke), ani 5xx i bledow sieci.        */
+bool trwaleOdrzucony(int code) {
+  return code == 400 || code == 413;
+}
+
 bool flushQueue() {
   String rec;
   int guard = QUEUE_CAPACITY + 2;
-  while (queuePeek(rec) && guard-- > 0) {
+  while (guard-- > 0) {
+    if (!queuePeek(rec)) {
+      if (queueCount() == 0) return true;
+      /* Licznik mowi, ze cos w kolejce jest, ale nie da sie tego
+         odczytac. Nieczytelny wpis zostawiony na czele zatrzymalby
+         wysylke na zawsze - a licznik nigdy nie zszedlby do zera.    */
+      LOGLN("[QUE] wpis nieczytelny - zdejmuje");
+      queueDrop();
+      continue;
+    }
     if (awakeTooLong()) {
       LOGLN("[QUE] limit czasu czuwania - dokoncze przy nastepnym polaczeniu");
       return false;
     }
-    if (!pushEventRecord(rec)) return false;
-    queuePop();
+    int code = pushEventRecord(rec);
+    if (code == 200) { queuePop(); continue; }
+    if (trwaleOdrzucony(code)) {
+      LOG("[QUE] odrzucony na stale (HTTP %d) - zdejmuje: %s\n", code, rec.c_str());
+      queueDrop();
+      continue;
+    }
+    return false;                 // chwilowa awaria - sprobujemy pozniej
   }
   return true;
 }
@@ -1471,7 +1556,7 @@ void reportEvent(const char* type, int slot) {
       pushLidState();
       fetchConfig();
       flushQueue();
-      if (pushEventRecord(rec)) {
+      if (pushEventRecord(rec) == 200) {
         note("wyslane");
         pushStatus();
         rtcRetryCount = 0;                 // sukces - kasujemy backoff
@@ -1756,8 +1841,7 @@ void logbookAdd(const char* co) {
   snprintf(linia, sizeof(linia), "%lu|%s|%s|%d|%u",
            (unsigned long)(rtcTimeValid ? time(nullptr) : 0),
            wakeName(wakeReason), co, batteryPercentage, queueCount());
-  prefs.putString(klucz, linia);
-  prefs.putUShort("lbIdx", (idx + 1) % (LOGBOOK_SLOTS * 8));
+  if (nvsPutStr(klucz, linia)) nvsPutU16("lbIdx", (idx + 1) % (LOGBOOK_SLOTS * 8));
   prefs.end();
 }
 

@@ -15,6 +15,7 @@
  * ===================================================================== */
 import * as A from "./app_module.mjs";
 import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
@@ -135,6 +136,19 @@ head("Wartosci skrajne");
     2147483647
   ];
   porownaj("skrajne znaczniki czasu", lista, 120);
+}
+
+/* ═══════════ 7. LICZNIKI STRAT ═══════════ */
+head("Liczniki strat: pudelko wysyla, aplikacja czyta");
+{
+  const fw  = readFileSync(join(here, "..", "firmware", "PillBox", "PillBox.ino"), "utf8");
+  const app = readFileSync(join(here, "..", "index.html"), "utf8");
+  /* Nazwy pol musza sie zgadzac po obu stronach. Rozjazd oznacza
+     ostrzezenie, ktore nigdy sie nie zapali - czyli ciche straty wracaja. */
+  for (const pole of ["dropped", "nvsFail"]) {
+    check(fw.includes(`doc["${pole}"]`), `pudelko wysyla w statusie: ${pole}`);
+    check(new RegExp(`st\\.${pole}`).test(app), `aplikacja czyta ze statusu: ${pole}`);
+  }
 }
 
 console.log("\n──────────────────────────────────────");
