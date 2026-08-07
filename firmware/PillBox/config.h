@@ -34,8 +34,8 @@
 
 /*  Haslo konta pillbox01@device.local z Firebase Authentication.
  *
- *  UWAGA: ten plik NIE MOZE trafic na GitHuba. Na strone wrzucasz wylacznie
- *  zawartosc katalogu app/ - config.h zostaje na Twoim dysku.               */
+ *  UWAGA: ten plik JEST w repo, ale wylacznie z placeholderem powyzej.
+ *  Wersji z wpisanym haslem NIGDY nie wrzucaj z powrotem na GitHuba.       */
 #define DEVICE_PASSWORD     "TUTAJ_WPISZ_HASLO"
 
 /* ---------------------------------------------------------------------
@@ -131,7 +131,7 @@
  *     oznaczony jako pominiety, dopoki naprawde nie minie okno.
  *
  *     UWAGA: ta sama liczba musi byc ustawiona w aplikacji
- *     (app/index.html, stala DAY_START_HOUR). Inaczej pudelko i telefon
+ *     (index.html w korzeniu repo, stala DAY_START_HOUR). Inaczej pudelko
  *     liczylyby doby inaczej i kalendarz by sie rozjechal.
  *
  *     Dopuszczalny zakres 0-6. Wartosc 0 = klasyczna polnoc.
@@ -344,7 +344,7 @@
 #define REPORT_BOOT_EVENT   0
 
 /* ---------------------------------------------------------------------
- * 7f. DZIENNIK WIECZKA  -  TYMCZASOWE, do testu terenowego
+ * 7i. DZIENNIK WIECZKA  -  TYMCZASOWE, do testu terenowego
  *
  *     Zapisuje kazda zmiane stanu kontaktronu (otwarcie i zamkniecie),
  *     zeby sprawdzic, czy pudelko melduje otwarcia, ktorych nikt nie
