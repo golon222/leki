@@ -302,6 +302,54 @@ Uczciwie, bo to ma znaczenie przy ocenie ryzyka:
 5. **Log z autotestu** — użytkownik zgłaszał przerywanie testu; w 1.21.1 dodano
    `etapTestu()` logujące każdy etap z czasem. Czeka na log z monitora portu.
 
+6. **Aktualizacja firmware przez WiFi (OTA)** — *poproszone wprost, świadomie
+   odłożone.* Kuba, 2026-08-07: **wracamy do tego, gdy B1 i B2 będą zrobione.**
+
+   **Blokada techniczna jest jedna i konkretna.** Podział pamięci to dziś
+   `Huge APP (3MB No OTA/1MB SPIFFS)` — jedna partycja programu:
+
+   ```
+   huge_app  (dziś):  app0 = 3 MB               ← OTA niemożliwe
+   min_spiffs      :  app0 = 1,875 MB
+                      app1 = 1,875 MB           ← OTA możliwe
+   ```
+
+   ESP32 przy OTA zapisuje nowy program do **drugiej** partycji i dopiero
+   potem się na nią przełącza. Drugiej nie ma, więc nie ma dokąd pisać.
+   Firmware waży 1,21 MB, czyli **61%** slotu w `min_spiffs` — mieści się
+   z zapasem ~760 kB.
+
+   **Czego NIE trzeba się bać:** OTA na ESP32 ma rollback
+   (`esp_ota_mark_app_valid_cancel_rollback`) — jeśli nowy program nie
+   potwierdzi, że żyje, bootloader **sam** wraca do poprzedniego. Pod tym
+   względem jest to **bezpieczniejsze niż dzisiejsze wgrywanie kablem**,
+   które nie ma żadnego odwrotu.
+
+   **Czego trzeba:**
+   - **Jedno wgranie kablem i tak jest konieczne**, żeby zmienić podział.
+     `nvs` leży pod tym samym adresem w obu podziałach, więc kolejka dawek
+     i token to przeżyją — o ile nie zaznaczy się „Erase All Flash Before
+     Sketch Upload".
+   - **Tylko na ładowarce.** Pudełko budzi się na sekundy, a pobranie 1,2 MB
+     to kilkadziesiąt sekund z włączonym radiem. Na kablu i tak czuwa
+     godzinami (`petlaLadowania`, D8) i prąd jest za darmo. Flaga „jest nowa
+     wersja" może siedzieć w `config`, które `fetchConfig()` już czyta.
+   - Plik `.bin` może serwować **to samo GitHub Pages**, na którym stoi
+     aplikacja. `rtdbSend()` już mówi po HTTPS.
+
+   **Dlaczego dopiero po B1 i B2** — nie ze strachu przed OTA, tylko przez
+   kolejność. **B1** oznacza, że kalendarz potrafi kłamać o wziętej dawce;
+   to problem z prawdą o leku, a OTA to wygoda. **B2** to niezbadane
+   przerywanie autotestu — czyli nie wiemy jeszcze, dlaczego pudełko czasem
+   nie dochodzi do końca operacji z siecią, a OTA jest właśnie długą
+   operacją z siecią. Do tego firmware z tego repo **nigdy nie chodził na
+   płytce**: kompiluje się, ale runtime jest niezweryfikowany.
+
+   **Tańszy środek, gdyby chodziło tylko o wygodę:** ESP Web Tools — strona
+   wgrywająca gotowy `.bin` przez USB z przeglądarki, bez Arduino IDE.
+   Zero zmian w firmware, ryzyko takie jak dziś. Haczyk: Chrome na
+   MacBooku tak, **iPhone nie** — Safari nie ma WebSerial.
+
 ---
 
 ## 9. Jak rozmawiać z Kubą o tym projekcie
