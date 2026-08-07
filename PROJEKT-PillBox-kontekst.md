@@ -235,7 +235,7 @@ którego szukasz.
 - `tests/crosscheck_days.cpp` + `test_crosscheck.mjs` — zgodność liczenia dób.
 - `bash tests/run_all.sh` uruchamia całość.
 
-**Stan: 220 + 51 firmware, 482 + 81 aplikacja (×6 pór doby), 17 zgodności,
+**Stan: 247 + 51 firmware, 487 + 81 aplikacja (×6 pór doby), 21 zgodności,
 190 kontroli audytu — 0 błędów.**
 
 ---

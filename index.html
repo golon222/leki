@@ -928,7 +928,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-07.4";
+const APP_VERSION = "2026-08-07.5";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -2599,10 +2599,33 @@ function ostrzReguly(){
        </div>` : "";
 }
 
+/* Pudełko liczy dwie rzeczy, których nie da się odzyskać: wpisy zdjęte z
+   kolejki bez wysłania (odrzucone przez reguły albo uszkodzone) i nieudane
+   zapisy do pamięci trwałej. Oba oznaczają, że jakieś zdarzenie przepadło.
+   Bez tego komunikatu byłaby to jedyna strata danych w projekcie, której
+   nie widać nigdzie — ani w kalendarzu, ani w historii.                  */
+function ostrzStraty(){
+  const st = ostatniStatus || {};
+  const dropped = st.dropped || 0, nvs = st.nvsFail || 0;
+  if (!dropped && !nvs) return "";
+  const czesci = [];
+  if (dropped) czesci.push(`<b>${dropped}</b> ${dropped === 1 ? "zdarzenie zostało odrzucone"
+                                                             : "zdarzeń zostało odrzuconych"} przez bazę`);
+  if (nvs)     czesci.push(`<b>${nvs}</b> ${nvs === 1 ? "zapis do pamięci pudełka się nie udał"
+                                                      : "zapisów do pamięci pudełka się nie udało"}`);
+  return `<div style="margin-bottom:10px;padding:10px;border-radius:12px;
+       border:1px solid var(--bad);background:rgba(248,113,113,.10)">
+       <b style="color:var(--bad)">Pudełko zgłasza utratę danych</b><br>
+       <span class="dim2">${czesci.join(" · ")}. Kalendarz może nie mieć kompletu
+       zdarzeń z tego okresu — sprawdź dni, których dotyczy, i uzupełnij ręcznie.
+       Licznik zeruje się po odłączeniu zasilania.</span>
+     </div>`;
+}
+
 function renderOstrzezenia(){
   const el = document.getElementById("setWarn");
   if (!el) return;
-  el.innerHTML = ostrzKolejka() + ostrzReguly();
+  el.innerHTML = ostrzKolejka() + ostrzReguly() + ostrzStraty();
   el.classList.toggle("hide", !el.innerHTML.trim());
 }
 
@@ -2746,6 +2769,7 @@ function renderStatus(st){
   ostatniStatus = st;
   const chip = document.getElementById("batChip");
   renderOpenWarn(st);
+  renderOstrzezenia();          // liczniki strat przychodzą właśnie w statusie
 
   /* Pudełko jeszcze się nie odezwało — zamiast samotnej kreski i pustego
      paska pokazujemy zrozumiały komunikat.                             */

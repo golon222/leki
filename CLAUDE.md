@@ -23,7 +23,7 @@ bash tests/run_all.sh
 ```
 
 Musi przejść przed zmianą i po zmianie. Stan wyjściowy:
-**220 + 51 firmware, 482 + 81 aplikacja (×6 pór doby), 17 zgodności,
+**247 + 51 firmware, 487 + 81 aplikacja (×6 pór doby), 21 zgodności,
 190 kontroli audytu — 0 błędów.**
 
 Testy pracują na **prawdziwym kodzie**, nie na kopii: `tests/extract.py` wycina
@@ -50,6 +50,10 @@ Jeśli zmieniasz nazwę wyciąganej funkcji, popraw też `extract.py`.
    ekran pokazuje sukces, dane nie docierają. Test tego pilnuje.
 6. **Nic nie kasujemy z pamięci pudełka przed potwierdzonym 2xx.**
    Kolejka, flagi statusu, dziennik wieczka. Rodzina błędu 3.5.
+   **Jeden wyjątek, świadomy:** `queueDrop()` zdejmuje wpis, którego baza
+   nie przyjmie **nigdy** (HTTP 400/413 albo rekord uszkodzony) — zostawiony
+   blokował wszystkie dawki za sobą. Strata idzie na licznik `dropped`
+   w statusie, więc aplikacja o niej krzyczy. Powód w `DECYZJE.md` D13.
 7. **Do gałęzi `events` nie dokładamy pól.** Reguła `$other: false` odrzuca
    **cały** wpis, gdy trafi w nim nieznane pole — czyli otwarcie pudełka
    przepada w całości. Nowe dane idą do nowej gałęzi.

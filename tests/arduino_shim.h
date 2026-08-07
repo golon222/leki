@@ -13,6 +13,7 @@
 #include <ctime>
 #include <string>
 #include <map>
+#include <set>
 #include <algorithm>
 
 /* ---------- sterowany czas ---------- */
@@ -80,10 +81,19 @@ public:
     auto it = str.find(k); return String(it == str.end() ? std::string(d) : it->second); }
   String getString(const char* k, const String& d) {
     auto it = str.find(k); return it == str.end() ? d : String(it->second); }
-  void putString(const char* k, const String& v) { str[k] = v.s; }
+  /* Prawdziwe NVS zwraca liczbe zapisanych bajtow, a ZERO gdy zapis sie
+     nie udal. Atrapa musi to odwzorowac, inaczej testy nie dotknelyby
+     jedynej sciezki, w ktorej dane znikaja po cichu.
+     failKeys pozwala udawac awarie konkretnego klucza.                 */
+  std::set<std::string> failKeys;
+  size_t putString(const char* k, const String& v) {
+    if (failKeys.count(k)) return 0;
+    str[k] = v.s; return v.s.size() + 1; }
   unsigned short getUShort(const char* k, unsigned short d = 0) {
     auto it = us.find(k); return it == us.end() ? d : it->second; }
-  void putUShort(const char* k, unsigned short v) { us[k] = v; }
+  size_t putUShort(const char* k, unsigned short v) {
+    if (failKeys.count(k)) return 0;
+    us[k] = v; return sizeof(unsigned short); }
   /* Daty ladowania trzymamy jako 32-bitowe znaczniki czasu. */
   std::map<std::string, unsigned int> ui;
   unsigned int getUInt(const char* k, unsigned int d = 0) {
@@ -101,7 +111,8 @@ public:
   bool remove(const char* k) {
     bool bylo = str.erase(k) || us.erase(k) || sh.erase(k) || ul.erase(k) || ui.erase(k);
     return bylo; }
-  void wipe() { str.clear(); us.clear(); sh.clear(); ul.clear(); ui.clear(); }
+  void wipe() { str.clear(); us.clear(); sh.clear(); ul.clear(); ui.clear();
+                failKeys.clear(); }
 };
 
 /* ---------- ADC / GPIO ---------- */

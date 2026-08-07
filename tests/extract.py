@@ -7,6 +7,8 @@ SRC  = pathlib.Path(__file__).parent.parent / "firmware" / "PillBox" / "PillBox.
 DEST = pathlib.Path(__file__).parent / "logic.inc"
 
 WANTED = [
+    # Pomocniki NVS musza byc PRZED wszystkim, co z nich korzysta.
+    "nvsPutStr", "nvsPutU16",
     "readBatteryRaw", "battPercentFromCurve", "resetBatteryFilter",
     "battSmooth", "readBattery", "zapiszKoniecLadowania", "trackCharging",
     "parseSchedule", "slotMinutes", "localDayNumber", "localMinutesOfDay",
@@ -14,11 +16,13 @@ WANTED = [
     "openWarnSecondsLeft",
     "wakeName", "lidLogAdd", "lidLogCount", "lidLogJson", "lidLogClear",
     "trackBoxOpen",
-    "przesunZnaczniki", "queuePush", "queueCount", "queuePeek", "queuePop", "queueShiftTimestamps",
+    # awakeTooLong musi byc przed flushQueue, ktore go wola.
+    "awakeTooLong", "extendAwake",
+    "przesunZnaczniki", "queuePush", "queueCount", "queuePeek", "queuePop", "queueDrop",
+    "queueShiftTimestamps", "rekordKompletny", "trwaleOdrzucony", "flushQueue",
     "makeRecordAt", "makeRecord",
     "loadDayMarkers", "setTakenDay", "setRolloverDay",
     "checkDayRollover",
-    "awakeTooLong", "extendAwake",
     "wartoZapisac", "logbookAdd", "jsonEscape", "logbookJson",
 ]
 
