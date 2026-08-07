@@ -532,8 +532,12 @@ head("Legenda kalendarza");
 check(/czas na pomiar INR/.test(html), "legenda kalendarza tlumaczy nowa ikonke");
 check(/legend[\s\S]{0,900}circle cx="6" cy="6" r="4\.4"/.test(html),
       "legenda uzywa TEJ SAMEJ ikonki co znacznik w kalendarzu");
-check(/mija Twój odstęp między[\s\S]{0,40}pomiarami INR/.test(html),
-      "pod legenda jest zdanie wyjasniajace, skad ten dzien sie bierze");
+/* Wyjasnienie stoi przy USTAWIENIU odstepu, nie pod kalendarzem - tam
+   zabieralo miejsce przy kazdym spojrzeniu, a potrzebne jest raz.        */
+check(!/Pomarańczowy znak pokazuje dzień/.test(html),
+      "pod kalendarzem NIE ma juz akapitu wyjasniajacego");
+check(/Termin liczy się od ostatniego wyniku[\s\S]{0,80}pomarańczowy znak/.test(html),
+      "wyjasnienie jest przy ustawieniu odstepu");
 
 check(!/id="inrDate"[\s\S]{0,200}flex:1/.test(html), "stary uklad flex przy dacie usuniety");
 
