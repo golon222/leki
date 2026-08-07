@@ -1263,8 +1263,24 @@ int pushEventRecord(const String& rec) {
 
   String body;
   serializeJson(doc, body);
-  int code = rtdbSend("POST", "/devices/" DEVICE_ID "/events.json", body);
-  LOG("[FB ] push event HTTP %d : %s\n", code, body.c_str());
+  /* Odpowiedz bazy zbieramy TYLKO po to, zeby przy niepowodzeniu bylo
+     wiadomo, co sie stalo.
+
+     Cala decyzja D13 stoi na zalozeniu, ze wpis odrzucony przez reguly
+     wraca kodem 400 - bo tylko wtedy trwaleOdrzucony() zdejmie go
+     z kolejki. Tego zalozenia nikt nigdy nie zmierzyl. Jesli baza
+     odpowiada tu 401 albo 403, wpis nie zostanie zdjety NIGDY, a przy
+     okazji kazda proba skasuje token i wymusi ponowne logowanie.
+     Log z pudelka rozstrzyga to jednym zdaniem, zamiast kolejnej
+     hipotezy w dokumentacji.                                          */
+  String odp;
+  int code = rtdbSend("POST", "/devices/" DEVICE_ID "/events.json", body, &odp);
+  if (code == 200) {
+    LOG("[FB ] push event HTTP 200 : %s\n", body.c_str());
+  } else {
+    LOG("[FB ] push event HTTP %d : %s\n     odpowiedz bazy: %s\n",
+        code, body.c_str(), odp.c_str());
+  }
   return code;
 }
 

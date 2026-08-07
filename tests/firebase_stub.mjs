@@ -46,11 +46,23 @@ const setPath = (obj, path, val) => {
   else cur[parts[parts.length-1]] = val;
 };
 
-/* Zachowanie bazy wedlug __db.tryb. Tryb "wisi" odwzorowuje Firebase
-   offline: obietnica NIE jest odrzucana, tylko nigdy sie nie konczy. */
+/* Blad w ksztalcie tego, co naprawde rzuca Firebase przy odmowie regul.
+   Aplikacja rozroznia "baza odmowila" od "bazy nie ma" po tym wlasnie
+   ksztalcie, wiec atrapa musi go odwzorowac, a nie wymyslic wlasny. */
+function bladOdmowy(szczegoly){
+  const e = new Error("PERMISSION_DENIED: Permission denied — " + szczegoly);
+  e.code = "PERMISSION_DENIED";
+  return e;
+}
+
+/* Zachowanie bazy wedlug __db.tryb.
+     "blad"   - baza nieosiagalna (siec, timeout) - NIE odmowa
+     "odmowa" - baza osiagalna i odmawia (np. wygasla sesja)
+     "wisi"   - Firebase offline: obietnica nigdy sie nie konczy (D1) */
 function wedlugTrybu(){
-  if (__db.tryb === "wisi") return new Promise(() => {});
-  if (__db.tryb === "blad") return Promise.reject(new Error("PERMISSION_DENIED: baza odrzucila zapis"));
+  if (__db.tryb === "wisi")   return new Promise(() => {});
+  if (__db.tryb === "odmowa") return Promise.reject(bladOdmowy("tryb testu"));
+  if (__db.tryb === "blad")   return Promise.reject(new Error("baza nie odpowiada"));
   return Promise.resolve();
 }
 
@@ -59,7 +71,7 @@ function waliduj(path, val){
   const w = sprawdzZapis(REGULY, path, val);
   if (!w.ok) {
     __db.odrzucone.push({ path, val, bledy: w.bledy });
-    throw new Error("REGULY ODRZUCILY ZAPIS -> " + opiszBledy(w.bledy));
+    throw bladOdmowy("REGULY ODRZUCILY ZAPIS -> " + opiszBledy(w.bledy));
   }
 }
 

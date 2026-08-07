@@ -1044,12 +1044,14 @@ head("Token z pamieci: kiedy wolno mu zaufac");
   rtcTokenExp = (uint32_t)FAKE_NOW - 1;
   CHECK(!tokenZPamieci(), "token juz wygasly jest odrzucany");
 
-  /* TU JEST DZIURA, i to cicha.
-     Bez wiarygodnego zegara nie da sie ocenic waznosci - tokenZPamieci()
-     slusznie odmawia. Ale firebaseSignIn() w tej samej sytuacji ZWRACA
-     TRUE, jesli token siedzi juz w RAM. Martwy token przechodzi dalej,
-     kazdy push wraca 401 i kolejka stoi. Ponizej pilnujemy obu polowek
-     tego zachowania osobno, zeby zmiana ktorejkolwiek byla widoczna. */
+  /* Bez wiarygodnego zegara nie da sie ocenic waznosci - tokenZPamieci()
+     odmawia. firebaseSignIn() w tej samej sytuacji ufa tokenowi, ktory
+     siedzi juz w RAM, wiec martwy token moze przejsc dalej i spalic
+     JEDNO zapytanie. Nic wiecej: rtdbSend() na 401/403 wola
+     zapomnijToken(), ktory zeruje rtcTokenExp i kasuje kopie z NVS -
+     wiec najblizsze firebaseSignIn() loguje sie haslem od nowa.
+     Sprawdzamy obie polowki osobno, zeby ta samonaprawa nie zniknela
+     niezauwazona.                                                    */
   idToken = "";
   rtcTimeValid = false; rtcTokenExp = (uint32_t)FAKE_NOW + 3600;
   CHECK(!tokenZPamieci(), "bez wiarygodnego zegara token z NVS nie jest uzywany");
@@ -1076,12 +1078,11 @@ head("Token z pamieci: kiedy wolno mu zaufac");
         (unsigned long)rtcTokenExp);
 }
 
-head("Kolejka pod nieustajacym 401 (trzeci sposob na zatkanie)");
+head("Kolejka pod nieustajacym 401");
 {
   /* 401 NIE jest na liscie trwale odrzuconych (D13) - i sluszne, bo po
-     odswiezeniu tokenu wpis przejdzie. Ale jesli odswiezenie nie
-     nastapi, dzieje sie to: kolejka stoi, nic nie ginie i nic nie
-     krzyczy. Test przypina ten stan, zeby byl widoczny w liczbach. */
+     odswiezeniu tokenu wpis przejdzie. Tu sprawdzamy druga polowe tej
+     umowy: dopoki token nie wroci, NIC nie ma prawa zginac.         */
   prefs.wipe();
   rtcTimeValid = true;
   rtcQueueDropped = 0; rtcNvsFail = 0;
@@ -1100,8 +1101,7 @@ head("Kolejka pod nieustajacym 401 (trzeci sposob na zatkanie)");
   for (int i = 0; i < 5; i++) flushQueue();
   CHECK(queueCount() == 5, "po pieciu wybudzeniach nadal 5 dawek (%u)", queueCount());
   CHECK(rtcQueueDropped == 0 && rtcNvsFail == 0,
-        "zaden licznik w statusie nie rosnie - aplikacja NIE MA o czym "
-        "krzyknac (znane ograniczenie, B8 w DECYZJE)");
+        "i nadal nic nie jest liczone jako strata - bo nic nie stracono");
 
   /* A po odswiezeniu tokenu wszystko ma przejsc bez straty - to jest
      wlasnie zalozenie, na ktorym stoi decyzja D13.                   */

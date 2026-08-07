@@ -23,7 +23,7 @@ bash tests/run_all.sh
 ```
 
 Musi przejść przed zmianą i po zmianie. Stan wyjściowy:
-**298 + 51 firmware, 487 (×6 pór doby) + 81 + 38 aplikacja, 40 zgodności,
+**298 + 51 firmware, 487 (×6 pór doby) + 81 + 46 aplikacja, 40 zgodności,
 55 reguł bazy, 195 kontroli audytu — 0 błędów.**
 
 Testy pracują na **prawdziwym kodzie**, nie na kopii: `tests/extract.py` wycina
@@ -34,7 +34,8 @@ Jeśli zmieniasz nazwę wyciąganej funkcji, popraw też `extract.py`.
 prawdziwym `database.rules.json`** i umie zawieść na żądanie:
 
 ```js
-__db.tryb = "blad";   // baza odrzuca
+__db.tryb = "blad";     // baza nieosiagalna (siec, timeout)
+__db.tryb = "odmowa";   // baza osiagalna i odmawia (PERMISSION_DENIED)
 __db.tryb = "wisi";   // Firebase offline - obietnica nigdy się nie kończy (D1)
 __db.sprawdzajReguly = false;   // tylko dla testów piszących celowo śmieci
 ```
@@ -96,11 +97,32 @@ telefon zostanie na starej wersji. Po zmianie firmware podbij `FW_VERSION`.
 
 ---
 
+## Kompilacja firmware
+
+```bash
+bash tests/kompiluj_firmware.sh
+```
+
+Buduje **oba** szkice prawdziwym toolchainem Arduino, na `esp32:esp32@3.3.11` —
+tej wersji, która siedzi w pudełku. Nie jest częścią `run_all.sh`: wymaga sieci
+i ~500 MB toolchainu (pierwsze uruchomienie kilka minut, kolejne szybkie).
+**Uruchom to po każdej zmianie w firmware.**
+
+Stan: `PillBox.ino` **92% flasha**, `PillBoxTest.ino` 30%.
+**Do przepełnienia zostało ~100 kB** — przy dokładaniu czegokolwiek do firmware
+patrz na tę liczbę, bo linker odezwie się dopiero na końcu.
+
+Szczegóły obejść (ctags, `.cpp` zamiast `.ino`, atrapa `dfu-util`) — D17.
+
 ## Czego nie zweryfikowano
 
-- **Firmware nigdy nie było kompilowane** toolchainem Arduino — testy kompilują
-  wycięte funkcje na zaślepkach. Nie twierdź, że „się skompiluje".
+- Firmware **się kompiluje**, ale **nigdy nie było uruchomione z tego repo** na
+  płytce. Kompilacja niczego nie wgrywa. Nie twierdź, że „działa".
 - Prąd ładowania 350 mA to wartość katalogowa, nie pomiar.
+- **Jakim kodem baza odrzuca wpis łamiący reguły.** Cała decyzja D13 zakłada
+  400 — bo tylko wtedy `trwaleOdrzucony()` zdejmie wpis z kolejki. Nikt tego
+  nie zmierzył. `pushEventRecord()` loguje teraz odpowiedź bazy przy każdym
+  niepowodzeniu, więc pierwszy log z pudełka to rozstrzygnie.
 
 ---
 

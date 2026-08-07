@@ -10,7 +10,7 @@
  *  sie nie konczy. Ekran pokazuje ptaszka, dane nie docieraja.
  *
  *  Powod, dla ktorego nikt tego nie wykonal, byl techniczny: atrapa bazy
- *  nie umiala zawiesc. Teraz umie - __db.tryb = "blad" | "wisi".
+ *  nie umiala zawiesc. Teraz umie - __db.tryb = "blad" | "odmowa" | "wisi".
  *
  *      node test_kolejka.mjs
  * ===================================================================== */
@@ -231,12 +231,10 @@ head("Ustawienia zapisywane polami, nie calym obiektem");
         "nikt nie nadpisuje calego config - ponowienie skasowaloby cudza zmiane");
 }
 
-/* ═══════════ 10. ZNANE OGRANICZENIE: WPIS TRWALE ODRZUCONY ═══════════
-   Zapis, ktorego reguly nie przyjma NIGDY, stoi na czele kolejki i
-   blokuje wszystko za soba - dokladnie tak, jak blad B3 po stronie
-   pudelka, tylko ze tu nie ma odpowiednika queueDrop(). Test PRZYPINA
-   dzisiejsze zachowanie, zeby ewentualna naprawa byla swiadoma.     */
-head("Trwale odrzucony wpis blokuje kolejke (znane, B6 w DECYZJE)");
+/* ═══════════ 10. NAPRAWA B6: ODMOWA NIE ZATYKA KOLEJKI ═══════════
+   Ta sama rodzina co B3 po stronie pudelka: wpis, ktorego baza nie
+   przyjmie, stal na czele i blokowal WSZYSTKIE dawki za soba.       */
+head("Odrzucony wpis nie blokuje poprawnych (B6)");
 {
   czysto("ok");
   A.__db.sprawdzajReguly = true;
@@ -246,11 +244,46 @@ head("Trwale odrzucony wpis blokuje kolejke (znane, B6 w DECYZJE)");
     { id: "dobry", ts: 2, opis: "Dobry", updates: { ["users/testuid/doses/2026-08-03/0"]: { ...DAWKA } } }
   ]);
   const ile = await A.oczekWyslij();
-  check(ile === 0, `nic nie przeszlo (${ile})`);
-  check(A.oczekIle() === 2,
-        "poprawny zapis stoi za nieprzyjmowalnym i nie ma jak sie przecisnac");
-  check(A.__db.data.users?.testuid?.doses?.["2026-08-03"] === undefined,
-        "dobra dawka NIE trafila do bazy - to jest cena tego ograniczenia");
+  check(ile === 1, `poprawny zapis przecisnal sie mimo odmowy przed nim (${ile})`);
+  check(A.__db.data.users?.testuid?.doses?.["2026-08-03"]?.["0"]?.status === "taken",
+        "dobra dawka trafila do bazy");
+
+  /* Odrzucony wpis ZOSTAJE - odmowa moze byc przejsciowa (wygasla sesja),
+     wiec kasowanie go byloby zlamaniem zasady 6 dla domysłu.          */
+  check(A.oczekIle() === 1, `odrzucony wpis zostaje w kolejce (${A.oczekIle()})`);
+  check(A.oczekWczytaj()[0].opis === "Zly", "i jest to ten wlasciwy");
+  check(A.oczekWczytaj()[0].odmowy === 1, "z policzona odmowa");
+}
+
+head("Odmowa jest widoczna, a nie opisana jako 'czeka na siec'");
+{
+  czysto("ok");
+  A.oczekZapisz([{ id: "zly", ts: 1, opis: "Zly",
+                   updates: { [SCIEZKA]: { ...DAWKA, lewePole: 1 } } }]);
+  await A.oczekWyslij();
+  check(A.oczekOdmowy() === 1, `licznik odmow dziala (${A.oczekOdmowy()})`);
+  A.renderOstrzezenia();
+  const html = globalThis.__els.get("setWarn")?.innerHTML || "";
+  check(/odrzucon/i.test(html),
+        "ostrzezenie mowi o odrzuceniu, nie o czekaniu na polaczenie");
+  check(!/dosle je sama/i.test(html),
+        "nie obiecuje, ze samo sie dosle - bo odmowa sama nie minie");
+}
+
+head("Brak sieci nadal przerywa wysylke, zamiast probowac w kolko");
+{
+  /* Naprawa B6 nie moze znieszczyc powodu, dla ktorego 'break' tam byl:
+     przy zerwanej sieci kazda proba to osiem sekund czekania.        */
+  czysto("blad");
+  await A.zapiszPewnie({ ["users/testuid/doses/2026-08-05/0"]: { ...DAWKA } }, "A");
+  await A.zapiszPewnie({ ["users/testuid/doses/2026-08-06/0"]: { ...DAWKA } }, "B");
+  await A.zapiszPewnie({ ["users/testuid/doses/2026-08-07/0"]: { ...DAWKA } }, "C");
+  const przed = A.__db.writes.length;
+  await A.oczekWyslij();
+  check(A.__db.writes.length === przed,
+        "przy braku kontaktu z baza nie probujemy kazdego wpisu po kolei");
+  check(A.oczekIle() === 3, `wszystkie trzy czekaja dalej (${A.oczekIle()})`);
+  check(A.oczekOdmowy() === 0, "i zaden nie jest liczony jako odrzucony");
 }
 
 przywrocKonsole();
