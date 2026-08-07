@@ -524,6 +524,17 @@ check(css.includes("min-width:0;outline:none") || /input,select\{[^}]*min-width:
   check(pary.every(p => !/grid-template-columns/.test(p) || /minmax\(0,/.test(p)),
         "kazda para ma kolumny minmax(0,...) - nie da sie ich rozepchnac");
 }
+
+head("Legenda kalendarza");
+/* Ikonka bez podpisu to zagadka. Legenda pod kalendarzem musi ja tlumaczyc,
+   i to tym samym ksztaltem, ktorego uzywa INR_DUE_MARK - inaczej te dwa
+   miejsca rozjada sie po pierwszej zmianie wygladu.                      */
+check(/czas na pomiar INR/.test(html), "legenda kalendarza tlumaczy nowa ikonke");
+check(/legend[\s\S]{0,900}circle cx="6" cy="6" r="4\.4"/.test(html),
+      "legenda uzywa TEJ SAMEJ ikonki co znacznik w kalendarzu");
+check(/mija Twój odstęp między[\s\S]{0,40}pomiarami INR/.test(html),
+      "pod legenda jest zdanie wyjasniajace, skad ten dzien sie bierze");
+
 check(!/id="inrDate"[\s\S]{0,200}flex:1/.test(html), "stary uklad flex przy dacie usuniety");
 
 head("Wersja aplikacji");
