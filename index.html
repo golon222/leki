@@ -703,6 +703,43 @@ nav button.act{color:var(--acc)}
     </div>
   </div>
 
+  <!-- WEJSCIE DO DIAGNOSTYKI -->
+  <div class="card">
+    <h3>Diagnostyka</h3>
+    <p class="muted" style="margin:6px 0 12px">
+      Co przysłało pudełko, autotest, historia wybudzeń i test wieczka.
+      Zaglądasz tu, gdy coś nie gra — nie na co dzień.
+    </p>
+    <!-- Ostrzeżenia zostają TUTAJ, nie za przyciskiem. Puste, gdy wszystko gra. -->
+    <div id="setWarn" class="hide"></div>
+    <button class="btn" onclick="showTab('diag')" style="width:100%">
+      Otwórz diagnostykę
+    </button>
+  </div>
+</section>
+
+<!-- ═══════════════ DIAGNOSTYKA ═══════════════
+     Osobny ekran, celowo POZA dolną nawigacją — wchodzi się tu z Ustawień.
+     Powód: te cztery karty otwiera się, gdy coś nie działa, a nie po to,
+     żeby zmienić godzinę leku. Trzymane razem z ustawieniami zmuszały do
+     przewijania czarnej skrzynki przy każdej zmianie dawki.
+
+     Ostrzeżenia (kolejka zapisów, przestarzałe reguły) NIE przeniosły się
+     tutaj — zostały w Ustawieniach, bo oznaczają utratę danych i schowane
+     mogłyby wisieć niezauważone.                                        -->
+<section id="tab-diag" class="hide">
+  <div class="card">
+    <button class="btn" onclick="showTab('set')"
+            style="background:transparent;padding:0;margin-bottom:10px">
+      ← Ustawienia
+    </button>
+    <h3>Diagnostyka</h3>
+    <p class="muted" style="margin:6px 0 0">
+      Stan pudełka i to, co przysłało. Przydaje się, gdy dawki nie widać
+      w kalendarzu albo pudełko zachowuje się dziwnie.
+    </p>
+  </div>
+
   <!-- DIAGNOSTYKA: surowe zdarzenia z pudełka -->
   <div class="card">
     <h3>Co przysłało pudełko</h3>
@@ -891,7 +928,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-07.2";
+const APP_VERSION = "2026-08-07.3";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -2524,9 +2561,54 @@ async function oczekWyslij(){
 }
 window.oczekWyslij = oczekWyslij;
 
+/* ═══════════════════════════════════════════════════════════════
+   OSTRZEŻENIA — celowo NIE schowane w Diagnostyce
+
+   Cztery karty diagnostyczne przeniosły się na osobny ekran, żeby nie
+   zaśmiecać Ustawień. Ale dwa komunikaty z nich MUSZĄ zostać na wierzchu,
+   bo oznaczają realną utratę danych:
+
+     • zapisy czekające w kolejce telefonu
+     • przestarzałe reguły bazy (Analiza traci godziny otwarć)
+
+   Schowane głęboko mogłyby wisieć miesiącami niezauważone — a to dokładnie
+   ten rodzaj cichej awarii, na którym ten projekt już się przejechał.
+   Gdy nie ma problemu, nie widać nic.
+   ═══════════════════════════════════════════════════════════════ */
+function ostrzKolejka(){
+  const ile = oczekIle();
+  return ile
+    ? `<div style="margin-bottom:10px;padding:10px;border-radius:12px;
+         border:1px solid var(--warn);background:rgba(251,191,36,.10)">
+         <b>${ile}</b> ${ile === 1 ? "zapis czeka" : "zapisów czeka"} na połączenie
+         z bazą. Nic nie zginęło — aplikacja dośle je sama, gdy wróci sieć.
+         <button class="btn" style="margin-top:8px"
+           onclick="oczekWyslij()">Spróbuj teraz</button>
+       </div>`
+    : "";
+}
+
+function ostrzReguly(){
+  return staleRules
+    ? `<div style="margin-bottom:10px;padding:10px;border-radius:12px;
+         border:1px solid var(--warn);background:rgba(251,191,36,.10)">
+         <b style="color:var(--warn)">Reguły bezpieczeństwa są przestarzałe</b><br>
+         <span class="dim2">Baza odrzuca pole z godziną otwarcia, więc zapisuję bez niego.
+         Kalendarz działa, ale Analiza traci dokładne godziny. Wgraj na nowo
+         database.rules.json w konsoli Firebase → Realtime Database → Rules → Publish.</span>
+       </div>` : "";
+}
+
+function renderOstrzezenia(){
+  const el = document.getElementById("setWarn");
+  if (!el) return;
+  el.innerHTML = ostrzKolejka() + ostrzReguly();
+  el.classList.toggle("hide", !el.innerHTML.trim());
+}
+
 function renderDiag(){
   const el = document.getElementById("diagList");
-  if (!el) return;
+  if (!el) { renderOstrzezenia(); return; }   // Diagnostyka schowana, ostrzeżenia nie
 
   /* Widoczny ślad po automatycznym uzupełnianiu. Bez tego "samo się nie
      zrobiło" i "zrobiło się, ale nie było czego dopisać" wyglądają
@@ -2544,25 +2626,9 @@ function renderDiag(){
                          : "nic nie wymagało zmiany")}
        </div>`;
 
-  const ile = oczekIle();
-  const kolejka = ile
-    ? `<div style="margin-bottom:10px;padding:10px;border-radius:12px;
-         border:1px solid var(--warn);background:rgba(251,191,36,.10)">
-         <b>${ile}</b> ${ile === 1 ? "zapis czeka" : "zapisów czeka"} na połączenie
-         z bazą. Nic nie zginęło — aplikacja dośle je sama, gdy wróci sieć.
-         <button class="btn" style="margin-top:8px"
-           onclick="oczekWyslij()">Spróbuj teraz</button>
-       </div>`
-    : "";
-
-  const warn = staleRules
-    ? `<div style="margin-bottom:10px;padding:10px;border-radius:12px;
-         border:1px solid var(--warn);background:rgba(251,191,36,.10)">
-         <b style="color:var(--warn)">Reguły bezpieczeństwa są przestarzałe</b><br>
-         <span class="dim2">Baza odrzuca pole z godziną otwarcia, więc zapisuję bez niego.
-         Kalendarz działa, ale Analiza traci dokładne godziny. Wgraj na nowo
-         database.rules.json w konsoli Firebase → Realtime Database → Rules → Publish.</span>
-       </div>` : "";
+  const kolejka = ostrzKolejka();
+  const warn    = ostrzReguly();
+  renderOstrzezenia();          // te same ostrzeżenia zostają widoczne w Ustawieniach
 
   if (!events.length){
     el.innerHTML = kolejka + rec + warn + `<span class="dim2">Pudełko nie przysłało jeszcze żadnych zdarzeń.<br>
@@ -3222,20 +3288,24 @@ window.exportCsv = async () => {
 let curTab = "cal";
 window.showTab = t => {
   curTab = t;
-  /* "lid" to ekran bez własnego przycisku w nawigacji — wchodzi się na niego
-     z Ustawień. W dolnym pasku podświetlony zostaje wtedy przycisk Ustawień,
-     żeby było widać, skąd się tu przyszło.                                */
+  /* "lid" i "diag" to ekrany bez własnego przycisku w nawigacji — wchodzi się
+     na nie z Ustawień. W dolnym pasku podświetlony zostaje wtedy przycisk
+     Ustawień, żeby było widać, skąd się tu przyszło. Piątego przycisku celowo
+     nie ma: cztery pozycje mieszczą się czytelnie, pięć już nie.          */
+  const zUstawien = (t === "lid" || t === "diag");
   ["cal","inr","ana","set"].forEach(x=>{
     document.getElementById("tab-"+x).classList.toggle("hide", x!==t);
     document.getElementById("nav-"+x).classList.toggle("act",
-      x === t || (t === "lid" && x === "set"));
+      x === t || (zUstawien && x === "set"));
   });
   document.getElementById("tab-lid").classList.toggle("hide", t !== "lid");
+  document.getElementById("tab-diag").classList.toggle("hide", t !== "diag");
   document.getElementById("hTitle").textContent =
     { cal:"Kalendarz", inr:"Pomiary INR", ana:"Analiza", set:"Ustawienia",
-      lid:"Dziennik wieczka" }[t];
-  if (t === "ana") renderAnalysis();
-  if (t === "lid") renderLidLog();
+      lid:"Dziennik wieczka", diag:"Diagnostyka" }[t];
+  if (t === "ana")  renderAnalysis();
+  if (t === "lid")  renderLidLog();
+  if (t === "diag") { renderDiag(); renderTesty(); renderBoxLog(); }
   window.scrollTo({ top:0, behavior:"smooth" });
 };
 

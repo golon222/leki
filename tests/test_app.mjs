@@ -525,6 +525,52 @@ check(css.includes("min-width:0;outline:none") || /input,select\{[^}]*min-width:
         "kazda para ma kolumny minmax(0,...) - nie da sie ich rozepchnac");
 }
 
+head("Diagnostyka na osobnym ekranie");
+
+/* Cztery karty diagnostyczne przenioslo sie z Ustawien na wlasny ekran.
+   Test pilnuje PODZIALU, bo bez niego pierwsza nowa karta wroci tam, gdzie
+   bylo najblizej - czyli do Ustawien, ktore wlasnie odchudzilismy.       */
+{
+  const wytnij = (id) => {
+    const od = html.indexOf(`<section id="${id}"`);
+    return od < 0 ? "" : html.slice(od, html.indexOf("</section>", od));
+  };
+  const ust  = wytnij("tab-set");
+  const diag = wytnij("tab-diag");
+
+  check(diag.length > 0, "istnieje osobny ekran Diagnostyki");
+  /* Szukamy NAGLOWKA karty, nie samej frazy - karta wejsciowa w Ustawieniach
+     wymienia te nazwy w opisie ("Co przyslalo pudelko, autotest, ...") i to
+     jest w porzadku. Chodzi o to, gdzie stoi KARTA.                       */
+  const naglowek = (sekcja, karta) => sekcja.includes(`<h3>${karta}</h3>`);
+  for (const karta of ["Co przysłało pudełko", "Autotest pudełka",
+                       "Historia pudełka", "Test wieczka"]){
+    check(naglowek(diag, karta) && !naglowek(ust, karta),
+          `„${karta}" jest w Diagnostyce, nie w Ustawieniach`);
+  }
+  /* Ustawienia maja zostac z rzeczami, ktore COS USTAWIAJA. */
+  for (const karta of ["Lek i dawkowanie", "Zakres terapeutyczny INR",
+                       "Jak często mierzysz INR"]){
+    check(naglowek(ust, karta), `„${karta}" zostaje w Ustawieniach`);
+  }
+  /* NAJWAZNIEJSZE: ostrzezenia nie moga sie schowac razem z kartami.
+     Oznaczaja utrate danych, wiec musza byc widoczne bez wchodzenia glebiej. */
+  check(ust.includes('id="setWarn"'),
+        "miejsce na ostrzezenia zostalo w Ustawieniach");
+  check(!diag.includes('id="setWarn"'),
+        "ostrzezenia NIE przeniosly sie do Diagnostyki");
+  check(/showTab\('diag'\)/.test(ust), "z Ustawien da sie wejsc w Diagnostyke");
+  check(/showTab\('set'\)/.test(diag), "z Diagnostyki da sie wrocic");
+}
+
+/* Ostrzezenia pokazuja sie tylko wtedy, gdy jest o czym ostrzegac. */
+A.renderOstrzezenia();
+{
+  const w = document.getElementById("setWarn");
+  check(!!w, "element ostrzezen istnieje w DOM");
+  check(!w.innerHTML.trim(), "przy czystym stanie ostrzezenia sa puste");
+}
+
 head("Legenda kalendarza");
 /* Ikonka bez podpisu to zagadka. Legenda pod kalendarzem musi ja tlumaczyc,
    i to tym samym ksztaltem, ktorego uzywa INR_DUE_MARK - inaczej te dwa
