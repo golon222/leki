@@ -36,8 +36,8 @@ prawdziwym `database.rules.json`** i umie zawieść na żądanie:
 ```js
 __db.tryb = "blad";     // baza nieosiagalna (siec, timeout)
 __db.tryb = "odmowa";   // baza osiagalna i odmawia (PERMISSION_DENIED)
-__db.tryb = "wisi";   // Firebase offline - obietnica nigdy się nie kończy (D1)
-__db.sprawdzajReguly = false;   // tylko dla testów piszących celowo śmieci
+__db.tryb = "wisi";     // Firebase offline - obietnica nigdy się nie kończy (D1)
+__db.sprawdzajReguly = false;  // tylko dla testów piszących celowo śmieci
 ```
 
 Jeśli dokładasz pole do zapisu — **dopisz je też do `database.rules.json`**.
