@@ -103,14 +103,20 @@ telefon zostanie na starej wersji. Po zmianie firmware podbij `FW_VERSION`.
 bash tests/kompiluj_firmware.sh
 ```
 
-Buduje **oba** szkice prawdziwym toolchainem Arduino, na `esp32:esp32@3.3.11` —
-tej wersji, która siedzi w pudełku. Nie jest częścią `run_all.sh`: wymaga sieci
-i ~500 MB toolchainu (pierwsze uruchomienie kilka minut, kolejne szybkie).
+Buduje **oba** szkice prawdziwym toolchainem Arduino, na `esp32:esp32@3.3.11`
+i z **ustawieniami płytki z nagłówka `PillBox.ino`** — czyli tak, jak Kuba
+naprawdę wgrywa. Nie jest częścią `run_all.sh`: wymaga sieci i ~500 MB
+toolchainu (pierwsze uruchomienie kilka minut, kolejne szybkie).
 **Uruchom to po każdej zmianie w firmware.**
 
-Stan: `PillBox.ino` **92% flasha**, `PillBoxTest.ino` 30%.
-**Do przepełnienia zostało ~100 kB** — przy dokładaniu czegokolwiek do firmware
-patrz na tę liczbę, bo linker odezwie się dopiero na końcu.
+Stan: `PillBox.ino` **38% flasha** (1,21 MB z 3 MB), `PillBoxTest.ino` 12%.
+Zapas ~1,9 MB — dużo.
+
+**Podział pamięci musi być `Huge APP (3MB No OTA/1MB SPIFFS)`**, bo tak jest
+w nagłówku szkicu. Na domyślnym podziale (1,2 MB) ten sam program pokazuje
+**92%** i wygląda jak alarm, którego nie ma. Skrypt sam sprawdza, czy nagłówek
+nadal zapowiada ten podział, i przerywa, gdy się rozjadą. Uwaga na mylące
+nazwy opcji: `CDCOnBoot=default` znaczy **włączone**, `CDCOnBoot=cdc` wyłączone.
 
 Szczegóły obejść (ctags, `.cpp` zamiast `.ino`, atrapa `dfu-util`) — D17.
 
