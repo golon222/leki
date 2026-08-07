@@ -18,12 +18,16 @@ WANTED = [
     "trackBoxOpen",
     # awakeTooLong musi byc przed flushQueue, ktore go wola.
     "awakeTooLong", "extendAwake",
+    "tokenZPamieci", "zapomnijToken",
     "przesunZnaczniki", "queuePush", "queueCount", "queuePeek", "queuePop", "queueDrop",
     "queueShiftTimestamps", "rekordKompletny", "trwaleOdrzucony", "flushQueue",
     "makeRecordAt", "makeRecord",
     "loadDayMarkers", "setTakenDay", "setRolloverDay",
     "checkDayRollover",
     "wartoZapisac", "logbookAdd", "jsonEscape", "logbookJson",
+    "alarmPotwierdzony",
+    # planNextSleep na koncu - wola prawie wszystko powyzej.
+    "planNextSleep",
 ]
 
 def grab(src, name):

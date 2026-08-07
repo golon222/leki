@@ -17,6 +17,7 @@ FakeSerial Serial;
 /* globalne, ktorych uzywa wycieta logika */
 Preferences prefs;
 String  slots[12];
+String  idToken;          /* token Firebase - potrzebny przez tokenZPamieci() */
 int     slotCount = 0;
 int     batteryPercentage = 0;
 int     batteryRawPercentage = 0;
@@ -48,6 +49,11 @@ uint16_t rtcOpenWarnCount = 0;
 bool     rtcOpenReported  = false;
 bool     rtcOpenClearPend = false;
 bool     rtcStatusDirty   = false;
+
+/* --- atrapy dla planowania snu --- */
+int8_t   rtcPendingSlot  = -1;
+uint8_t  rtcAlarmRetries = 0;
+uint8_t  rtcRetryCount   = 0;
 enum WakeReason { WAKE_BOOT, WAKE_REED, WAKE_BUTTON, WAKE_TIMER, WAKE_CLOSED };
 WakeReason wakeReason = WAKE_TIMER;
 
@@ -969,6 +975,288 @@ CHECK(REPORT_BOOT_EVENT == 0,
     CHECK(!trackCharging(0.0f, 4.20f), "pomiar bez sensu nie udaje ladowania");
     CHECK(rtcVoltMax == 0.0f, "i kasuje zapamietany szczyt");
   }
+
+/* ================= 17a. POTWIERDZENIE DAWKI (B1) ====================
+   Najwrazliwsze miejsce w calym projekcie i do tej pory jedyne bez
+   ANI JEDNEGO testu - bo runAlarmWindow() to petla na millis() z
+   delay() i odczytem pinu, nie do uruchomienia w tescie. Sama decyzja
+   jest teraz osobna funkcja, wiec da sie ja przebadac.
+
+   Testy PRZYPINAJA stan dzisiejszy, razem z bledem B1. Kazdy z trzech
+   wariantow naprawy zmieni ktoras z tych linii - i wtedy bedzie widac
+   dokladnie, ktore zachowanie sie zmienilo, zamiast wchodzic w alarm
+   po omacku.                                                          */
+head("Co liczy sie jako potwierdzenie dawki (B1)");
+{
+  CHECK(alarmPotwierdzony(true,  false),
+        "wieczko otwarte w trakcie dzwonienia = dawka wzieta");
+  CHECK(!alarmPotwierdzony(false, false),
+        "zamkniete przez cale okno = dawka nie potwierdzona");
+  CHECK(!alarmPotwierdzony(false, true),
+        "zamkniecie wieczka NIE jest dzis potwierdzeniem (to wariant B)");
+
+  /* TO JEST BLAD B1, przypiety swiadomie.
+     Pudelko z przesunietym magnesem zglasza "otwarte" bez przerwy.
+     Alarm konczy sie potwierdzeniem w pierwszej setnej sekundy, wiec
+     w telefonie jest zielone "wziete", a pudelko nawet nie zadzwonilo. */
+  CHECK(alarmPotwierdzony(true, true),
+        "wieczko otwarte JUZ PRZED alarmem tez potwierdza dawke - "
+        "to jest blad B1, nie cecha; zmiana tej linii to wariant A");
+
+  /* Decyzja nie moze zalezec od niczego poza podanym stanem - inaczej
+     naprawa B1 zachowywalaby sie roznie przy tych samych wejsciach. */
+  FAKE_BOX_OPEN = false;
+  CHECK(alarmPotwierdzony(true, false), "wynik nie zalezy od globalnego stanu pinu");
+  FAKE_BOX_OPEN = true;
+  CHECK(!alarmPotwierdzony(false, false), "ani w druga strone");
+  FAKE_BOX_OPEN = false;
+  /* Tego, ze petla alarmu naprawde pyta przez te funkcje - a nie omija
+     jej bokiem - pilnuje audyt (audit_firmware.py, sekcja B1).        */
+}
+
+/* ================= 17b. TOKEN FIREBASE ==============================
+   Cale rozumowanie stojace za D13 opiera sie na zalozeniu, ktorego
+   nikt nie sprawdzil: "401 to wygasly token, po odswiezeniu przejdzie".
+   Jesli token sie NIE odswieza, kazda wysylka wraca 401, flushQueue()
+   zwraca false w nieskonczonosc, a zaden licznik sie nie rusza -
+   ani dropped, ani nvsFail. Aplikacja nie ma o czym krzyknac.       */
+head("Token z pamieci: kiedy wolno mu zaufac");
+{
+  prefs.wipe();
+  idToken = "";
+  const String dobryToken = "eyJhbGciOiJSUzI1NiIsImtpZCI6InRoaXNJc0FUb2tlbiJ9";
+  prefs.putString("tok", dobryToken);
+  FAKE_NOW = 1750000000;
+
+  rtcTimeValid = true; rtcTokenExp = (uint32_t)FAKE_NOW + 3600;
+  idToken = "";
+  CHECK(tokenZPamieci(), "wazny token z zapasem czasu jest przyjmowany");
+  CHECK(idToken.length() > 20, "i naprawde wlazi do zmiennej");
+
+  idToken = "";
+  rtcTokenExp = (uint32_t)FAKE_NOW + TOKEN_MARGIN_S - 1;
+  CHECK(!tokenZPamieci(),
+        "token gasnacy w ciagu marginesu jest odrzucany - inaczej wygasnie "
+        "w polowie wysylki i dostaniemy 401");
+  CHECK(idToken.length() == 0, "i nie zostawia po sobie smiecia");
+
+  idToken = "";
+  rtcTokenExp = (uint32_t)FAKE_NOW - 1;
+  CHECK(!tokenZPamieci(), "token juz wygasly jest odrzucany");
+
+  /* Bez wiarygodnego zegara nie da sie ocenic waznosci - tokenZPamieci()
+     odmawia. firebaseSignIn() w tej samej sytuacji ufa tokenowi, ktory
+     siedzi juz w RAM, wiec martwy token moze przejsc dalej i spalic
+     JEDNO zapytanie. Nic wiecej: rtdbSend() na 401/403 wola
+     zapomnijToken(), ktory zeruje rtcTokenExp i kasuje kopie z NVS -
+     wiec najblizsze firebaseSignIn() loguje sie haslem od nowa.
+     Sprawdzamy obie polowki osobno, zeby ta samonaprawa nie zniknela
+     niezauwazona.                                                    */
+  idToken = "";
+  rtcTimeValid = false; rtcTokenExp = (uint32_t)FAKE_NOW + 3600;
+  CHECK(!tokenZPamieci(), "bez wiarygodnego zegara token z NVS nie jest uzywany");
+
+  rtcTimeValid = true; rtcTokenExp = 0;
+  idToken = "";
+  CHECK(!tokenZPamieci(), "brak zapamietanego terminu waznosci = brak zaufania");
+
+  /* Zapomnienie musi czyscic OBIE kopie - RAM i NVS. Zostawiona w NVS
+     wrocilaby przy nastepnym wybudzeniu i blad powtorzylby sie w kolko. */
+  idToken = dobryToken; rtcTokenExp = 999; rtcTimeValid = true;
+  zapomnijToken();
+  CHECK(idToken.length() == 0, "zapomnijToken czysci token w pamieci RAM");
+  CHECK(rtcTokenExp == 0, "i termin waznosci");
+  CHECK(prefs.getString("tok", "") == String(""), "i kopie w NVS");
+
+  /* Korekta zegara po NTP musi ruszyc takze terminem waznosci tokenu -
+     inaczej po skoku o godziny token wyglada na wieczny albo na trupa. */
+  rtcTokenExp = 1750000000; rtcLastOpenTs = 0; rtcLastPushTs = 0;
+  rtcOpenSinceTs = 0; rtcNextWarnTs = 0;
+  przesunZnaczniki(3600);
+  CHECK(rtcTokenExp == 1750003600u,
+        "termin waznosci tokenu przesuwa sie razem z zegarem (%lu)",
+        (unsigned long)rtcTokenExp);
+}
+
+head("Kolejka pod nieustajacym 401");
+{
+  /* 401 NIE jest na liscie trwale odrzuconych (D13) - i sluszne, bo po
+     odswiezeniu tokenu wpis przejdzie. Tu sprawdzamy druga polowe tej
+     umowy: dopoki token nie wroci, NIC nie ma prawa zginac.         */
+  prefs.wipe();
+  rtcTimeValid = true;
+  rtcQueueDropped = 0; rtcNvsFail = 0;
+  FAKE_MILLIS = 0; awakeDeadlineMs = AWAKE_LIMIT_MS;
+  batteryPercentage = 80; realBatteryVoltage = 4.0f;
+  for (int i = 0; i < 5; i++) queuePush(makeRecordAt("open", 0, 1750000000u + i));
+
+  FAKE_HTTP = 401;
+  FAKE_SENT.clear();
+  CHECK(!flushQueue(), "401 konczy wysylke niepowodzeniem");
+  CHECK(queueCount() == 5, "wszystkie dawki zostaja w kolejce (%u)", queueCount());
+  CHECK(rtcQueueDropped == 0, "nic nie zostalo skasowane - 401 to nie 400");
+  CHECK(FAKE_SENT.size() == 1, "po pierwszym 401 nie probujemy reszty na sile");
+
+  /* Piec wybudzen z rzedu i dalej to samo: zero sladu w licznikach. */
+  for (int i = 0; i < 5; i++) flushQueue();
+  CHECK(queueCount() == 5, "po pieciu wybudzeniach nadal 5 dawek (%u)", queueCount());
+  CHECK(rtcQueueDropped == 0 && rtcNvsFail == 0,
+        "i nadal nic nie jest liczone jako strata - bo nic nie stracono");
+
+  /* A po odswiezeniu tokenu wszystko ma przejsc bez straty - to jest
+     wlasnie zalozenie, na ktorym stoi decyzja D13.                   */
+  FAKE_HTTP = 200;
+  CHECK(flushQueue(), "po odzyskaniu tokenu wysylka przechodzi");
+  CHECK(queueCount() == 0, "kolejka pusta (%u)", queueCount());
+  CHECK(rtcQueueDropped == 0, "i ani jedna dawka nie zostala skasowana po drodze");
+
+  FAKE_HTTP = 200;
+  prefs.wipe();
+}
+
+/* ================= 18. ILE SPAC (planNextSleep) =====================
+   Jedyna funkcja decydujaca o tym, czy pudelko obudzi sie na 20:00.
+   Szesc warunkow konkuruje tu ze soba i kazdy potrafi sen skrocic.
+   Do tej pory pilnowal jej wylacznie audyt tekstowy - sprawdzal, ze
+   pewne napisy sa w zrodle, nie ze wynik jest poprawny.            */
+{
+  /* Stan wyjsciowy: harmonogram 20:00, poludnie, nic sie nie pali. */
+  auto spokoj = [&](int godz, int minuta){
+    prefs.wipe();
+    parseSchedule("20:00");
+    rtcTimeValid = true; rtcTzOffsetMin = 120;
+    rtcPendingSlot = -1; rtcAlarmRetries = 0; rtcRetryCount = 0;
+    rtcCharging = false; rtcStatusDirty = false; rtcOpenClearPend = false;
+    resetOpenState(false);
+    rtcOpenReported = false;                 // zgodnie z FAKE_BOX_OPEN
+    FAKE_NOW = local(2026,8,1,godz,minuta);
+  };
+
+  head("Ile spac: zwykly dzien");
+  spokoj(12, 0);
+  CHECK(planNextSleep() == 8*3600u - 30u,
+        "poludnie -> do dawki minus 30 s zapasu (%lu)", (unsigned long)planNextSleep());
+  spokoj(19, 55);
+  CHECK(planNextSleep() == 300u - 30u,
+        "piec minut przed dawka -> %lu s", (unsigned long)planNextSleep());
+
+  head("Ile spac: drzemka alarmu ma pierwszenstwo");
+  spokoj(20, 0);
+  rtcPendingSlot = 0; rtcAlarmRetries = 0;
+  CHECK(planNextSleep() == (uint32_t)SNOOZE_S, "alarm czeka -> drzemka");
+  /* Drzemka bije WSZYSTKO. Gdyby ladowarka albo kolejka potrafily ja
+     skrocic, pudelko wrociloby do dzwonienia szybciej niz co 5 min i
+     zjadloby okno alarmu na darmo.                                   */
+  rtcCharging = true; rtcStatusDirty = true;
+  for (int i = 0; i < 3; i++) queuePush(makeRecordAt("open", 0, 1750000000u + i));
+  CHECK(planNextSleep() == (uint32_t)SNOOZE_S,
+        "ladowarka ani kolejka nie skracaja drzemki (%lu)", (unsigned long)planNextSleep());
+
+  spokoj(20, 0);
+  rtcPendingSlot = 0; rtcAlarmRetries = MAX_ALARM_RETRIES;
+  CHECK(planNextSleep() != (uint32_t)SNOOZE_S,
+        "po wyczerpaniu prob drzemka sie konczy");
+
+  head("Ile spac: backoff przy zaleglosciach w kolejce");
+  /* 15 min, 30, 60, 120, 240 - potem juz nie rzadziej. Za krotko zjada
+     bateria przy zerwanej sieci, za dlugo opoznia dawke w kalendarzu. */
+  {
+    const uint32_t oczek[] = { 900u, 1800u, 3600u, 7200u, 14400u, 14400u, 14400u };
+    for (int i = 0; i < 7; i++) {
+      spokoj(12, 0);
+      queuePush(makeRecordAt("open", 0, 1750000000u));
+      rtcRetryCount = (uint8_t)i;
+      CHECK(planNextSleep() == oczek[i],
+            "proba %d -> %lu s (oczekiwano %lu)", i,
+            (unsigned long)planNextSleep(), (unsigned long)oczek[i]);
+    }
+    CHECK(oczek[4] == (uint32_t)RETRY_MAX_S, "sufit backoffu to RETRY_MAX_S");
+  }
+  /* Backoff wolno sen SKRACAC, nigdy wydluzac. Inaczej zalegly wpis
+     w kolejce przesunalby pobudke na dawke o cztery godziny.        */
+  spokoj(19, 50);
+  queuePush(makeRecordAt("open", 0, 1750000000u));
+  rtcRetryCount = 4;                          // backoff = 4 h
+  CHECK(planNextSleep() == 600u - 30u,
+        "backoff nie wydluza snu ponad termin dawki (%lu)", (unsigned long)planNextSleep());
+
+  head("Ile spac: aplikacja bez aktualnego stanu");
+  /* Bez tego punktu nieudany status czekal do najblizszej dawki albo
+     12 h - a telefon przez ten czas pokazywalby nieprawde.          */
+  spokoj(12, 0);
+  rtcStatusDirty = true;
+  CHECK(planNextSleep() == 900u, "nieudany status -> ponowna proba za 15 min");
+  spokoj(12, 0);
+  rtcOpenClearPend = true;
+  CHECK(planNextSleep() == 900u, "odwolanie alarmu tez wymusza ponowienie");
+  spokoj(12, 0);
+  rtcOpenReported = true;                     // baza mysli ze otwarte, a jest zamkniete
+  CHECK(planNextSleep() == 900u, "rozjazd stanu wieczka tez wymusza ponowienie");
+  spokoj(12, 0);
+  rtcStatusDirty = true; rtcRetryCount = 3;
+  CHECK(planNextSleep() == 7200u, "ponowienia statusu ida tym samym backoffem");
+
+  head("Ile spac: ladowarka i granica doby");
+  spokoj(12, 0);
+  rtcCharging = true;
+  CHECK(planNextSleep() == (uint32_t)CHARGE_POLL_S,
+        "na kablu meldunek co minute (%lu)", (unsigned long)planNextSleep());
+#if MIDNIGHT_CHECK
+  /* 02:30 lokalnego: do granicy doby 30 min + minuta, do dawki 17,5 h. */
+  spokoj(2, 30);
+  CHECK(planNextSleep() == 30u*60u + 60u,
+        "granica doby blizej niz dawka -> %lu s", (unsigned long)planNextSleep());
+#endif
+
+  head("Ile spac: otwarte wieczko przycina sen");
+  spokoj(12, 0);
+  resetOpenState(true);
+  rtcOpenReported = true;                     // zeby nie mieszal rozjazd stanu
+  FAKE_NOW = local(2026,8,1,12,0);
+  trackBoxOpen();                             // ustawia rtcNextWarnTs
+  CHECK(planNextSleep() == (uint32_t)OPEN_WARN_FIRST_S,
+        "budzimy sie dokladnie na sygnal (%lu)", (unsigned long)planNextSleep());
+
+  head("Ile spac: sufit i wlasnosci ogolne");
+  /* Bez zegara i bez harmonogramu wszystko zwraca HOUSEKEEP_MAX_S -
+     sen musi zostac przyciety do 12 h, bo to jedyna okazja na sync. */
+  spokoj(12, 0);
+  rtcTimeValid = false;
+  CHECK(planNextSleep() <= (uint32_t)HOUSEKEEP_MAX_S,
+        "bez zegara nie spimy dluzej niz 12 h (%lu)", (unsigned long)planNextSleep());
+
+  /* Wlasnosc zbiorcza: przez wszystkie kombinacje flag sen NIGDY nie
+     moze wyjsc zerowy (natychmiastowe wybudzenie = petla i pusta
+     bateria) ani przekroczyc czasu do najblizszej dawki.            */
+  {
+    int zero = 0, zaDlugo = 0, ponadSufit = 0, prob = 0;
+    for (int godz = 0; godz < 24; godz++)
+    for (int mask = 0; mask < 32; mask++)
+    for (int rc = 0; rc <= 5; rc++) {
+      spokoj(godz, 17);
+      rtcRetryCount   = (uint8_t)rc;
+      rtcCharging     = mask & 1;
+      rtcStatusDirty  = mask & 2;
+      rtcOpenClearPend= mask & 4;
+      if (mask & 8)  { resetOpenState(true); rtcOpenReported = true;
+                       FAKE_NOW = local(2026,8,1,godz,17); trackBoxOpen(); }
+      if (mask & 16) queuePush(makeRecordAt("open", 0, 1750000000u));
+      uint32_t s = planNextSleep();
+      uint32_t doDawki = secondsToNextSlot(FAKE_NOW);
+      prob++;
+      if (s == 0) zero++;
+      if (s > doDawki) zaDlugo++;
+      if (s > (uint32_t)HOUSEKEEP_MAX_S) ponadSufit++;
+    }
+    CHECK(zero == 0, "zaden z %d wariantow nie zasypia na 0 s (%d takich)", prob, zero);
+    CHECK(zaDlugo == 0, "zaden nie przesypia dawki (%d takich)", zaDlugo);
+    CHECK(ponadSufit == 0, "zaden nie przekracza sufitu 12 h (%d takich)", ponadSufit);
+  }
+
+  /* sprzatanie po sekcji */
+  spokoj(12, 0);
+  prefs.wipe();
+}
 
 printf("\n──────────────────────────────────────\n");
 printf("  ZALICZONE: %d    BLEDY: %d\n", PASS, FAIL);

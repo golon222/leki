@@ -1263,8 +1263,24 @@ int pushEventRecord(const String& rec) {
 
   String body;
   serializeJson(doc, body);
-  int code = rtdbSend("POST", "/devices/" DEVICE_ID "/events.json", body);
-  LOG("[FB ] push event HTTP %d : %s\n", code, body.c_str());
+  /* Odpowiedz bazy zbieramy TYLKO po to, zeby przy niepowodzeniu bylo
+     wiadomo, co sie stalo.
+
+     Cala decyzja D13 stoi na zalozeniu, ze wpis odrzucony przez reguly
+     wraca kodem 400 - bo tylko wtedy trwaleOdrzucony() zdejmie go
+     z kolejki. Tego zalozenia nikt nigdy nie zmierzyl. Jesli baza
+     odpowiada tu 401 albo 403, wpis nie zostanie zdjety NIGDY, a przy
+     okazji kazda proba skasuje token i wymusi ponowne logowanie.
+     Log z pudelka rozstrzyga to jednym zdaniem, zamiast kolejnej
+     hipotezy w dokumentacji.                                          */
+  String odp;
+  int code = rtdbSend("POST", "/devices/" DEVICE_ID "/events.json", body, &odp);
+  if (code == 200) {
+    LOG("[FB ] push event HTTP 200 : %s\n", body.c_str());
+  } else {
+    LOG("[FB ] push event HTTP %d : %s\n     odpowiedz bazy: %s\n",
+        code, body.c_str(), odp.c_str());
+  }
   return code;
 }
 
@@ -1592,10 +1608,35 @@ void reportEvent(const char* type, int slot) {
  * ===================================================================== */
 /* Dzwoni przez ALARM_WINDOW_S i sprawdza czy pudelko zostalo otwarte.
    Zwraca true jesli otwarto.                                          */
+/* Czy stan wieczka w oknie alarmu liczy sie jako POTWIERDZENIE dawki.
+
+   Wydzielone z runAlarmWindow() wylacznie po to, zeby dalo sie to
+   przetestowac. Sama petla to czyste we/wy - budzik, delay() i odczyt
+   pinu - wiec nie da sie jej uruchomic w tescie. Decyzja da sie.
+
+   ZACHOWANIE JEST DZISIAJ NIEZMIENIONE: wystarczy, ze wieczko JEST
+   otwarte. I to jest dokladnie sedno bledu B1 - pytamy "czy jest
+   otwarte", a nie "czy ktos je otworzyl". Przy przesunietym magnesie
+   pudelko codziennie zapisuje dawke, ktorej nie bylo, i nie dzwoni.
+
+   Trzy warianty naprawy (DECYZJE, B1) sa teraz zmiana JEDNEJ linii
+   w tym miejscu, z gotowym zestawem testow obok:
+     A: return otwarteTeraz && !byloOtwarteNaStarcie;
+     B: potwierdzeniem jest zamkniecie, gdy bylo otwarte na starcie
+     C: nie ufaj wieczku otwartemu od dawna (rtcOpenSinceTs)
+   Ktory wariant - o tym decyduje pomiar z dziennika wieczka, nie ten
+   komentarz. Do tego czasu zostaje stan obecny.                      */
+bool alarmPotwierdzony(bool otwarteTeraz, bool byloOtwarteNaStarcie) {
+  (void)byloOtwarteNaStarcie;     // uzywaja go warianty A i B naprawy B1
+  return otwarteTeraz;
+}
+
 bool runAlarmWindow() {
   /* Krytycznie niska bateria: zew ladowania poprzedza alarm o leku, zebys
      dowiedzial sie o tym takze wtedy, gdy akurat nie otwierasz pudelka. */
   if (batteryPercentage <= BATT_CRIT_PCT) { beepLowBattery(true); delay(400); }
+
+  const bool byloOtwarteNaStarcie = boxIsOpen();
 
   buzzerInit();
   uint32_t deadline = millis() + (uint32_t)ALARM_WINDOW_S * 1000UL;
@@ -1606,11 +1647,11 @@ bool runAlarmWindow() {
       delay(BEEP_MS);
       buzzerTone(0);
       delay(120);
-      if (boxIsOpen()) { buzzerOff(); return true; }
+      if (alarmPotwierdzony(boxIsOpen(), byloOtwarteNaStarcie)) { buzzerOff(); return true; }
     }
     uint32_t gapEnd = millis() + BURST_GAP_MS;
     while (millis() < gapEnd) {
-      if (boxIsOpen()) { buzzerOff(); return true; }
+      if (alarmPotwierdzony(boxIsOpen(), byloOtwarteNaStarcie)) { buzzerOff(); return true; }
       delay(50);
     }
   }

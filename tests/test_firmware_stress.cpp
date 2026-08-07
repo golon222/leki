@@ -22,6 +22,7 @@ FakeSerial Serial;
 
 Preferences prefs;
 String  slots[12];
+String  idToken;          /* token Firebase - potrzebny przez tokenZPamieci() */
 int     slotCount = 0;
 int     batteryPercentage = 0;
 int     batteryRawPercentage = 0;
@@ -50,6 +51,9 @@ uint16_t rtcOpenWarnCount = 0;
 bool     rtcOpenReported  = false;
 bool     rtcOpenClearPend = false;
 bool     rtcStatusDirty   = false;
+int8_t   rtcPendingSlot   = -1;
+uint8_t  rtcAlarmRetries  = 0;
+uint8_t  rtcRetryCount    = 0;
 enum WakeReason { WAKE_BOOT, WAKE_REED, WAKE_BUTTON, WAKE_TIMER, WAKE_CLOSED };
 WakeReason wakeReason = WAKE_TIMER;
 bool FAKE_BOX_OPEN = false;

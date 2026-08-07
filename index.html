@@ -928,7 +928,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-07.5";
+const APP_VERSION = "2026-08-07.6";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -2538,12 +2538,42 @@ function zapiszCfg(obj, opis){
   return zapiszPewnie(u, opis);
 }
 
-/* Wysyłka zaległości. Przerywamy na pierwszym niepowodzeniu - skoro
-   baza nie odpowiada, kolejne próby tylko zabierałyby czas.         */
+/* Czy baza ODMÓWIŁA, czy w ogóle nie odpowiedziała.
+
+   To rozróżnienie decyduje o tym, co zrobić dalej — i jest dokładnie tym
+   samym rozróżnieniem, które po stronie pudełka robi `trwaleOdrzucony()`.
+   Odmowa znaczy, że baza jest osiągalna i przeczytała nasz zapis; brak
+   odpowiedzi znaczy, że nie ma z nią kontaktu i kolejne próby to strata
+   czasu.
+
+   UWAGA, świadomie: odmowy NIE traktujemy jako „to nigdy nie przejdzie".
+   PERMISSION_DENIED dostaniemy także wtedy, gdy wygasła sesja logowania —
+   a to jest stan przejściowy. Dlatego wpis zostaje w kolejce (zasada 6),
+   a jedyne, co się zmienia, to że przestaje blokować resztę.            */
+function bazaOdmowila(e){
+  const t = `${e?.code || ""} ${e?.message || e || ""}`.toUpperCase();
+  return t.includes("PERMISSION_DENIED") || t.includes("PERMISSION DENIED");
+}
+
+/* Wysyłka zaległości.
+
+   TU BYŁ BŁĄD B6 — ta sama rodzina co B3 po stronie pudełka.
+
+   Pętla przerywała się na PIERWSZYM niepowodzeniu. Przy braku sieci to
+   sensowne: skoro baza nie odpowiada, kolejne próby tylko zabierają czas.
+   Ale gdy baza odpowiadała i odmawiała jednego wpisu — bo trafiło w nim
+   pole spoza reguł — ten wpis stawał na czele kolejki i blokował
+   WSZYSTKIE dawki za sobą. Na zawsze, bo odmowa nie mijała sama.
+
+   Teraz odmowa pojedynczego wpisu przesuwa nas do następnego. Wpisu NIE
+   kasujemy — w przeciwieństwie do pudełka, gdzie `queueDrop()` musi to
+   robić, bo tam kolejka ma 120 miejsc i nadpisuje najstarsze. Tutaj
+   kolejka siedzi w telefonie, ma sufit 200 i nikomu nie przeszkadza, więc
+   nie ma powodu niczego tracić. Liczymy odmowy i pokazujemy je wprost. */
 async function oczekWyslij(){
   const lista = oczekWczytaj();
   if (!lista.length) return 0;
-  let wyslane = 0;
+  let wyslane = 0, odmowy = 0;
   for (const o of lista) {
     try {
       await Promise.race([
@@ -2553,13 +2583,25 @@ async function oczekWyslij(){
       ]);
       oczekZapisz(oczekWczytaj().filter(x => x.id !== o.id));
       wyslane++;
-    } catch (e) { console.warn("kolejka zapisow:", e); break; }
+    } catch (e) {
+      console.warn("kolejka zapisow:", e);
+      if (!bazaOdmowila(e)) break;          // brak kontaktu - reszta poczeka
+      /* Baza odmówiła TEGO wpisu. Zostawiamy go i idziemy dalej, żeby
+         poprawne zapisy za nim nie stały w nieskończoność.            */
+      odmowy++;
+      oczekZapisz(oczekWczytaj().map(x =>
+        x.id === o.id ? { ...x, odmowy: (x.odmowy || 0) + 1 } : x));
+    }
   }
   if (wyslane) toast(`Dosłano ${wyslane} zaległych ${wyslane === 1 ? "zapis" : "zapisów"}`, "ok", 3000);
+  if (odmowy) toast(`${odmowy} ${odmowy === 1 ? "zapis odrzucony" : "zapisów odrzuconych"} przez bazę — szczegóły w Diagnostyce`, "warn", 5000);
   if (typeof renderDiag === "function") renderDiag();
   return wyslane;
 }
 window.oczekWyslij = oczekWyslij;
+
+/* Ile wpisów baza już odrzuciła. Zero = kolejka czeka tylko na sieć. */
+function oczekOdmowy(){ return oczekWczytaj().filter(o => (o.odmowy || 0) > 0).length; }
 
 /* ═══════════════════════════════════════════════════════════════
    OSTRZEŻENIA — celowo NIE schowane w Diagnostyce
@@ -2577,15 +2619,24 @@ window.oczekWyslij = oczekWyslij;
    ═══════════════════════════════════════════════════════════════ */
 function ostrzKolejka(){
   const ile = oczekIle();
-  return ile
-    ? `<div style="margin-bottom:10px;padding:10px;border-radius:12px;
-         border:1px solid var(--warn);background:rgba(251,191,36,.10)">
-         <b>${ile}</b> ${ile === 1 ? "zapis czeka" : "zapisów czeka"} na połączenie
-         z bazą. Nic nie zginęło — aplikacja dośle je sama, gdy wróci sieć.
-         <button class="btn" style="margin-top:8px"
-           onclick="oczekWyslij()">Spróbuj teraz</button>
-       </div>`
-    : "";
+  if (!ile) return "";
+  /* Zapis odrzucony przez bazę to co innego niż zapis czekający na sieć:
+     sieć wraca sama, a odmowa nie minie, dopóki ktoś czegoś nie zmieni.
+     Napisanie „dośle je sama" o odmowie byłoby po prostu nieprawdą.   */
+  const odm = oczekOdmowy();
+  const tresc = odm
+    ? `<b style="color:var(--warn)">${odm}</b> ${odm === 1 ? "zapis został odrzucony" : "zapisów zostało odrzuconych"}
+       przez bazę${ile > odm ? `, a ${ile - odm} czeka na połączenie` : ""}.
+       Odrzucenie samo nie minie — najczęstsza przyczyna to przestarzałe
+       reguły bezpieczeństwa. Nic nie zginęło, wpisy czekają w telefonie.`
+    : `<b>${ile}</b> ${ile === 1 ? "zapis czeka" : "zapisów czeka"} na połączenie
+       z bazą. Nic nie zginęło — aplikacja dośle je sama, gdy wróci sieć.`;
+  return `<div style="margin-bottom:10px;padding:10px;border-radius:12px;
+            border:1px solid var(--warn);background:rgba(251,191,36,.10)">
+            ${tresc}
+            <button class="btn" style="margin-top:8px"
+              onclick="oczekWyslij()">Spróbuj teraz</button>
+          </div>`;
 }
 
 function ostrzReguly(){
