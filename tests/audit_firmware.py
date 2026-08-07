@@ -481,6 +481,23 @@ si_cfg  = code.find("configureInputs();")
 ok(si_hold >= 0 and si_cfg >= 0 and si_hold < si_cfg,
    "zwolnienie zatrzasku przed configureInputs()")
 
+# ---------- 6b. Alarm: gdzie zapada decyzja o dawce (B1) ----------
+# Decyzja "otwarte wieczko = dawka wzieta" jest wydzielona z petli alarmu
+# wylacznie po to, zeby dala sie przetestowac. Cala wartosc tego zabiegu
+# znika, gdy petla zacznie pytac o pin z pominieciem tej funkcji: naprawa
+# B1 wejdzie wtedy w jedno miejsce, a dzialac bedzie drugie.
+alarm = cialo("bool runAlarmWindow()")
+ok("bool alarmPotwierdzony(" in code,
+   "decyzja o potwierdzeniu dawki jest osobna, testowalna funkcja")
+ok(alarm.count("alarmPotwierdzony(") == 2,
+   f"obie sciezki wyjscia z alarmu pytaja przez nia ({alarm.count('alarmPotwierdzony(')})")
+ok("if (boxIsOpen()) { buzzerOff(); return true; }" not in alarm,
+   "petla alarmu nie omija funkcji decyzyjnej skrotem do pinu")
+ok("const bool byloOtwarteNaStarcie = boxIsOpen();" in alarm,
+   "stan wieczka sprzed dzwonienia zapamietany, zanim cokolwiek zapiszczy")
+ok(alarm.find("byloOtwarteNaStarcie = boxIsOpen()") < alarm.find("buzzerInit()"),
+   "i zapamietany PRZED pierwszym pikiem, nie w trakcie")
+
 # ---------- 7. Znaczniki dobowe trwale ----------
 ok("loadDayMarkers();" in setup_body, "znaczniki dobowe odtwarzane przy starcie")
 allowed_fns = ("loadDayMarkers", "setTakenDay", "setRolloverDay", "clearDayMarkers")

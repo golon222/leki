@@ -17,6 +17,7 @@ FakeSerial Serial;
 /* globalne, ktorych uzywa wycieta logika */
 Preferences prefs;
 String  slots[12];
+String  idToken;          /* token Firebase - potrzebny przez tokenZPamieci() */
 int     slotCount = 0;
 int     batteryPercentage = 0;
 int     batteryRawPercentage = 0;
@@ -974,6 +975,144 @@ CHECK(REPORT_BOOT_EVENT == 0,
     CHECK(!trackCharging(0.0f, 4.20f), "pomiar bez sensu nie udaje ladowania");
     CHECK(rtcVoltMax == 0.0f, "i kasuje zapamietany szczyt");
   }
+
+/* ================= 17a. POTWIERDZENIE DAWKI (B1) ====================
+   Najwrazliwsze miejsce w calym projekcie i do tej pory jedyne bez
+   ANI JEDNEGO testu - bo runAlarmWindow() to petla na millis() z
+   delay() i odczytem pinu, nie do uruchomienia w tescie. Sama decyzja
+   jest teraz osobna funkcja, wiec da sie ja przebadac.
+
+   Testy PRZYPINAJA stan dzisiejszy, razem z bledem B1. Kazdy z trzech
+   wariantow naprawy zmieni ktoras z tych linii - i wtedy bedzie widac
+   dokladnie, ktore zachowanie sie zmienilo, zamiast wchodzic w alarm
+   po omacku.                                                          */
+head("Co liczy sie jako potwierdzenie dawki (B1)");
+{
+  CHECK(alarmPotwierdzony(true,  false),
+        "wieczko otwarte w trakcie dzwonienia = dawka wzieta");
+  CHECK(!alarmPotwierdzony(false, false),
+        "zamkniete przez cale okno = dawka nie potwierdzona");
+  CHECK(!alarmPotwierdzony(false, true),
+        "zamkniecie wieczka NIE jest dzis potwierdzeniem (to wariant B)");
+
+  /* TO JEST BLAD B1, przypiety swiadomie.
+     Pudelko z przesunietym magnesem zglasza "otwarte" bez przerwy.
+     Alarm konczy sie potwierdzeniem w pierwszej setnej sekundy, wiec
+     w telefonie jest zielone "wziete", a pudelko nawet nie zadzwonilo. */
+  CHECK(alarmPotwierdzony(true, true),
+        "wieczko otwarte JUZ PRZED alarmem tez potwierdza dawke - "
+        "to jest blad B1, nie cecha; zmiana tej linii to wariant A");
+
+  /* Decyzja nie moze zalezec od niczego poza podanym stanem - inaczej
+     naprawa B1 zachowywalaby sie roznie przy tych samych wejsciach. */
+  FAKE_BOX_OPEN = false;
+  CHECK(alarmPotwierdzony(true, false), "wynik nie zalezy od globalnego stanu pinu");
+  FAKE_BOX_OPEN = true;
+  CHECK(!alarmPotwierdzony(false, false), "ani w druga strone");
+  FAKE_BOX_OPEN = false;
+  /* Tego, ze petla alarmu naprawde pyta przez te funkcje - a nie omija
+     jej bokiem - pilnuje audyt (audit_firmware.py, sekcja B1).        */
+}
+
+/* ================= 17b. TOKEN FIREBASE ==============================
+   Cale rozumowanie stojace za D13 opiera sie na zalozeniu, ktorego
+   nikt nie sprawdzil: "401 to wygasly token, po odswiezeniu przejdzie".
+   Jesli token sie NIE odswieza, kazda wysylka wraca 401, flushQueue()
+   zwraca false w nieskonczonosc, a zaden licznik sie nie rusza -
+   ani dropped, ani nvsFail. Aplikacja nie ma o czym krzyknac.       */
+head("Token z pamieci: kiedy wolno mu zaufac");
+{
+  prefs.wipe();
+  idToken = "";
+  const String dobryToken = "eyJhbGciOiJSUzI1NiIsImtpZCI6InRoaXNJc0FUb2tlbiJ9";
+  prefs.putString("tok", dobryToken);
+  FAKE_NOW = 1750000000;
+
+  rtcTimeValid = true; rtcTokenExp = (uint32_t)FAKE_NOW + 3600;
+  idToken = "";
+  CHECK(tokenZPamieci(), "wazny token z zapasem czasu jest przyjmowany");
+  CHECK(idToken.length() > 20, "i naprawde wlazi do zmiennej");
+
+  idToken = "";
+  rtcTokenExp = (uint32_t)FAKE_NOW + TOKEN_MARGIN_S - 1;
+  CHECK(!tokenZPamieci(),
+        "token gasnacy w ciagu marginesu jest odrzucany - inaczej wygasnie "
+        "w polowie wysylki i dostaniemy 401");
+  CHECK(idToken.length() == 0, "i nie zostawia po sobie smiecia");
+
+  idToken = "";
+  rtcTokenExp = (uint32_t)FAKE_NOW - 1;
+  CHECK(!tokenZPamieci(), "token juz wygasly jest odrzucany");
+
+  /* TU JEST DZIURA, i to cicha.
+     Bez wiarygodnego zegara nie da sie ocenic waznosci - tokenZPamieci()
+     slusznie odmawia. Ale firebaseSignIn() w tej samej sytuacji ZWRACA
+     TRUE, jesli token siedzi juz w RAM. Martwy token przechodzi dalej,
+     kazdy push wraca 401 i kolejka stoi. Ponizej pilnujemy obu polowek
+     tego zachowania osobno, zeby zmiana ktorejkolwiek byla widoczna. */
+  idToken = "";
+  rtcTimeValid = false; rtcTokenExp = (uint32_t)FAKE_NOW + 3600;
+  CHECK(!tokenZPamieci(), "bez wiarygodnego zegara token z NVS nie jest uzywany");
+
+  rtcTimeValid = true; rtcTokenExp = 0;
+  idToken = "";
+  CHECK(!tokenZPamieci(), "brak zapamietanego terminu waznosci = brak zaufania");
+
+  /* Zapomnienie musi czyscic OBIE kopie - RAM i NVS. Zostawiona w NVS
+     wrocilaby przy nastepnym wybudzeniu i blad powtorzylby sie w kolko. */
+  idToken = dobryToken; rtcTokenExp = 999; rtcTimeValid = true;
+  zapomnijToken();
+  CHECK(idToken.length() == 0, "zapomnijToken czysci token w pamieci RAM");
+  CHECK(rtcTokenExp == 0, "i termin waznosci");
+  CHECK(prefs.getString("tok", "") == String(""), "i kopie w NVS");
+
+  /* Korekta zegara po NTP musi ruszyc takze terminem waznosci tokenu -
+     inaczej po skoku o godziny token wyglada na wieczny albo na trupa. */
+  rtcTokenExp = 1750000000; rtcLastOpenTs = 0; rtcLastPushTs = 0;
+  rtcOpenSinceTs = 0; rtcNextWarnTs = 0;
+  przesunZnaczniki(3600);
+  CHECK(rtcTokenExp == 1750003600u,
+        "termin waznosci tokenu przesuwa sie razem z zegarem (%lu)",
+        (unsigned long)rtcTokenExp);
+}
+
+head("Kolejka pod nieustajacym 401 (trzeci sposob na zatkanie)");
+{
+  /* 401 NIE jest na liscie trwale odrzuconych (D13) - i sluszne, bo po
+     odswiezeniu tokenu wpis przejdzie. Ale jesli odswiezenie nie
+     nastapi, dzieje sie to: kolejka stoi, nic nie ginie i nic nie
+     krzyczy. Test przypina ten stan, zeby byl widoczny w liczbach. */
+  prefs.wipe();
+  rtcTimeValid = true;
+  rtcQueueDropped = 0; rtcNvsFail = 0;
+  FAKE_MILLIS = 0; awakeDeadlineMs = AWAKE_LIMIT_MS;
+  batteryPercentage = 80; realBatteryVoltage = 4.0f;
+  for (int i = 0; i < 5; i++) queuePush(makeRecordAt("open", 0, 1750000000u + i));
+
+  FAKE_HTTP = 401;
+  FAKE_SENT.clear();
+  CHECK(!flushQueue(), "401 konczy wysylke niepowodzeniem");
+  CHECK(queueCount() == 5, "wszystkie dawki zostaja w kolejce (%u)", queueCount());
+  CHECK(rtcQueueDropped == 0, "nic nie zostalo skasowane - 401 to nie 400");
+  CHECK(FAKE_SENT.size() == 1, "po pierwszym 401 nie probujemy reszty na sile");
+
+  /* Piec wybudzen z rzedu i dalej to samo: zero sladu w licznikach. */
+  for (int i = 0; i < 5; i++) flushQueue();
+  CHECK(queueCount() == 5, "po pieciu wybudzeniach nadal 5 dawek (%u)", queueCount());
+  CHECK(rtcQueueDropped == 0 && rtcNvsFail == 0,
+        "zaden licznik w statusie nie rosnie - aplikacja NIE MA o czym "
+        "krzyknac (znane ograniczenie, B8 w DECYZJE)");
+
+  /* A po odswiezeniu tokenu wszystko ma przejsc bez straty - to jest
+     wlasnie zalozenie, na ktorym stoi decyzja D13.                   */
+  FAKE_HTTP = 200;
+  CHECK(flushQueue(), "po odzyskaniu tokenu wysylka przechodzi");
+  CHECK(queueCount() == 0, "kolejka pusta (%u)", queueCount());
+  CHECK(rtcQueueDropped == 0, "i ani jedna dawka nie zostala skasowana po drodze");
+
+  FAKE_HTTP = 200;
+  prefs.wipe();
+}
 
 /* ================= 18. ILE SPAC (planNextSleep) =====================
    Jedyna funkcja decydujaca o tym, czy pudelko obudzi sie na 20:00.

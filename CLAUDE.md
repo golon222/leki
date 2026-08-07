@@ -23,12 +23,26 @@ bash tests/run_all.sh
 ```
 
 Musi przejść przed zmianą i po zmianie. Stan wyjściowy:
-**247 + 51 firmware, 487 + 81 aplikacja (×6 pór doby), 21 zgodności,
-190 kontroli audytu — 0 błędów.**
+**298 + 51 firmware, 487 (×6 pór doby) + 81 + 38 aplikacja, 40 zgodności,
+55 reguł bazy, 195 kontroli audytu — 0 błędów.**
 
 Testy pracują na **prawdziwym kodzie**, nie na kopii: `tests/extract.py` wycina
 funkcje z `PillBox.ino`, `tests/build_app_module.mjs` buduje moduł z `index.html`.
 Jeśli zmieniasz nazwę wyciąganej funkcji, popraw też `extract.py`.
+
+**Atrapa Firebase (`tests/firebase_stub.mjs`) sprawdza każdy zapis
+prawdziwym `database.rules.json`** i umie zawieść na żądanie:
+
+```js
+__db.tryb = "blad";   // baza odrzuca
+__db.tryb = "wisi";   // Firebase offline - obietnica nigdy się nie kończy (D1)
+__db.sprawdzajReguly = false;   // tylko dla testów piszących celowo śmieci
+```
+
+Jeśli dokładasz pole do zapisu — **dopisz je też do `database.rules.json`**.
+Gałąź `events` i pojedyncza dawka mają `$other: false`, więc nieznane pole
+odrzuca **cały** wpis kodem 400, a `trwaleOdrzucony(400)` go wtedy **kasuje**.
+Test to złapie, ale komunikat zrozumiesz szybciej, znając powód (D6, D13, D15).
 
 ---
 

@@ -1,14 +1,16 @@
 /* =====================================================================
- *  Wypisuje numer DOBY LEKOWEJ dla znacznikow czasu podanych na wejsciu,
- *  uzywajac PRAWDZIWEJ funkcji localDayNumber() wycietej z PillBox.ino.
+ *  Przepuszcza znaczniki czasu przez PRAWDZIWE funkcje wyciete
+ *  z PillBox.ino, zeby dalo sie porownac ich wynik z ta sama decyzja
+ *  podjeta po stronie aplikacji.
  *
- *  Sluzy do porownania z ta sama decyzja podjeta po stronie aplikacji.
  *  Rozjazd miedzy pudelkiem a telefonem jest najgrozniejszym bledem w tym
  *  projekcie: obie strony dzialaja "poprawnie", tylko przypisuja te sama
- *  tabletke do dwoch roznych dni - i nikt tego nie widzi, dopoki nie
- *  zrobi sie dziura w kalendarzu.
+ *  tabletke do dwoch roznych dni albo do dwoch roznych dawek - i nikt tego
+ *  nie widzi, dopoki nie zrobi sie dziura w kalendarzu.
  *
- *  Uzycie:  echo "<offset_min> <ts> <ts> ..." | ./crosscheck
+ *  Uzycie:
+ *    echo "dzien <offset_min> <ts>..."               | ./crosscheck
+ *    echo "slot  <offset_min> <hh:mm,hh:mm> <ts>..." | ./crosscheck
  * ===================================================================== */
 #include "arduino_shim.h"
 #include "../firmware/PillBox/config.h"
@@ -22,6 +24,7 @@ FakeSerial Serial;
 
 Preferences prefs;
 String  slots[12];
+String  idToken;          /* token Firebase - potrzebny przez tokenZPamieci() */
 int     slotCount = 0;
 int     batteryPercentage = 0;
 int     batteryRawPercentage = 0;
@@ -69,11 +72,25 @@ int pushEventRecord(const String&) { return 200; }
 #include "logic.inc"
 
 int main() {
+  char tryb[16];
   long off;
+  if (scanf("%15s", tryb) != 1) return 1;
   if (scanf("%ld", &off) != 1) return 1;
   rtcTzOffsetMin = (int16_t)off;
 
   long long ts;
+
+  if (strcmp(tryb, "slot") == 0) {
+    /* Harmonogram wczytujemy TA SAMA funkcja, ktorej uzywa pudelko -
+       wlasny parser w tescie badalby juz co innego niz produkcja.    */
+    char plan[128];
+    if (scanf("%127s", plan) != 1) return 1;
+    parseSchedule(String(plan));
+    while (scanf("%lld", &ts) == 1)
+      printf("%d\n", matchSlot((time_t)ts));
+    return 0;
+  }
+
   while (scanf("%lld", &ts) == 1)
     printf("%lu\n", (unsigned long)localDayNumber((time_t)ts));
   return 0;

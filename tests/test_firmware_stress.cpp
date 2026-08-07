@@ -22,6 +22,7 @@ FakeSerial Serial;
 
 Preferences prefs;
 String  slots[12];
+String  idToken;          /* token Firebase - potrzebny przez tokenZPamieci() */
 int     slotCount = 0;
 int     batteryPercentage = 0;
 int     batteryRawPercentage = 0;
