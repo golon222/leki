@@ -22,7 +22,29 @@ ROOT="$(pwd)"
 ACLI_DIR="${ACLI_DIR:-$HOME/.pillbox-arduino}"
 ACLI="$ACLI_DIR/arduino-cli"
 CORE_VER="${CORE_VER:-3.3.11}"        # ta wersja siedzi w pudelku
-FQBN="esp32:esp32:XIAO_ESP32C3"
+
+# USTAWIENIA PLYTKI - musza byc DOKLADNIE te, ktore Kuba wybiera w Arduino IDE.
+#
+#   Kompilacja na domyslnych ustawieniach mierzy inna rzecz niz to, co
+#   naprawde ląduje w pudelku. Domyslny podzial pamieci daje programowi
+#   1,2 MB, a Kuba wgrywa z podzialem "Huge APP" - 3 MB. Ten sam plik to
+#   raz 92% zajetosci, raz 38%. Pierwsza liczba wyglada jak alarm, ktorego
+#   nie ma.
+#
+#   Nazwy opcji sa mylace i latwo je wziac odwrotnie:
+#     CDCOnBoot=default  ->  USB CDC WLACZONE   (tak ma byc)
+#     CDCOnBoot=cdc      ->  USB CDC WYLACZONE
+#   Zrodlo prawdy to naglowek PillBox.ino, ktory te ustawienia wypisuje.
+#   Ponizej sprawdzamy, czy nadal sie zgadzaja.
+PART="${PART:-huge_app}"
+PART_OPIS="Huge APP (3MB No OTA/1MB SPIFFS)"
+FQBN="esp32:esp32:XIAO_ESP32C3:PartitionScheme=$PART,CDCOnBoot=default"
+
+if ! grep -qF "$PART_OPIS" "$ROOT/firmware/PillBox/PillBox.ino"; then
+  echo "BLAD: naglowek PillBox.ino nie zapowiada juz podzialu '$PART_OPIS'."
+  echo "      Kompilowanie na innym podziale mierzy nie to urzadzenie."
+  exit 1
+fi
 ESP32_INDEX="https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json"
 
 mkdir -p "$ACLI_DIR"
@@ -120,7 +142,7 @@ zbuduj() {
 }
 
 zbuduj pillbox "$ROOT/firmware/PillBox/PillBox.ino" "$ROOT/firmware/PillBox" \
-       "PillBox.ino  (rdzen $CORE_VER, plytka XIAO ESP32-C3)"
+       "PillBox.ino  (rdzen $CORE_VER, XIAO ESP32-C3, $PART_OPIS)"
 zbuduj pillboxtest "$ROOT/firmware/PillBoxTest/PillBoxTest.ino" "$ROOT/firmware/PillBoxTest" \
        "PillBoxTest.ino  (szkic diagnostyczny)"
 
