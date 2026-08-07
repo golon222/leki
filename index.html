@@ -928,7 +928,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-07.3";
+const APP_VERSION = "2026-08-07.4";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -2832,21 +2832,52 @@ function renderStatus(st){
 /* Wczoraj = dzień przed bieżącym DNIEM LEKOWYM. O 01:00 „dziś” to wciąż
    poprzedni dzień kalendarzowy, więc liczymy od todayKey(), nie od zegara. */
 function yesterdayKey(){ const d = medDate(new Date()); d.setDate(d.getDate()-1); return dateKey(d); }
+/* Południe, nie północ — przy zmianie czasu +1 dzień od północy potrafi
+   wylądować z powrotem w tym samym dniu. */
+function dayAfter(key){ const d = new Date(key + "T12:00:00"); d.setDate(d.getDate()+1); return dateKey(d); }
+
+/* Licznik liczy się OD BAZY, nie różnicowo (B4). `pillsBase` to stan na
+   początek dnia `pillsBaseFrom`; `pillsLeft` wyliczamy za każdym razem od
+   nowa jako bazę minus wszystko wzięte od tamtej daty.
+
+   Dlaczego nie różnicowo: stary kod trzymał znacznik „dokąd doszliśmy” i
+   pomijał dni starsze od niego — na zawsze. Pudełko offline od wtorku,
+   telefon online: w czwartek dopisujesz ręcznie środę, znacznik skacze na
+   środę, a gdy w piątek pudełko dośle wtorek — wtorek jest starszy od
+   znacznika i ta tabletka nie odejmie się już nigdy. Licznik rósł.        */
+function pillsBaseInfo(){
+  if (typeof cfg.pillsBase === "number" && cfg.pillsBaseFrom)
+    return { base: cfg.pillsBase, from: cfg.pillsBaseFrom };
+  if (typeof cfg.pillsLeft !== "number") return null;
+  /* Migracja ze starego zapisu, jednorazowo i bez pytania: stary
+     `pillsLeft` był stanem na dzień PO znaczniku, więc dokładnie stąd
+     zaczynamy liczyć. Stan licznika się nie zmienia.                      */
+  return { base: cfg.pillsLeft, from: dayAfter(cfg.pillsCountedUntil || yesterdayKey()) };
+}
 
 async function settlePills(){
-  if (typeof cfg.pillsLeft !== "number") return;
-  const today = todayKey(), until = cfg.pillsCountedUntil || "0000-00-00";
-  const closed = Object.keys(doses).filter(d => d < today).sort();
-  if (!closed.length) return;
-  const newest = closed[closed.length-1];
-  if (newest <= until) return;
+  const b = pillsBaseInfo();
+  if (!b) return;
+  const today = todayKey();
   let used = 0;
-  for (const d of closed){ if (d <= until) continue;
-    for (const r of Object.values(doses[d])) if (r.status === "taken") used += (r.dose ?? 1); }
-  cfg.pillsLeft = Math.max(0, Math.round((cfg.pillsLeft - used)*100)/100);
-  cfg.pillsCountedUntil = newest;
-  await zapiszCfg({ pillsLeft: cfg.pillsLeft,
-                    pillsCountedUntil: cfg.pillsCountedUntil }, "Stan opakowania");
+  for (const d of Object.keys(doses)){
+    if (d < b.from || d >= today) continue;
+    for (const r of Object.values(doses[d])) if (r.status === "taken") used += (r.dose ?? 1);
+  }
+  const left = Math.max(0, Math.round((b.base - used)*100)/100);
+  /* `pillsCountedUntil` nie jest już nam do niczego potrzebne, ale zostaje
+     w bazie i dalej idzie do przodu — telefon z zakeszowaną starą wersją
+     aplikacji liczy po staremu i bez tego odjąłby wszystko drugi raz.     */
+  const prev   = cfg.pillsCountedUntil || "";
+  const closed = Object.keys(doses).filter(d => d < today).sort();
+  const until  = closed.length && closed[closed.length-1] > prev ? closed[closed.length-1] : prev;
+  if (cfg.pillsBase === b.base && cfg.pillsBaseFrom === b.from &&
+      cfg.pillsLeft === left && cfg.pillsCountedUntil === until) return;
+  cfg.pillsBase = b.base; cfg.pillsBaseFrom = b.from;
+  cfg.pillsLeft = left;   cfg.pillsCountedUntil = until;
+  await zapiszCfg({ pillsBase: cfg.pillsBase, pillsBaseFrom: cfg.pillsBaseFrom,
+                    pillsLeft: cfg.pillsLeft, pillsCountedUntil: cfg.pillsCountedUntil },
+                  "Stan opakowania");
 }
 
 function renderPills(){
@@ -2866,11 +2897,17 @@ function renderPills(){
   sub.textContent = `starczy na ok. ${days} dni` + (days < 7 ? " — czas po receptę" : "");
 }
 
+/* Ręczny wpis to policzone tabletki LEŻĄCE TERAZ w opakowaniu, więc baza
+   rusza od dziś. Dni zamknięte wcześniej są już w tej liczbie zawarte i nie
+   wolno ich odejmować drugi raz — nawet gdy pudełko dośle je za tydzień.  */
 async function savePills(n){
-  cfg.pillsLeft = Math.max(0, Math.round(n*100)/100);
-  cfg.pillsCountedUntil = cfg.pillsCountedUntil || yesterdayKey();
-  await zapiszCfg({ pillsLeft: cfg.pillsLeft,
-                    pillsCountedUntil: cfg.pillsCountedUntil }, "Stan opakowania");
+  cfg.pillsBase = Math.max(0, Math.round(n*100)/100);
+  cfg.pillsBaseFrom = todayKey();
+  cfg.pillsLeft = cfg.pillsBase;
+  cfg.pillsCountedUntil = yesterdayKey();
+  await zapiszCfg({ pillsBase: cfg.pillsBase, pillsBaseFrom: cfg.pillsBaseFrom,
+                    pillsLeft: cfg.pillsLeft, pillsCountedUntil: cfg.pillsCountedUntil },
+                  "Stan opakowania");
   renderPills();
 }
 window.addPills = n => savePills(Math.max(0,(cfg.pillsLeft ?? 0) + n));

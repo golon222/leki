@@ -24,6 +24,12 @@
           "pillsCountedUntil": {
             ".validate": "newData.isString() && newData.val().length <= 10"
           },
+          "pillsBase": {
+            ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100000"
+          },
+          "pillsBaseFrom": {
+            ".validate": "newData.isString() && newData.val().length <= 10"
+          },
           "defaultDose": {
             ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() <= 10"
           },
