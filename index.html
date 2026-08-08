@@ -543,7 +543,7 @@ nav button.act{color:var(--acc)}
     <div class="pair">
       <div><label>Data pomiaru</label><input type="date" id="inrDate"></div>
       <div><label>Wynik INR</label>
-        <input type="number" id="inrVal" step="0.1" min="0.5" max="12"
+        <input type="number" id="inrVal" step="0.1" min="0.5" max="15"
                inputmode="decimal" placeholder="2,4"></div>
     </div>
     <input id="inrNote" placeholder="Notatka, np. dzień po antybiotyku" style="margin-top:10px">
@@ -623,11 +623,12 @@ nav button.act{color:var(--acc)}
       <option value="0">inna — tabletka biała</option>
     </select>
     <label>Standardowa dawka dzienna (tabletki)</label>
-    <input id="defDose" type="number" step="0.5" min="0.5" inputmode="decimal">
-    <label>Godzina przypomnienia</label>
+    <input id="defDose" type="number" step="0.5" min="0.5" max="10" inputmode="decimal">
+    <label>Godziny przypomnień</label>
+    <div class="dim2" style="margin:-4px 0 6px">Tabletkę bierzesz, kiedy chcesz — pudełko przypomni o tych godzinach, jeśli jeszcze jej nie wziąłeś.</div>
     <div id="slotEditor"></div>
     <div class="row" style="margin-top:10px">
-      <button class="ghost" onclick="addSlot()">+ Dodaj godzinę</button>
+      <button class="ghost" onclick="addSlot()">+ Dodaj przypomnienie</button>
       <button class="primary" style="flex:1" onclick="saveConfig()">Zapisz</button>
     </div>
     <label>Strefa czasowa</label>
@@ -928,7 +929,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-07.6";
+const APP_VERSION = "2026-08-08.1";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -1025,6 +1026,10 @@ const dateKey = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate(
    lekowego należy ten moment”. */
 const medDate = d => new Date(d.getTime() - DAY_START_HOUR*3600*1000);
 const todayKey = () => dateKey(medDate(new Date()));
+/* Zwykła data kalendarzowa, BEZ przesunięcia doby lekowej. Do ograniczania
+   pola wyboru daty: o 01:00 dziewiątego todayKey() mówi jeszcze „ósmy",
+   a użytkownik wpisujący pomiar z dziewiątego ma rację, nie aplikacja. */
+const dzisiajKey = () => dateKey(new Date());
 
 /* Czy trwa jeszcze wczorajsza doba (jest po północy, ale przed granicą)? */
 const inNightWindow = () => new Date().getHours() < DAY_START_HOUR;
@@ -1669,16 +1674,26 @@ async function doReconcile(silent = true){
   for (const ev of events){
     if (!ev.ts) continue;
     const key = devKey(ev.ts);
-    let slot = (typeof ev.slot === "number" && ev.slot >= 0) ? ev.slot : -1;
-    if (slot < 0 && cfg.schedule.length === 1) slot = 0;
-    else if (slot < 0){
-      const m = devDate(ev.ts).getUTCHours()*60 + devDate(ev.ts).getUTCMinutes();
-      let best=-1, bd=1e9;
-      cfg.schedule.forEach((h,i)=>{ let d=Math.abs(m-slotMin(h)); if(d>720)d=1440-d;
-        if(d<=90 && d<bd){bd=d;best=i;} });
-      slot = best;
-    }
-    if (slot < 0) continue;
+    /* TU PRZEPADAŁY DAWKI.
+
+       Godziny w `cfg.schedule` to PRZYPOMNIENIA, a nie pory brania leku —
+       tabletkę bierze się wtedy, kiedy wygodnie. Przy jednym przypomnieniu
+       kod miał furtkę „jedna pora → slot 0" i wszystko działało. Ale przy
+       DWÓCH przypomnieniach furtka znikała: otwarcie o 14:00 nie pasowało
+       do żadnego z nich, `best` zostawało -1, a `continue` niżej wyrzucało
+       zdarzenie do kosza. Dawka wzięta poza porą przypomnienia po prostu
+       nie trafiała do kalendarza — i wyglądała jak pominięta.
+
+       Skoro dawka jest JEDNA dziennie, to każde otwarcie należy do niej —
+       i zawsze trafia do slotu 0. Reszta aplikacji od dawna tak to widzi:
+       arkusz dnia czyta `doses[data][0]`, a ręczna korekta pisze do
+       `.../0`. Zapisanie dawki pod innym numerem zrobiłoby wpis, którego
+       żaden ekran by nie pokazał — czyli dawkę niewidzialną.
+
+       Numer przypomnienia, który przysyła pudełko, jest tu bez znaczenia:
+       ma sens przy dzwonieniu (które przypomnienie trwa), nie przy
+       zapisie do kalendarza. */
+    const slot = 0;
 
     const cur = doses?.[key]?.[slot];
     if (cur && cur.source === "manual") continue;      // ręczna korekta wygrywa zawsze
@@ -1784,11 +1799,24 @@ window.shiftMonth = n => {
   renderCalendar();
 };
 
+/* `cfg.schedule` to godziny PRZYPOMNIEŃ, nie godziny brania leku.
+
+   Kuba bierze tabletkę wtedy, kiedy mu wygodnie — o 10, o 14, o 21, czasem
+   o 2 w nocy. Pudełko ma tylko przypomnieć, jeśli do danej godziny jeszcze
+   jej nie wziął. Dlatego druga pozycja w harmonogramie znaczy „przypomnij
+   mi jeszcze raz o 23:00", a NIE „weź drugą tabletkę".
+
+   Firmware rozumiał to od początku (`ONE_DOSE_PER_DAY = 1`). Aplikacja nie:
+   liczyła `defaultDose × schedule.length`, więc dodanie drugiego
+   przypomnienia zamieniało każdy poprawny dzień w „częściowy", a prognozę
+   zapasu tabletek dzieliło na pół. Dzienny cel to JEDNA dawka. */
+function dawekNaDzien(){ return cfg.defaultDose ?? 1; }
+
 function dayDose(key){
   const rec = doses[key] || {};
   let sum = 0, any = false;
-  for (let i = 0; i < (cfg.schedule.length||1); i++){
-    const r = rec[i];
+  /* Po wszystkim, co tego dnia zapisano - nie po liczbie przypomnień. */
+  for (const r of Object.values(rec)){
     if (r){ any = true; if (r.status === "taken") sum += (r.dose ?? 1); }
   }
   return { sum, any };
@@ -1803,7 +1831,7 @@ function beforeTracking(key){ return key < trackingSince(); }
 
 function dayStatus(key){
   const { sum, any } = dayDose(key);
-  const target = (cfg.defaultDose ?? 1) * (cfg.schedule.length || 1);
+  const target = dawekNaDzien();
   const past = key < todayKey();
   /* Wpis ręczny wygrywa nawet przed datą startu — skoro coś tam wpisałeś,
      to znaczy, że wiesz lepiej niż domyślna reguła. */
@@ -1930,7 +1958,7 @@ function opisCzasu(min){
 
 function renderToday(){
   const key = todayKey(), { sum, any } = dayDose(key);
-  const target = (cfg.defaultDose ?? 1) * (cfg.schedule.length || 1);
+  const target = dawekNaDzien();
   const el = document.getElementById("todayState");
   /* Na ekranie głównym tabletka jest bryłą. Kręci się dopiero wtedy, gdy
      dawka jest wzięta - ruch ma coś znaczyć, a nie być tapetą.        */
@@ -2092,6 +2120,15 @@ window.addInr = async () => {
   if (!date || !val || val <= 0 || val > 15){
     msg.textContent = "Podaj datę i wynik (np. 2,4)."; msg.style.color = "var(--bad)"; return;
   }
+  /* Data z przyszłości cicho wyłączała przypomnienie o kolejnym pomiarze:
+     inrTerminKey() bierze NAJPÓŹNIEJSZY wpis jako ostatni pomiar, więc
+     literówka w roku przesuwała termin o rok i nikt się o tym nie
+     dowiadywał. Wstecz wolno wpisywać bez ograniczeń — pomiar sprzed
+     tygodnia to normalna sytuacja. */
+  if (date > dzisiajKey()){
+    msg.textContent = "Data pomiaru nie może być z przyszłości.";
+    msg.style.color = "var(--bad)"; return;
+  }
   const note = document.getElementById("inrNote").value.trim();
   await zapiszPewnie({ [`users/${uid}/inr/${date}`]: {
     value: Math.round(val*100)/100,
@@ -2159,6 +2196,11 @@ function inrDoTerminu(){
 function dniTxt(n){ return n === 1 ? "1 dzień" : `${n} dni`; }
 
 function renderInr(){
+  /* Kalendarz sam nie daje wybrać jutra. Ustawiamy przy każdym renderze,
+     bo aplikacja potrafi być otwarta przez kilka dni i „dziś" się zmienia. */
+  const pole = document.getElementById("inrDate");
+  if (pole) pole.max = dzisiajKey();
+
   const keys = inrKeysOk();
   const lastK = keys[keys.length-1];
   const el = document.getElementById("inrLast");
@@ -2570,10 +2612,15 @@ function bazaOdmowila(e){
    robić, bo tam kolejka ma 120 miejsc i nadpisuje najstarsze. Tutaj
    kolejka siedzi w telefonie, ma sufit 200 i nikomu nie przeszkadza, więc
    nie ma powodu niczego tracić. Liczymy odmowy i pokazujemy je wprost. */
+/* Po tylu odmowach POD RZĄD uznajemy, że baza odmawia wszystkiego, a nie
+   jednego felernego wpisu — i przestajemy ją męczyć. */
+const ODMOWY_POD_RZAD_MAX = 3;
+
 async function oczekWyslij(){
   const lista = oczekWczytaj();
   if (!lista.length) return 0;
-  let wyslane = 0, odmowy = 0;
+  let wyslane = 0, odmowy = 0, podRzad = 0;
+  const odrzucone = new Set();
   for (const o of lista) {
     try {
       await Promise.race([
@@ -2583,16 +2630,25 @@ async function oczekWyslij(){
       ]);
       oczekZapisz(oczekWczytaj().filter(x => x.id !== o.id));
       wyslane++;
+      podRzad = 0;
     } catch (e) {
       console.warn("kolejka zapisow:", e);
       if (!bazaOdmowila(e)) break;          // brak kontaktu - reszta poczeka
       /* Baza odmówiła TEGO wpisu. Zostawiamy go i idziemy dalej, żeby
          poprawne zapisy za nim nie stały w nieskończoność.            */
       odmowy++;
-      oczekZapisz(oczekWczytaj().map(x =>
-        x.id === o.id ? { ...x, odmowy: (x.odmowy || 0) + 1 } : x));
+      odrzucone.add(o.id);
+      /* Ale gdy odmawia KAŻDEGO po kolei, to nie wina wpisów, tylko
+         sesji albo reguł. Bez tego licznika wygasłe logowanie
+         wystrzeliwało serię zapytań długą jak cała kolejka. */
+      if (++podRzad >= ODMOWY_POD_RZAD_MAX) break;
     }
   }
+  /* Liczniki odmów dopisujemy RAZ, na końcu. Zapisywanie całej kolejki
+     przy każdej odmowie z osobna to n zapisów po n wpisów. */
+  if (odrzucone.size)
+    oczekZapisz(oczekWczytaj().map(x =>
+      odrzucone.has(x.id) ? { ...x, odmowy: (x.odmowy || 0) + 1 } : x));
   if (wyslane) toast(`Dosłano ${wyslane} zaległych ${wyslane === 1 ? "zapis" : "zapisów"}`, "ok", 3000);
   if (odmowy) toast(`${odmowy} ${odmowy === 1 ? "zapis odrzucony" : "zapisów odrzuconych"} przez bazę — szczegóły w Diagnostyce`, "warn", 5000);
   if (typeof renderDiag === "function") renderDiag();
@@ -2964,7 +3020,7 @@ function renderPills(){
   const takenToday = Object.values(doses[todayKey()]||{})
     .filter(r=>r.status==="taken").reduce((a,r)=>a+(r.dose??1),0);
   const left = Math.max(0, cfg.pillsLeft - takenToday);
-  const perDay = (cfg.defaultDose ?? 1) * (cfg.schedule.length || 1);
+  const perDay = dawekNaDzien();
   const days = perDay > 0 ? Math.floor(left/perDay) : 0;
   const col = days < 7 ? "var(--bad)" : days < 14 ? "var(--warn)" : "var(--ok)";
   big.textContent = nf(left); big.style.color = col;
@@ -2988,7 +3044,9 @@ async function savePills(n){
 window.addPills = n => savePills(Math.max(0,(cfg.pillsLeft ?? 0) + n));
 window.setPills = () => {
   const v = prompt("Ile tabletek jest w opakowaniu?", cfg.pillsLeft ?? 100);
-  if (v !== null && !isNaN(+v)) savePills(+v);
+  /* Sam warunek !isNaN(+v) nie wystarczy: +"" to ZERO, więc kliknięcie OK
+     przy pustym polu kasowało cały stan opakowania. */
+  if (v !== null && String(v).trim() !== "" && !isNaN(+v)) savePills(+v);
 };
 
 /* ═══════════════ USTAWIENIA ═══════════════ */
@@ -3035,11 +3093,26 @@ window.addSlot = () => { cfg.schedule.push("20:00"); renderSettings(); };
 window.delSlot = i => { cfg.schedule.splice(i,1); renderSettings(); };
 
 window.saveConfig = async () => {
-  cfg.schedule     = [...new Set(cfg.schedule)].sort();
+  /* Godziny muszą mieć format HH:MM. Puste pole czasu daje "", które
+     przechodziło przez reguły bazy (widzą tylko „tablica ma dzieci"),
+     a firmware taką pozycję po cichu odrzucał — więc apka liczyła
+     przypomnienia od innego numeru niż pudełko i dawka lądowała
+     w złym wierszu. Bez ani jednej poprawnej godziny nie ma czego
+     zapisywać: zostawiamy poprzedni harmonogram i mówimy o tym. */
+  const godziny = [...new Set(cfg.schedule)].filter(h => /^([01]\d|2[0-3]):[0-5]\d$/.test(h)).sort();
+  if (!godziny.length){
+    toast("Podaj przynajmniej jedną godzinę przypomnienia (HH:MM).", "err", 4000);
+    return;
+  }
+  cfg.schedule     = godziny;
   cfg.tz           = document.getElementById("tzSelect").value || TZ_DEFAULT;
   cfg.tzOffsetMin  = tzOffsetFor(cfg.tz) ?? 120;
   cfg.trackingSince = document.getElementById("trackFrom")?.value || trackingSince();
-  cfg.defaultDose  = +document.getElementById("defDose").value || 1;
+  /* Reguły bazy dopuszczają 0 < defaultDose <= 10. Bez tego ograniczenia
+     większa wartość leciała do bazy, ta odrzucała CAŁY zapis ustawień
+     (to jedna aktualizacja wielościeżkowa), a użytkownik dostawał
+     „czeka na połączenie, nie zginie" — czyli komunikat nieprawdziwy. */
+  cfg.defaultDose  = Math.min(10, Math.max(0.5, +document.getElementById("defDose").value || 1));
   cfg.drugName     = document.getElementById("drugName").value.trim() || "Warfin";
   cfg.drugStrength = +document.getElementById("drugStrength").value;
   await zapiszCfg({

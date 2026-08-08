@@ -23,8 +23,8 @@ bash tests/run_all.sh
 ```
 
 Musi przejść przed zmianą i po zmianie. Stan wyjściowy:
-**298 + 51 firmware, 487 (×6 pór doby) + 81 + 46 aplikacja, 40 zgodności,
-55 reguł bazy, 195 kontroli audytu — 0 błędów.**
+**310 + 51 firmware, 495 (×6 pór doby) + 86 + 49 aplikacja, 48 zgodności,
+58 reguł bazy, 195 kontroli audytu — 0 błędów.**
 
 Testy pracują na **prawdziwym kodzie**, nie na kopii: `tests/extract.py` wycina
 funkcje z `PillBox.ino`, `tests/build_app_module.mjs` buduje moduł z `index.html`.
@@ -60,6 +60,13 @@ Test to złapie, ale komunikat zrozumiesz szybciej, znając powód (D6, D13, D15
    jego wyraźną prośbę** — nie przywracaj jej.
    Prawdziwe hasło żyje wyłącznie na jego dysku i **nigdy nie wraca do repo**.
 4. **`DAY_START_HOUR = 3`** identycznie w firmware i aplikacji.
+4b. **`cfg.schedule` to godziny PRZYPOMNIEŃ, nie pory brania leku.**
+   Kuba bierze tabletkę kiedy chce — o 10, o 14, o 21, czasem o 2 w nocy.
+   Pudełko ma tylko przypomnieć, jeśli do danej godziny jeszcze jej nie wziął.
+   Dawka jest **jedna dziennie** (`ONE_DOSE_PER_DAY`) i zawsze siedzi
+   w slocie **0**. Druga pozycja w harmonogramie znaczy „przypomnij jeszcze
+   raz o 23:00", a nie „weź drugą tabletkę". Nie licz dawek przez
+   `schedule.length` — od tego był błąd B9.
 5. **Każdy zapis użytkownika w aplikacji idzie przez `zapiszPewnie()`.**
    Nigdy gołe `set()`. Firebase offline nie odrzuca obietnicy, tylko wisi —
    ekran pokazuje sukces, dane nie docierają. Test tego pilnuje.

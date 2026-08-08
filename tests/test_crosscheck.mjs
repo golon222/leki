@@ -162,77 +162,77 @@ head("Wartosci skrajne");
   porownaj("skrajne znaczniki czasu", lista, 120);
 }
 
-/* ═══════════ 6b. DOPASOWANIE OTWARCIA DO DAWKI ═══════════
-   Druga regula liczona niezaleznie po obu stronach: pudelko ma
-   matchSlot(), aplikacja ma wlasny skan po cfg.schedule w doReconcile().
-   Obie uzywaja okna +/-90 min i obie musza wskazac TE SAMA dawke.
-   Rozjazd oznacza tabletke wpisana pod inna pore niz zostala wzieta -
-   a przy dwoch dawkach dziennie to jedna pokazana jako wzieta i druga
-   jako pominieta, tego samego dnia.                                  */
-head("Zgodnosc dopasowania otwarcia do dawki");
+/* ═══════════ 6b. ZADNA DAWKA NIE MOZE PRZEPASC ═══════════
+   Godziny w cfg.schedule to PRZYPOMNIENIA, nie pory brania leku. Kuba
+   bierze tabletke kiedy chce - o 10, o 14, o 21, czasem o 2 w nocy -
+   a pudelko ma tylko przypomniec, jesli do danej godziny jeszcze jej
+   nie wzial. Dawka jest JEDNA dziennie (ONE_DOSE_PER_DAY w firmware).
+
+   TU BYL BLAD, ktory ujawnil sie dopiero przy DRUGIM przypomnieniu.
+   doReconcile() mial furtke "jedna pora -> slot 0"; przy dwoch porach
+   furtka znikala, otwarcie o 14:00 nie pasowalo do zadnej z nich
+   (okno +/-90 min), slot zostawal -1 i `continue` wyrzucalo zdarzenie
+   do kosza. Dawka wzieta poza pora przypomnienia po prostu nie trafiala
+   do kalendarza i wygladala jak pominieta.
+
+   Niezmiennik jest teraz prosty i tego pilnujemy: KAZDE otwarcie zostaje
+   zapisane, w dobie wskazanej przez devKey(), zawsze w slocie 0.       */
+head("Zadna dawka nie przepada, niezaleznie od liczby przypomnien");
 {
   const OFF = 120;
-  for (const plan of [["08:00","20:00"], ["06:00","14:00","22:00"], ["00:30","12:30"]]) {
-    /* Cala doba co 10 minut - z naciskiem na krawedzie okna +/-90 min
-       i na przejscia przez polnoc.                                    */
-    const lista = [];
+  for (const plan of [["20:00"], ["20:00","23:00"], ["06:00","14:00","22:00"]]) {
     const polnoc = Math.floor(Date.UTC(2026, 7, 1) / 1000) - OFF * 60;
-    for (let s = 0; s < 86400; s += 600) lista.push(polnoc + s);
-
-    const pud = slotPudelka(lista, OFF, plan);
-    let zle = 0, pierwszy = null;
-    for (let i = 0; i < lista.length; i++) {
-      const app = await slotAplikacji(lista[i], OFF, plan);
-      if (app !== pud[i]) {
-        zle++;
-        if (!pierwszy)
-          pierwszy = `ts=${lista[i]} (${new Date(lista[i]*1000).toISOString()}) ` +
-                     `pudelko=${pud[i]} aplikacja=${app}`;
-      }
+    let zgubione = 0, zlySlot = 0, pierwszy = null;
+    for (let s = 0; s < 86400; s += 600) {
+      const ts = polnoc + s;
+      const slot = await slotAplikacji(ts, OFF, plan);
+      if (slot < 0) { zgubione++; if (!pierwszy) pierwszy = new Date(ts*1000).toISOString(); }
+      else if (slot !== 0) zlySlot++;
     }
-    check(zle === 0, `harmonogram ${plan.join(", ")}: ${zle} z ${lista.length} rozbieznosci` +
-                     (pierwszy ? `\n        pierwsza: ${pierwszy}` : ""));
+    check(zgubione === 0,
+          `${plan.length} przypomnien: ${zgubione} zgubionych dawek` +
+          (pierwszy ? ` (pierwsza: ${pierwszy})` : ""));
+    check(zlySlot === 0,
+          `${plan.length} przypomnien: ${zlySlot} dawek pod numerem innym niz 0 ` +
+          `- arkusz dnia czyta doses[data][0], wiec inny numer = dawka niewidzialna`);
   }
-  console.log(`        sprawdzono 3 harmonogramy po 144 chwile`);
+  console.log(`        sprawdzono 3 uklady przypomnien po 144 chwile doby`);
 }
 
-head("Krawedzie okna dopasowania (+/-90 min)");
+head("Dawka trafia do WLASCIWEJ doby, nie tylko do wlasciwego slotu");
 {
-  const OFF = 120, plan = ["20:00"];
-  /* Przy JEDNEJ dawce dziennie obie strony maja te sama furtke:
-     "slot < 0 && jedna pora -> slot 0". Dlatego okno badamy na
-     harmonogramie dwudawkowym, gdzie furtka nie dziala.              */
-  const plan2 = ["08:00", "20:00"];
-  const oDwudziestej = Math.floor(Date.UTC(2026, 7, 1, 20, 0) / 1000) - OFF * 60;
-  for (const [dt, opis] of [[-90*60, "dokladnie 90 min przed"],
-                            [-91*60, "91 min przed - juz poza oknem"],
-                            [ 90*60, "dokladnie 90 min po"],
-                            [ 91*60, "91 min po - juz poza oknem"],
-                            [ 0,     "co do sekundy"]]) {
-    const ts = oDwudziestej + dt;
-    const pud = slotPudelka([ts], OFF, plan2)[0];
-    const app = await slotAplikacji(ts, OFF, plan2);
-    check(pud === app, `${opis}: pudelko=${pud} aplikacja=${app}`);
-  }
-  void plan;
-}
-
-head("Jedna dawka dziennie: obie strony maja te sama furtke");
-{
-  /* Przy jednej porze otwarcie o dowolnej godzinie ma trafic do slotu 0,
-     nawet jesli wypadlo daleko od pory leku. Pudelko robi to poza
-     matchSlot(), wiec porownujemy z sama aplikacja.                   */
+  /* Numer slotu to polowa sprawy - drugie tyle warta jest doba. Godziny
+     nocne sa tu najwazniejsze: otwarcie o 02:00 nalezy do doby
+     POPRZEDNIEJ (DAY_START_HOUR = 3).                                 */
   const OFF = 120;
-  const polnoc = Math.floor(Date.UTC(2026, 7, 1) / 1000) - OFF * 60;
-  let zle = 0;
-  for (let s = 0; s < 86400; s += 3600) {
-    const app = await slotAplikacji(polnoc + s, OFF, ["20:00"]);
-    if (app !== 0) zle++;
+  for (const [g, m] of [[0,30],[2,0],[2,59],[3,0],[3,1],[13,0],[23,59]]) {
+    const ts = Math.floor(Date.UTC(2026, 7, 2, g, m) / 1000) - OFF * 60;
+    A.__resetDb();
+    A.__setState({ cfg: { schedule: ["20:00","23:00"], tzOffsetMin: OFF, defaultDose: 1 },
+                   doses: {}, events: [{ ts, type: "open" }] });
+    await A.doReconcile(true);
+    const klucz = Object.keys(A.__db.writes[0]?.val || {})[0] || "";
+    const oczekiwana = `users/testuid/doses/${A.devKey(ts)}/0`;
+    check(klucz === oczekiwana,
+          `${String(g).padStart(2,"0")}:${String(m).padStart(2,"0")} -> ${klucz || "NIC"} (oczekiwano ${oczekiwana})`);
   }
-  check(zle === 0, `kazde otwarcie trafia do jedynej dawki (${zle} wyjatkow)`);
-  check(/slot < 0 && slotCount == 1\) slot = 0/.test(
-          readFileSync(join(here, "..", "firmware", "PillBox", "PillBox.ino"), "utf8")),
-        "pudelko ma te sama furtke w setup()");
+}
+
+head("Pudelko nadal poprawnie rozpoznaje, ktore przypomnienie dzwoni");
+{
+  /* matchSlot() przestal decydowac o zapisie, ale dalej decyduje o tym,
+     KTORE przypomnienie trwa - a od tego zalezy drzemka alarmu. Okna
+     +/-90 min pilnujemy wiec po stronie pudelka osobno.               */
+  const OFF = 120, plan = ["08:00", "20:00"];
+  const oDwudziestej = Math.floor(Date.UTC(2026, 7, 1, 20, 0) / 1000) - OFF * 60;
+  for (const [dt, opis, oczek] of [[-90*60, "dokladnie 90 min przed", 1],
+                                   [-91*60, "91 min przed - poza oknem", -1],
+                                   [ 90*60, "dokladnie 90 min po", 1],
+                                   [ 91*60, "91 min po - poza oknem", -1],
+                                   [ 0,     "co do sekundy", 1]]) {
+    const pud = slotPudelka([oDwudziestej + dt], OFF, plan)[0];
+    check(pud === oczek, `${opis}: pudelko=${pud} (oczekiwano ${oczek})`);
+  }
 }
 
 /* ═══════════ 6c. LICZNIK TABLETEK: KONTRAKT MIEDZY STRONAMI ═══════════

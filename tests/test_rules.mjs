@@ -13,7 +13,7 @@
  *
  *      node test_rules.mjs
  * ===================================================================== */
-import { wczytajReguly, sprawdzZapis, opiszBledy } from "./rules_engine.mjs";
+import { wczytajReguly, sprawdzZapis, opiszBledy, nieobslugiwane } from "./rules_engine.mjs";
 import { readFileSync } from "node:fs";
 
 const R = wczytajReguly();
@@ -175,6 +175,35 @@ check(/return code == 400 \|\| code == 413;/.test(ino),
 odrzuc("zdarzenie z polem spoza regul zostaloby skasowane",
        "devices/pillbox1/events/e1",
        { ...PRZYKLAD_ZDARZENIA, nowePole: 1 });
+
+/* ═══════════ 5. GRANICE SAMEGO SILNIKA ═══════════
+   Silnik nie liczy wyrazen z auth/data/root - i slusznie, bo wymagalyby
+   symulowania logowania i stanu calej bazy. Wazne jest, zeby taka regula
+   NIE zamienila sie w falszywy alarm "reguly odrzucily zapis", bo wtedy
+   komunikat wskazywalby na dane zamiast na silnik. Zamiast tego
+   przepuszczamy - i pilnujemy tutaj, czy w pliku cos takiego przybylo. */
+head("Granice silnika sa jawne, a nie zamieniaja sie w falszywy alarm");
+{
+  const walidacje = [];
+  (function zbierz(n){
+    if (!n || typeof n !== "object") return;
+    for (const [k, v] of Object.entries(n)) {
+      if (k === ".validate") walidacje.push(v);
+      else zbierz(v);
+    }
+  })(R);
+  check(walidacje.length > 0, `znaleziono ${walidacje.length} regul .validate`);
+
+  const poza = walidacje.filter(nieobslugiwane);
+  check(poza.length === 0,
+        `${poza.length} regul .validate uzywa auth/data/root - silnik ich NIE ` +
+        `sprawdza, wiec te pola sa poza pokryciem testow: ${JSON.stringify(poza)}`);
+
+  /* Regula, ktorej silnik nie umie policzyc, ma PRZEPUSCIC zapis. */
+  const udawana = { ".validate": "root.child('x').val() === true" };
+  check(nieobslugiwane(udawana[".validate"]),
+        "wyrazenie z root jest rozpoznawane jako nieobslugiwane");
+}
 
 console.log("\n──────────────────────────────────────");
 console.log(`  ZALICZONE: ${PASS}    BLEDY: ${FAIL}`);

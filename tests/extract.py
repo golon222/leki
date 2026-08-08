@@ -14,6 +14,7 @@ WANTED = [
     "parseSchedule", "slotMinutes", "localDayNumber", "localMinutesOfDay",
     "matchSlot", "secondsToDayBoundary", "secondsToNextSlot",
     "openWarnSecondsLeft",
+    "jsonEscape",   # przed lidLogJson - ta go wola
     "wakeName", "lidLogAdd", "lidLogCount", "lidLogJson", "lidLogClear",
     "trackBoxOpen",
     # awakeTooLong musi byc przed flushQueue, ktore go wola.
@@ -24,7 +25,7 @@ WANTED = [
     "makeRecordAt", "makeRecord",
     "loadDayMarkers", "setTakenDay", "setRolloverDay",
     "checkDayRollover",
-    "wartoZapisac", "logbookAdd", "jsonEscape", "logbookJson",
+    "wartoZapisac", "logbookAdd", "logbookJson",
     "alarmPotwierdzony",
     # planNextSleep na koncu - wola prawie wszystko powyzej.
     "planNextSleep",

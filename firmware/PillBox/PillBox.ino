@@ -759,6 +759,24 @@ uint16_t lidLogCount() {
   return c;
 }
 
+/* Ucieczka znakow specjalnych w JSON. Stoi tutaj, a nie przy czarnej
+   skrzynce nizej, bo lidLogJson() jest jej PIERWSZYM uzyciem - a w tym
+   pliku obowiazuje zasada "definicja przed uzyciem" (pilnuje jej audyt). */
+static String jsonEscape(const String& in) {
+  String o;
+  for (int i = 0; i < in.length(); i++) {
+    char c = in.charAt(i);
+    if      (c == '"')  o += "\\\"";
+    else if (c == '\\') o += "\\\\";
+    else if (c == '\n') o += "\\n";
+    else if (c == '\r') o += "\\r";
+    else if (c == '\t') o += "\\t";
+    else if ((unsigned char)c < 0x20) continue;   // znaki sterujace pomijamy
+    else o += c;
+  }
+  return o;
+}
+
 /* Dziennik jako JSON do wyslania. {"zgubione":N,"wpisy":["ts;stan;powod",...]} */
 String lidLogJson() {
   prefs.begin(NVS_NAMESPACE, true);
@@ -775,9 +793,12 @@ String lidLogJson() {
     if (!l.length()) continue;
     if (!pierwszy) out += ",";
     pierwszy = false;
-    out += "\"";
-    out += l;
-    out += "\"";
+    /* Escapujemy tak samo jak logbookJson(). Tresc lepi dzis snprintf,
+       wiec cudzyslow sie w niej nie znajdzie - ale blizniacza funkcja
+       obok jest zabezpieczona, a niesymetryczna obrona w module, ktory
+       wedlug zasady 8 nie moze uszkodzic danych o leku, to proszenie
+       sie o klopoty przy pierwszej zmianie formatu.                  */
+    out += "\"" + jsonEscape(l) + "\"";
   }
   out += "]}";
   prefs.end();
@@ -1545,14 +1566,43 @@ void checkDayRollover() {
   if (rtcRolloverDay == 0) { setRolloverDay(today); return; }    // pierwszy raz
   if (rtcRolloverDay == today) return;                           // ta sama doba
 
-  if (rtcTakenDay != rtcRolloverDay) {
-    /* 23:59 poprzedniej doby = teraz minus tyle, ile uplynelo dzis, minus minuta */
-    time_t now = time(nullptr);
-    uint32_t ts = (uint32_t)(now - (localMinutesOfDay(now) * 60) - 60);
+  /* TU GINELY CALE DNI.
+
+     Wczesniej powstawal DOKLADNIE JEDEN wpis "missed", ze znacznikiem
+     wczoraj 23:59, po czym rtcRolloverDay skakal od razu na dzis. Gdy
+     pudelko stalo kilka dni - rozladowane ogniwo, wyjazd, wyjete z
+     ladowarki - dni posrednie nie dostawaly nic. W kalendarzu wygladaly
+     jak "brak danych", a nie jak "nie wziete", czyli dokladnie odwrotnie
+     niz w rzeczywistosci.
+
+     Teraz domykamy KAZDA otwarta dobe od rtcRolloverDay do wczoraj.
+     Kolejnosc jest od najstarszej, zeby kolejka zostala FIFO.
+
+     Limit MAX_ROLLOVER_DNI istnieje po to, zeby pudelko wracajace po
+     miesiacu nie wystrzelilo 30 wpisow naraz w 120-elementowa kolejke,
+     wypychajac z niej prawdziwe dawki. Dluzsza przerwa i tak znaczy, ze
+     urzadzenie bylo martwe, a nie ze ktos nie wzial leku.            */
+  time_t now = time(nullptr);
+  time_t polnocDzis = now - (time_t)localMinutesOfDay(now) * 60;
+
+  int doZamkniecia = 0;
+  for (int wstecz = 1; wstecz <= MAX_ROLLOVER_DNI; wstecz++) {
+    uint32_t ts = (uint32_t)(polnocDzis - (time_t)(wstecz - 1) * 86400 - 60);
+    if (localDayNumber((time_t)ts) < rtcRolloverDay) break;
+    doZamkniecia = wstecz;
+    if (localDayNumber((time_t)ts) == rtcRolloverDay) break;
+  }
+
+  for (int wstecz = doZamkniecia; wstecz >= 1; wstecz--) {
+    uint32_t ts = (uint32_t)(polnocDzis - (time_t)(wstecz - 1) * 86400 - 60);
+    uint32_t doba = localDayNumber((time_t)ts);
+    if (doba < rtcRolloverDay) continue;
+    if (doba == rtcTakenDay) {
+      LOG("[DAY] doba %lu zamknieta poprawnie\n", (unsigned long)doba);
+      continue;
+    }
     queuePush(makeRecordAt("missed", slotCount == 1 ? 0 : -1, ts));
-    LOG("[DAY] doba %lu zamknieta bez dawki -> missed\n", (unsigned long)rtcRolloverDay);
-  } else {
-    LOG("[DAY] doba %lu zamknieta poprawnie\n", (unsigned long)rtcRolloverDay);
+    LOG("[DAY] doba %lu zamknieta bez dawki -> missed\n", (unsigned long)doba);
   }
   setRolloverDay(today);
 }
@@ -1909,20 +1959,6 @@ void logbookPrint() {
    Jeden taki znak w notatce zamienia caly dziennik w niepoprawny JSON, baza
    odrzuca zapis i historia znika CALA, nie tylko ten jeden wpis. Awaria cicha:
    w aplikacji wyglada jak "pudelko nic nie przyslalo".                      */
-static String jsonEscape(const String& in) {
-  String o;
-  for (int i = 0; i < in.length(); i++) {
-    char c = in.charAt(i);
-    if      (c == '"')  o += "\\\"";
-    else if (c == '\\') o += "\\\\";
-    else if (c == '\n') o += "\\n";
-    else if (c == '\r') o += "\\r";
-    else if (c == '\t') o += "\\t";
-    else if ((unsigned char)c < 0x20) continue;   // znaki sterujace pomijamy
-    else o += c;
-  }
-  return o;
-}
 
 /* Cala historia jako tablica JSON - do wyslania do aplikacji. */
 String logbookJson() {

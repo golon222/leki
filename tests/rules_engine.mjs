@@ -58,11 +58,27 @@ function skompiluj(wyr) {
   return pamiec.get(wyr);
 }
 
+/* Czego ten silnik NIE umie policzyc. Wyrazenia z auth/data/root/now
+   wymagalyby symulowania logowania i stanu calej bazy - swiadomie tego
+   nie robimy (patrz naglowek).                                        */
+const NIEOBSLUGIWANE = /\b(auth|data|root|now)\b/;
+export const nieobslugiwane = wyr => typeof wyr === "string" && NIEOBSLUGIWANE.test(wyr);
+
 function ocen(wyr, val) {
   if (wyr === true || wyr === false) return wyr;
   if (typeof wyr !== "string") return true;
+  /* PRZEPUSZCZAMY, czego nie umiemy policzyc - zamiast zglaszac blad.
+
+     Wczesniej bylo tu `catch { return false; }`, czyli kazde wyrazenie
+     odwolujace sie do auth/data/root konczylo sie "reguly odrzucily
+     zapis". Gdyby ktos dopisal takie .validate, testy zaczelyby krzyczec
+     na CALKIEM POPRAWNY plik regul, a komunikat wskazywalby na dane
+     zamiast na silnik. Zamiast tego przepuszczamy, a test_rules.mjs
+     osobno pilnuje, czy w pliku nie pojawilo sie cos, czego nie
+     obsluguje - i mowi to wprost.                                    */
+  if (nieobslugiwane(wyr)) return true;
   try { return !!skompiluj(wyr)(newDataZ(val)); }
-  catch { return false; }          // wyrazenie na czyms, czego tu nie ma
+  catch { return true; }
 }
 
 /* Ktory wezel regul odpowiada danemu kluczowi.

@@ -120,6 +120,37 @@ head("Tresc od uzytkownika nie moze stac sie kodem");
   check(A.esc(`"cudzyslow"`).includes("&quot;"), "cudzyslowy tez");
 }
 
+/* ═══════════ 2b. PRZYPOMNIENIA TO NIE DAWKI ═══════════
+   cfg.schedule to godziny PRZYPOMNIEN. Kuba bierze tabletke kiedy chce;
+   pudelko ma tylko przypomniec, jesli jeszcze jej nie wzial. Dawka jest
+   jedna dziennie. Aplikacja liczyla to jednak jako defaultDose x liczba
+   przypomnien, wiec dodanie drugiego przypomnienia zamienialo kazdy
+   poprawny dzien w "czesciowy" i o polowe skracalo prognoze zapasu.  */
+head("Drugie przypomnienie nie tworzy drugiej dawki");
+{
+  for (const plan of [["20:00"], ["20:00","23:00"], ["08:00","14:00","20:00"]]) {
+    D({ cfg: { ...bazowyCfg, schedule: plan, defaultDose: 1 },
+        doses: { [dzien(1)]: { 0: { status: "taken", dose: 1 } } } });
+    check(A.dayStatus(dzien(1)) === "taken",
+          `${plan.length} przypomnien: dzien z jedna wzieta dawka jest ZALICZONY ` +
+          `(jest "${A.dayStatus(dzien(1))}")`);
+  }
+}
+
+head("Prognoza zapasu nie zalezy od liczby przypomnien");
+{
+  const zapas = plan => {
+    D({ cfg: { ...bazowyCfg, schedule: plan, defaultDose: 1,
+               pillsLeft: 30, pillsBase: 30, pillsBaseFrom: dzien(0) }, doses: {} });
+    A.renderPills();
+    return document.getElementById("pillsSub").textContent;
+  };
+  const jedno = zapas(["20:00"]);
+  check(jedno === zapas(["20:00","23:00"]),
+        `dwa przypomnienia daja ten sam zapas co jedno ("${jedno}" vs "${zapas(["20:00","23:00"])}")`);
+  check(jedno === zapas(["08:00","14:00","20:00"]), "trzy tak samo");
+}
+
 /* ═══════════ 3. STO DNI PRACY ═══════════ */
 head("Sto dni pracy pod rzad");
 {

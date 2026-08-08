@@ -20,7 +20,7 @@
  * 1. IDENTYFIKATOR URZADZENIA
  * ------------------------------------------------------------------ */
 #define DEVICE_ID           "pillbox01"     // klucz w /devices/<DEVICE_ID>
-#define FW_VERSION          "1.24.0"   // widoczna w aplikacji - po wgraniu sprawdz, czy sie zmienila
+#define FW_VERSION          "1.25.0"   // widoczna w aplikacji - po wgraniu sprawdz, czy sie zmienila
 
 /* ---------------------------------------------------------------------
  * 2. FIREBASE  (Realtime Database + Auth email/haslo)
@@ -121,6 +121,12 @@
  * ------------------------------------------------------------------ */
 #define ONE_DOSE_PER_DAY    1
 #define LOW_STOCK_WARN      7               // ostrzegaj, gdy zostalo < X tabletek
+
+/* Ile zaleglych dob pudelko domyka po dluzszej przerwie (rozladowane
+   ogniwo, wyjazd). Wiecej wypchneloby z 120-elementowej kolejki prawdziwe
+   dawki, a przerwa dluzsza niz to i tak znaczy "urzadzenie nie dzialalo",
+   a nie "ktos nie wzial leku".                                        */
+#define MAX_ROLLOVER_DNI    7
 
 /* ---------------------------------------------------------------------
  * 6c. GRANICA DOBY LEKOWEJ

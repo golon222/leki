@@ -286,6 +286,26 @@ head("Brak sieci nadal przerywa wysylke, zamiast probowac w kolko");
   check(A.oczekOdmowy() === 0, "i zaden nie jest liczony jako odrzucony");
 }
 
+head("Odmowa WSZYSTKIEGO nie zamienia sie w serie zapytan (naprawa)");
+{
+  /* Wygasla sesja sprawia, ze baza odmawia KAZDEGO wpisu. Bez licznika
+     odmow pod rzad naprawa B6 wystrzeliwalaby tyle zapytan, ile jest
+     wpisow w kolejce - do dwustu z rzedu.                              */
+  czysto("odmowa");
+  const duzo = [];
+  for (let i = 0; i < 20; i++)
+    duzo.push({ id: "x" + i, ts: i, opis: "D" + i,
+                updates: { [`users/testuid/doses/2026-09-${String(i+1).padStart(2,"0")}/0`]: { ...DAWKA } } });
+  A.oczekZapisz(duzo);
+  const przed = A.__db.writes.length;
+  await A.oczekWyslij();
+  const prob = A.__db.writes.length - przed;
+  check(prob === 0, "przy odmowie nic nie zostaje zapisane");
+  check(A.oczekIle() === 20, `wszystkie wpisy zostaja (${A.oczekIle()})`);
+  check(A.oczekOdmowy() <= 3,
+        `poddajemy sie po kilku odmowach pod rzad, nie po dwudziestu (${A.oczekOdmowy()})`);
+}
+
 przywrocKonsole();
 globalThis.setTimeout = prawdziwySetTimeout;
 

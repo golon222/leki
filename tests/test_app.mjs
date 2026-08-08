@@ -1169,6 +1169,27 @@ head("Nieudane uzupelnianie musi byc widoczne");
 check(/zapis kalendarza[\s\S]{0,400}toast\(/.test(html),
       "blad zapisu pokazywany takze w trybie automatycznym");
 
+/* ── Walidacja tego, co uzytkownik moze wpisac ──
+   Kazdy z tych przypadkow konczyl sie CICHA szkoda: pusta godzina
+   rozjezdzala numery przypomnien miedzy apka a pudelkiem, data z
+   przyszlosci wylaczala przypomnienie o INR, pusty prompt zerowal
+   licznik tabletek, a za duza dawka powodowala odrzucenie CALEGO
+   zapisu ustawien z komunikatem "czeka na polaczenie".            */
+head("Aplikacja nie wypuszcza danych, ktorych baza albo pudelko nie przyjmie");
+check(/filter\(h => \/\^\(\[01\]\\d\|2\[0-3\]\):\[0-5\]\\d\$\/\.test\(h\)\)/.test(html),
+      "godziny przypomnien filtrowane do formatu HH:MM");
+check(/Podaj przynajmniej jedna godzine przypomnienia|Podaj przynajmniej jedną godzinę przypomnienia/.test(html),
+      "brak poprawnej godziny konczy sie komunikatem, a nie pustym harmonogramem");
+check(/Math\.min\(10, Math\.max\(0\.5, \+document\.getElementById\("defDose"\)/.test(html),
+      "dawka przycinana do zakresu, ktory dopuszczaja reguly bazy (0,5-10)");
+check(/max="10"/.test(html), "pole dawki ma gorny limit takze w HTML");
+check(/date > dzisiajKey\(\)/.test(html), "data pomiaru INR nie moze byc z przyszlosci");
+check(/pole\.max = dzisiajKey\(\)/.test(html), "kalendarz sam nie pozwala wybrac jutra");
+check(/String\(v\)\.trim\(\) !== ""/.test(html),
+      "pusty prompt nie zeruje licznika tabletek");
+check(/id="inrVal"[^>]*max="15"/.test(html),
+      "gorna granica INR w polu zgadza sie z regulami bazy (15)");
+
 head("Kolejka zapisow w telefonie");
 check(/async function zapiszPewnie\(/.test(html), "istnieje zapis z gwarancja");
 check(!/await set\(ref\(db/.test(html) && !/await update\(ref\(db, `devices/.test(html),

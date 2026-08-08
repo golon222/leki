@@ -8,6 +8,7 @@
 #include "../firmware/PillBox/config.h"
 
 #include <vector>
+#include <set>
 
 time_t FAKE_NOW = 0;
 int    FAKE_ADC = 0;
@@ -975,6 +976,97 @@ CHECK(REPORT_BOOT_EVENT == 0,
     CHECK(!trackCharging(0.0f, 4.20f), "pomiar bez sensu nie udaje ladowania");
     CHECK(rtcVoltMax == 0.0f, "i kasuje zapamietany szczyt");
   }
+
+/* ========== 16b. DOMYKANIE ZALEGLYCH DOB PO DLUZSZEJ PRZERWIE =======
+   Wczesniej powstawal DOKLADNIE JEDEN wpis "missed", ze znacznikiem
+   wczoraj 23:59, a rtcRolloverDay skakal od razu na dzis. Po kilku dniach
+   bez zasilania dni posrednie nie dostawaly nic - w kalendarzu wygladaly
+   jak "brak danych" zamiast "nie wziete", czyli odwrotnie niz naprawde. */
+head("Zalegle doby domykane po dluzszej przerwie");
+{
+  prefs.wipe();
+  rtcTimeValid = true; rtcTzOffsetMin = 120;
+  parseSchedule("20:00");
+  batteryPercentage = 80; realBatteryVoltage = 4.0f;
+
+  /* rtcRolloverDay = 1 sierpnia znaczy "wszystko PRZED 1 sierpnia jest
+     rozliczone, a 1 sierpnia wlasnie trwa". Budzimy sie 6 sierpnia rano,
+     wiec skonczyly sie doby 1, 2, 3, 4 i 5 sierpnia - piec sztuk.
+     Dawek nie bylo zadnych, wiec kazda z nich to pominieta dawka.   */
+  rtcRolloverDay = 20260801; rtcTakenDay = 0;
+  FAKE_NOW = local(2026, 8, 6, 3, 1);
+  checkDayRollover();
+
+  std::set<unsigned long> doby;
+  String rec;
+  int guard = 0;
+  while (queuePeek(rec) && guard++ < 40) {
+    unsigned long ts = (unsigned long)rec.substring(0, rec.indexOf(';')).toInt();
+    doby.insert((unsigned long)localDayNumber((time_t)ts));
+    queuePop();
+  }
+  CHECK(doby.size() == 5, "piec zaleglych dob domknietych, nie jedna (%zu)", doby.size());
+  CHECK(doby.count(20260801) && doby.count(20260802) && doby.count(20260803) &&
+        doby.count(20260804) && doby.count(20260805),
+        "i sa to dokladnie doby 1-5 sierpnia");
+  CHECK(!doby.count(20260731), "doba sprzed znacznika nie wraca");
+  CHECK(!doby.count(20260806), "biezaca doba jeszcze sie nie skonczyla");
+  CHECK(rtcRolloverDay == 20260806u, "znacznik przestawiony na dzis (%lu)",
+        (unsigned long)rtcRolloverDay);
+
+  /* Doba, w ktorej dawka JEDNAK byla, nie moze trafic do pominietych. */
+  prefs.wipe();
+  rtcRolloverDay = 20260801; rtcTakenDay = 20260803;
+  FAKE_NOW = local(2026, 8, 5, 3, 1);
+  checkDayRollover();
+  doby.clear(); guard = 0;
+  while (queuePeek(rec) && guard++ < 40) {
+    unsigned long ts = (unsigned long)rec.substring(0, rec.indexOf(';')).toInt();
+    doby.insert((unsigned long)localDayNumber((time_t)ts));
+    queuePop();
+  }
+  CHECK(!doby.count(20260803), "doba z wzieta dawka NIE jest oznaczana jako pominieta");
+  CHECK(doby.count(20260802) && doby.count(20260804),
+        "ale sasiednie puste doby juz tak");
+
+  /* Bardzo dluga przerwa nie moze wypchnac z kolejki prawdziwych dawek. */
+  prefs.wipe();
+  rtcRolloverDay = 20250101; rtcTakenDay = 0;
+  FAKE_NOW = local(2026, 8, 6, 3, 1);
+  checkDayRollover();
+  CHECK(queueCount() <= MAX_ROLLOVER_DNI,
+        "miesiace przerwy daja najwyzej %d wpisow, a nie setki (%u)",
+        MAX_ROLLOVER_DNI, queueCount());
+
+  /* Zwykly przypadek: jedna doba, jeden wpis - bez regresji. */
+  prefs.wipe();
+  rtcRolloverDay = 20260805; rtcTakenDay = 0;
+  FAKE_NOW = local(2026, 8, 6, 3, 1);
+  checkDayRollover();
+  CHECK(queueCount() == 1, "pojedyncza zalegla doba to dalej jeden wpis (%u)", queueCount());
+  queuePeek(rec);
+  CHECK(localDayNumber((time_t)(unsigned long)rec.substring(0, rec.indexOf(';')).toInt())
+        == 20260805u, "i dotyczy wlasciwej doby");
+  prefs.wipe();
+}
+
+head("Dziennik wieczka jest escapowany tak samo jak czarna skrzynka");
+{
+  prefs.wipe();
+  /* Wpis z cudzyslowem nie moze rozwalic JSON-a. Dzis tresc lepi
+     snprintf, wiec cudzyslow sie tam nie znajdzie - ale blizniaczy
+     logbookJson() jest zabezpieczony i te dwa maja byc symetryczne. */
+  prefs.putString("ll0", "1750000000;1;\"reed\"");
+  prefs.putUShort("llCnt", 1);
+  String j = lidLogJson();
+  CHECK(j.indexOf("\\\"reed\\\"") >= 0,
+        "cudzyslow w tresci jest escapowany: %s", j.c_str());
+  int cudz = 0;
+  for (int i = 0; i < j.length(); i++)
+    if (j.charAt(i) == '"' && (i == 0 || j.charAt(i-1) != '\\')) cudz++;
+  CHECK(cudz % 2 == 0, "liczba niezaescapowanych cudzyslowow jest parzysta (%d)", cudz);
+  prefs.wipe();
+}
 
 /* ================= 17a. POTWIERDZENIE DAWKI (B1) ====================
    Najwrazliwsze miejsce w calym projekcie i do tej pory jedyne bez

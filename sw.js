@@ -3,12 +3,32 @@
 /* WAŻNE: ta wartość musi zgadzać się z APP_VERSION w index.html.
    Jej zmiana to sygnał dla iPhone'a, że jest nowa wersja aplikacji —
    stary cache zostaje wtedy skasowany, a strona sama się przeładuje. */
-const CACHE = "pillbox-2026-08-07.6";
+const CACHE = "pillbox-2026-08-08.1";
 const SHELL = ["./", "./index.html",
   "./tabletka.gif", "./manifest.json"];
 
+/* TU BYŁ BŁĄD, i to cichy.
+
+   Wcześniej stało tu `c.addAll(SHELL)`. addAll jest ATOMOWE: gdy choć
+   jeden plik z listy zwróci 404, cała obietnica jest odrzucana, instalacja
+   pada, `skipWaiting()` nigdy się nie wykonuje i worker NIE przejmuje
+   kontroli nad stroną.
+
+   Skutek jest gorszy, niż wygląda: razem z workerem znika CAŁY mechanizm
+   aktualizacji aplikacji. Telefon zostaje na starej wersji i nic o tym nie
+   mówi — wygląda to jak „nie chce się zaktualizować", a naprawdę jest to
+   jeden brakujący plik, o którym nikt się nie dowie.
+
+   Teraz każdy plik jest pobierany osobno. Brak pliku pobocznego (ikona,
+   gif) kosztuje tyle, że nie ma go w pamięci podręcznej — a nie tyle, że
+   aplikacja przestaje się aktualizować. */
 self.addEventListener("install", e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));
+  e.waitUntil(
+    caches.open(CACHE)
+      .then(c => Promise.allSettled(SHELL.map(u => c.add(u))))
+      .catch(() => {})              // nawet nieudane otwarcie cache nie blokuje
+      .then(() => self.skipWaiting())
+  );
 });
 
 self.addEventListener("activate", e => {
