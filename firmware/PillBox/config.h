@@ -20,7 +20,7 @@
  * 1. IDENTYFIKATOR URZADZENIA
  * ------------------------------------------------------------------ */
 #define DEVICE_ID           "pillbox01"     // klucz w /devices/<DEVICE_ID>
-#define FW_VERSION          "1.25.0"   // widoczna w aplikacji - po wgraniu sprawdz, czy sie zmienila
+#define FW_VERSION          "1.26.0"   // widoczna w aplikacji - po wgraniu sprawdz, czy sie zmienila
 
 /* ---------------------------------------------------------------------
  * 2. FIREBASE  (Realtime Database + Auth email/haslo)
@@ -120,6 +120,15 @@
  *     ("juz brales, nie bierz drugi raz") i ZERO zapisu do Firebase.
  * ------------------------------------------------------------------ */
 #define ONE_DOSE_PER_DAY    1
+
+/* Ochrona przed druga dawka BEZ WIARYGODNEGO ZEGARA.
+   Pudelko po resecie i bez internetu nie wie, ktory jest dzien - ale
+   nadal potrafi zmierzyc, ILE CZASU minelo od poprzedniej dawki, bo
+   zegar RTC tyka takze w deep sleepie. Jesli minelo mniej niz tyle,
+   traktujemy otwarcie jako podejrzenie powtorki i ostrzegamy.
+   20 h, a nie 24: przy braniu o roznych porach doba lekowa i tak sie
+   przesuwa, a falszywe ostrzezenie kosztuje tu jedno pikniecie.     */
+#define ONE_DOSE_WINDOW_S   72000
 #define LOW_STOCK_WARN      7               // ostrzegaj, gdy zostalo < X tabletek
 
 /* Ile zaleglych dob pudelko domyka po dluzszej przerwie (rozladowane

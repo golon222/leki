@@ -45,6 +45,7 @@ uint8_t  rtcChargeFromPct = 255;
 uint32_t rtcLastOpenTs    = 0;
 uint32_t rtcLastPushTs    = 0;
 uint32_t rtcTokenExp      = 0;
+uint32_t rtcTakenTs       = 0;
 uint32_t rtcOpenSinceTs   = 0;
 uint32_t rtcNextWarnTs    = 0;
 uint16_t rtcOpenWarnCount = 0;

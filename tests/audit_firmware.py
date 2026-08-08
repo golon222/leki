@@ -498,6 +498,35 @@ ok("const bool byloOtwarteNaStarcie = boxIsOpen();" in alarm,
 ok(alarm.find("byloOtwarteNaStarcie = boxIsOpen()") < alarm.find("buzzerInit()"),
    "i zapamietany PRZED pierwszym pikiem, nie w trakcie")
 
+# ---------- 6c. Ochrona przed druga dawka bez internetu ----------
+# Zgloszenie Kuby z wyjazdu: bez sieci pudelko nie ostrzegalo o powtorce.
+# Cala ochrona byla bramkowana rtcTimeValid, ktore ustawia WYLACZNIE NTP.
+# UWAGA: "case WAKE_REED:" i "case WAKE_BUTTON:" wystepuja TAKZE
+# w wakeName(), czyli wyzej niz galaz kontaktronu w setup(). Szukanie od
+# poczatku pliku dawalo wycinek dlugi na 61 znakow, a trzy kontrole
+# ponizej przechodzily na pustym tekscie - czyli nie sprawdzaly nic.
+_s = ino.find("void setup()")
+_i = ino.find("case WAKE_REED:", _s)
+reed = ino[_i:ino.find("case WAKE_BUTTON:", _i)]
+ok(len(reed) > 500, f"galaz kontaktronu wycieta poprawnie ({len(reed)} znakow)")
+ok("void zapiszDawke()" in code,
+   "zapis dawki jest osobna funkcja, dzialajaca takze bez zegara")
+ok("bool juzDzisBrane()" in code,
+   "decyzja 'juz dzis brane' jest osobna, testowalna funkcja")
+ok("rtcTakenTs" in cialo("void zapiszDawke()"),
+   "zapis dawki odnotowuje CZAS takze wtedy, gdy zegar jest nieznany")
+ok("if (rtcTimeValid) setTakenDay(localDayNumber(time(nullptr)));" not in reed,
+   "galaz kontaktronu nie bramkuje juz zapisu dawki zegarem")
+ok("zapiszDawke();" in reed, "otwarcie odnotowuje dawke bezwarunkowo")
+ok(reed.count("juzDzisBrane()") >= 1, "i pyta o powtorke przez wspolna funkcje")
+# Bez zegara ostrzezenie to tylko PODEJRZENIE - wolno piknac, ale nie
+# wolno wyrzucic otwarcia, bo prawdziwa dawka przepadlaby bez sladu.
+_jd = reed[reed.find("if (juzDzisBrane())"):]
+_jd = _jd[:_jd.find("\n      }")]
+ok("if (rtcTimeValid) {" in _jd,
+   "pominiecie zapisu tylko przy WIARYGODNYM zegarze, nie na podejrzenie")
+ok("ONE_DOSE_WINDOW_S" in code, "okno podejrzenia jest nazwana stala z config.h")
+
 # ---------- 7. Znaczniki dobowe trwale ----------
 ok("loadDayMarkers();" in setup_body, "znaczniki dobowe odtwarzane przy starcie")
 allowed_fns = ("loadDayMarkers", "setTakenDay", "setRolloverDay", "clearDayMarkers")

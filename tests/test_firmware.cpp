@@ -9,6 +9,7 @@
 
 #include <vector>
 #include <set>
+#include <string>
 
 time_t FAKE_NOW = 0;
 int    FAKE_ADC = 0;
@@ -44,6 +45,7 @@ uint16_t rtcQueueDropped = 0;
 uint32_t rtcLastOpenTs    = 0;
 uint32_t rtcLastPushTs    = 0;
 uint32_t rtcTokenExp      = 0;
+uint32_t rtcTakenTs       = 0;
 uint32_t rtcOpenSinceTs   = 0;
 uint32_t rtcNextWarnTs    = 0;
 uint16_t rtcOpenWarnCount = 0;
@@ -1066,6 +1068,92 @@ head("Dziennik wieczka jest escapowany tak samo jak czarna skrzynka");
     if (j.charAt(i) == '"' && (i == 0 || j.charAt(i-1) != '\\')) cudz++;
   CHECK(cudz % 2 == 0, "liczba niezaescapowanych cudzyslowow jest parzysta (%d)", cudz);
   prefs.wipe();
+}
+
+/* ====== 16c. OCHRONA PRZED DRUGA DAWKA **BEZ INTERNETU** ============
+   Zglosil to Kuba z wyjazdu: pudelko bez sieci, wzial tabletke, zamknal
+   wieczko, otworzyl ponownie - i CISZA. Zadnego "juz dzis brales".
+
+   Przyczyna: cala ochrona byla bramkowana rtcTimeValid, a to ustawia
+   WYLACZNIE syncTimeNTP(). Po resecie (wgranie programu przed wyjazdem,
+   zanik zasilania) i bez internetu flaga nigdy nie stawala sie prawda,
+   wiec pudelko ani nie ZAPISYWALO wzietej dawki, ani nie mialo na czym
+   oprzec ostrzezenia. Ochrona przed podwojna dawka nie istniala.     */
+head("Ostrzezenie o drugiej dawce dziala bez internetu");
+{
+  prefs.wipe();
+  parseSchedule("20:00");
+
+  /* Pudelko po wgraniu programu, bez sieci: zegar liczy od zera. */
+  rtcTimeValid = false;
+  rtcTakenDay = 0; rtcRolloverDay = 0; rtcTakenTs = 0;
+  FAKE_NOW = 3600;                            // godzina od startu plytki
+
+  CHECK(!juzDzisBrane(), "przed pierwsza dawka pudelko milczy");
+
+  zapiszDawke();                              // wziete o "3600"
+  CHECK(rtcTakenTs != 0, "dawka odnotowana MIMO braku zegara (%lu)",
+        (unsigned long)rtcTakenTs);
+
+  FAKE_NOW = 3600 + 30;                       // zamykasz i otwierasz po 30 s
+  CHECK(juzDzisBrane(), "TO JEST TEN OBJAW: po ponownym otwarciu pudelko ostrzega");
+
+  FAKE_NOW = 3600 + 4 * 3600;                 // cztery godziny pozniej
+  CHECK(juzDzisBrane(), "po czterech godzinach nadal ostrzega");
+
+  FAKE_NOW = 3600 + ONE_DOSE_WINDOW_S - 60;
+  CHECK(juzDzisBrane(), "tuz przed koncem okna jeszcze ostrzega");
+
+  FAKE_NOW = 3600 + ONE_DOSE_WINDOW_S + 60;
+  CHECK(!juzDzisBrane(),
+        "po uplywie okna milknie - to juz nowa doba, dawke trzeba wziac");
+}
+
+head("Powrot internetu przypisuje dawke do wlasciwej doby");
+{
+  prefs.wipe();
+  rtcTimeValid = false; rtcTakenDay = 0; rtcTakenTs = 0;
+  FAKE_NOW = 7200;
+  zapiszDawke();                              // dawka wzieta "na slepo"
+  CHECK(rtcTakenDay == 0, "bez zegara numer doby jeszcze nieznany");
+
+  /* Dwie godziny pozniej wraca siec i NTP ustawia prawdziwy czas. */
+  const uint32_t temu = 2 * 3600;
+  FAKE_NOW = 7200 + temu;                     // stara, nieprawdziwa skala
+  time_t prawdziwyTeraz = local(2026, 8, 1, 22, 0);
+  /* To samo, co robi syncTimeNTP() przy przejsciu nieznany -> znany. */
+  {
+    uint32_t roznica = (uint32_t)(FAKE_NOW - (time_t)rtcTakenTs);
+    FAKE_NOW = prawdziwyTeraz;
+    rtcTimeValid = true;
+    time_t kiedy = FAKE_NOW - (time_t)roznica;
+    rtcTakenTs = (uint32_t)kiedy;
+    setTakenDay(localDayNumber(kiedy));
+  }
+  CHECK(rtcTakenDay == localDayNumber(local(2026, 8, 1, 20, 0)),
+        "dawka sprzed 2 h przypisana do doby, w ktorej naprawde byla (%lu)",
+        (unsigned long)rtcTakenDay);
+  CHECK(juzDzisBrane(), "i pudelko dalej wie, ze dawka byla");
+}
+
+head("Z wiarygodnym zegarem nic sie nie zmienilo");
+{
+  prefs.wipe();
+  rtcTimeValid = true; rtcTakenDay = 0; rtcTakenTs = 0;
+  FAKE_NOW = local(2026, 8, 1, 20, 0);
+  CHECK(!juzDzisBrane(), "przed dawka milczy");
+  zapiszDawke();
+  CHECK(rtcTakenDay == 20260801u, "znacznik doby ustawiony (%lu)", (unsigned long)rtcTakenDay);
+  FAKE_NOW = local(2026, 8, 1, 23, 30);
+  CHECK(juzDzisBrane(), "tego samego wieczora ostrzega");
+  FAKE_NOW = local(2026, 8, 2, 2, 0);
+  CHECK(juzDzisBrane(), "o 2 w nocy TEZ - to wciaz ta sama doba lekowa");
+  FAKE_NOW = local(2026, 8, 2, 4, 0);
+  CHECK(!juzDzisBrane(), "po granicy doby (3:00) milknie - czas na nowa dawke");
+
+  /* Zegar wiarygodny, ale znacznika brak - nie wolno ostrzegac na zapas. */
+  rtcTakenDay = 0;
+  CHECK(!juzDzisBrane(), "brak znacznika doby to nie jest 'juz brane'");
 }
 
 /* ================= 17a. POTWIERDZENIE DAWKI (B1) ====================

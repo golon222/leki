@@ -70,6 +70,7 @@ RTC_DATA_ATTR bool     rtcBlokWysokie   = false;// nie wracaj do ladowania po od
 RTC_DATA_ATTR uint32_t rtcChargeSinceTs = 0;    // kiedy podlaczono kabel
 RTC_DATA_ATTR uint8_t  rtcChargeFromPct = 255;  // procent sprzed ladowania
 RTC_DATA_ATTR uint32_t rtcTokenExp      = 0;    // do kiedy wazny token Firebase
+RTC_DATA_ATTR uint32_t rtcTakenTs       = 0;    // KIEDY zapisano dawke (takze bez zegara)
 RTC_DATA_ATTR uint32_t rtcLastPushTs    = 0;    // kiedy ostatnio poszedl status
 RTC_DATA_ATTR int16_t  rtcLastPushPct   = -1;   // z jakim procentem baterii
 RTC_DATA_ATTR uint16_t rtcLogWyslanyIdx = 0xFFFF;// stan czarnej skrzynki przy ostatniej wysylce
@@ -143,6 +144,7 @@ bool timeSyncedThisWake = false;
 
 bool syncTimeNTP();             // deklaracja - wifiConnect() wola ja od razu
 String logbookJson();           // czarna skrzynka - definicje nizej
+void   setTakenDay(uint32_t day);   // wola ja syncTimeNTP() przy odzyskaniu zegara
 void   logbookPrint();
 void   note(const char* co);    // odnotuj, co sie stalo w tym wybudzeniu
 Gest   czekajNaZamkniecieIGest(uint32_t limitMs);
@@ -1085,8 +1087,30 @@ bool syncTimeNTP() {
   configTime(0, 0, "pool.ntp.org", "time.google.com", "time.cloudflare.com");
   uint32_t t0 = millis();
   while (time(nullptr) < 1700000000 && millis() - t0 < 8000 && !awakeTooLong()) delay(200);
+  const bool bylZegar = hadTime;
   rtcTimeValid = time(nullptr) > 1700000000;
   LOG("[NTP] %s (epoch=%lu)\n", rtcTimeValid ? "OK" : "FAIL", (unsigned long)time(nullptr));
+
+  /* Zegar wlasnie stal sie wiarygodny, a dawka zostala zapisana WCZESNIEJ,
+     na slepo. Wiemy dokladnie, ile czasu temu to bylo (roznica na starej,
+     nieprawdziwej skali) - i wiemy juz, ktora jest godzina. Wystarczy
+     odjac jedno od drugiego, zeby dawka trafila na wlasciwa dobe.
+
+     Bez tego pudelko po odzyskaniu sieci uznaloby, ze dawki dzis nie bylo,
+     i przy nastepnym otwarciu zamilkloby dokladnie wtedy, gdy powinno
+     ostrzec.                                                          */
+  if (rtcTimeValid && !bylZegar && rtcTakenTs != 0 && before >= (time_t)rtcTakenTs) {
+    uint32_t temu = (uint32_t)(before - (time_t)rtcTakenTs);
+    if (temu < (uint32_t)ONE_DOSE_WINDOW_S) {
+      time_t kiedy = time(nullptr) - (time_t)temu;
+      rtcTakenTs = (uint32_t)kiedy;
+      setTakenDay(localDayNumber(kiedy));
+      LOG("[NTP] dawka sprzed %lu s przypisana do doby %lu\n",
+          (unsigned long)temu, (unsigned long)rtcTakenDay);
+    } else {
+      rtcTakenTs = 0;                        // za dawno, nie ma czego ratowac
+    }
+  }
 
   /* Zegar sie przesunal w trakcie dlugiego offline'u? Popraw zaleglosci. */
   if (rtcTimeValid && hadTime) {
@@ -1559,6 +1583,44 @@ void setRolloverDay(uint32_t day) {
    zdarzenie "missed" ze znacznikiem 23:59 tamtego dnia. NIE wlaczamy tu
    radia - wpis poleci przy najblizszym polaczeniu, a kalendarz w apce
    dostanie twarda informacje zamiast domyslania sie z braku danych.    */
+/* Odnotowuje wziecie dawki. Dziala TAKZE bez wiarygodnego zegara.
+
+   TU BYLA DZIURA, zglosil ja Kuba z wyjazdu.
+
+   Wczesniej stalo tu `if (rtcTimeValid) setTakenDay(...)`, wiec pudelko
+   bez internetu NIE ZAPISYWALO w ogole, ze dawka zostala wzieta - a co
+   za tym idzie, przy ponownym otwarciu nie mialo na czym oprzec
+   ostrzezenia. rtcTimeValid ustawia wylacznie syncTimeNTP(), wiec po
+   resecie (wgranie programu przed wyjazdem, zanik zasilania) i bez sieci
+   ochrona przed druga dawka NIE ISTNIALA. Objaw dokladnie taki, jak
+   opisal: zamykasz wieczko, otwierasz ponownie i cisza.
+
+   Znacznik czasu zapisujemy zawsze. Bez NTP nie jest to prawdziwa data,
+   tylko licznik od startu plytki - ale ROZNICA miedzy dwoma odczytami
+   jest poprawna, bo zegar RTC tyka takze w deep sleepie. A do pytania
+   "czy brales to niedawno" wystarcza wlasnie roznica.               */
+void zapiszDawke() {
+  uint32_t teraz = (uint32_t)time(nullptr);
+  rtcTakenTs = teraz ? teraz : 1;             // 0 znaczy "nie bylo dawki"
+  if (rtcTimeValid) setTakenDay(localDayNumber((time_t)teraz));
+}
+
+/* Czy dawka na te dobe zostala juz zapisana.
+
+   Dwie drogi, bo dwie sytuacje:
+     - zegar wiarygodny -> porownujemy NUMER DOBY. Pewna odpowiedz.
+     - zegar nieznany   -> patrzymy, ile czasu minelo od ostatniej dawki.
+       To tylko podejrzenie: nie wiemy, gdzie przebiega granica doby,
+       wiec przy braniu o 23:00 i nastepnym o 10:00 wyjdzie "juz brane",
+       choc to nowa doba. Dlatego wolajacy MUSI to rozroznic - sygnal
+       ostrzegawczy tak, ale wyrzucenie otwarcia juz nie.              */
+bool juzDzisBrane() {
+  if (rtcTimeValid) return rtcTakenDay != 0 && rtcTakenDay == localDayNumber(time(nullptr));
+  if (rtcTakenTs == 0) return false;
+  uint32_t teraz = (uint32_t)time(nullptr);
+  return teraz >= rtcTakenTs && (teraz - rtcTakenTs) < (uint32_t)ONE_DOSE_WINDOW_S;
+}
+
 void checkDayRollover() {
   if (!rtcTimeValid) return;
   uint32_t today = localDayNumber(time(nullptr));
@@ -2609,8 +2671,7 @@ void setup() {
 
   bool juzOstrzezono = false;
 #if ONE_DOSE_PER_DAY
-  if (wakeReason == WAKE_REED && rtcTimeValid && boxIsOpen()
-      && rtcTakenDay == localDayNumber(time(nullptr))) {
+  if (wakeReason == WAKE_REED && boxIsOpen() && juzDzisBrane()) {
     beepAlreadyTaken();
     juzOstrzezono = true;
   }
@@ -2841,19 +2902,27 @@ void setup() {
          Ta kontrola musi byc PRZED antydrganiami. Wczesniej bylo odwrotnie
          i drugie otwarcie w ciagu minuty konczylo sie cisza zamiast
          ostrzezenia - a to wlasnie wtedy najbardziej grozi podwojna dawka. */
-      if (rtcTimeValid) {
-        uint32_t today = localDayNumber(time(nullptr));
-        if (rtcTakenDay == today) {
-          LOG("[REED] dawka na dzien %lu juz zapisana -> OSTRZEZENIE\n",
-              (unsigned long)today);
-          note("juz dzis brane");
-          /* Sygnal zwykle poszedl juz na samym poczatku setup(). Tutaj
-             zostaje wylacznie dla przypadku, w ktorym tam sie nie udal
-             - np. wieczko drgnelo i w tamtej chwili bylo zamkniete.  */
-          if (!juzOstrzezono) beepAlreadyTaken();
+      if (juzDzisBrane()) {
+        LOGLN("[REED] dawka juz zapisana -> OSTRZEZENIE");
+        note("juz dzis brane");
+        /* Sygnal zwykle poszedl juz na samym poczatku setup(). Tutaj
+           zostaje wylacznie dla przypadku, w ktorym tam sie nie udal
+           - np. wieczko drgnelo i w tamtej chwili bylo zamkniete.  */
+        if (!juzOstrzezono) beepAlreadyTaken();
+
+        /* Z WIARYGODNYM ZEGAREM mamy pewnosc, ze to powtorka - konczymy
+           i nie zapisujemy niczego.
+
+           BEZ ZEGARA to tylko podejrzenie oparte na czasie od poprzedniej
+           dawki. Ostrzec trzeba (od tego ten sygnal jest), ale otwarcia
+           NIE WOLNO wyrzucic: gdyby to jednak byla nowa doba, prawdziwa
+           dawka przepadlaby bez sladu. Falszywe pikniecie kosztuje
+           sekunde, zgubiona dawka - dzien w kalendarzu.              */
+        if (rtcTimeValid) {
           gestPoOtwarciu = czekajNaZamkniecieIGest(CZEKAJ_ZAMKNIECIE_MS);
           break;
         }
+        LOGLN("[REED] ...ale bez zegara to tylko podejrzenie - zapisuje mimo to");
       }
 #endif
 
@@ -2870,7 +2939,7 @@ void setup() {
       }
 
 #if ONE_DOSE_PER_DAY
-      if (rtcTimeValid) setTakenDay(localDayNumber(time(nullptr)));
+      zapiszDawke();
 #endif
 
       int slot = (rtcPendingSlot >= 0) ? rtcPendingSlot : matchSlot(time(nullptr));
@@ -2934,7 +3003,7 @@ void setup() {
 
 #if ONE_DOSE_PER_DAY
       /* Jesli dawka na dzis juz zostala zapisana - nie dzwon w ogole. */
-      if (slot >= 0 && rtcTimeValid && rtcTakenDay == localDayNumber(time(nullptr))) {
+      if (slot >= 0 && juzDzisBrane()) {
         LOGLN("[ALM] dawka na dzis juz wzieta - alarm pominiety");
         rtcPendingSlot = -1;
         rtcAlarmRetries = 0;
@@ -2955,7 +3024,7 @@ void setup() {
           rtcPendingSlot = -1;
           rtcAlarmRetries = 0;
           rtcLastOpenTs = (uint32_t)time(nullptr);
-          if (rtcTimeValid) setTakenDay(localDayNumber(time(nullptr)));
+          zapiszDawke();
           reportEvent("open", slot);
 #if ONE_DOSE_PER_DAY
           if (rtcTimeValid && rtcTakenDay != localDayNumber(time(nullptr)))
