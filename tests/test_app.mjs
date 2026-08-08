@@ -1190,6 +1190,45 @@ check(/String\(v\)\.trim\(\) !== ""/.test(html),
 check(/id="inrVal"[^>]*max="15"/.test(html),
       "gorna granica INR w polu zgadza sie z regulami bazy (15)");
 
+head("Zakres terapeutyczny INR ma sensowne granice");
+{
+  /* Kuba ma cel 2-3. Poza przedzialem 1-5 nie ma czego pilnowac: INR
+     ponizej 1 nie istnieje, a powyzej 5 to nie jest CEL leczenia, tylko
+     stan alarmowy. Polowki musza dzialac - 2,5 to normalna wartosc.  */
+  const g = (wpis) => { document.getElementById("inrMin").value = wpis;
+                        return A.inrGranica("inrMin", 2); };
+  check(g("2") === 2,        "liczba calkowita przechodzi bez zmian");
+  check(g("2.5") === 2.5,    "polowka z kropka");
+  check(g("2,5") === 2.5,    "polowka z PRZECINKIEM - tak pisze polska klawiatura");
+  check(g("0.2") === 1,      `ponizej 1 przycinane do 1 (jest ${g("0.2")})`);
+  check(g("9")   === 5,      `powyzej 5 przycinane do 5 (jest ${g("9")})`);
+  check(g("2.55") === 2.6,   `jedno miejsce po przecinku (2,55 -> ${g("2.55")})`);
+  check(g("abc") === 2,      "smiec zostawia wartosc domyslna");
+  check(g("")    === 2,      "puste pole tez");
+
+  const zapisz = async (od, doo) => {
+    A.__resetDb();
+    A.__setState({ cfg: { schedule:["20:00"], defaultDose:1, tzOffsetMin:120,
+                          inrMin:2, inrMax:3 } });
+    document.getElementById("inrMin").value = od;
+    document.getElementById("inrMax").value = doo;
+    await globalThis.saveInrRange();
+    const w = A.__db.writes.at(-1)?.val;
+    return w ? [w["devices/pillbox01/config/inrMin"], w["devices/pillbox01/config/inrMax"]] : null;
+  };
+  check(JSON.stringify(await zapisz("2","3")) === "[2,3]", "zakres 2-3 zapisany");
+  check(JSON.stringify(await zapisz("2,5","3,5")) === "[2.5,3.5]", "zakres z polowkami zapisany");
+  check(JSON.stringify(await zapisz("0.2","9")) === "[1,5]", "wartosci skrajne przyciete do 1-5");
+  /* Odwrocony zakres dawalby przedzial pusty: kazdy pomiar poza celem,
+     a na wykresie pasek o ujemnej wysokosci. */
+  check(await zapisz("3","2") === null, "dolna granica wieksza od gornej - odrzucone");
+  check(await zapisz("2","2") === null, "granice rowne - tez odrzucone");
+
+  check(/id="inrMin"[^>]*min="1"[^>]*max="5"/.test(html), "pole Od ma granice takze w HTML");
+  check(/id="inrMax"[^>]*min="1"[^>]*max="5"/.test(html), "pole Do ma granice takze w HTML");
+  check(/id="inrMin"[^>]*step="0\.1"/.test(html), "krok 0,1 - polowki sa mozliwe");
+}
+
 head("Kolejka zapisow w telefonie");
 check(/async function zapiszPewnie\(/.test(html), "istnieje zapis z gwarancja");
 check(!/await set\(ref\(db/.test(html) && !/await update\(ref\(db, `devices/.test(html),
