@@ -10,6 +10,7 @@
 #include <vector>
 #include <set>
 #include <string>
+#include <utility>
 
 time_t FAKE_NOW = 0;
 int    FAKE_ADC = 0;
@@ -46,6 +47,8 @@ uint32_t rtcLastOpenTs    = 0;
 uint32_t rtcLastPushTs    = 0;
 uint32_t rtcTokenExp      = 0;
 uint32_t rtcTakenTs       = 0;
+uint32_t rtcAlarmDoneDay  = 0;
+uint32_t rtcAlarmDoneTs   = 0;
 uint32_t rtcOpenSinceTs   = 0;
 uint32_t rtcNextWarnTs    = 0;
 uint16_t rtcOpenWarnCount = 0;
@@ -1068,6 +1071,67 @@ head("Dziennik wieczka jest escapowany tak samo jak czarna skrzynka");
     if (j.charAt(i) == '"' && (i == 0 || j.charAt(i-1) != '\\')) cudz++;
   CHECK(cudz % 2 == 0, "liczba niezaescapowanych cudzyslowow jest parzysta (%d)", cudz);
   prefs.wipe();
+}
+
+/* ====== 16b2. ALARM NIE MOZE DZWONIC W KOLKO PRZEZ TRZY GODZINY ======
+   Zglosil Kuba z wyjazdu: "pika juz 3 raz od 18:30, o 19:30 tez".
+
+   Po wyczerpaniu prob alarm zapisywal "missed" i czyscil rtcPendingSlot,
+   ale nie zostawial sladu, ze dla tej doby juz zadzwonil. matchSlot()
+   dopasowuje pore leku w oknie +/-MATCH_WINDOW_MIN, czyli dla 20:00
+   zwraca slot 0 przez CALE trzy godziny (18:30-21:30). Kazde wybudzenie
+   w tym oknie zaczynalo alarm od nowa - a bez sieci pudelko budzi sie
+   tam wielokrotnie, bo ponawia wysylke kolejki po 15, 30, 60 minutach. */
+head("Odzwoniony alarm nie wraca w tym samym oknie dopasowania");
+{
+  prefs.wipe();
+  parseSchedule("20:00");
+  rtcTimeValid = true; rtcTzOffsetMin = 120;
+  rtcTakenDay = 0; rtcTakenTs = 0;
+  rtcAlarmDoneDay = 0; rtcAlarmDoneTs = 0;
+
+  /* 20:00 - pora leku. Alarm dzwoni i po trzech probach sie poddaje. */
+  FAKE_NOW = local(2026, 8, 8, 20, 0);
+  CHECK(matchSlot(FAKE_NOW) == 0, "o porze leku alarm ma prawo zadzwonic");
+  CHECK(!alarmJuzObsluzony(), "na starcie nic nie jest jeszcze odzwonione");
+  oznaczAlarmObsluzony();                    // to robi galaz "pominieta dawka"
+
+  /* Kolejne wybudzenia w oknie +/-90 min - dokladnie te, ktore Kuba slyszal. */
+  for (const auto& p : { std::pair<int,int>{20,15}, {21,0}, {21,29} }) {
+    FAKE_NOW = local(2026, 8, 8, p.first, p.second);
+    CHECK(matchSlot(FAKE_NOW) == 0,
+          "%02d:%02d wciaz miesci sie w oknie dopasowania", p.first, p.second);
+    CHECK(alarmJuzObsluzony(),
+          "...ale o %02d:%02d alarm juz NIE dzwoni drugi raz", p.first, p.second);
+  }
+
+  /* Nowa doba - alarm musi wrocic, inaczej pudelko zamilkloby na zawsze. */
+  FAKE_NOW = local(2026, 8, 9, 20, 0);
+  CHECK(!alarmJuzObsluzony(), "nazajutrz alarm znowu dziala");
+
+  /* To samo bez zegara: pudelko offline po resecie. */
+  prefs.wipe();
+  rtcTimeValid = false; rtcAlarmDoneDay = 0; rtcAlarmDoneTs = 0;
+  FAKE_NOW = 5000;
+  CHECK(!alarmJuzObsluzony(), "bez zegara tez zaczynamy od ciszy");
+  oznaczAlarmObsluzony();
+  FAKE_NOW = 5000 + 3600;
+  CHECK(alarmJuzObsluzony(), "godzine pozniej alarm nie wraca");
+  FAKE_NOW = 5000 + ONE_DOSE_WINDOW_S + 60;
+  CHECK(!alarmJuzObsluzony(), "po uplywie okna wraca - to juz nowa doba");
+}
+
+head("Wziecie tabletki tez konczy alarm na te dobe");
+{
+  prefs.wipe();
+  rtcTimeValid = true; rtcTakenDay = 0; rtcTakenTs = 0;
+  rtcAlarmDoneDay = 0; rtcAlarmDoneTs = 0;
+  FAKE_NOW = local(2026, 8, 8, 19, 0);
+  zapiszDawke();
+  oznaczAlarmObsluzony();                    // tak robi galaz "otwarto w trakcie"
+  FAKE_NOW = local(2026, 8, 8, 20, 0);
+  CHECK(juzDzisBrane(), "dawka zapisana");
+  CHECK(alarmJuzObsluzony(), "i alarm o 20:00 juz nie zadzwoni");
 }
 
 /* ====== 16c. OCHRONA PRZED DRUGA DAWKA **BEZ INTERNETU** ============

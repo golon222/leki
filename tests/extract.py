@@ -24,7 +24,7 @@ WANTED = [
     "queueShiftTimestamps", "rekordKompletny", "trwaleOdrzucony", "flushQueue",
     "makeRecordAt", "makeRecord",
     "loadDayMarkers", "setTakenDay", "setRolloverDay",
-    "zapiszDawke", "juzDzisBrane",
+    "zapiszDawke", "oznaczAlarmObsluzony", "alarmJuzObsluzony", "juzDzisBrane",
     "checkDayRollover",
     "wartoZapisac", "logbookAdd", "logbookJson",
     "alarmPotwierdzony",

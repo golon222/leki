@@ -501,14 +501,22 @@ ok(alarm.find("byloOtwarteNaStarcie = boxIsOpen()") < alarm.find("buzzerInit()")
 # ---------- 6c. Ochrona przed druga dawka bez internetu ----------
 # Zgloszenie Kuby z wyjazdu: bez sieci pudelko nie ostrzegalo o powtorce.
 # Cala ochrona byla bramkowana rtcTimeValid, ktore ustawia WYLACZNIE NTP.
-# UWAGA: "case WAKE_REED:" i "case WAKE_BUTTON:" wystepuja TAKZE
-# w wakeName(), czyli wyzej niz galaz kontaktronu w setup(). Szukanie od
-# poczatku pliku dawalo wycinek dlugi na 61 znakow, a trzy kontrole
-# ponizej przechodzily na pustym tekscie - czyli nie sprawdzaly nic.
-_s = ino.find("void setup()")
-_i = ino.find("case WAKE_REED:", _s)
-reed = ino[_i:ino.find("case WAKE_BUTTON:", _i)]
-ok(len(reed) > 500, f"galaz kontaktronu wycieta poprawnie ({len(reed)} znakow)")
+# Wycinanie galezi z setup() ma wlasna funkcje, bo recznie pomylilem sie
+# przy tym TRZY RAZY. Wszystkie nazwy "case WAKE_*" wystepuja rowniez
+# w wakeName(), ktore stoi WYZEJ - szukanie od poczatku pliku dawalo raz
+# wycinek 61-znakowy, raz 105 000-znakowy, a kontrole na nim przechodzily
+# nie sprawdzajac niczego. Teraz kotwiczymy od setup() i sprawdzamy
+# rozmiar, wiec kolejna taka pomylka od razu sie zglosi.
+def galaz(nazwa, konczy_sie):
+    poczatek = ino.find("void setup()")
+    i = ino.find(nazwa, poczatek)
+    if i < 0: return ""
+    j = ino.find(konczy_sie, i)
+    return ino[i:j] if j > i else ino[i:]
+
+reed = galaz("case WAKE_REED:", "case WAKE_BUTTON:")
+ok(1000 < len(reed) < 20000,
+   f"galaz kontaktronu wycieta poprawnie ({len(reed)} znakow)")
 ok("void zapiszDawke()" in code,
    "zapis dawki jest osobna funkcja, dzialajaca takze bez zegara")
 ok("bool juzDzisBrane()" in code,
@@ -526,6 +534,27 @@ _jd = _jd[:_jd.find("\n      }")]
 ok("if (rtcTimeValid) {" in _jd,
    "pominiecie zapisu tylko przy WIARYGODNYM zegarze, nie na podejrzenie")
 ok("ONE_DOSE_WINDOW_S" in code, "okno podejrzenia jest nazwana stala z config.h")
+
+# ---------- 6d. Alarm nie moze dzwonic w kolko w oknie dopasowania ----------
+# Zgloszenie Kuby: "pika 3 raz od 18:30, o 19:30 tez". matchSlot() dopasowuje
+# pore leku w oknie +/-MATCH_WINDOW_MIN, czyli dla 20:00 przez trzy godziny.
+# Bez znacznika "odzwonione" kazde wybudzenie w tym oknie zaczyna alarm od nowa,
+# a bez sieci pudelko budzi sie tam wielokrotnie (ponawianie kolejki).
+tim = galaz("case WAKE_TIMER:", "gestPoOtwarciu == GEST_TEST")
+ok(1000 < len(tim) < 20000,
+   f"galaz timera wycieta poprawnie ({len(tim)} znakow)")
+ok("void oznaczAlarmObsluzony()" in code,
+   "istnieje znacznik 'alarm na te dobe juz sie odbyl'")
+ok("bool alarmJuzObsluzony()" in code, "i funkcja, ktora go czyta")
+ok("alarmJuzObsluzony()" in tim,
+   "galaz alarmu sprawdza go PRZED zadzwonieniem")
+_po = tim[tim.find('reportEvent("missed"'):]
+ok("oznaczAlarmObsluzony();" in _po[:400],
+   "po wyczerpaniu prob alarm zostawia slad, ze juz dzwonil")
+# Tu szukamy NAPISU, wiec na surowym zrodle - strip() zamienia literaly na "".
+_ldm = ino[ino.find("void loadDayMarkers()"):]
+ok('prefs.getULong("almDay"' in _ldm[:_ldm.find("\n}")],
+   "znacznik przezywa reset - odtwarzany z pamieci trwalej")
 
 # ---------- 7. Znaczniki dobowe trwale ----------
 ok("loadDayMarkers();" in setup_body, "znaczniki dobowe odtwarzane przy starcie")

@@ -23,8 +23,8 @@ bash tests/run_all.sh
 ```
 
 Musi przejść przed zmianą i po zmianie. Stan wyjściowy:
-**325 + 51 firmware, 526 (×6 pór doby) + 86 + 49 aplikacja, 48 zgodności,
-58 reguł bazy, 204 kontrole audytu — 0 błędów.**
+**339 + 51 firmware, 526 (×6 pór doby) + 86 + 49 aplikacja, 48 zgodności,
+58 reguł bazy, 211 kontroli audytu — 0 błędów.**
 
 Testy pracują na **prawdziwym kodzie**, nie na kopii: `tests/extract.py` wycina
 funkcje z `PillBox.ino`, `tests/build_app_module.mjs` buduje moduł z `index.html`.

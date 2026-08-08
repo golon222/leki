@@ -71,6 +71,8 @@ RTC_DATA_ATTR uint32_t rtcChargeSinceTs = 0;    // kiedy podlaczono kabel
 RTC_DATA_ATTR uint8_t  rtcChargeFromPct = 255;  // procent sprzed ladowania
 RTC_DATA_ATTR uint32_t rtcTokenExp      = 0;    // do kiedy wazny token Firebase
 RTC_DATA_ATTR uint32_t rtcTakenTs       = 0;    // KIEDY zapisano dawke (takze bez zegara)
+RTC_DATA_ATTR uint32_t rtcAlarmDoneDay  = 0;    // doba, w ktorej alarm juz sie odbyl
+RTC_DATA_ATTR uint32_t rtcAlarmDoneTs   = 0;    // ...i kiedy, gdy zegar nieznany
 RTC_DATA_ATTR uint32_t rtcLastPushTs    = 0;    // kiedy ostatnio poszedl status
 RTC_DATA_ATTR int16_t  rtcLastPushPct   = -1;   // z jakim procentem baterii
 RTC_DATA_ATTR uint16_t rtcLogWyslanyIdx = 0xFFFF;// stan czarnej skrzynki przy ostatniej wysylce
@@ -1544,6 +1546,7 @@ void loadDayMarkers() {
   prefs.begin(NVS_NAMESPACE, true);
   if (rtcTakenDay == 0)    rtcTakenDay    = prefs.getULong("takenDay", 0);
   if (rtcRolloverDay == 0) rtcRolloverDay = prefs.getULong("rollDay", 0);
+  if (rtcAlarmDoneDay == 0) rtcAlarmDoneDay = prefs.getULong("almDay", 0);
   prefs.end();
   LOG("[DAY] odtworzono z pamieci: wzieta=%lu, rozliczona=%lu\n",
       (unsigned long)rtcTakenDay, (unsigned long)rtcRolloverDay);
@@ -1614,6 +1617,44 @@ void zapiszDawke() {
        wiec przy braniu o 23:00 i nastepnym o 10:00 wyjdzie "juz brane",
        choc to nowa doba. Dlatego wolajacy MUSI to rozroznic - sygnal
        ostrzegawczy tak, ale wyrzucenie otwarcia juz nie.              */
+/* Czy alarm dla tej doby zostal juz odegrany do konca.
+
+   TU BYL BLAD, zglosil go Kuba z wyjazdu: "pika 3 raz od 18:30, o 19:30
+   tez, a tabletke juz wzialem".
+
+   Po wyczerpaniu MAX_ALARM_RETRIES prob alarm zapisywal "missed" i czyscil
+   rtcPendingSlot - ale NIE zostawial sladu, ze dla tej doby juz zadzwonil.
+   Tymczasem matchSlot() dopasowuje pore leku w oknie +/-MATCH_WINDOW_MIN,
+   czyli dla przypomnienia o 20:00 zwraca slot 0 przez CALE trzy godziny,
+   od 18:30 do 21:30. Kazde wybudzenie w tym oknie zaczynalo wiec caly
+   alarm od nowa.
+
+   A wybudzen w tym oknie jest sporo, gdy pudelko nie ma sieci:
+   planNextSleep() budzi je do ponawiania wysylki kolejki po 15, 30, 60,
+   120 i 240 minutach. Stad dzwonienie o 18:30, potem o 19:30 i dalej.
+
+   Z SIECIA TEGO NIE WIDAC: kolejka jest pusta, wiec nie ma po co budzic
+   pudelka w srodku okna i alarm odzywa sie doklandie raz. Blad ujawnia sie
+   wylacznie po dluzszym czasie offline - czyli wtedy, gdy pudelko ma byc
+   najbardziej samodzielne.                                             */
+void oznaczAlarmObsluzony() {
+  uint32_t teraz = (uint32_t)time(nullptr);
+  rtcAlarmDoneTs = teraz ? teraz : 1;
+  if (rtcTimeValid) {
+    rtcAlarmDoneDay = localDayNumber((time_t)teraz);
+    prefs.begin(NVS_NAMESPACE, false);
+    prefs.putULong("almDay", rtcAlarmDoneDay);   // jak setTakenDay obok
+    prefs.end();
+  }
+}
+
+bool alarmJuzObsluzony() {
+  if (rtcTimeValid) return rtcAlarmDoneDay != 0 && rtcAlarmDoneDay == localDayNumber(time(nullptr));
+  if (rtcAlarmDoneTs == 0) return false;
+  uint32_t teraz = (uint32_t)time(nullptr);
+  return teraz >= rtcAlarmDoneTs && (teraz - rtcAlarmDoneTs) < (uint32_t)ONE_DOSE_WINDOW_S;
+}
+
 bool juzDzisBrane() {
   if (rtcTimeValid) return rtcTakenDay != 0 && rtcTakenDay == localDayNumber(time(nullptr));
   if (rtcTakenTs == 0) return false;
@@ -3003,8 +3044,8 @@ void setup() {
 
 #if ONE_DOSE_PER_DAY
       /* Jesli dawka na dzis juz zostala zapisana - nie dzwon w ogole. */
-      if (slot >= 0 && juzDzisBrane()) {
-        LOGLN("[ALM] dawka na dzis juz wzieta - alarm pominiety");
+      if (slot >= 0 && (juzDzisBrane() || alarmJuzObsluzony())) {
+        LOGLN("[ALM] dawka na dzis zalatwiona (wzieta albo odzwoniona) - cisza");
         rtcPendingSlot = -1;
         rtcAlarmRetries = 0;
         slot = -1;
@@ -3025,6 +3066,7 @@ void setup() {
           rtcAlarmRetries = 0;
           rtcLastOpenTs = (uint32_t)time(nullptr);
           zapiszDawke();
+          oznaczAlarmObsluzony();
           reportEvent("open", slot);
 #if ONE_DOSE_PER_DAY
           if (rtcTimeValid && rtcTakenDay != localDayNumber(time(nullptr)))
@@ -3039,6 +3081,9 @@ void setup() {
             reportEvent("missed", slot);
             rtcPendingSlot = -1;
             rtcAlarmRetries = 0;
+            /* Odzwonione. Bez tego kazde kolejne wybudzenie w oknie
+               +/-90 min zaczynaloby alarm od nowa.                    */
+            oznaczAlarmObsluzony();
           }
         }
       } else {
