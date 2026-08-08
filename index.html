@@ -647,8 +647,8 @@ nav button.act{color:var(--acc)}
     <h3>Zakres terapeutyczny INR</h3>
     <div class="muted">Ustala go lekarz prowadzący. Najczęściej 2,0–3,0.</div>
     <div class="pair" style="grid-template-columns:minmax(0,1fr) minmax(0,1fr)">
-      <div><label>Od</label><input id="inrMin" type="number" step="0.1" min="1" max="5" inputmode="decimal"></div>
-      <div><label>Do</label><input id="inrMax" type="number" step="0.1" min="1" max="5" inputmode="decimal"></div>
+      <div><label>Od</label><select id="inrMin" onchange="inrZakresZmieniony()"></select></div>
+      <div><label>Do</label><select id="inrMax"></select></div>
     </div>
     <button class="primary" style="width:100%;margin-top:12px" onclick="saveInrRange()">Zapisz zakres</button>
   </div>
@@ -661,12 +661,9 @@ nav button.act{color:var(--acc)}
     <div class="muted">Odstęp ustala lekarz — aplikacja tylko odlicza dni.
       Termin liczy się od ostatniego wyniku i pojawia się w kalendarzu jako
       pomarańczowy znak.</div>
-    <div class="pair" style="grid-template-columns:minmax(0,1fr) minmax(0,1.2fr)">
-      <div><label>Co ile dni</label>
-        <input id="inrEvery" type="number" step="1" min="0" max="365" inputmode="numeric"></div>
-      <div style="align-self:end"><div class="dim2" id="inrEveryHint"></div></div>
-    </div>
-    <div class="dim2" style="margin-top:6px">0 wyłącza przypominanie.</div>
+    <div><label>Co ile</label>
+      <select id="inrEvery" onchange="odswiezPodpowiedzInr()"></select></div>
+    <div class="dim2" id="inrEveryHint" style="margin-top:6px"></div>
     <button class="primary" style="width:100%;margin-top:12px" onclick="saveInrEvery()">Zapisz odstęp</button>
   </div>
 
@@ -929,7 +926,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-08.2";
+const APP_VERSION = "2026-08-08.3";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -3073,14 +3070,9 @@ function renderSettings(){
   document.getElementById("defDose").value  = cfg.defaultDose ?? 1;
   document.getElementById("drugName").value = cfg.drugName || "Warfin";
   document.getElementById("drugStrength").value = String(cfg.drugStrength ?? 3);
-  document.getElementById("inrMin").value = cfg.inrMin ?? 2;
-  document.getElementById("inrMax").value = cfg.inrMax ?? 3;
-  const ev = document.getElementById("inrEvery");
-  if (ev){
-    ev.value = inrOdstep();
-    ev.oninput = odswiezPodpowiedzInr;      // podpowiedź zmienia się w trakcie pisania
-    odswiezPodpowiedzInr();
-  }
+  wypelnijListyZakresu();
+  wypelnijListeOdstepu();
+  odswiezPodpowiedzInr();
 }
 /* Zmiana w liście od razu pokazuje przesunięcie - bez zapisywania. */
 window.tzChanged = () => {
@@ -3123,49 +3115,111 @@ window.saveConfig = async () => {
   toast("Zapisano · pudełko pobierze przy najbliższym połączeniu", "ok", 3200);
 };
 
-/* Zakres terapeutyczny: sensowne granice to 1–5.
+/* Zakres terapeutyczny INR — dwie listy zamiast dwóch pól liczbowych.
 
-   Poza nimi nie ma czego pilnować — INR poniżej 1 nie istnieje, a wartość
-   powyżej 5 jako CEL leczenia nie ma sensu (to już jest stan alarmowy,
-   nie zakres docelowy). Bez tych granic dało się wpisać cokolwiek i cała
-   ocena „w zakresie / poza zakresem" przestawała cokolwiek znaczyć.
+   Wpisywanie liczby na telefonie to klawiatura, przecinek kontra kropka
+   i szansa na literówkę w rodzaju „25" zamiast „2,5". Lista tego nie
+   dopuszcza: wszystkie wartości są z góry poprawne, a iPhone pokazuje ją
+   jako wygodne kółko.
 
-   Jedno miejsce po przecinku, żeby 2,5 było możliwe. Przecinek przyjmujemy
-   tak samo jak kropkę — polska klawiatura daje przecinek. */
-const INR_ZAKRES_MIN = 1, INR_ZAKRES_MAX = 5;
+   Granice 1–5 wzięte z sensu klinicznego: INR poniżej 1 nie istnieje,
+   a wartość powyżej 5 nie jest CELEM leczenia, tylko stanem alarmowym.
+   Krok 0,1, żeby 2,5 było możliwe. */
+const INR_ZAKRES_MIN = 1, INR_ZAKRES_MAX = 5, INR_KROK = 0.1;
 
-function inrGranica(id, domyslna){
-  const surowe = String(document.getElementById(id).value).replace(",", ".");
-  const v = parseFloat(surowe);
-  if (!Number.isFinite(v)) return domyslna;
-  const przyciete = Math.min(INR_ZAKRES_MAX, Math.max(INR_ZAKRES_MIN, v));
-  return Math.round(przyciete * 10) / 10;          // jedno miejsce po przecinku
+/* 1,0 · 1,1 · … · 5,0 — bez błędów zmiennoprzecinkowych (0.1+0.2 ≠ 0.3). */
+function inrKrokiZakresu(){
+  const out = [];
+  for (let i = Math.round(INR_ZAKRES_MIN * 10); i <= Math.round(INR_ZAKRES_MAX * 10); i++)
+    out.push(i / 10);
+  return out;
+}
+
+function opcjeInr(sel, wartosci, wybrana){
+  sel.innerHTML = wartosci.map(v =>
+    `<option value="${v}"${Math.abs(v - wybrana) < 0.001 ? " selected" : ""}>${nf(v)}</option>`).join("");
+}
+
+/* Lista „do" pokazuje WYŁĄCZNIE wartości większe od wybranego „od".
+
+   Dzięki temu odwrócony zakres (3–2) jest nie do wyklikania, zamiast być
+   wyłapywany komunikatem po fakcie. Pusty przedział oznaczałby, że każdy
+   pomiar jest poza celem, a pasek celu na wykresie miałby ujemną
+   wysokość. Lepiej nie dać się w to wpakować, niż potem tłumaczyć. */
+window.inrZakresZmieniony = () => {
+  const selOd = document.getElementById("inrMin");
+  const selDo = document.getElementById("inrMax");
+  if (!selOd || !selDo) return;
+  const od = +selOd.value;
+  const mozliwe = inrKrokiZakresu().filter(v => v > od + 0.001);
+  /* Gdy poprzednie „do" wypadło z listy, bierzemy najbliższą sensowną
+     wartość w górę, a nie pierwszą lepszą z brzegu. */
+  const bylo = +selDo.value;
+  const nowe = mozliwe.includes(bylo) ? bylo : mozliwe[0];
+  opcjeInr(selDo, mozliwe, nowe);
+};
+
+function wypelnijListyZakresu(){
+  const selOd = document.getElementById("inrMin");
+  const selDo = document.getElementById("inrMax");
+  if (!selOd || !selDo) return;
+  const od = Math.min(INR_ZAKRES_MAX - INR_KROK,
+                      Math.max(INR_ZAKRES_MIN, +(cfg.inrMin ?? 2)));
+  opcjeInr(selOd, inrKrokiZakresu().filter(v => v < INR_ZAKRES_MAX - 0.001), od);
+  selDo.value = String(Math.min(INR_ZAKRES_MAX, Math.max(od + INR_KROK, +(cfg.inrMax ?? 3))));
+  inrZakresZmieniony();
 }
 
 window.saveInrRange = async () => {
-  const od = inrGranica("inrMin", 2);
-  const doo = inrGranica("inrMax", 3);
-  /* „Od" większe niż „do" dałoby zakres pusty — każdy pomiar byłby wtedy
-     poza zakresem, a wykres narysowałby pasek o ujemnej wysokości. */
-  if (od >= doo){
-    toast(`Dolna granica musi być mniejsza od górnej (${nf(od)} – ${nf(doo)}).`, "err", 4000);
+  const od  = +document.getElementById("inrMin").value;
+  const doo = +document.getElementById("inrMax").value;
+  /* Listy nie pozwalają tego złamać, ale zapis idzie do bazy medycznej —
+     ostatnie sprawdzenie kosztuje jedną linię. */
+  if (!(Number.isFinite(od) && Number.isFinite(doo) && od < doo)){
+    toast("Zakres jest nieprawidłowy — dolna granica musi być mniejsza od górnej.", "err", 4000);
     return;
   }
-  cfg.inrMin = od; cfg.inrMax = doo;
-  document.getElementById("inrMin").value = od;     // pokaż, co naprawdę zapisano
-  document.getElementById("inrMax").value = doo;
+  cfg.inrMin = Math.round(od * 10) / 10;
+  cfg.inrMax = Math.round(doo * 10) / 10;
   await zapiszCfg({ inrMin: cfg.inrMin, inrMax: cfg.inrMax }, "Zakres INR");
   renderInr();
 };
 
 /* Odstęp między pomiarami INR. Pusty klucz = wróć do domyślnych 21 dni;
    jawne 0 = wyłącz przypominanie i zapamiętaj, że to była decyzja.     */
+/* Odstępy, które realnie zleca lekarz przy warfarynie. Wpisywanie
+   dowolnej liczby dni dawało pozorną swobodę i realne ryzyko literówki
+   („210" zamiast „21" wyciszyłoby przypomnienie na siedem miesięcy).
+   Podpisy w tygodniach, bo tak się o tym myśli i mówi w gabinecie. */
+const INR_ODSTEPY = [
+  [0,   "wyłączone"],
+  [7,   "co tydzień"],
+  [10,  "co 10 dni"],
+  [14,  "co 2 tygodnie"],
+  [21,  "co 3 tygodnie"],
+  [28,  "co 4 tygodnie"],
+  [35,  "co 5 tygodni"],
+  [42,  "co 6 tygodni"],
+  [56,  "co 8 tygodni"],
+  [84,  "co 12 tygodni"]
+];
+
+function wypelnijListeOdstepu(){
+  const sel = document.getElementById("inrEvery");
+  if (!sel) return;
+  const teraz = inrOdstep();
+  /* Gdyby w bazie siedziała wartość spoza listy (np. ustawiona starszą
+     wersją aplikacji), dopisujemy ją, zamiast po cichu ją zmieniać. */
+  const lista = INR_ODSTEPY.some(([d]) => d === teraz)
+    ? INR_ODSTEPY
+    : [...INR_ODSTEPY, [teraz, `co ${teraz} dni`]].sort((a, b) => a[0] - b[0]);
+  sel.innerHTML = lista.map(([d, opis]) =>
+    `<option value="${d}"${d === teraz ? " selected" : ""}>${esc(opis)}</option>`).join("");
+}
+
 window.saveInrEvery = async () => {
-  const pole = document.getElementById("inrEvery");
-  const surowe = String(pole?.value ?? "").trim();
-  const n = surowe === "" ? 21 : Math.max(0, Math.min(365, Math.round(+surowe) || 0));
+  const n = Math.max(0, Math.min(365, Math.round(+document.getElementById("inrEvery").value) || 0));
   cfg.inrEveryDays = n;
-  if (pole) pole.value = n;
   odswiezPodpowiedzInr();
   await zapiszCfg({ inrEveryDays: n }, "Odstęp pomiarów INR");
   renderInr(); renderCalendar();
@@ -3176,12 +3230,20 @@ function odswiezPodpowiedzInr(){
   const h = document.getElementById("inrEveryHint");
   if (!h) return;
   const n = +(document.getElementById("inrEvery")?.value ?? inrOdstep());
-  if (!Number.isFinite(n) || n <= 0){ h.textContent = "przypominanie wyłączone"; return; }
-  const tyg = n / 7;
-  h.textContent = Number.isInteger(tyg)
-    ? `= ${tyg} ${tyg === 1 ? "tydzień" : (tyg < 5 ? "tygodnie" : "tygodni")}`
-    : `≈ ${tyg.toFixed(1).replace(".", ",")} tygodnia`;
+  if (!Number.isFinite(n) || n <= 0){
+    h.textContent = "Przypominanie wyłączone — kalendarz nie pokaże terminu.";
+    return;
+  }
+  /* Lista mówi „co 3 tygodnie", więc podpowiedź ma dodać to, czego z niej
+     nie widać: ile to dni i kiedy konkretnie wypada następny raz. */
+  const k = inrTerminKey();
+  h.textContent = `Co ${dniTxt(n)}.` + (k
+    ? ` Najbliższy termin: ${k}.`
+    : " Termin pojawi się po pierwszym wyniku.");
 }
+/* Wołane z onchange="" w HTML, więc MUSI być na window - inaczej lista
+   działa w testach (import modułu) i wybucha w telefonie. */
+window.odswiezPodpowiedzInr = odswiezPodpowiedzInr;
 
 /* ═══════════════════════════════════════════════════════════════
  *  ANALIZA

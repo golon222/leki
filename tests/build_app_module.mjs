@@ -39,8 +39,8 @@ export { brakujePokrycia, doReconcile, opisLadowan, minutyDoPelna, opisLadowania
          tzName, trackingSince, beforeTracking, analyze, inrContext, openTimeOf,
          openMinutes, hm, dev2, renderStatus,
          zapiszPewnie, zapiszCfg, oczekWczytaj, oczekZapisz, oczekIle, oczekWyslij,
-         magazyn, OCZEK_KEY, oczekOdmowy, bazaOdmowila, inrGranica,
-         INR_ZAKRES_MIN, INR_ZAKRES_MAX };
+         magazyn, OCZEK_KEY, oczekOdmowy, bazaOdmowila,
+         INR_ZAKRES_MIN, INR_ZAKRES_MAX, INR_ODSTEPY, inrKrokiZakresu, renderSettings };
 export function __setState(o){
   if (o.cfg)    Object.assign(cfg, o.cfg);
   if (o.doses)  { for (const k of Object.keys(doses)) delete doses[k]; Object.assign(doses, o.doses); }

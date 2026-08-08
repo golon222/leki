@@ -1190,43 +1190,97 @@ check(/String\(v\)\.trim\(\) !== ""/.test(html),
 check(/id="inrVal"[^>]*max="15"/.test(html),
       "gorna granica INR w polu zgadza sie z regulami bazy (15)");
 
-head("Zakres terapeutyczny INR ma sensowne granice");
+head("Zakres terapeutyczny INR wybiera sie z LIST, nie wpisuje");
 {
-  /* Kuba ma cel 2-3. Poza przedzialem 1-5 nie ma czego pilnowac: INR
-     ponizej 1 nie istnieje, a powyzej 5 to nie jest CEL leczenia, tylko
-     stan alarmowy. Polowki musza dzialac - 2,5 to normalna wartosc.  */
-  const g = (wpis) => { document.getElementById("inrMin").value = wpis;
-                        return A.inrGranica("inrMin", 2); };
-  check(g("2") === 2,        "liczba calkowita przechodzi bez zmian");
-  check(g("2.5") === 2.5,    "polowka z kropka");
-  check(g("2,5") === 2.5,    "polowka z PRZECINKIEM - tak pisze polska klawiatura");
-  check(g("0.2") === 1,      `ponizej 1 przycinane do 1 (jest ${g("0.2")})`);
-  check(g("9")   === 5,      `powyzej 5 przycinane do 5 (jest ${g("9")})`);
-  check(g("2.55") === 2.6,   `jedno miejsce po przecinku (2,55 -> ${g("2.55")})`);
-  check(g("abc") === 2,      "smiec zostawia wartosc domyslna");
-  check(g("")    === 2,      "puste pole tez");
+  /* Wpisywanie liczby na telefonie to klawiatura, przecinek kontra kropka
+     i literowka "25" zamiast "2,5". Lista tego nie dopuszcza.          */
+  const el = id => document.getElementById(id);
+  A.__setState({ cfg: { schedule:["20:00"], defaultDose:1, tzOffsetMin:120,
+                        inrMin:2, inrMax:3, inrEveryDays:21 } });
+  A.renderSettings();
+
+  check(/<select id="inrMin"/.test(html), "pole Od to lista, nie input");
+  check(/<select id="inrMax"/.test(html), "pole Do to lista, nie input");
+  check(el("inrMin").value === "2", `lista Od pokazuje zapisana wartosc (${el("inrMin").value})`);
+  check(el("inrMax").value === "3", `lista Do pokazuje zapisana wartosc (${el("inrMax").value})`);
+
+  const kroki = A.inrKrokiZakresu();
+  check(kroki[0] === A.INR_ZAKRES_MIN, `lista zaczyna sie od ${A.INR_ZAKRES_MIN}`);
+  check(kroki[kroki.length-1] === A.INR_ZAKRES_MAX, `i konczy na ${A.INR_ZAKRES_MAX}`);
+  check(kroki.includes(2.5), "2,5 jest na liscie - polowki maja byc mozliwe");
+  check(kroki.every(v => Math.abs(v*10 - Math.round(v*10)) < 1e-9),
+        "zadna wartosc nie ma ogona zmiennoprzecinkowego (0.1+0.2 != 0.3)");
+  check(!kroki.some(v => v < 1 || v > 5), "nic poza 1-5 nie da sie wybrac");
+
+  /* Sedno: odwrocony zakres ma byc NIE DO WYKLIKANIA, a nie lapany
+     komunikatem po fakcie. Pusty przedzial oznaczalby, ze kazdy pomiar
+     jest poza celem, a pasek celu na wykresie mialby ujemna wysokosc. */
+  for (const od of ["1", "2.5", "4.9"]) {
+    el("inrMin").value = od;
+    globalThis.inrZakresZmieniony();
+    const mozliwe = el("inrMax").options.map(o => +o.value);
+    check(mozliwe.every(v => v > +od),
+          `przy od=${od} lista Do ma wylacznie wartosci wieksze (najmniejsza ${Math.min(...mozliwe)})`);
+    check(+el("inrMax").value > +od,
+          `przy od=${od} wybrane Do (${el("inrMax").value}) jest wieksze od Od`);
+  }
+
+  /* Podniesienie Od ponad aktualne Do musi przesunac Do, a nie zostawic
+     zakresu w stanie niemozliwym. */
+  el("inrMin").value = "2"; globalThis.inrZakresZmieniony();
+  el("inrMax").value = "2.4";
+  el("inrMin").value = "3"; globalThis.inrZakresZmieniony();
+  check(+el("inrMax").value > 3, `Do podnioslo sie razem z Od (${el("inrMax").value})`);
 
   const zapisz = async (od, doo) => {
     A.__resetDb();
     A.__setState({ cfg: { schedule:["20:00"], defaultDose:1, tzOffsetMin:120,
                           inrMin:2, inrMax:3 } });
-    document.getElementById("inrMin").value = od;
-    document.getElementById("inrMax").value = doo;
+    el("inrMin").value = od; el("inrMax").value = doo;
     await globalThis.saveInrRange();
     const w = A.__db.writes.at(-1)?.val;
     return w ? [w["devices/pillbox01/config/inrMin"], w["devices/pillbox01/config/inrMax"]] : null;
   };
   check(JSON.stringify(await zapisz("2","3")) === "[2,3]", "zakres 2-3 zapisany");
-  check(JSON.stringify(await zapisz("2,5","3,5")) === "[2.5,3.5]", "zakres z polowkami zapisany");
-  check(JSON.stringify(await zapisz("0.2","9")) === "[1,5]", "wartosci skrajne przyciete do 1-5");
-  /* Odwrocony zakres dawalby przedzial pusty: kazdy pomiar poza celem,
-     a na wykresie pasek o ujemnej wysokosci. */
-  check(await zapisz("3","2") === null, "dolna granica wieksza od gornej - odrzucone");
-  check(await zapisz("2","2") === null, "granice rowne - tez odrzucone");
+  check(JSON.stringify(await zapisz("2.5","3.5")) === "[2.5,3.5]", "zakres z polowkami zapisany");
+  /* Listy tego nie dopuszczaja, ale zapis idzie do bazy medycznej -
+     ostatnie sprawdzenie w kodzie ma zostac.                          */
+  check(await zapisz("3","2") === null, "odwrocony zakres odrzucony takze w kodzie zapisu");
+}
 
-  check(/id="inrMin"[^>]*min="1"[^>]*max="5"/.test(html), "pole Od ma granice takze w HTML");
-  check(/id="inrMax"[^>]*min="1"[^>]*max="5"/.test(html), "pole Do ma granice takze w HTML");
-  check(/id="inrMin"[^>]*step="0\.1"/.test(html), "krok 0,1 - polowki sa mozliwe");
+head("Odstep pomiarow INR wybiera sie z listy");
+{
+  const el = id => document.getElementById(id);
+  check(/<select id="inrEvery"/.test(html), "odstep to lista, nie input");
+
+  const dni = A.INR_ODSTEPY.map(o => o[0]);
+  check(dni[0] === 0, "pierwsza pozycja wylacza przypominanie");
+  check(A.INR_ODSTEPY[0][1] === "wyłączone", "i mowi to wprost, a nie zerem");
+  check(dni.includes(21), "domyslne 21 dni jest na liscie");
+  check(dni.every(d => d >= 0 && d <= 365), "wszystkie odstepy w rozsadnym zakresie");
+  check(new Set(dni).size === dni.length, "bez duplikatow");
+  check(dni.every((d, i) => i === 0 || d > dni[i-1]), "posortowane rosnaco");
+  check(A.INR_ODSTEPY.every(([, opis]) => opis && opis.length < 20),
+        "kazda pozycja ma krotki, ludzki podpis");
+
+  A.__setState({ cfg: { schedule:["20:00"], defaultDose:1, tzOffsetMin:120,
+                        inrMin:2, inrMax:3, inrEveryDays:14 } });
+  A.renderSettings();
+  check(el("inrEvery").value === "14", `lista pokazuje zapisany odstep (${el("inrEvery").value})`);
+  check(/Co 14 dni/.test(el("inrEveryHint").textContent),
+        `podpowiedz mowi, ile to dni ("${el("inrEveryHint").textContent}")`);
+
+  /* Wartosc spoza listy - np. ustawiona starsza wersja aplikacji - ma
+     zostac dopisana, a nie po cichu zmieniona na inna.               */
+  A.__setState({ cfg: { inrEveryDays: 17 } });
+  A.renderSettings();
+  check(el("inrEvery").value === "17",
+        `nietypowy odstep z bazy zostaje zachowany (${el("inrEvery").value})`);
+
+  A.__setState({ cfg: { inrEveryDays: 0 } });
+  A.renderSettings();
+  check(/wyłączone/i.test(el("inrEveryHint").textContent),
+        `zero opisane slowem, nie liczba ("${el("inrEveryHint").textContent}")`);
 }
 
 head("Kolejka zapisow w telefonie");

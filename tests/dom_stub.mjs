@@ -8,8 +8,21 @@ class El {
     this.className = ""; this.dataset = {}; this.onclick = null;
     this._classes = new Set();
   }
-  set innerHTML(v){ this._html = String(v); }
+  /* Ustawienie innerHTML na liscie <option> musi zmienic value elementu -
+     tak robi prawdziwa przegladarka. Bez tego kod, ktory buduje <select>
+     i zaraz potem czyta z niego wartosc, w testach widzi pustke, a w
+     telefonie dziala. Roznica objawialaby sie wylacznie u Kuby.       */
+  set innerHTML(v){
+    this._html = String(v);
+    const opcje = [...this._html.matchAll(/<option value="([^"]*)"([^>]*)>/g)];
+    if (opcje.length) {
+      const zazn = opcje.find(o => /\bselected\b/.test(o[2]));
+      this.value = (zazn || opcje[0])[1];
+      this._opcje = opcje.map(o => o[1]);
+    }
+  }
   get innerHTML(){ return this._html; }
+  get options(){ return (this._opcje || []).map(v => ({ value: v })); }
   querySelectorAll(){ return []; }
   get classList(){
     const c = this._classes;
