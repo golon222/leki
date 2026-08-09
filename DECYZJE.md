@@ -103,4 +103,3 @@ czego nie próbować drugi raz.
 | Co | Dlaczego cofnięte |
 |---|---|
 | **D5** — wyjęcie `config.h` z repo na rzecz `config.example.h` | Zgodne z zapisaną zasadą, ale złamało sposób pracy Kuby (patrz **D7**). Chroniło przed ryzykiem, które **nigdy się nie zmaterializowało** — hasło w historii repo zawsze było placeholderem.<br>**Morał: zasada z dokumentu nie bije sposobu pracy człowieka, który z tego korzysta.** |
-| **Zakaz ruszania bloku pomiaru napięcia** | Zniesiony przez Kubę 2026-08-05. Blok wolno modyfikować. Audyt **nie blokuje** — zgłasza uwagę i przechodzi dalej (`0 bledow, 1 uwag`). Te liczby były kalibrowane na sprzęcie, a w diffie zmiana przypadkowa wygląda identycznie jak świadoma; uwaga kosztuje sekundę, a odróżnia jedno od drugiego. |
