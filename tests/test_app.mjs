@@ -1046,6 +1046,34 @@ head("Pominiete z pudelka nie kasuje tego, co juz jest w kalendarzu");
   A.__resetDb(); A.__setState({ events: [], doses: {} });
 }
 
+/* ── B28: zalegla kolejka nigdy nie dostawala szansy na starcie ──
+   Kuba: "aplikacja nie zmienia danych w bazie, przez co po wejsciu do
+   aplikacji ponownie zczytuje mi dane z bazy gdzie nie jest to
+   zaktualizowane" - trafna diagnoza, poprzednia byla bledna.
+
+   Jedyny automatyczny trigger oczekWyslij() to `.info/connected` false->true
+   W TRAKCIE dzialania aplikacji. Na swiezym uruchomieniu bylPolaczony
+   startuje jako null, wiec ten warunek nigdy nie jest prawdziwy na
+   pierwszym polaczeniu - kolejka nigdy nie dostawala szansy na starcie.  */
+head("Kolejka zaleglych zapisow dostaje szanse na starcie aplikacji");
+{
+  const od = html.indexOf("function boot(){");
+  check(od >= 0, "znaleziono function boot(){");
+  /* Komentarz przy tej naprawie CELOWO pisze `oczekWyslij()` w prozie -
+     goly regex zlapalby wiec sam opis bledu, a nie prawdziwe wywolanie.
+     Usuwamy komentarze blokowe przed szukaniem, tak jak audit_firmware.py
+     robi to swoim strip() z tego samego powodu.                        */
+  const bezKomentarzy = html.slice(od, od + 2500).replace(/\/\*[\s\S]*?\*\//g, "");
+  const pierwszeWywolanie = bezKomentarzy.search(/\boczekWyslij\s*\(\s*\)/);
+  check(pierwszeWywolanie >= 0, "boot() wola oczekWyslij() (poza komentarzem)");
+  /* Musi byc PRZED nasluchami onValue - inaczej zdarzy sie ten sam wyscig,
+     ktory naprawilismy juz w doReconcile (D33): nasluch doses zdazy
+     przeczytac SERWEROWY stan zanim kolejka zdazy go poprawic.          */
+  const pierwszyOnValue = bezKomentarzy.search(/\bonValue\s*\(/);
+  check(pierwszeWywolanie >= 0 && pierwszyOnValue >= 0 && pierwszeWywolanie < pierwszyOnValue,
+        `oczekWyslij() (poz. ${pierwszeWywolanie}) przed pierwszym onValue (poz. ${pierwszyOnValue})`);
+}
+
 head("Odmowa bazy nie udaje braku sieci");
 {
   const box = document.getElementById("toasts");

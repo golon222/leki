@@ -935,7 +935,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-10.6";
+const APP_VERSION = "2026-08-10.7";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -1389,6 +1389,26 @@ onAuthStateChanged(auth, u => {
 
 /* ═══════════════ START ═══════════════ */
 function boot(){
+  /* ZALEGŁA KOLEJKA MUSI DOSTAĆ SZANSĘ NA STARCIE, NIE TYLKO PRZY RECONNECT.
+
+     TU BYŁ BŁĄD (B28), zgłoszony przez Kubę: „wpisuję ręcznie tego 8,
+     a po wyjściu z aplikacji mi się to cofa do tego że nie wziąłem".
+
+     Jedynym miejscem, które automatycznie wysyłało `oczekWyslij()`, było
+     przejście `.info/connected` z false na true W TRAKCIE działania
+     aplikacji (patrz niżej). Przy ŚWIEŻYM uruchomieniu `bylPolaczony`
+     zaczyna jako `null` — więc warunek `bylPolaczony === false && teraz`
+     nigdy nie jest prawdziwy na pierwszym połączeniu. Kolejka zaległych
+     zapisów NIGDY nie dostawała szansy na starcie.
+
+     Skutek: zapis, który z jakiegokolwiek powodu nie przeszedł od razu
+     (limit 8 s w `zapiszPewnie()`, chwila słabego sygnału tuż przed
+     zamknięciem aplikacji) trafiał do kolejki i zostawał tam BEZ KOŃCA —
+     dopóki ktoś sam nie kliknął „Spróbuj teraz". Kalendarz przy każdym
+     kolejnym otwarciu aplikacji czytał więc dane sprzed tego zapisu i
+     wyglądało to jak cofnięcie ręcznej korekty, choć korekta nigdy
+     nawet nie dotarła do bazy.                                        */
+  oczekWyslij();
   /* Otwieramy miesiac biezacej doby lekowej. Tuz po polnocy pierwszego dnia
      miesiaca inaczej pokazalby sie nowy miesiac, a podswietlony dzien
      lezalby w poprzednim - czyli poza ekranem.                         */
