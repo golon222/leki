@@ -801,6 +801,26 @@ ok(not _zagniezdzenia,
    "zaden blok prefs.begin()...end() nie wola funkcji otwierajacej prefs "
    f"(inaczej zapisy po niej przepadaja - B22){'; ' + '; '.join(_zagniezdzenia) if _zagniezdzenia else ''}")
 
+# ---------- 9d. Wynik queuePush() nie moze byc ignorowany (B24) ----------
+#
+# queuePush() zwraca false, gdy zapis do NVS nie przeszedl - tresc nie
+# zostaje wtedy NIGDZIE. reportEvent() ignorowal ten wynik i mimo to gral
+# beepQueued(), czyli "mam to u siebie, wysle pozniej". Kuba slyszal to
+# potwierdzenie codziennie przez caly wyjazd; dawek nie bylo.
+#
+# Sygnal dzwiekowy jest jedynym, co pudelko mowi bez internetu. Jesli
+# klamie, nie ma zadnego innego sposobu, zeby sie o tym dowiedziec.
+_rep = cialo("void reportEvent(const char* type, int slot)")
+ok(bool(_rep), "znaleziono cialo reportEvent()")
+if _rep:
+    ok(not re.search(r"^\s*queuePush\(", _rep, re.M),
+       "reportEvent() nie wyrzuca wyniku queuePush() do kosza (B24)")
+    ok(re.search(r"(bool|auto)\s+\w+\s*=\s*queuePush\(", _rep) is not None,
+       "reportEvent() zapamietuje, czy zapis do pamieci sie udal")
+    _po = _rep[_rep.find("queuePush("):]
+    ok("beepQueued()" in _po and re.search(r"if\s*\(\s*!\s*\w+\s*\)", _po) is not None,
+       "i dzwiek zalezy od tego wyniku, a nie gra bezwarunkowo")
+
 # ---------- 10. Rzeczy do uzupelnienia przez uzytkownika ----------
 todo = "TUTAJ_WPISZ_HASLO_C" in cfg
 warn(todo, "DEVICE_PASSWORD nie jest jeszcze uzupelnione w config.h")

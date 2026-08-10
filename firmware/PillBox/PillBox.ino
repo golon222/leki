@@ -1793,15 +1793,39 @@ void reportEvent(const char* type, int slot) {
   }
   /* Brak sieci albo blad serwera: zdarzenie ląduje w pamieci nieulotnej,
      a rtcRetryCount steruje tym, jak szybko sprobujemy ponownie.       */
-  queuePush(rec);
+  /* WYNIK queuePush() DECYDUJE O DZWIEKU. Nie wolno go zignorowac.
+
+     TU BYL BLAD B24, i zglosil go Kuba jednym zdaniem: "za kazdym razem
+     byl charakterystyczny dzwiek, jakby probowal wyslac, ale mu sie nie
+     udalo". Ten dzwiek - beepQueued() - znaczy "zapisalem u siebie, wysle
+     pozniej". Grał ZAWSZE, bo wynik queuePush() leciał do kosza.
+
+     A queuePush() od naprawy B5 potrafi zwrocic false: gdy zapis do NVS
+     nie przeszedl, tresc NIE zostaje nigdzie, tylko licznik sie nie
+     podnosi. Pudelko meldowalo wtedy "mam to u siebie" o dawce, ktorej
+     nie mialo. To najgorszy mozliwy rodzaj klamstwa w tym urzadzeniu:
+     czlowiek slyszy potwierdzenie, wychodzi z domu i jest spokojny.
+
+     Teraz nieudany zapis ma WLASNY sygnal - podwojny blad, wyraznie
+     inny od pojedynczego potwierdzenia kolejki. "Nie mam tej dawki
+     nigdzie, zapisz ja recznie."                                      */
+  const bool zapisane = queuePush(rec);
   if (rtcRetryCount < 200) rtcRetryCount++;
   /* Otwarcie pudelka jest zawsze potwierdzane dzwiekiem - takze wtedy, gdy
      nie udalo sie go wyslac. Inaczej brak sieci wyglada dokladnie tak samo
      jak zepsute urzadzenie, a to dwie zupelnie rozne sytuacje.           */
-  note(WiFi.status() == WL_CONNECTED ? "baza nie odpowiada" : "brak wifi");
-  if (strcmp(type, "open") == 0) beepQueued();
-  else                           beepErr();
-  LOG("[EVT] '%s' zapisane w pamieci, w kolejce %u zdarzen\n", type, queueCount());
+  if (!zapisane)                        note("DAWKA NIEZAPISANA");
+  else if (WiFi.status() == WL_CONNECTED) note("baza nie odpowiada");
+  else                                    note("brak wifi");
+
+  if (!zapisane)                      { beepErr(); delay(250); beepErr(); }
+  else if (strcmp(type, "open") == 0) beepQueued();
+  else                                beepErr();
+
+  if (zapisane)
+    LOG("[EVT] '%s' zapisane w pamieci, w kolejce %u zdarzen\n", type, queueCount());
+  else
+    LOG("[EVT] '%s' NIE ZAPISANE - pamiec odmowila, dawka przepadla\n", type);
 }
 
 /* =====================================================================
