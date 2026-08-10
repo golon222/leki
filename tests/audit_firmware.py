@@ -710,6 +710,97 @@ for nazwa, zrodlo in (("PillBox.ino", ino), ("PillBoxTest.ino", _test_ino)):
            f"{nazwa}: typ '{typ}' (linia {gdzie}) zadeklarowany przed pierwsza "
            f"funkcja (linia {granica}) - inaczej Arduino IDE nie wgra szkicu")
 
+# ---------- 9c. Zagniezdzone prefs.begin() (B22) ----------
+#
+# Preferences to JEDEN globalny obiekt z JEDNYM uchwytem:
+#     bool begin(...) { if (_started) return false; ... }
+#     void end()      { nvs_close(_handle); _started = false; }
+# begin() na juz otwartym uchwycie nic nie robi, ale end() zagniezdzonego
+# wywolania ZAMYKA uchwyt funkcji nadrzednej - i wszystko, co ta funkcja
+# zapisze pozniej, przepada.
+#
+# Tak zginela CALA czarna skrzynka: logbookAdd() wolalo queueCount()
+# w argumentach snprintf, w srodku wlasnego bloku. Kazdy zapis po tym
+# zawodzil, przy kazdym wybudzeniu, a pushStatus() nadpisywal historie
+# w bazie pusta tablica.
+_funkcje = {}          # nazwa -> (poczatek, koniec) w liniach
+_def = re.compile(r'^[A-Za-z_][A-Za-z0-9_:<>, \*&]*?[ \*&]([A-Za-z_][A-Za-z0-9_]*)\s*\([^;]*\)\s*\{')
+_linie = ino.split("\n")
+_biezaca = None
+for _i, _l in enumerate(_linie):
+    _m = _def.match(_l)
+    if _m:
+        if _biezaca:
+            _funkcje[_biezaca][1] = _i
+        _biezaca = _m.group(1)
+        _funkcje.setdefault(_biezaca, [_i, len(_linie)])
+if _biezaca:
+    _funkcje[_biezaca][1] = len(_linie)
+
+def _bez_komentarzy(linie):
+    """Zwraca linie z wyciętymi komentarzami /* */ i //.
+       Nazwa funkcji wymieniona w komentarzu nie jest jej wywolaniem -
+       bez tego kontrola nizej podnosi falszywy alarm na wlasnym opisie."""
+    out, w_bloku = [], False
+    for l in linie:
+        buf, i = [], 0
+        while i < len(l):
+            if w_bloku:
+                k = l.find("*/", i)
+                if k < 0:
+                    i = len(l)
+                else:
+                    w_bloku = False
+                    i = k + 2
+            elif l.startswith("/*", i):
+                w_bloku = True
+                i += 2
+            elif l.startswith("//", i):
+                break
+            else:
+                buf.append(l[i])
+                i += 1
+        out.append("".join(buf))
+    return out
+
+
+def _cialo(nazwa):
+    a, b = _funkcje[nazwa]
+    return _linie[a:b]
+
+# Ktore funkcje otwieraja prefs - wprost albo przez inna taka funkcje.
+_kod = {n: _bez_komentarzy(_cialo(n)) for n in _funkcje}
+
+_otwiera = {n for n in _funkcje if any("prefs.begin(" in l for l in _kod[n])}
+for _ in range(6):                       # domkniecie przechodnie
+    _nowe = {n for n in _funkcje
+             if any(re.search(r'\b' + f + r'\s*\(', l)
+                    for l in _kod[n] for f in _otwiera if f != n)}
+    if _nowe <= _otwiera:
+        break
+    _otwiera |= _nowe
+
+_zagniezdzenia = []
+for _n in sorted(_funkcje):
+    _otwarty = False
+    for _off, _goly in enumerate(_kod[_n]):
+        if "prefs.begin(" in _goly:
+            _otwarty = True
+            continue
+        if "prefs.end()" in _goly:
+            _otwarty = False
+            continue
+        if not _otwarty:
+            continue
+        for _f in _otwiera:
+            if _f != _n and re.search(r'\b' + _f + r'\s*\(', _goly):
+                _zagniezdzenia.append(
+                    f"{_n}() linia {_funkcje[_n][0] + _off + 1} wola {_f}(), "
+                    f"ktore samo otwiera prefs")
+ok(not _zagniezdzenia,
+   "zaden blok prefs.begin()...end() nie wola funkcji otwierajacej prefs "
+   f"(inaczej zapisy po niej przepadaja - B22){'; ' + '; '.join(_zagniezdzenia) if _zagniezdzenia else ''}")
+
 # ---------- 10. Rzeczy do uzupelnienia przez uzytkownika ----------
 todo = "TUTAJ_WPISZ_HASLO_C" in cfg
 warn(todo, "DEVICE_PASSWORD nie jest jeszcze uzupelnione w config.h")

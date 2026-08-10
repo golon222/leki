@@ -767,6 +767,50 @@ batteryPercentage = 77;
 CHECK(logbookJson() == "[]", "pusty dziennik to poprawna pusta tablica: %s",
       logbookJson().c_str());
 
+/* --- B22: czarna skrzynka nie zapisala ANI JEDNEJ linijki --------------
+   Zgloszone przez Kube po wgraniu 1.28.1: "Pudelko zglasza utrate danych,
+   3 zapisow sie nie udalo", a Historia pudelka pusta.
+
+   Preferences to JEDEN globalny obiekt z JEDNYM uchwytem. begin() na juz
+   otwartym uchwycie zwraca false i nic nie robi, ale end() tego
+   zagniezdzonego wywolania ZAMYKA uchwyt funkcji nadrzednej.
+
+   logbookAdd() otwieral prefs, a potem w tej samej instrukcji snprintf
+   wolal queueCount() - ktore samo robi begin()/end(). Po powrocie uchwyt
+   byl juz zamkniety, wiec nvsPutStr() ponizej zawodzil ZA KAZDYM RAZEM.
+   Efekt: dziennik zawsze pusty, licznik nvsFail rosnacy co wybudzenie,
+   a pushStatus() nadpisywal historie w bazie pusta tablica.
+
+   Blad istnial takze przed naprawa B5 - tylko byl wtedy CICHY, bo nikt
+   nie patrzyl na wynik putString(). D14 zadzialalo dokladnie tak, jak
+   mialo: zamienilo ciche znikanie danych w widoczny licznik.          */
+{
+  prefs.wipe();
+  prefs.strict = true;                 // NVS: zapis bez uchwytu nie przechodzi
+  rtcNvsFail = 0;
+  queuePush(makeRecordAt("open", 0, 1750000000u));   // zeby queueCount() != 0
+  rtcNvsFail = 0;
+  prefs.zagniezdzoneBegin = 0;
+
+  logbookAdd("wyslane");
+  CHECK(prefs.zagniezdzoneBegin == 0,
+        "logbookAdd() nie otwiera prefs drugi raz w srodku wlasnego bloku (%d)",
+        prefs.zagniezdzoneBegin);
+  CHECK(rtcNvsFail == 0, "i zaden zapis nie przepada (nvsFail=%u)", rtcNvsFail);
+  CHECK(logbookJson().indexOf("wyslane") >= 0,
+        "wpis NAPRAWDE trafia do dziennika: %s", logbookJson().c_str());
+  /* Liczba w kolejce musi byc prawdziwa, a nie zerem "bo tak wyszlo". */
+  CHECK(logbookJson().indexOf("|1") >= 0,
+        "i niesie stan kolejki: %s", logbookJson().c_str());
+  prefs.strict = false;
+}
+
+prefs.wipe();
+FAKE_NOW = local(2026,8,6,12,0);
+rtcTimeValid = true;
+wakeReason = WAKE_REED;
+batteryPercentage = 77;
+
 logbookAdd("wyslane");
 {
   String j = logbookJson();

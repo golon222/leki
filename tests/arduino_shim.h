@@ -75,8 +75,33 @@ public:
   std::map<std::string, unsigned short> us;
   std::map<std::string, short> sh;
   std::map<std::string, unsigned long> ul;
-  bool begin(const char*, bool = false) { return true; }
-  void end() {}
+  /* --- Otwieranie uchwytu tak, jak robi to PRAWDZIWE Preferences --------
+     To nie jest szczegol. Preferences w rdzeniu ESP32 to JEDEN globalny
+     obiekt z JEDNYM uchwytem, a jego begin() wyglada tak:
+
+         bool Preferences::begin(...) { if (_started) return false; ... }
+         void Preferences::end()      { nvs_close(_handle); _started = false; }
+
+     Czyli: begin() na juz otwartym uchwycie NIC nie robi i zwraca false,
+     a end() tego zagniezdzonego wywolania ZAMYKA uchwyt funkcji nadrzednej.
+     Wszystko, co ta funkcja zapisze pozniej, przepada.
+
+     Atrapa zwracala dotad zawsze true i miala puste end(), wiec ta cala
+     klasa bledow byla dla testow NIEWIDZIALNA - i faktycznie jeden taki
+     siedzial w logbookAdd() (B22), przez co czarna skrzynka nie zapisala
+     ani jednej linijki. Nikt tego nie zauwazyl, bo przed naprawa B5 zapis
+     do NVS nie meldowal niepowodzenia.                                   */
+  bool _started = false;
+  int  zagniezdzoneBegin = 0;   // ile razy begin() trafil na otwarty uchwyt
+  /* Gdy true, zapis przy zamknietym uchwycie zawodzi - jak w NVS. Domyslnie
+     false, zeby przygotowanie danych w testach moglo pisac wprost.       */
+  bool strict = false;
+
+  bool begin(const char*, bool = false) {
+    if (_started) { zagniezdzoneBegin++; return false; }
+    _started = true; return true;
+  }
+  void end() { _started = false; }
   String getString(const char* k, const char* d = "") {
     auto it = str.find(k); return String(it == str.end() ? std::string(d) : it->second); }
   String getString(const char* k, const String& d) {
@@ -88,11 +113,13 @@ public:
   std::set<std::string> failKeys;
   size_t putString(const char* k, const String& v) {
     if (failKeys.count(k)) return 0;
+    if (strict && !_started) return 0;      // NVS: zapis bez uchwytu nie przechodzi
     str[k] = v.s; return v.s.size() + 1; }
   unsigned short getUShort(const char* k, unsigned short d = 0) {
     auto it = us.find(k); return it == us.end() ? d : it->second; }
   size_t putUShort(const char* k, unsigned short v) {
     if (failKeys.count(k)) return 0;
+    if (strict && !_started) return 0;
     us[k] = v; return sizeof(unsigned short); }
   /* Daty ladowania trzymamy jako 32-bitowe znaczniki czasu. */
   std::map<std::string, unsigned int> ui;
@@ -112,7 +139,7 @@ public:
     bool bylo = str.erase(k) || us.erase(k) || sh.erase(k) || ul.erase(k) || ui.erase(k);
     return bylo; }
   void wipe() { str.clear(); us.clear(); sh.clear(); ul.clear(); ui.clear();
-                failKeys.clear(); }
+                failKeys.clear(); _started = false; zagniezdzoneBegin = 0; }
 };
 
 /* ---------- ADC / GPIO ---------- */

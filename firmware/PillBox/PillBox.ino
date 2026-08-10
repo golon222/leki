@@ -2072,6 +2072,23 @@ bool wartoZapisac(const char* co) {
 
 void logbookAdd(const char* co) {
   if (!wartoZapisac(co)) return;
+
+  /* queueCount() SAM otwiera i zamyka prefs, wiec musi zostac wywolane
+     PRZED naszym begin() - inaczej jego end() zamknie NASZ uchwyt.
+
+     TU BYL BLAD B22, i przez niego czarna skrzynka nie zapisala ani jednej
+     linijki. Preferences to jeden globalny obiekt z jednym uchwytem:
+     begin() na juz otwartym zwraca false i nic nie robi, ale end()
+     zagniezdzonego wywolania zamyka uchwyt funkcji nadrzednej. Wywolanie
+     queueCount() siedzialo w argumentach snprintf ponizej, wiec kazdy
+     nvsPutStr() po nim trafial w zamkniety uchwyt i zawodzil - za kazdym
+     razem, przy kazdym wybudzeniu.
+
+     Objaw u uzytkownika: "Historia pudelka" pusta, a licznik nvsFail
+     rosnacy co wybudzenie. Do tego pushStatus() nadpisywal historie
+     w bazie pusta tablica, wiec ginela takze ta zapisana wczesniej.  */
+  const uint16_t wKolejce = queueCount();
+
   prefs.begin(NVS_NAMESPACE, false);
   uint16_t idx = prefs.getUShort("lbIdx", 0);
   char klucz[8];
@@ -2082,7 +2099,7 @@ void logbookAdd(const char* co) {
   char linia[72];
   snprintf(linia, sizeof(linia), "%lu|%s|%s|%d|%u",
            (unsigned long)(rtcTimeValid ? time(nullptr) : 0),
-           wakeName(wakeReason), co, batteryPercentage, queueCount());
+           wakeName(wakeReason), co, batteryPercentage, wKolejce);
   if (nvsPutStr(klucz, linia)) nvsPutU16("lbIdx", (idx + 1) % (LOGBOOK_SLOTS * 8));
   prefs.end();
 }
