@@ -36,7 +36,12 @@ main{overflow-x:hidden}
 body{margin:0;background:
       radial-gradient(1200px 600px at 50% -10%, #16233c 0%, transparent 60%), var(--bg);
      color:var(--txt);font:16px/1.5 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,sans-serif;
-     padding:0 0 env(safe-area-inset-bottom);-webkit-font-smoothing:antialiased}
+     /* BEZ padding-bottom. Pasek nawigacji jest position:fixed, wiec liczy
+        sie wzgledem OKNA, nie wzgledem wypelnienia body - to wypelnienie
+        niczego mu nie dawalo, a dokladalo wysokosci pod trescia. Przy
+        odbiciu (rubber-band) na iOS pasek odrywal sie przez to od dolu.
+        Miejsce na sam pasek rezerwuje `main` swoim padding-bottom.      */
+     padding:0;-webkit-font-smoothing:antialiased}
 
 /* ---------- szkielet ----------
    Pasek statusu iOS: to NAGŁÓWEK rezerwuje na niego miejsce własnym
@@ -44,13 +49,13 @@ body{margin:0;background:
    pod zegarek i wskaźnik baterii przy przewijaniu.                    */
 header{display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:20;
        padding:calc(10px + env(safe-area-inset-top)) 18px 10px;
-       background:rgba(11,18,32,.92);backdrop-filter:blur(16px);border-bottom:1px solid var(--line)}
+       background:rgba(11,18,32,.92);-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);border-bottom:1px solid var(--line)}
 header .ttl{flex:1;min-width:0}
 header h1{font-size:17px;margin:0;font-weight:650;letter-spacing:-.01em;
           white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 header .sub{font-size:11.5px;color:var(--dim2);margin-top:1px;
             white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-main{padding:16px 16px 96px;max-width:580px;margin:0 auto}
+main{padding:16px 16px calc(96px + env(safe-area-inset-bottom));max-width:580px;margin:0 auto}
 section{animation:fade .28s ease}
 @keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 
@@ -141,7 +146,7 @@ label{font-size:12px;color:var(--dim2);display:block;margin:12px 0 5px;
 .toast{max-width:min(420px,92vw);padding:11px 15px;border-radius:14px;font-size:13.5px;
        display:flex;align-items:center;gap:9px;line-height:1.35;
        background:rgba(29,41,66,.97);border:1px solid var(--line);color:var(--txt);
-       box-shadow:0 12px 32px -12px #000;backdrop-filter:blur(12px);
+       box-shadow:0 12px 32px -12px #000;-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);
        animation:wjedz .26s cubic-bezier(.2,.9,.3,1.3)}
 .toast.ok  {border-color:rgba(52,211,153,.5)}
 .toast.err {border-color:rgba(248,113,113,.55)}
@@ -281,7 +286,7 @@ button:focus-visible,.day:focus-visible{outline:2px solid var(--acc);outline-off
 .bar>div{height:100%;width:0;border-radius:99px;transition:width .5s}
 
 /* ---------- arkusz ---------- */
-.sheet{position:fixed;inset:0;background:rgba(3,7,16,.72);backdrop-filter:blur(3px);
+.sheet{position:fixed;inset:0;background:rgba(3,7,16,.72);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);
        display:none;align-items:flex-end;z-index:60}
 .sheet.show{display:flex;animation:fade .2s}
 .sheet>div{background:var(--bg2);width:100%;max-width:580px;margin:0 auto;border:1px solid var(--line);
@@ -327,8 +332,12 @@ button:focus-visible,.day:focus-visible{outline:2px solid var(--acc);outline-off
 
 /* ---------- nawigacja ---------- */
 nav{position:fixed;bottom:0;left:0;right:0;display:flex;z-index:30;
-    background:rgba(15,24,41,.92);backdrop-filter:blur(16px);border-top:1px solid var(--line);
-    padding-bottom:env(safe-area-inset-bottom)}
+    background:rgba(15,24,41,.92);-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);border-top:1px solid var(--line);
+    padding-bottom:env(safe-area-inset-bottom);
+    /* Wlasna warstwa kompozycji. Element position:fixed z rozmyciem tla
+       potrafi na iOS zostawac w tyle za przewijaniem - wtedy pasek
+       "rozjezdza sie" wzgledem tresci. Wymuszenie warstwy to naprawia. */
+    transform:translateZ(0);will-change:transform}
 nav button{flex:1;background:none;border-radius:0;padding:9px 0 8px;font-size:10.5px;color:var(--dim2);
            display:flex;flex-direction:column;align-items:center;gap:3px;font-weight:600}
 nav button svg{width:21px;height:21px}
@@ -926,7 +935,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-10.2";
+const APP_VERSION = "2026-08-10.3";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -1443,7 +1452,17 @@ function boot(){
           onErr("odczyt stanu pudełka"));
 
   onValue(query(ref(db, `devices/${DEVICE_ID}/events`), orderByChild("ts"), limitToLast(400)), s => {
-    events = []; s.forEach(c => events.push(Object.assign({id:c.key}, c.val())));
+    /* KLAMRY SA TU OBOWIAZKOWE, nie stylistyczne.
+
+       DataSnapshot.forEach przerywa sie, gdy callback zwroci true. Arrow bez
+       klamer zwraca wynik push(), czyli DLUGOSC tablicy - liczbe >= 1, czyli
+       zawsze true. Petla konczyla sie po PIERWSZYM dziecku i aplikacja
+       widziala JEDNO zdarzenie zamiast czterdziestu dwoch (B25).
+
+       Objaw w Diagnostyce byl wprost na ekranie: "Pokazano 1 z 1 zdarzen"
+       obok "Zdarzen z pudelka: 42" - to samo zapytanie, ta sama chwila.
+       Roznily sie wylacznie klamrami w petli.                            */
+    events = []; s.forEach(c => { events.push(Object.assign({id:c.key}, c.val())); });
     events.sort((a,b)=>b.ts-a.ts);
     /* Najpierw kalendarz, potem obrazek - patrz komentarz przy wakeUp().
        renderDiag() czyta pola statusu, ktorych starszy firmware nie
@@ -1515,7 +1534,8 @@ function boot(){
       const evS = val(ev);
       if (evS){
         events = [];
-        evS.forEach(c => events.push(Object.assign({ id:c.key }, c.val())));
+        /* Klamry obowiazkowe - patrz komentarz przy nasluchu zdarzen (B25). */
+        evS.forEach(c => { events.push(Object.assign({ id:c.key }, c.val())); });
         events.sort((a,b) => b.ts - a.ts);
       }
       const dsS = val(ds); if (dsS) doses = dsS.val() || {};

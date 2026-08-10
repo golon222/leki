@@ -93,8 +93,25 @@ export const get = async (r) => {
   for (const p of parts) cur = (cur && typeof cur === "object") ? cur[p] : undefined;
   return {
     val: () => cur ?? null,
+    /* forEach PRZERYWA sie, gdy callback zwroci true - tak dziala prawdziwy
+       DataSnapshot.forEach w Firebase. To nie jest szczegol:
+
+           s.forEach(c => events.push(...))
+
+       arrow bez klamer zwraca wynik push(), czyli DLUGOSC tablicy - zawsze
+       liczbe >= 1, czyli zawsze true. Petla konczy sie po PIERWSZYM dziecku
+       i aplikacja widzi jedno zdarzenie zamiast czterdziestu dwoch (B25).
+
+       Atrapa ignorowala dotad wynik callbacku, wiec ten blad byl dla testow
+       niewidzialny - tak samo jak Preferences.begin() dla firmware.       */
     forEach: cb => { if (cur && typeof cur === "object")
-                       for (const [k, v] of Object.entries(cur)) cb({ key:k, val:()=>v }); }
+                       for (const [k, v] of Object.entries(cur))
+                         /* Prawdziwy SDK robi `!!action(...)` - przerywa na KAZDEJ
+                            prawdziwej wartosci, nie tylko na dokladnym true.
+                            Wlasnie dlatego push() (zwraca dlugosc >= 1) urywa
+                            petle po pierwszym dziecku.                      */
+                         if (cb({ key:k, val:()=>v })) return true;
+                     return false; }
   };
 };
 export const query = (r) => r;

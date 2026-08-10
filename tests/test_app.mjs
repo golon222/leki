@@ -515,7 +515,15 @@ const css = html.match(/<style>([\s\S]*?)<\/style>/)[1];
 check(css.includes("repeat(6,minmax(0,1fr))"), "szesc przyciskow licznika w rownych kolumnach");
 check(!/\.pillpad button\{[^}]*flex:1/.test(css), "przyciski nie rozpychaja sie trescia");
 check(css.includes("calc(10px + env(safe-area-inset-top))"), "naglowek rezerwuje pasek statusu iOS");
-check(css.includes("padding:0 0 env(safe-area-inset-bottom)"), "body nie dubluje rezerwacji");
+/* Ten test wymagal `padding:0 0 env(safe-area-inset-bottom)` na body -
+   i mial to za "brak dublowania". Ale pasek nawigacji jest position:fixed,
+   wiec liczy sie wzgledem OKNA: wypelnienie body nie dawalo mu niczego,
+   a dokladalo wysokosci pod trescia. Rezerwowac musi ten, kto naprawde
+   stoi nad wcieciem - czyli sam pasek.                                  */
+check(/nav\{[^}]*padding-bottom:env\(safe-area-inset-bottom\)/.test(css),
+      "pasek nawigacji sam rezerwuje miejsce nad wcieciem ekranu");
+check(!/body\{[^}]*env\(safe-area-inset-bottom\)/.test(css),
+      "a body juz tego nie dubluje");
 check((css.match(/min-width:0/g)||[]).length >= 4, "zabezpieczenia flexboxa obecne");
 check(css.includes("overflow-wrap:anywhere"), "dlugi tekst sie lamie");
 
@@ -866,10 +874,73 @@ check(/res\.ok/.test(swSrc), "nie zapamietuje odpowiedzi bledu (404, strona awar
 check(/text\/html/.test(swSrc), "strony zapamietuje tylko gdy serwer mowi, ze to HTML");
 check(swSrc.includes("wyczysc-cache"), "worker przyjmuje polecenie wyczyszczenia");
 
+/* ── B25: aplikacja widziala JEDNO zdarzenie zamiast czterdziestu dwoch ──
+   Kuba przyslal zrzut Diagnostyki, na ktorym stalo obok siebie:
+       "Pokazano 1 z 1 zdarzen"      (tablica events w aplikacji)
+       "Zdarzen z pudelka: 42"       (sprawdzenie polaczenia)
+   To samo zapytanie, ta sama chwila, ten sam uzytkownik.
+
+   Roznily sie JEDNYM znakiem - klamra:
+       s.forEach(c => evs.push(...));      <- dziala, zwraca undefined
+       s.forEach(c => events.push(...))    <- zwraca push() = dlugosc >= 1
+
+   DataSnapshot.forEach PRZERYWA enumeracje, gdy callback zwroci true.
+   push() zwraca liczbe, liczba >= 1 jest prawdziwa - wiec petla konczyla
+   sie po pierwszym dziecku. ZAWSZE.
+
+   Dlatego dni 6-9 sierpnia nie dawaly sie odtworzyc: uzupelnianie
+   kalendarza dostawalo jedno zdarzenie i nie mialo z czego ich zrobic.  */
+head("Zdarzenia z pudelka czytane w CALOSCI, nie pierwsze z brzegu");
+{
+  /* Zachowanie, nie zapis: atrapa Firebase przerywa forEach na true,
+     tak jak prawdziwy SDK. Ten sam ksztalt bledu z klamrami i bez.    */
+  const { get, __db } = await import("./firebase_stub.mjs");
+  __db.data = { probka: { a:{ts:1}, b:{ts:2}, c:{ts:3}, d:{ts:4} } };
+  const snap = await get({ path: "probka" });
+
+  const zKlamrami = [];
+  snap.forEach(c => { zKlamrami.push(c.key); });
+  check(zKlamrami.length === 4, `z klamrami czyta wszystkie 4 (${zKlamrami.length})`);
+
+  const bezKlamer = [];
+  snap.forEach(c => bezKlamer.push(c.key));
+  check(bezKlamer.length === 1,
+        `bez klamer atrapa URYWA po pierwszym (${bezKlamer.length}) - tak jak Firebase`);
+}
+
+/* I kontrola samego zrodla: zaden odczyt zdarzen nie moze uzywac formy
+   bez klamer. Regula jest prosta - callback forEach nie zwraca wartosci. */
+{
+  /* `\s*(?!\{)` NIE dziala: \s* moze sie cofnac do zera znakow i lookahead
+     przechodzi na spacji. Wymagamy wprost, zeby pierwszy niebialy znak
+     ciala nie byl klamra.                                              */
+  const zle = [...html.matchAll(/\.forEach\(\s*\w+\s*=>[ \t]*([^\s{][^\n;]*)/g)]
+    .filter(m => /\.push\(/.test(m[1]));
+  check(zle.length === 0,
+        `zaden forEach na danych z bazy nie zwraca wyniku push() (${zle.length}: ` +
+        `${zle.map(m => m[0].slice(0, 45)).join(" | ")})`);
+}
+
+/* Pasek nawigacji "rozjezdzal sie przy scrollowaniu" na iPhonie (B26). */
+head("Pasek nawigacji trzyma sie dolu ekranu");
+{
+  const css = html.slice(0, html.indexOf("</style>"));
+  const bez = (css.match(/(?<!-)\bbackdrop-filter:/g) || []).length;
+  const zPrefiksem = (css.match(/-webkit-backdrop-filter:/g) || []).length;
+  check(zPrefiksem >= bez && zPrefiksem > 0,
+        `kazde rozmycie tla ma prefiks -webkit- dla iOS (${zPrefiksem}/${bez})`);
+  check(/nav\{[^}]*transform:translateZ\(0\)/.test(css),
+        "pasek ma wlasna warstwe kompozycji - inaczej zostaje w tyle za przewijaniem");
+  check(!/body\{[^}]*padding:0 0 env\(safe-area-inset-bottom\)/.test(css),
+        "body nie rezerwuje juz safe-area drugi raz po pasku");
+  check(/main\{[^}]*padding:[^;}]*env\(safe-area-inset-bottom\)/.test(css),
+        "za to tresc rezerwuje miejsce na pasek RAZEM z safe-area");
+}
+
 head("Automatyczne uzupelnianie kalendarza");
 /* Sedno: to ma dzialac bez klikania. Nasluch zdarzen i nasluch kalendarza
    MUSZA same wolac uzupelnianie, a jeden nieudany odczyt nie moze go zabic. */
-check(/onValue\(query\(ref\(db, `devices\/\$\{DEVICE_ID\}\/events`[\s\S]{0,400}doReconcile\(true\)/.test(html),
+check(/onValue\(query\(ref\(db, `devices\/\$\{DEVICE_ID\}\/events`[\s\S]{0,1400}doReconcile\(true\)/.test(html),
       "nasluch zdarzen sam uzupelnia kalendarz");
 check(/users\/\$\{uid\}\/doses`\), s => \{[\s\S]{0,400}doReconcile\(true\)/.test(html),
       "nasluch kalendarza tez - na wypadek innej kolejnosci nadejscia danych");
