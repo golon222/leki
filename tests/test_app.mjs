@@ -1283,6 +1283,71 @@ head("Odstep pomiarow INR wybiera sie z listy");
         `zero opisane slowem, nie liczba ("${el("inrEveryHint").textContent}")`);
 }
 
+/* ── Milczace pudelko ──
+   Powstalo z konkretnego zdarzenia: Kuba pojechal na wyjazd, pudelko
+   stracilo WiFi w czwartek rano i przez 2,5 dnia nie odezwalo sie ani
+   razu. Aplikacja pokazywala przez ten czas kalendarz jak zwykle -
+   spokojny i kompletny - bez slowa, ze dane sa sprzed trzech dni.  */
+head("Aplikacja mowi, gdy pudelko przestalo sie odzywac");
+{
+  const godz = h => Math.floor(Date.now()/1000 - h*3600);
+  const przy = (h, extra = {}) => {
+    A.renderStatus({ lastSeen: godz(h), ...extra });
+    return A.ostrzMilczy();
+  };
+
+  check(A.MILCZY_PROG_H >= 24 && A.MILCZY_PROG_H <= 48,
+        `prog miedzy doba a dwiema (${A.MILCZY_PROG_H} h) - pudelko melduje sie ` +
+        `samo co 12 h, wiec krotsza cisza jest normalna`);
+
+  /* Cisza, gdy jest cisza. Ostrzezenie, ktore pali sie zawsze, przestaje
+     cokolwiek znaczyc - a to jest jedno z dwoch, ktore NIE sa schowane
+     w Diagnostyce (D11).                                              */
+  A.renderStatus(null);
+  check(A.ostrzMilczy() === "", "brak statusu w ogole nie straszy przy pierwszym uruchomieniu");
+  check(przy(0.5) === "", "swiezy kontakt - nic nie pokazujemy");
+  check(przy(12)  === "", "12 godzin ciszy to normalny cykl snu");
+  check(przy(A.MILCZY_PROG_H - 1) === "", "tuz pod progiem jeszcze cisza");
+  A.renderStatus({ lastSeen: 0 });
+  check(A.ostrzMilczy() === "", "lastSeen = 0 traktujemy jak brak danych, nie jak rok 1970");
+
+  /* I ostrzezenie, gdy jest o czym mowic. */
+  const dzien = przy(A.MILCZY_PROG_H + 1);
+  check(dzien !== "", "powyzej progu ostrzezenie sie pojawia");
+  check(/milczy od/.test(dzien), "nazywa rzecz po imieniu");
+  check(/nie trafi/.test(dzien),
+        "i mowi, CO to znaczy: dawki nie sa w kalendarzu");
+  check(/hotspot/.test(dzien), "podaje wyjscie, a nie tylko diagnoze");
+
+  /* Scenariusz Kuby: 2,5 dnia bez sieci, trzy dawki czekaja w pudelku. */
+  const wyjazd = przy(60, { queued: 3 });
+  check(/2 dni/.test(wyjazd), `liczy doby w dol, nie zaokragla w gore (${wyjazd.match(/milczy od [^<]*/)})`);
+  check(/3<\/b> zdarzenia/.test(wyjazd),
+        "mowi, ile dawek czeka w pudelku - i odmienia to po polsku");
+
+  /* Jedna liczba w calym komunikacie. Wczesniej naglowek liczyl doby
+     w dol, a zdanie nizej bralo relTime(), ktore zaokragla - wychodzily
+     dwie rozne liczby o tym samym w jednym akapicie.                  */
+  const ileRazy = (wyjazd.match(/2 dni/g) || []).length;
+  check(ileRazy === 2 && !/3 dni/.test(wyjazd),
+        `ten sam okres opisany ta sama liczba (${ileRazy}x "2 dni", brak "3 dni")`);
+
+  /* Dopelniacz: "od doby", nie "od 1 dzien". */
+  check(/od doby/.test(dzien) && !/od 1 dzie/.test(dzien),
+        `poprawna odmiana przy jednej dobie (${dzien.match(/milczy od [^<]*/)})`);
+
+  /* Liczba mnoga po polsku: 1 zdarzenie, 2-4 zdarzenia, 5+ zdarzen. */
+  for (const [n, forma] of [[1,"zdarzenie"], [3,"zdarzenia"], [5,"zdarzeń"], [12,"zdarzeń"]])
+    check(new RegExp(`${n}<\\/b> ${forma}`).test(przy(30, { queued: n })),
+          `${n} -> "${forma}"`);
+
+  /* Ostrzezenie ma byc na wierzchu, nie w Diagnostyce (D11). */
+  A.renderStatus({ lastSeen: godz(60) });
+  A.renderOstrzezenia();
+  check(/milczy od/.test(document.getElementById("setWarn").innerHTML),
+        "trafia do bloku ostrzezen w Ustawieniach, a nie do Diagnostyki");
+}
+
 head("Kolejka zapisow w telefonie");
 check(/async function zapiszPewnie\(/.test(html), "istnieje zapis z gwarancja");
 check(!/await set\(ref\(db/.test(html) && !/await update\(ref\(db, `devices/.test(html),

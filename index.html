@@ -926,7 +926,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-08.3";
+const APP_VERSION = "2026-08-08.4";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -2708,6 +2708,71 @@ function ostrzReguly(){
    zapisy do pamięci trwałej. Oba oznaczają, że jakieś zdarzenie przepadło.
    Bez tego komunikatu byłaby to jedyna strata danych w projekcie, której
    nie widać nigdzie — ani w kalendarzu, ani w historii.                  */
+/* Pudełko przestało się odzywać.
+
+   POWSTAŁO Z KONKRETNEGO ZDARZENIA: Kuba pojechał na wyjazd, pudełko
+   straciło WiFi w czwartek rano i przez 2,5 dnia nie odezwało się ani
+   razu. Aplikacja pokazywała przez ten czas kalendarz jak zwykle —
+   spokojny, kompletny, bez jednego słowa, że dane w nim są sprzed
+   trzech dni. Dopiero pikanie w sobotę wieczorem zdradziło, że coś jest
+   nie tak.
+
+   To jest dokładnie ta klasa cichej awarii, na której ten projekt już
+   się przejechał: brak danych wygląda identycznie jak „wszystko dobrze".
+
+   Próg: pudełko melduje się samo najrzadziej co HOUSEKEEP_MAX_S (12 h),
+   a przy nieudanej wysyłce ponawia z backoffem do 4 h. Doba z okładem
+   bez ani jednego meldunku to więc już nie jest normalna cisza.
+
+   Świadomie NIE jest to schowane w Diagnostyce (D11): milczące pudełko
+   znaczy, że kalendarz może kłamać o wziętych dawkach, a to jedna z
+   dwóch rzeczy, które muszą zostać na wierzchu.                      */
+const MILCZY_PROG_H = 26;
+
+/* Polska liczba mnoga: 1 zdarzenie, 2-4 zdarzenia, 5+ zdarzeń.
+   Wyjątek na 12-14, bo „12 zdarzenia" brzmi jak tłumaczenie maszynowe. */
+function lm(n, jeden, kilka, wiele){
+  if (n === 1) return jeden;
+  const d = n % 10, s = n % 100;
+  return (d >= 2 && d <= 4 && !(s >= 12 && s <= 14)) ? kilka : wiele;
+}
+
+function ostrzMilczy(){
+  const st = ostatniStatus;
+  /* Brak statusu w ogóle = pudełko nigdy się nie połączyło. To osobna
+     sytuacja (pierwsze uruchomienie, zły identyfikator) i nie chcemy
+     straszyć nią przy pierwszym otwarciu aplikacji. */
+  if (!st || typeof st.lastSeen !== "number" || !st.lastSeen) return "";
+
+  const sekund = Math.round(Date.now() / 1000 - st.lastSeen);
+  if (sekund < MILCZY_PROG_H * 3600) return "";
+
+  /* JEDNA liczba w całym komunikacie. Wcześniej nagłówek liczył doby
+     w dół (2 dni), a zdanie niżej brało relTime(), które zaokrągla
+     (3 dni temu) — dwie różne liczby o tym samym w jednym akapicie. */
+  const dni = Math.floor(sekund / 86400);
+  /* Dopełniacz, bo tekst używa tego w dwóch miejscach: „milczy OD ..."
+     i „jest SPRZED ...". „od 1 dzień" brzmiałoby jak automat. */
+  const ile = dni >= 1
+    ? (dni === 1 ? "doby" : `${dni} dni`)
+    : `${Math.round(sekund / 3600)} godz.`;
+  /* Kolejka w pudełku rośnie przez ten czas — jeśli wiemy ile, mówimy. */
+  const q = st.queued || 0;
+  const oQueued = q
+    ? ` W pamięci pudełka czeka <b>${q}</b> ${lm(q, "zdarzenie", "zdarzenia", "zdarzeń")} do dosłania.`
+    : "";
+
+  return `<div style="margin-bottom:10px;padding:10px;border-radius:12px;
+       border:1px solid var(--bad);background:rgba(248,113,113,.10)">
+       <b style="color:var(--bad)">Pudełko milczy od ${ile}</b><br>
+       <span class="dim2">Dawki wzięte w tym czasie <b>nie trafiły jeszcze
+       do kalendarza</b> — to, co widzisz, jest sprzed ${ile}.${oQueued}
+       Najczęstsza przyczyna to brak zasięgu WiFi; wystarczy jedno połączenie,
+       żeby wszystko się uzupełniło. Jeśli jesteś poza domem, włącz hotspot
+       w telefonie.</span>
+     </div>`;
+}
+
 function ostrzStraty(){
   const st = ostatniStatus || {};
   const dropped = st.dropped || 0, nvs = st.nvsFail || 0;
@@ -2729,7 +2794,7 @@ function ostrzStraty(){
 function renderOstrzezenia(){
   const el = document.getElementById("setWarn");
   if (!el) return;
-  el.innerHTML = ostrzKolejka() + ostrzReguly() + ostrzStraty();
+  el.innerHTML = ostrzMilczy() + ostrzKolejka() + ostrzReguly() + ostrzStraty();
   el.classList.toggle("hide", !el.innerHTML.trim());
 }
 
