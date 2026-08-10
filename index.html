@@ -935,7 +935,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-10.3";
+const APP_VERSION = "2026-08-10.4";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -2433,9 +2433,15 @@ function renderBoxLog(){
       Pojawi się przy najbliższej synchronizacji.</span>`;
     return;
   }
-  el.innerHTML = boxLog.slice()
+  /* To samo co przy liscie zdarzen: domyslnie kilka ostatnich wybudzen,
+     reszta na zadanie. Trzydziesci dwa wiersze rutyny spychaja wszystko
+     inne poza ekran, a szuka sie tu zwykle ostatniej godziny.          */
+  const wpisy = boxLog.slice()
     .filter(w => !String(w).split("|")[2]?.startsWith("test:"))
-    .reverse().map(w => {
+    .reverse();
+  const widoczne = logWszystko ? wpisy : wpisy.slice(0, 5);
+
+  el.innerHTML = widoczne.map(w => {
     const [ts, powod, co, bat, kol] = String(w).split("|");
     const kiedy = +ts > 0 ? `${devDayMon(+ts)} ${devHM(+ts)}` : "czas nieznany";
     const zle = WYNIK_ZLE.includes(co);
@@ -2446,8 +2452,16 @@ function renderBoxLog(){
       <span style="color:${zle ? "var(--bad)" : "var(--ok)"}">${esc(co)}</span>
       <span class="dim2">· bateria ${esc(bat)}%</span>${kolejka}</div>`;
   }).join("") +
+  (wpisy.length > 5
+    ? `<button class="ghost" style="width:100%;margin-top:10px" onclick="logPrzelacz()">${
+        logWszystko ? "Pokaż tylko ostatnie 5"
+                    : `Pokaż całą historię (${wpisy.length})`}</button>`
+    : "") +
   `<div class="dim2" style="margin-top:8px">Pudełko pamięta 32 ostatnie wybudzenia.</div>`;
 }
+
+let logWszystko = false;
+window.logPrzelacz = () => { logWszystko = !logWszystko; renderBoxLog(); };
 
 /* ═══════════════════════════════════════════════════════════════
    DZIENNIK WIECZKA — narzędzie na czas testu terenowego.
@@ -2935,22 +2949,62 @@ function renderDiag(){
     return;
   }
 
-  const rows = events.slice(0, 15).map(e => {
+  /* DOMYSLNIE POKAZUJEMY TYLKO TO, CO SIE NIE ZGADZA.
+
+     Ta lista powstala do jednego pytania: "dlaczego tej dawki nie ma
+     w kalendarzu". Gdy wszystko ma pokrycie, czterdziesci wierszy
+     z zielonym ptaszkiem nie odpowiada na nic - tylko przykrywa soba
+     reszte Diagnostyki. Wiersz, ktory zawsze wyglada tak samo, przestaje
+     cokolwiek znaczyc; to ta sama zasada, co przy ostrzezeniach (D11).
+
+     Zostaje jedno zdanie podsumowania i wylacznie zdarzenia bez pokrycia.
+     Cala liste da sie rozwinac jednym przyciskiem - bo gdy juz czegos
+     szukasz, chcesz widziec wszystko.                                   */
+  const bezPokrycia = e => {
+    if (e.type !== "open" && e.type !== "missed") return false;
+    const k = e.ts ? devKey(e.ts) : null;
+    return !(k && (doses[k] || {})[0]);
+  };
+  const problemy = events.filter(bezPokrycia);
+  const widoczne = diagWszystko ? events.slice(0, 40) : problemy.slice(0, 15);
+
+  const wiersz = e => {
     const isDose = e.type === "open" || e.type === "missed";
     const key = e.ts ? devKey(e.ts) : null;
-    const rec = key ? (doses[key] || {})[0] : null;
+    const wpis = key ? (doses[key] || {})[0] : null;
     const mark = !isDose ? `<span class="dim2">(nie dotyczy dawki)</span>`
-      : rec ? `<span style="color:var(--ok)">✓ jest w kalendarzu — ${esc(rec.status)}</span>`
-            : `<span style="color:var(--bad)">✗ BRAK w kalendarzu</span>`;
+      : wpis ? `<span style="color:var(--ok)">✓ jest w kalendarzu — ${esc(wpis.status)}</span>`
+             : `<span style="color:var(--bad)">✗ BRAK w kalendarzu</span>`;
     return `<div style="padding:7px 0;border-bottom:1px solid var(--line)">
       <b>${esc(EVENT_NAMES[e.type] || e.type)}</b>
       <span class="dim2">· ${e.ts ? devDayMon(e.ts) + " " + devHM(e.ts) : "bez czasu"}</span><br>
       <span class="dim2">doba lekowa: ${key || "—"}</span> · ${mark}</div>`;
-  }).join("");
+  };
 
-  el.innerHTML = kolejka + rec + warn + rows + `<div class="dim2" style="margin-top:8px">Pokazano
-    ${Math.min(15, events.length)} z ${events.length} zdarzeń.</div>`;
+  const podsumowanie = problemy.length
+    ? `<div style="margin-bottom:8px;color:var(--bad)"><b>${problemy.length}</b>
+         ${lm(problemy.length, "zdarzenie nie ma", "zdarzenia nie mają", "zdarzeń nie ma")}
+         pokrycia w kalendarzu <span class="dim2">(z ${events.length})</span></div>`
+    : `<div style="margin-bottom:8px;color:var(--ok)">✓ Wszystkie
+         <b>${events.length}</b> ${lm(events.length, "zdarzenie ma", "zdarzenia mają", "zdarzeń ma")}
+         pokrycie w kalendarzu.</div>`;
+
+  const przycisk = `<button class="ghost" style="width:100%;margin-top:10px"
+      onclick="diagPrzelacz()">${diagWszystko
+        ? "Pokaż tylko to, co się nie zgadza"
+        : `Pokaż wszystkie zdarzenia (${events.length})`}</button>`;
+
+  el.innerHTML = kolejka + rec + warn + podsumowanie
+    + widoczne.map(wiersz).join("")
+    + (diagWszystko && events.length > 40
+        ? `<div class="dim2" style="margin-top:8px">Pokazano 40 z ${events.length}.</div>` : "")
+    + przycisk;
 }
+
+/* Rozwijanie pelnej listy. Stan trzymamy w module, a nie w DOM, zeby
+   przezyl kazde przerysowanie - a te lecą przy kazdej zmianie w bazie. */
+let diagWszystko = false;
+window.diagPrzelacz = () => { diagWszystko = !diagWszystko; renderDiag(); };
 
 /* Baner „pudełko jest otwarte”. Pudełko zgłasza to samo z siebie po
    kwadransie od otwarcia, więc baner pojawia się mniej więcej wtedy,

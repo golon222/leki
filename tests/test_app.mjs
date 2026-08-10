@@ -834,18 +834,41 @@ check(/BRAK w kalendarzu/.test(diag.innerHTML),
 check(/2026-07-31/.test(diag.innerHTML), "pokazana doba lekowa zdarzenia");
 check(/08:00/.test(diag.innerHTML), "pokazana prawdziwa godzina otwarcia");
 
-/* Ten sam przypadek, ale wpis juz jest. */
+/* Ten sam przypadek, ale wpis juz jest.
+
+   Zdarzenia Z POKRYCIEM sa domyslnie zwiniete - lista powstala do pytania
+   "dlaczego tej dawki nie ma w kalendarzu", a czterdziesci zielonych
+   ptaszkow na nie nie odpowiada. Rozwijamy ja, zeby sprawdzic sam wiersz. */
 D({ events: [ { ts:t0800, type:"open", slot:0 } ],
     doses:{ "2026-07-31": { 0:{ status:"taken", dose:1, source:"device" } } } });
 A.renderDiag();
+check(/Wszystkie/.test(diag.innerHTML) && !/jest w kalendarzu/.test(diag.innerHTML),
+      "gdy wszystko sie zgadza, lista jest zwinieta do jednego zdania");
+window.diagPrzelacz();
 check(/jest w kalendarzu/.test(diag.innerHTML), "zdarzenie rozliczone oznaczone na zielono");
+window.diagPrzelacz();
 check(!/BRAK w kalendarzu/.test(diag.innerHTML), "i bez ostrzezenia");
 
-/* Zdarzenia niedotyczace dawki nie moga straszyc czerwonym "BRAK". */
+/* Zdarzenia niedotyczace dawki nie moga straszyc czerwonym "BRAK" ani
+   liczyc sie jako "bez pokrycia" - uruchomienie nie jest dawka.        */
 D({ events: [ { ts:t0800, type:"boot" } ], doses:{} });
 A.renderDiag();
+check(/Wszystkie/.test(diag.innerHTML) && !/BRAK w kalendarzu/.test(diag.innerHTML),
+      "samo uruchomienie nie jest zglaszane jako brak pokrycia");
+window.diagPrzelacz();
 check(/nie dotyczy dawki/.test(diag.innerHTML), "uruchomienie opisane jako nieistotne");
 check(!/BRAK w kalendarzu/.test(diag.innerHTML), "i nie liczone jako zgubiona dawka");
+window.diagPrzelacz();
+
+/* Sedno porzadkow: gdy cos NIE ma pokrycia, widac to bez klikania. */
+D({ events: [ { ts:t0800, type:"open", slot:0 },
+               { ts:t0800 - 86400, type:"open", slot:0 } ],
+    doses:{ "2026-07-31": { 0:{ status:"taken", dose:1, source:"device" } } } });
+A.renderDiag();
+check(/nie ma\s*\n?\s*pokrycia|nie ma pokrycia/.test(diag.innerHTML.replace(/\s+/g," ")),
+      "niepokryte zdarzenie jest widoczne od razu, bez rozwijania");
+check((diag.innerHTML.match(/doba lekowa/g) || []).length === 1,
+      "i tylko ono - pokryte nie zasmiecaja listy");
 
 /* Nocne otwarcie ma trafic do doby poprzedniej takze w diagnostyce. */
 D({ events: [ { ts:nightTs, type:"open", slot:0 } ], doses:{} });
@@ -935,6 +958,29 @@ head("Pasek nawigacji trzyma sie dolu ekranu");
         "body nie rezerwuje juz safe-area drugi raz po pasku");
   check(/main\{[^}]*padding:[^;}]*env\(safe-area-inset-bottom\)/.test(css),
         "za to tresc rezerwuje miejsce na pasek RAZEM z safe-area");
+}
+
+/* Historia pudelka: 32 wiersze rutyny spychaly wszystko inne poza ekran. */
+head("Historia pudelka zwinieta do ostatnich pieciu");
+{
+  const wpisy = [];
+  for (let i = 0; i < 12; i++) wpisy.push(`${1786300000 + i*3600}|reed|wyslane|80|0`);
+  A.__setState({ boxLog: wpisy });
+  A.renderBoxLog();
+  const el = document.getElementById("boxLog");
+  const ile = h => (h.match(/w kolejce|· bateria/g) || []).length;
+  check(ile(el.innerHTML) === 5, `domyslnie piec wpisow (${ile(el.innerHTML)})`);
+  check(/Pokaż całą historię \(12\)/.test(el.innerHTML), "i przycisk z prawdziwa liczba");
+  window.logPrzelacz();
+  check(ile(el.innerHTML) === 12, `po rozwinieciu wszystkie (${ile(el.innerHTML)})`);
+  window.logPrzelacz();
+
+  /* Przy krotkiej historii przycisk bylby tylko halasem. */
+  A.__setState({ boxLog: [`1786300000|reed|wyslane|80|0`] });
+  A.renderBoxLog();
+  check(!/Pokaż całą historię/.test(document.getElementById("boxLog").innerHTML),
+        "przy jednym wpisie nie ma czego rozwijac");
+  A.__setState({ boxLog: [] });
 }
 
 head("Automatyczne uzupelnianie kalendarza");
