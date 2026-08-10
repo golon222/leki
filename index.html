@@ -935,7 +935,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-10.4";
+const APP_VERSION = "2026-08-10.5";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -2625,8 +2625,28 @@ async function zapiszPewnie(updates, opis = "Zapis"){
     return true;
   } catch (e) {
     console.error("zapis '" + opis + "':", e);
-    toast(opis + " — czeka na połączenie, nie zginie", "warn", 3600);
+    /* ODMOWA TO NIE JEST BRAK SIECI, i nie wolno o niej mowic tak samo.
+
+       TU BYL BLAD (B27). Kazde niepowodzenie dostawalo komunikat "czeka na
+       polaczenie, nie zginie". Przy zerwanej sieci to prawda. Przy odmowie
+       bazy to dokladne przeciwienstwo prawdy: zapis NIE przejdzie ani teraz,
+       ani za godzine, dopoki ktos nie ruszy regul.
+
+       Objaw u Kuby: wpisywal 8 sierpnia recznie, widzial zmiane na ekranie
+       (Firebase pokazuje wlasny zapis lokalnie OD RAZU), po czym serwer go
+       odrzucal, SDK cofal wartosc - i dzien wracal do "nie wziete". Aplikacja
+       mowila przy tym, ze nic nie zginelo.
+
+       To samo rozroznienie robi juz oczekWyslij() (D16) i trwaleOdrzucony()
+       w pudelku (D13). Tu go brakowalo.                                    */
+    if (bazaOdmowila(e)) {
+      staleRules = true;
+      toast(opis + " — BAZA ODRZUCIŁA zapis, to nie minie samo", "err", 6000);
+    } else {
+      toast(opis + " — czeka na połączenie, nie zginie", "warn", 3600);
+    }
     if (typeof renderDiag === "function") renderDiag();
+    renderOstrzezenia();
     return false;
   }
 }

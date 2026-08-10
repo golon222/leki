@@ -983,6 +983,40 @@ head("Historia pudelka zwinieta do ostatnich pieciu");
   A.__setState({ boxLog: [] });
 }
 
+/* ── B27: odmowa bazy opisana jako "czeka na polaczenie" ──
+   Kuba: "wpisuje recznie tego 8, a po wyjsciu z aplikacji mi sie to cofa
+   do tego ze nie wzialem".
+
+   Firebase pokazuje WLASNY zapis lokalnie od razu, wiec zmiana byla widoczna
+   na ekranie. Dopiero serwer ja odrzucal, SDK cofal wartosc - i dzien wracal
+   do "nie wziete". Aplikacja mowila przy tym "czeka na polaczenie, nie
+   zginie", czyli doklandnie odwrotnie niz bylo: odmowa NIE minie sama.
+
+   To samo rozroznienie robi juz oczekWyslij() (D16) i trwaleOdrzucony()
+   w pudelku (D13) - tu go brakowalo.                                    */
+head("Odmowa bazy nie udaje braku sieci");
+{
+  const box = document.getElementById("toasts");
+
+  A.__db.tryb = "odmowa";
+  await A.zapiszPewnie({ [`users/testuid/doses/2026-08-08/0`]:
+    { status:"taken", dose:1, source:"manual", ts:1786237200 } }, "Zmiana dawki");
+  check(/ODRZUCIŁA/.test(box.innerHTML),
+        `odmowa nazwana po imieniu: ${box.textContent.slice(0,60)}`);
+  check(!/nie zginie/.test(box.innerHTML),
+        "i NIE obiecujemy, ze zapis sam dojdzie");
+
+  A.__db.tryb = "blad";
+  await A.zapiszPewnie({ [`users/testuid/doses/2026-08-08/0`]:
+    { status:"taken", dose:1, source:"manual", ts:1786237200 } }, "Zmiana dawki");
+  check(/nie zginie/.test(box.innerHTML),
+        `brak sieci nadal opisany spokojnie: ${box.textContent.slice(0,60)}`);
+  check(!/ODRZUCIŁA/.test(box.innerHTML), "bo tu zapis naprawde poczeka");
+
+  A.__db.tryb = "ok";
+  A.oczekZapisz([]);
+}
+
 head("Automatyczne uzupelnianie kalendarza");
 /* Sedno: to ma dzialac bez klikania. Nasluch zdarzen i nasluch kalendarza
    MUSZA same wolac uzupelnianie, a jeden nieudany odczyt nie moze go zabic. */
