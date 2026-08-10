@@ -98,6 +98,31 @@ RTC_DATA_ATTR uint16_t rtcQueueDropped  = 0;    // wpisy zdjete z kolejki bez wy
 /* =====================================================================
  *  STAN GLOBALNY
  * ===================================================================== */
+/* --- TYPY WLASNE STOJA PRZED PIERWSZA FUNKCJA W PLIKU. NIE PRZENOSIC. ---
+
+   Arduino IDE samo dopisuje prototypy wszystkich funkcji i wstawia je
+   TUZ PRZED PIERWSZA DEFINICJA FUNKCJI w pliku. Wygenerowany prototyp
+   `const char* wakeName(WakeReason w);` trafia wiec wyzej niz definicja
+   `enum WakeReason` - i kompilacja pada na "WakeReason was not declared
+   in this scope", w miejscu, ktore wyglada na zupelnie poprawne.
+
+   TO JUZ RAZ ZATRZYMALO PROJEKT NA MIESIAC. Enumy stoly kiedys nizej,
+   pod zmiennymi globalnymi, i wszystko dzialalo - bo pierwsza funkcja
+   w pliku byla wtedy awakeTooLong(), zdefiniowana JESZCZE NIZEJ. Dopiero
+   naprawa B5 dolozyla nvsPutStr() na samej gorze i przesunela punkt
+   wstawiania prototypow ponad enumy. Od tej chwili ZADNA wersja firmware
+   nie dala sie wgrac z Arduino IDE - a nikt tego nie zauwazyl, bo
+   tests/kompiluj_firmware.sh kompiluje jako .cpp i ten etap omija (D17).
+
+   Zasada: kazdy typ uzywany w SYGNATURZE jakiejkolwiek funkcji musi byc
+   zadeklarowany powyzej pierwszej definicji funkcji. Pilnuje tego audyt
+   (tests/audit_firmware.py) oraz kompilacja przez prawdziwa sciezke .ino
+   w tests/kompiluj_firmware.sh.                                        */
+enum WakeReason { WAKE_BOOT, WAKE_REED, WAKE_BUTTON, WAKE_TIMER, WAKE_CLOSED };
+
+/* Co uzytkownik pokazal przyciskiem po otwarciu wieczka. */
+enum Gest { GEST_BRAK, GEST_TEST, GEST_PORTAL };
+
 Preferences prefs;
 
 /* --- Zapisy do NVS, ktore nie udaja, ze sie udaly ---------------------
@@ -142,13 +167,8 @@ float  realBatteryVoltage   = 0.0f;
 String slots[12];          // godziny "HH:MM"
 int    slotCount = 0;
 
-enum WakeReason { WAKE_BOOT, WAKE_REED, WAKE_BUTTON, WAKE_TIMER, WAKE_CLOSED };
+/* Same typy stoja wyzej, przed pierwsza funkcja - patrz komentarz tam. */
 WakeReason wakeReason = WAKE_BOOT;
-
-/* Co uzytkownik pokazal przyciskiem po otwarciu wieczka. Typ musi byc
-   zdefiniowany TUTAJ, przed zmienna gestPoOtwarciu ponizej - kompilator
-   czyta plik z gory na dol i nie zna typu, ktory poznaje pozniej.     */
-enum Gest { GEST_BRAK, GEST_TEST, GEST_PORTAL };
 
 bool boxOpenWarned  = false;    // czy w tym wybudzeniu zabrzmial sygnal "otwarte"
 bool byloOtwarte    = false;    // czy w tym wybudzeniu wieczko bylo otwarte
@@ -165,15 +185,6 @@ void   setTakenDay(uint32_t day);   // wola ja syncTimeNTP() przy odzyskaniu zeg
 void   logbookPrint();
 void   note(const char* co);    // odnotuj, co sie stalo w tym wybudzeniu
 Gest   czekajNaZamkniecieIGest(uint32_t limitMs);
-/* Ta sama przyczyna co przy czekajNaZamkniecieIGest() dwie linie wyzej:
-   generator prototypow Arduino IDE wstawia auto-wygenerowana deklaracje
-   TUZ PO OSTATNIM #include - czyli przed linia definiujaca WakeReason.
-   Bez recznej deklaracji TUTAJ kompilator w prawdziwym Arduino IDE zgłasza
-   "WakeReason was not declared in this scope" przy definicji na dole pliku.
-   Nasz skrypt testowy tego nie łapie, bo kompiluje jako .cpp i omija ten
-   etap w ogole - stad błąd wyszedł dopiero przy prawdziwym wgrywaniu.    */
-const char* wakeName(WakeReason w);
-WakeReason  detectWakeReason();
 void   autoTest();
 void   startWifiPortal();
 

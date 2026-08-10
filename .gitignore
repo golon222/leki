@@ -6,3 +6,7 @@ tests/crosscheck_bin
 
 # UWAGA: firmware/PillBox/config.h jest CELOWO sledzony przez gita - patrz
 # komentarz na gorze tego pliku. Trzymamy w nim wylacznie placeholder hasla.
+
+# Python bytecode z tests/proto_arduino.py
+__pycache__/
+*.pyc

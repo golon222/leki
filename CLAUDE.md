@@ -24,7 +24,7 @@ bash tests/run_all.sh
 
 Musi przejść przed zmianą i po zmianie. Stan wyjściowy:
 **345 + 51 firmware, 570 (×6 pór doby) + 86 + 49 aplikacja, 48 zgodności,
-58 reguł bazy, 211 kontroli audytu — 0 błędów.**
+58 reguł bazy, 215 kontroli audytu — 0 błędów.**
 
 Testy pracują na **prawdziwym kodzie**, nie na kopii: `tests/extract.py` wycina
 funkcje z `PillBox.ino`, `tests/build_app_module.mjs` buduje moduł z `index.html`.
@@ -110,7 +110,10 @@ telefon zostanie na starej wersji. Po zmianie firmware podbij `FW_VERSION`.
 bash tests/kompiluj_firmware.sh
 ```
 
-Buduje **oba** szkice prawdziwym toolchainem Arduino, na `esp32:esp32@3.3.11`
+Buduje **oba** szkice prawdziwym toolchainem Arduino, **dwa razy: jako `.cpp`
+i przez prawdziwą ścieżkę `.ino` z wygenerowanymi prototypami** (B21/D26 —
+przez miesiąc sprawdzaliśmy tylko `.cpp` i firmware nie dawał się wgrać),
+na `esp32:esp32@3.3.11`
 i z **ustawieniami płytki z nagłówka `PillBox.ino`** — czyli tak, jak Kuba
 naprawdę wgrywa. Nie jest częścią `run_all.sh`: wymaga sieci i ~500 MB
 toolchainu (pierwsze uruchomienie kilka minut, kolejne szybkie).

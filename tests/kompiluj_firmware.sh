@@ -146,6 +146,42 @@ zbuduj pillbox "$ROOT/firmware/PillBox/PillBox.ino" "$ROOT/firmware/PillBox" \
 zbuduj pillboxtest "$ROOT/firmware/PillBoxTest/PillBoxTest.ino" "$ROOT/firmware/PillBoxTest" \
        "PillBoxTest.ino  (szkic diagnostyczny)"
 
+# ── 6. Kompilacja przez PRAWDZIWA sciezke .ino ────────────────────────
+# Kompilacja jako .cpp powyzej odpowiada na pytanie "czy kod sie buduje".
+# NIE odpowiada na pytanie "czy Kuba to wgra" - a to dwie rozne rzeczy.
+#
+# Arduino IDE przed kompilacja dopisuje prototypy wszystkich funkcji i
+# wstawia je TUZ PRZED PIERWSZA DEFINICJA FUNKCJI. Jesli jakikolwiek typ
+# wlasny (enum, struct) uzyty w SYGNATURZE stoi nizej niz ten punkt,
+# wygenerowany prototyp odwoluje sie do typu, ktorego kompilator jeszcze
+# nie zna - i wgrywanie pada, choc `.cpp` buduje sie bez uwag.
+#
+# TO SIE NAPRAWDE STALO. Wersje 1.23.0-1.28.0 nie daly sie wgrac z
+# Arduino IDE przez ponad miesiac, a ten skrypt przez caly ten czas
+# meldowal sukces. Dlatego ten etap juz tu zostaje.
+zbudujIno() {
+  local nazwa="$1" zrodlo="$2" katalog="$3" opis="$4"
+  local tmp; tmp="$(mktemp -d)/$nazwa"
+  mkdir -p "$tmp"
+  python3 "$ROOT/tests/proto_arduino.py" "$zrodlo" "$tmp/$nazwa.cpp" "$(basename "$zrodlo")"
+  find "$katalog" -maxdepth 1 -name '*.h' -exec cp {} "$tmp/" \;
+  touch "$tmp/$nazwa.ino"
+
+  echo
+  echo "════════ $opis ════════"
+  "$ACLI" compile --fqbn "$FQBN" --library "$LIB" \
+      --build-property "runtime.tools.ctags.path=$CTAGS_DIR" "$tmp" 2>&1 \
+    | grep -E "error:|Sketch uses|Error during" || true
+
+  "$ACLI" compile --fqbn "$FQBN" --library "$LIB" \
+      --build-property "runtime.tools.ctags.path=$CTAGS_DIR" "$tmp" >/dev/null 2>&1
+}
+
+zbudujIno pbino "$ROOT/firmware/PillBox/PillBox.ino" "$ROOT/firmware/PillBox" \
+       "PillBox.ino  Z PROTOTYPAMI, tak jak wgrywa Arduino IDE"
+zbudujIno pbtino "$ROOT/firmware/PillBoxTest/PillBoxTest.ino" "$ROOT/firmware/PillBoxTest" \
+       "PillBoxTest.ino  Z PROTOTYPAMI"
+
 echo
 echo "✔  Firmware kompiluje sie toolchainem Arduino (rdzen $CORE_VER)."
 echo

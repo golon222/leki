@@ -668,6 +668,48 @@ ok(volts == sorted(volts, reverse=True), "punkty krzywej uporzadkowane malejaco 
 ok(pcts == sorted(pcts, reverse=True), "procenty tez maleja razem z napieciem")
 ok(pcts and pcts[0] == 100 and pcts[-1] == 0, "krzywa zaczyna sie od 100% i konczy na 0%")
 
+# ---------- 9b. Czy to sie W OGOLE wgra z Arduino IDE ----------
+#
+# Arduino IDE dopisuje prototypy wszystkich funkcji i wstawia je TUZ PRZED
+# PIERWSZA DEFINICJA FUNKCJI w pliku. Typ wlasny uzyty w SYGNATURZE, ale
+# zadeklarowany nizej niz ten punkt, daje przy wgrywaniu:
+#     error: 'WakeReason' was not declared in this scope
+# w miejscu, ktore wyglada na zupelnie poprawne.
+#
+# TO ZATRZYMALO PROJEKT NA MIESIAC. Naprawa B5 dolozyla nvsPutStr() na
+# gorze pliku i przesunela punkt wstawiania prototypow ponad `enum
+# WakeReason`. Od 1.23.0 do 1.28.0 zadna wersja nie dala sie wgrac, a
+# kompilacja jako .cpp (D17) omija ten etap i przez caly czas meldowala
+# sukces. Kuba zostal z firmware 1.22.0 w pudelku - nie dlatego, ze nie
+# probowal, tylko dlatego, ze sie nie dalo.
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+from proto_arduino import pierwsza_funkcja          # noqa: E402
+
+_test_ino = (pathlib.Path(__file__).parent.parent / "firmware" / "PillBoxTest"
+             / "PillBoxTest.ino").read_text(encoding="utf-8")
+
+for nazwa, zrodlo in (("PillBox.ino", ino), ("PillBoxTest.ino", _test_ino)):
+    granica = pierwsza_funkcja(zrodlo)
+    ok(granica is not None, f"{nazwa} - znaleziono pierwsza definicje funkcji")
+    if granica is None:
+        continue
+    linie = zrodlo.split("\n")
+    # Typy wlasne zadeklarowane w tym pliku, z numerem linii.
+    typy = {m.group(2): i + 1
+            for i, l in enumerate(linie)
+            for m in [re.match(r"^(enum|struct)\s+(\w+)", l)] if m}
+    # Ktore z nich pojawiaja sie w SYGNATURZE jakiejkolwiek funkcji - bo
+    # tylko takie trafiaja do wygenerowanych prototypow.
+    for typ, gdzie in sorted(typy.items()):
+        w_sygnaturze = re.search(
+            r"^[A-Za-z_][\w \*&]*\**\w+\([^;{]*\b" + typ + r"\b[^;{]*\)\s*\{",
+            zrodlo, re.M) or re.search(r"^" + typ + r"\s+\w+\([^;{]*\)\s*\{", zrodlo, re.M)
+        if not w_sygnaturze:
+            continue
+        ok(gdzie < granica,
+           f"{nazwa}: typ '{typ}' (linia {gdzie}) zadeklarowany przed pierwsza "
+           f"funkcja (linia {granica}) - inaczej Arduino IDE nie wgra szkicu")
+
 # ---------- 10. Rzeczy do uzupelnienia przez uzytkownika ----------
 todo = "TUTAJ_WPISZ_HASLO_C" in cfg
 warn(todo, "DEVICE_PASSWORD nie jest jeszcze uzupelnione w config.h")
