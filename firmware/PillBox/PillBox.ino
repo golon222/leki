@@ -165,6 +165,15 @@ void   setTakenDay(uint32_t day);   // wola ja syncTimeNTP() przy odzyskaniu zeg
 void   logbookPrint();
 void   note(const char* co);    // odnotuj, co sie stalo w tym wybudzeniu
 Gest   czekajNaZamkniecieIGest(uint32_t limitMs);
+/* Ta sama przyczyna co przy czekajNaZamkniecieIGest() dwie linie wyzej:
+   generator prototypow Arduino IDE wstawia auto-wygenerowana deklaracje
+   TUZ PO OSTATNIM #include - czyli przed linia definiujaca WakeReason.
+   Bez recznej deklaracji TUTAJ kompilator w prawdziwym Arduino IDE zgłasza
+   "WakeReason was not declared in this scope" przy definicji na dole pliku.
+   Nasz skrypt testowy tego nie łapie, bo kompiluje jako .cpp i omija ten
+   etap w ogole - stad błąd wyszedł dopiero przy prawdziwym wgrywaniu.    */
+const char* wakeName(WakeReason w);
+WakeReason  detectWakeReason();
 void   autoTest();
 void   startWifiPortal();
 
