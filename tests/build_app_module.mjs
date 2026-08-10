@@ -50,6 +50,12 @@ export function __setState(o){
   if (o.events) { events.length = 0; events.push(...o.events); }
   if (o.boxLog) { boxLog = o.boxLog; }
 }
+/* Kalendarz domysla sie biezacego miesiaca, gdy viewYear/viewMonth nie sa
+   jeszcze ustawione (patrz komentarz w renderCalendar()). Testy sprawdzajace
+   konkretny dzien musza umiec wymusic miesiac inny niz "teraz" - inaczej
+   test dla terminu INR liczonego "dzis + odstep dni" psulby sie caly czas,
+   gdy "dzis" wypada blisko konca miesiaca i termin przeskakuje w przod.  */
+export function __setView(rok, miesiac){ viewYear = rok; viewMonth = miesiac; }
 export { __db, __resetDb };
 `;
 

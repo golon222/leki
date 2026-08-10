@@ -389,13 +389,33 @@ check(A.dniTxt(5) === "5 dni",   "odmiana: 5 dni");
 /* TU BYL BLAD: pierwsza wersja oznaczala termin sama przerywana ramka wokol
    kratki. Technicznie dzialalo, praktycznie Kuba tego NIE ZAUWAZYL - szukal
    ikonki, bo tak oznaczone sa dni z pomiarem. Test pilnuje teraz IKONKI,
-   a nie samej klasy CSS, bo to ikonka jest tym, co widac.               */
+   a nie samej klasy CSS, bo to ikonka jest tym, co widac.
+
+   TU BYL DRUGI BLAD, tym razem w samym tescie: termin = dzis + 21 dni.
+   Gdy "dzis" wypada w ostatniej dekadzie miesiaca (w sierpniu - od 11.),
+   termin przeskakuje do nastepnego miesiaca, a kalendarz domyslnie
+   pokazuje TEN "dzis" - wiec dnia terminu nie ma na siatce w ogole i test
+   pada, choc kod jest poprawny. Zalapalo to dopiero losowe TZ w 2b/10,
+   ale bez niego padloby samo, gdy tylko "dzis" przesunieloby sie za 10.
+   Kazda z dwoch sprawdzanych kratek jest wiec renderowana we WLASCIWYM
+   dla siebie miesiacu, a nie w tym, w ktorym akurat jest "teraz".        */
 D({ cfg:{ inrEveryDays:21 }, inr:{ [today]:{ value:2.5, ts:at(0,12,0) } } });
+const termKeyTest = A.inrTerminKey();
+const [termRok, termMies] = termKeyTest.split("-").map(Number);
+
+A.__setView(termRok, termMies - 1);
 A.renderCalendar();
 {
   const kal = document.getElementById("calGrid").innerHTML;
   check(kal.includes("inrdue-i"), "dzien terminu ma widoczna IKONKE, nie samo obramowanie");
   check((kal.match(/inrdue-i/g)||[]).length === 1, "dokladnie jeden dzien terminu");
+}
+
+const [dzisRok, dzisMies] = today.split("-").map(Number);
+A.__setView(dzisRok, dzisMies - 1);
+A.renderCalendar();
+{
+  const kal = document.getElementById("calGrid").innerHTML;
   const kratki = kal.split('<div class="day');
   const dzisiaj = kratki.find(k => k.includes('data-k="'+today+'"')) || "";
   check(/class="inr"/.test(dzisiaj) && !/inrdue-i/.test(dzisiaj),
