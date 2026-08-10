@@ -926,7 +926,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-10.1";
+const APP_VERSION = "2026-08-10.2";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -1411,12 +1411,12 @@ function boot(){
       cfg.tzOffsetMin = now;
       zapiszCfg({ tzOffsetMin: now, tz: zone }, "Strefa czasowa");
     }
-    renderSettings(); renderAll();
     /* Ustawienia decydują o tym, do której dawki przypisać zdarzenie.
        Gdy dotrą PÓŹNIEJ niż zdarzenia — a kolejność nasłuchów nie jest
        niczym gwarantowana — pierwsze uzupełnianie liczyło na starych
        danych i nikt go już nie powtarzał.                             */
     doReconcile(true);
+    renderSettings(); renderAll();
   }, onErr("odczyt ustawień urządzenia"));
 
   /* Odliczanie musi tykac samo. Pudelko melduje sie rzadko - i słusznie,
@@ -1445,17 +1445,23 @@ function boot(){
   onValue(query(ref(db, `devices/${DEVICE_ID}/events`), orderByChild("ts"), limitToLast(400)), s => {
     events = []; s.forEach(c => events.push(Object.assign({id:c.key}, c.val())));
     events.sort((a,b)=>b.ts-a.ts);
-    renderDiag();
+    /* Najpierw kalendarz, potem obrazek - patrz komentarz przy wakeUp().
+       renderDiag() czyta pola statusu, ktorych starszy firmware nie
+       przysyla; wyjatek tutaj zabralby ze soba uzupelnianie dawki.    */
     doReconcile(true);          // automatycznie, bez komunikatow
+    renderDiag();
   }, onErr("odczyt zdarzeń z pudełka"));
 
   onValue(ref(db, `users/${uid}/doses`), s => {
-    doses = s.val() || {}; renderAll(); renderDiag(); settlePills();
+    doses = s.val() || {};
+    /* settlePills() SAM pisze do bazy, wiec potrafi rzucic. Gdy stalo
+       przed uzupelnianiem, zabieralo je ze soba.                      */
+    doReconcile(true);
+    renderAll(); renderDiag(); settlePills();
     /* Nasłuchy przychodzą w nieprzewidywalnej kolejności. Jeśli zdarzenia
        dotarły przed kalendarzem, uzupełnianie liczyło na pustym stanie -
        to bezpieczne, ale mogło minąć się z danymi. Powtarzamy po każdej
        zmianie kalendarza; jest bezczynne, gdy nie ma czego dopisać.     */
-    doReconcile(true);
   }, onErr("odczyt kalendarza dawek"));
 
   onValue(ref(db, `users/${uid}/inr`), s => { inr = s.val() || {}; renderAll(); },
@@ -1519,9 +1525,21 @@ function boot(){
                                 ["INR", ir], ["ustawienia", cf]])
         if (r.status === "rejected") console.error("odswiezanie -", nazwa, r.reason);
 
+      /* UZUPEŁNIANIE IDZIE PRZED RYSOWANIEM. Nie odwrotnie.
+
+         Komentarz kilkanaście linijek wyżej opisuje dokładnie ten błąd —
+         i naprawiał go tylko w połowie. `allSettled` uodporniło ODCZYTY,
+         ale `doReconcile` dalej stało na samym końcu, za sześcioma
+         wywołaniami rysującymi. Wyjątek w którymkolwiek z nich (brakujący
+         element, pole, którego nie przysłał starszy firmware) leci do
+         `catch` niżej i uzupełnianie po prostu się nie wykonuje. Cicho.
+
+         Rysowanie jest kosmetyką — dawka w kalendarzu nie jest. Kolejność
+         ma to odzwierciedlać.                                            */
+      await doReconcile(true);
+
       renderStatus(val(st) ? val(st).val() : null);
       renderSettings(); renderAll(); renderDiag(); renderBoxLog(); renderTesty();
-      await doReconcile(true);
 
       if (recznie) {
         const bledy = [st, ev, ds, ir, cf].filter(r => r.status === "rejected").length;
@@ -1653,9 +1671,19 @@ function brakujePokrycia(){
   for (const ev of events){
     if (!ev.ts || ev.type !== "open") continue;
     const key = devKey(ev.ts);
-    let slot = (typeof ev.slot === "number" && ev.slot >= 0) ? ev.slot : -1;
-    if (slot < 0) slot = 0;
-    const cur = doses?.[key]?.[slot];
+    /* Slot 0 — DOKŁADNIE ten, do którego pisze doReconcile().
+
+       Wcześniej stało tu `ev.slot`, czyli numer PRZYPOMNIENIA przysłany
+       przez pudełko. Po naprawie B9 uzupełnianie pisze zawsze do slotu 0
+       (dawka jest jedna dziennie), więc przy dwóch przypomnieniach te dwie
+       funkcje patrzyły na różne miejsca: zdarzenie ze `slot: 1` nigdy nie
+       miało pokrycia pod `doses[dzień][1]`, bo tam nikt nie pisze.
+
+       Siatka bezpieczeństwa uznawała więc, że wciąż czegoś brakuje, i
+       wołała uzupełnianie co minutę bez końca — a przy okazji nigdy nie
+       zgłaszała stanu „wszystko pokryte". Dwie funkcje opisujące ten sam
+       fakt muszą go liczyć tak samo.                                    */
+    const cur = doses?.[key]?.[0];
     if (!cur || (cur.status !== "taken" && cur.source !== "manual")) return true;
   }
   return false;

@@ -877,8 +877,61 @@ check(html.includes("Promise.allSettled"),
       "odswiezanie znosi pojedynczy nieudany odczyt");
 check(!/await Promise\.all\(\[/.test(html),
       "nigdzie nie zostalo Promise.all, ktore przerywa wszystko");
-check(/renderBoxLog\(\); renderTesty\(\);\s*await doReconcile\(true\);/.test(html),
-      "uzupelnianie na koncu odswiezania, po zaladowaniu danych");
+/* TEN TEST UTRWALAL BLAD. Sprawdzal, ze doReconcile stoi na KONCU
+   odswiezania - czyli za szescioma wywolaniami rysujacymi. Wyjatek
+   w ktorymkolwiek z nich (brakujacy element, pole, ktorego starszy
+   firmware nie przysyla) leci do catch i uzupelnianie sie nie wykonuje.
+   Kuba zglosil dokladnie to: "dzisiejszy dzien zsynchronizowal sie
+   dopiero po nacisnieciu przelicz, a to sie samo powinno robic".
+
+   Wlasciwy niezmiennik jest odwrotny: dawka w kalendarzu przed
+   kosmetyka. Rysowanie moze paść - uzupelnianie nie.                  */
+check(/await doReconcile\(true\);\s*(?:\/\*[\s\S]*?\*\/\s*)?renderStatus\(/.test(html),
+      "uzupelnianie PRZED rysowaniem w odswiezaniu - wyjatek w renderze go nie zabija");
+{
+  /* Kolejnosc liczona wprost W CIELE wakeUp(), zeby test nie zalezal od
+     jednego wzorca ani nie trafil w renderBoxLog z innego nasluchu.    */
+  const od = html.indexOf("Promise.allSettled");
+  const cialo = html.slice(od, od + 3000);
+  const i = cialo.indexOf("await doReconcile(true);");
+  const r = cialo.indexOf("renderBoxLog(); renderTesty();");
+  check(i > 0 && r > i,
+        `w odswiezaniu doReconcile (+${i}) wyprzedza rysowanie (+${r})`);
+}
+/* --- Siatka bezpieczenstwa musi patrzec TAM, GDZIE PISZE uzupelnianie ---
+   brakujePokrycia() czytalo doses[dzien][ev.slot], a doReconcile() od
+   naprawy B9 pisze ZAWSZE do slotu 0. Przy dwoch przypomnieniach
+   zdarzenie ze `slot: 1` nie mialo wiec pokrycia NIGDY - siatka wolala
+   uzupelnianie co minute bez konca i nigdy nie meldowala "pokryte".
+   Dwie funkcje opisujace ten sam fakt musza liczyc go tak samo.       */
+{
+  const ts = Math.floor(Date.now()/1000);
+  /* Klucz dnia liczymy DOKLADNIE tak, jak robi to brakujePokrycia() -
+     przez devKey(ts), a nie todayKey(). Doba lekowa zaczyna sie o 3:00,
+     wiec o 01:xx w niektorych strefach te dwa daja rozne dni i test
+     padalby losowo w przebiegu 2b/10 (ta sama pulapka co N3).        */
+  const dzis = A.devKey(ts);
+
+  A.__setState({ events: [{ id:"e1", ts, type:"open", slot: 1 }], doses: {} });
+  check(A.brakujePokrycia() === true, "brak wpisu w kalendarzu = brakuje pokrycia");
+
+  /* Pudelko przyslalo slot 1, ale dawka siedzi - jak zawsze - w slocie 0. */
+  A.__setState({ events: [{ id:"e1", ts, type:"open", slot: 1 }],
+                 doses: { [dzis]: { 0: { status:"taken", source:"device" } } } });
+  check(A.brakujePokrycia() === false,
+        "dawka w slocie 0 pokrywa zdarzenie z dowolnym numerem przypomnienia");
+
+  A.__setState({ events: [{ id:"e1", ts, type:"open", slot: 0 }],
+                 doses: { [dzis]: { 0: { status:"missed", source:"device" } } } });
+  check(A.brakujePokrycia() === true,
+        "wpis 'pominiete' przy zdarzeniu otwarcia to nadal brak pokrycia");
+
+  A.__setState({ events: [{ id:"e1", ts, type:"open", slot: 0 }],
+                 doses: { [dzis]: { 0: { status:"missed", source:"manual" } } } });
+  check(A.brakujePokrycia() === false, "reczna korekta zamyka sprawe");
+  A.__setState({ events: [], doses: {} });
+}
+
 check(html.includes("lastRec = { at: Date.now()"), "kazde uzupelnienie zostawia slad");
 check(html.includes("Ostatnie automatyczne uzupełnienie"), "i jest on widoczny w diagnostyce");
 check(html.includes("nic nie wymagało zmiany"),
@@ -1165,8 +1218,8 @@ head("Zdarzenie bez pokrycia w kalendarzu");
 }
 check(/setInterval\([\s\S]{0,200}brakujePokrycia\(\)[\s\S]{0,80}60000\)/.test(html),
       "sprawdzenie chodzi cyklicznie, a nie tylko przy zdarzeniach");
-check(/renderSettings\(\); renderAll\(\);[\s\S]{0,400}doReconcile\(true\)/.test(html),
-      "zmiana ustawien tez uruchamia uzupelnianie");
+check(/doReconcile\(true\);\s*renderSettings\(\); renderAll\(\);/.test(html),
+      "zmiana ustawien tez uruchamia uzupelnianie - i to PRZED rysowaniem");
 
 head("Instrukcja autotestu zgodna z firmware");
 check(!/naciśnij raz/.test(html), "instrukcja nie kaze juz sprawdzac przycisku");
