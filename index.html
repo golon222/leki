@@ -935,7 +935,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-10.5";
+const APP_VERSION = "2026-08-10.6";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -1770,7 +1770,25 @@ async function doReconcile(silent = true){
         { status:"taken", dose: cfg.defaultDose ?? 1, source:"device",
           ts: ev.ts, openTs: ev.ts };
     } else if (ev.type === "missed"){
-      if (cur && cur.status === "taken") continue;
+      /* „POMINIĘTE" TYLKO TWORZY WPIS. Nigdy nie zmienia istniejącego.
+
+         TU BYŁ BŁĄD (B27). Stało tu `if (cur && cur.status === "taken")`,
+         czyli pominięte nadpisywało wszystko, co nie było „wzięte" —
+         w tym RĘCZNĄ korektę. Chronił przed tym warunek `source === "manual"`
+         na górze pętli, ale on czyta lokalną kopię `doses`. Wystarczy, że ta
+         kopia jest o chwilę nieaktualna — a `wakeUp()` przeładowuje ją
+         DOKŁADNIE przy powrocie do aplikacji — i ochrona nie ma czego
+         sprawdzić.
+
+         Objaw u Kuby: wpisywał 8 sierpnia ręcznie, wychodził z aplikacji,
+         wracał — i dzień znowu był czerwony.
+
+         Reguła jest teraz taka, że nie da się jej ominąć wyścigiem:
+         zdarzenie „pominięte" wolno wyłącznie ZAŁOŻYĆ brakujący wpis.
+         Cokolwiek już w kalendarzu jest — zostaje. To bezpieczny kierunek:
+         „pominięte" i tak jest domyślnym pesymistycznym odczytem, a jedyne,
+         co potrafi je unieważnić, to otwarcie pudełka albo człowiek. */
+      if (cur) continue;                    // w kalendarzu coś już jest — nie ruszamy
       if (juz) continue;                    // cokolwiek już ustalono, zostaje
       updates[sciezka] =
         { status:"missed", dose:0, source:"device", ts: ev.ts };

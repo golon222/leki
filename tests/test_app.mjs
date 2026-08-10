@@ -994,6 +994,58 @@ head("Historia pudelka zwinieta do ostatnich pieciu");
 
    To samo rozroznienie robi juz oczekWyslij() (D16) i trwaleOdrzucony()
    w pudelku (D13) - tu go brakowalo.                                    */
+/* ── B27: reczny wpis "cofal sie" po wyjsciu z aplikacji ──
+   Kuba: "wpisuje recznie tego 8, a po wyjsciu z aplikacji mi sie to cofa
+   do tego ze nie wzialem".
+
+   doReconcile chronil reczna korekte warunkiem source === "manual", ale
+   `cur` czyta LOKALNA kopie doses. Wystarczy, ze jest o chwile nieaktualna
+   - a wakeUp() przeladowuje ja dokladnie przy powrocie do aplikacji - i
+   "pominiete" z pudelka nadpisywalo wpis czlowieka.
+
+   Teraz "pominiete" wolno wylacznie ZALOZYC brakujacy wpis.            */
+head("Pominiete z pudelka nie kasuje tego, co juz jest w kalendarzu");
+{
+  const ts8 = 1786237200 + 3600;             // 8.08, w dobie lekowej 2026-08-08
+  const dzien = A.devKey(ts8);
+  const sciezka = `users/testuid/doses/${dzien}/0`;
+
+  /* 1. Reczny wpis "wzialem" + zdarzenie "pominiete" z pudelka na ten dzien. */
+  A.__resetDb();
+  A.__setState({ events: [{ id:"m1", ts: ts8, type:"missed", slot:0 }],
+                 doses: { [dzien]: { 0:{ status:"taken", dose:1, source:"manual", ts:ts8 } } } });
+  await A.doReconcile(true);
+  check(!A.__db.writes.some(w => JSON.stringify(w.val).includes("missed")),
+        "reczne 'wzialem' przezywa zdarzenie 'pominiete'");
+
+  /* 2. TEN SAM przypadek, ale lokalna kopia doses jest NIEAKTUALNA -
+        dokladnie to, co robi wyscig przy powrocie do aplikacji.       */
+  A.__resetDb();
+  A.__setState({ events: [{ id:"m1", ts: ts8, type:"missed", slot:0 }],
+                 doses: { [dzien]: { 0:{ status:"missed", dose:0, source:"device", ts:ts8 } } } });
+  await A.doReconcile(true);
+  check(A.__db.writes.length === 0,
+        `nieaktualna kopia nie powoduje zadnego zapisu (${A.__db.writes.length})`);
+
+  /* 3. Ale gdy dnia NIE MA w kalendarzu, pominiete musi go zalozyc -
+        inaczej stracilibysmy jedyna informacje o niewzietej dawce.    */
+  A.__resetDb();
+  A.__setState({ events: [{ id:"m1", ts: ts8, type:"missed", slot:0 }], doses: {} });
+  await A.doReconcile(true);
+  check(A.__db.writes.some(w => JSON.stringify(w.val).includes("missed")),
+        "brakujacy dzien nadal dostaje wpis 'pominiete'");
+
+  /* 4. Otwarcie wciaz bije pominiete - tego nie wolno bylo zepsuc. */
+  A.__resetDb();
+  A.__setState({ events: [{ id:"m1", ts: ts8, type:"missed", slot:0 },
+                          { id:"o1", ts: ts8 + 600, type:"open", slot:0 }], doses: {} });
+  await A.doReconcile(true);
+  const zapis = A.__db.writes.map(w => JSON.stringify(w.val)).join(" ");
+  check(/taken/.test(zapis) && !/"status":"missed"/.test(zapis),
+        `otwarcie nadal wygrywa z pominietym (${zapis.slice(0,80)})`);
+  A.__resetDb(); A.__setState({ events: [], doses: {} });
+}
+
 head("Odmowa bazy nie udaje braku sieci");
 {
   const box = document.getElementById("toasts");
