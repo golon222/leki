@@ -41,7 +41,8 @@ export { brakujePokrycia, doReconcile, opisLadowan, minutyDoPelna, opisLadowania
          zapiszPewnie, zapiszCfg, oczekWczytaj, oczekZapisz, oczekIle, oczekWyslij,
          magazyn, OCZEK_KEY, oczekOdmowy, bazaOdmowila,
          INR_ZAKRES_MIN, INR_ZAKRES_MAX, INR_ODSTEPY, inrKrokiZakresu, renderSettings,
-         ostrzMilczy, MILCZY_PROG_H };
+         ostrzMilczy, MILCZY_PROG_H,
+         ostrzZatkana, ZATKANA_SWIEZOSC_H, nvsMalo, NVS_MALO };
 export function __setState(o){
   if (o.cfg)    Object.assign(cfg, o.cfg);
   if (o.doses)  { for (const k of Object.keys(doses)) delete doses[k]; Object.assign(doses, o.doses); }

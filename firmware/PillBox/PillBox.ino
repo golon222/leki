@@ -43,6 +43,7 @@
 #include <soc/soc_caps.h>       // SOC_GPIO_SUPPORT_DEEPSLEEP_WAKEUP
 #include <esp_wifi.h>
 #include <driver/gpio.h>
+#include <nvs.h>                // nvs_get_stats - ile miejsca zostalo w pamieci
 #include <time.h>
 
 /* =====================================================================
@@ -118,6 +119,20 @@ bool nvsPutU16(const char* key, uint16_t val) {
   if (rtcNvsFail < 65535) rtcNvsFail++;
   LOG("[NVS] ZAPIS NIEUDANY: %s\n", key);
   return false;
+}
+
+/* --- Ile miejsca zostalo w pamieci trwalej ----------------------------
+   nvsPutStr() mowi, ze zapis PRZEPADL. Nie mowi, ile jeszcze zostalo -
+   a to jest roznica miedzy "wlasnie zaczely ginac dane" a "za dwa dni
+   zaczna". Kolejka, dziennik wieczka, czarna skrzynka i token siedza w
+   tej samej partycji 20 kB; gdy sie zapelni, kazdy z nich zaczyna cicho
+   gubic wpisy. Aplikacja ma to widziec ZANIM zniknie pierwsza dawka.
+
+   Zwraca liczbe wolnych wpisow, albo -1 gdy nie da sie odczytac.       */
+int nvsWolneWpisy() {
+  nvs_stats_t st;
+  if (nvs_get_stats(nullptr, &st) != ESP_OK) return -1;
+  return (int)st.free_entries;
 }
 
 int    batteryPercentage    = 0;    // po wygladzeniu - to trafia do aplikacji
@@ -1370,6 +1385,9 @@ bool pushStatus() {
   /* Ciche straty przestaja byc ciche. Aplikacja krzyczy, gdy > 0.      */
   doc["dropped"]  = rtcQueueDropped;
   doc["nvsFail"]  = rtcNvsFail;
+  /* Wolne miejsce w pamieci trwalej. rtcNvsFail mowi, ze juz jest zle;
+     to pole pozwala aplikacji ostrzec, ZANIM bedzie.                   */
+  doc["nvsFree"]  = nvsWolneWpisy();
   doc["charging"] = rtcCharging;            // zywy podglad ladowania w aplikacji
   /* Na tych dwoch polach aplikacja opiera szacunek "ile jeszcze". Sam
      procent podczas ladowania nic nie mowi - napiecie pokazuje wtedy
@@ -1510,9 +1528,19 @@ bool flushQueue() {
       return false;
     }
     int code = pushEventRecord(rec);
-    if (code == 200) { queuePop(); continue; }
+    /* Kazdy wyslany wpis to dowod, ze siec dziala - wiec backoff wraca do
+       zera. TU BYL BLAD (B19): rtcRetryCount zerowal sie WYLACZNIE w
+       reportEvent(), czyli tylko przy otwarciu pudelka. Po kilku dniach bez
+       internetu licznik stal na maksimum, a wtedy przerwa miedzy probami to
+       cztery godziny. Gdy zaleglosci nie miescily sie w jednym czuwaniu
+       (limit AWAKE_LIMIT_MS), reszta czekala kolejne cztery godziny mimo
+       sprawnej sieci - i tak w kolko. Powrot do domu nie przyspieszal
+       niczego, bo zadne z tych wybudzen nie przechodzilo przez
+       reportEvent().                                                     */
+    if (code == 200) { rtcRetryCount = 0; queuePop(); continue; }
     if (trwaleOdrzucony(code)) {
       LOG("[QUE] odrzucony na stale (HTTP %d) - zdejmuje: %s\n", code, rec.c_str());
+      rtcRetryCount = 0;          // baza ODPOWIEDZIALA - siec dziala, tylko wpis byl zly
       queueDrop();
       continue;
     }

@@ -23,7 +23,7 @@ bash tests/run_all.sh
 ```
 
 Musi przejść przed zmianą i po zmianie. Stan wyjściowy:
-**339 + 51 firmware, 545 (×6 pór doby) + 86 + 49 aplikacja, 48 zgodności,
+**345 + 51 firmware, 570 (×6 pór doby) + 86 + 49 aplikacja, 48 zgodności,
 58 reguł bazy, 211 kontroli audytu — 0 błędów.**
 
 Testy pracują na **prawdziwym kodzie**, nie na kopii: `tests/extract.py` wycina

@@ -259,6 +259,40 @@ CHECK(!flushQueue(), "awaria serwera melduje niepowodzenie");
 CHECK(queueCount()==3, "przy awarii nie tracimy nic (%u)", queueCount());
 CHECK(rtcQueueDropped==0, "licznik strat nietkniety: %u", rtcQueueDropped);
 
+/* --- B19: backoff musi wracac do zera, gdy siec sie odezwie ------------
+   rtcRetryCount rosnie przy kazdej nieudanej wysylce i steruje przerwa
+   miedzy probami: 15 min, 30, 60, 120, 240 - i tyle juz zostaje.
+
+   TU BYL BLAD. Zerowanie stalo WYLACZNIE w reportEvent(), czyli tylko na
+   sciezce "otwarto pudelko". Po kilku dniach bez internetu licznik stal
+   na maksimum, a wybudzenia rutynowe (fetchConfig(); flushQueue();
+   pushStatus();) nie ruszaly go wcale. Powrot do domu niczego wiec nie
+   przyspieszal: jesli zaleglosci nie zmiescily sie w jednym czuwaniu,
+   reszta czekala kolejne CZTERY GODZINY mimo sprawnej sieci.          */
+prefs.wipe(); FAKE_SENT.clear(); FAKE_HTTP = 200;
+queuePush(makeRecordAt("open", 0, 1750000000u));
+rtcRetryCount = 4;                                  // stan po dobie bez sieci
+CHECK(flushQueue(), "wysylka po powrocie sieci przechodzi");
+CHECK(rtcRetryCount == 0, "udana wysylka kasuje backoff (%u)", rtcRetryCount);
+
+prefs.wipe(); FAKE_SENT.clear(); FAKE_HTTP = 500;
+queuePush(makeRecordAt("open", 0, 1750000000u));
+rtcRetryCount = 4;
+CHECK(!flushQueue(), "awaria serwera nadal melduje niepowodzenie");
+CHECK(rtcRetryCount == 4,
+      "awaria NIE kasuje backoffu - inaczej pudelko dobijaloby sie co 15 min "
+      "do martwej bazy i zjadlo baterie (%u)", rtcRetryCount);
+
+/* Odmowa na stale to co innego: baza ODPOWIEDZIALA, wiec siec dziala.
+   Reszta kolejki ma prawo pojsc od razu, a nie za cztery godziny.     */
+prefs.wipe(); FAKE_SENT.clear(); FAKE_HTTP = 400; rtcQueueDropped = 0;
+queuePush(makeRecordAt("open", 0, 1750000000u));
+rtcRetryCount = 4;
+CHECK(flushQueue(), "odrzucenie nie jest awaria sieci");
+CHECK(rtcRetryCount == 0, "odpowiedz bazy tez jest dowodem na dzialajaca siec (%u)",
+      rtcRetryCount);
+FAKE_HTTP = 200; rtcQueueDropped = 0; rtcRetryCount = 0;
+
 /* Rekord uszkodzony tez nigdy nie przejdzie - nie moze blokowac. */
 CHECK(rekordKompletny(makeRecordAt("open", 0, 1750000000u)), "pelny rekord przechodzi");
 CHECK(!rekordKompletny(String("cos;bez;pieciu;pol")), "brak piatego pola wykryty");

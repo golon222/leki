@@ -926,7 +926,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-08.4";
+const APP_VERSION = "2026-08-10.1";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -2773,11 +2773,27 @@ function ostrzMilczy(){
      </div>`;
 }
 
+/* Pamięć trwała pudełka to jedna partycja 20 kB na WSZYSTKO: kolejkę
+   zdarzeń, dziennik wieczka, czarną skrzynkę i token logowania. Gdy się
+   zapełni, `putString()` zwraca zero i każdy z tych mechanizmów zaczyna
+   gubić wpisy po cichu — nie ma wyjątku, nie ma komunikatu, nie ma śladu.
+   `nvsFail` mówi, że to już się dzieje. To pole mówi, że zaraz zacznie.
+
+   Próg 40 wpisów: partycja mieści ich około 640, a jedno wybudzenie z
+   otwarciem pudełka zużywa ich kilka. Czterdzieści to więc dzień, może
+   dwa zapasu — dość, żeby zdążyć zareagować, za mało, żeby zwlekać.    */
+const NVS_MALO = 40;
+
+function nvsMalo(st){
+  return typeof st?.nvsFree === "number" && st.nvsFree >= 0 && st.nvsFree < NVS_MALO;
+}
+
 function ostrzStraty(){
   const st = ostatniStatus || {};
   const dropped = st.dropped || 0, nvs = st.nvsFail || 0;
-  if (!dropped && !nvs) return "";
+  if (!dropped && !nvs && !nvsMalo(st)) return "";
   const czesci = [];
+  if (nvsMalo(st)) czesci.push(`pamięć trwała jest prawie pełna (${st.nvsFree} wolnych wpisów)`);
   if (dropped) czesci.push(`<b>${dropped}</b> ${dropped === 1 ? "zdarzenie zostało odrzucone"
                                                              : "zdarzeń zostało odrzuconych"} przez bazę`);
   if (nvs)     czesci.push(`<b>${nvs}</b> ${nvs === 1 ? "zapis do pamięci pudełka się nie udał"
@@ -2791,10 +2807,51 @@ function ostrzStraty(){
      </div>`;
 }
 
+/* ═══════════════ KOLEJKA, KTÓRA NIE SCHODZI ═══════════════
+
+   POWSTAŁO Z KONKRETNEGO ZDARZENIA (B20). Kuba wrócił z wyjazdu, pudełko
+   złapało WiFi w domu, zameldowało się — i jedyne, co się zmieniło, to
+   napis „10 zdarzeń czeka w pamięci pudełka". Dawki z czterech dni nie
+   dojechały ani wtedy, ani przy kolejnych połączeniach.
+
+   Skąd wiemy, że to awaria, a nie zwykłe czekanie na sieć: pudełko
+   wysyła status DOPIERO po próbie opróżnienia kolejki (flushQueue();
+   pushStatus();). Świeży status z niezerowym `queued` to więc zapis
+   z chwili, w której pudełko MIAŁO połączenie i mimo to nic nie wysłało.
+
+   Dotychczas aplikacja pisała o tym tym samym spokojnym, żółtym zdaniem
+   co o chwilowym braku zasięgu — czyli dokładnie odwrotnie, niż było.
+
+   Próg 6 h jest z premedytacją większy niż maksymalny backoff pudełka
+   (RETRY_MAX_S = 4 h): przy zaległościach pudełko ponawia najrzadziej co
+   cztery godziny, więc jeśli od ostatniego meldunku minęło mniej niż
+   sześć, a kolejka nadal stoi, to nie jest kwestia czekania.            */
+const ZATKANA_SWIEZOSC_H = 6;
+
+function ostrzZatkana(){
+  const st = ostatniStatus;
+  if (!st || typeof st.lastSeen !== "number" || !st.lastSeen) return "";
+  const q = +st.queued || 0;
+  if (!q) return "";
+  const sekund = Math.round(Date.now() / 1000 - st.lastSeen);
+  if (sekund >= ZATKANA_SWIEZOSC_H * 3600) return "";   // to mówi już ostrzMilczy()
+
+  return `<div style="margin-bottom:10px;padding:10px;border-radius:12px;
+       border:1px solid var(--bad);background:rgba(248,113,113,.10)">
+       <b style="color:var(--bad)">Zaległości nie schodzą z pudełka</b><br>
+       <span class="dim2">Pudełko łączyło się z bazą ${relTime(sekund)} i mimo to
+       <b>${q}</b> ${lm(q, "zdarzenie", "zdarzenia", "zdarzeń")} nadal czeka w jego
+       pamięci. To nie jest brak zasięgu — połączenie było. Dawki z tego okresu
+       <b>wpisz w kalendarzu ręcznie</b>, bo mogą już nie dać się odzyskać,
+       a potem wgraj najnowszy firmware: starsze wersje potrafiły zatrzymać
+       całą kolejkę na jednym wpisie i nie zgłaszały tego niczym.</span>
+     </div>`;
+}
+
 function renderOstrzezenia(){
   const el = document.getElementById("setWarn");
   if (!el) return;
-  el.innerHTML = ostrzMilczy() + ostrzKolejka() + ostrzReguly() + ostrzStraty();
+  el.innerHTML = ostrzMilczy() + ostrzZatkana() + ostrzKolejka() + ostrzReguly() + ostrzStraty();
   el.classList.toggle("hide", !el.innerHTML.trim());
 }
 
@@ -3009,8 +3066,23 @@ function renderStatus(st){
         hour:"2-digit",minute:"2-digit"}) : "nigdy";
   document.getElementById("lastSyncRel").textContent = ls ? relTime(ago) : "";
 
+  /* Starszy firmware nie przysyła nvsFree w ogóle — wtedy nie piszemy nic,
+     zamiast pokazywać „0 wolnych" i straszyć czymś, czego nie zmierzono. */
+  const pamiecTxt = s => typeof s.nvsFree !== "number" || s.nvsFree < 0 ? ""
+    : ` · wolnej pamięci: ${s.nvsFree}` +
+      (s.nvsFree < NVS_MALO ? ` <span style="color:var(--bad)">(mało)</span>` : "");
+
   const q = num(st.queued), qi = document.getElementById("queueInfo");
-  qi.innerHTML = q ? `<span style="color:var(--warn)">⏳ ${q} zdarzeń czeka w pamięci pudełka.</span>` : "";
+  /* Ta sama liczba znaczy dwie różne rzeczy zależnie od tego, kiedy pudełko
+     ostatnio było w bazie — patrz ostrzZatkana(). Świeży meldunek z niepustą
+     kolejką to awaria, nie czekanie na zasięg, i tak ma być napisane.     */
+  const zatkana = ls && (ago < ZATKANA_SWIEZOSC_H * 3600);
+  qi.innerHTML = !q ? ""
+    : zatkana
+      ? `<span style="color:var(--bad)">⚠️ ${q} ${lm(q,"zdarzenie","zdarzenia","zdarzeń")}
+         nie zeszło z pudełka mimo połączenia z bazą ${relTime(ago)}.</span>`
+      : `<span style="color:var(--warn)">⏳ ${q} ${lm(q,"zdarzenie","zdarzenia","zdarzeń")}
+         czeka w pamięci pudełka na połączenie.</span>`;
 
   /* battRaw = odczyt prosto z krzywej, przed wygładzeniem. Gdy różni się
      mocno od wskazania, znaczy że filtr właśnie nadrabia spadek.        */
@@ -3018,7 +3090,7 @@ function renderStatus(st){
     ? `<br>Pomiar surowy: ${st.battRaw}% (wskazanie wygładzone)` : "";
   document.getElementById("devInfo").innerHTML =
     `ID: <b>${DEVICE_ID}</b><br>Firmware: ${st.fw||"?"}<br>WiFi: ${esc(st.ssid)||"?"} (${st.rssi||"?"} dBm)<br>` +
-    `Wybudzeń: ${st.boots||0} · w kolejce: ${q}${rawTxt}` + opisLadowan(st);
+    `Wybudzeń: ${st.boots||0} · w kolejce: ${q}${pamiecTxt(st)}${rawTxt}` + opisLadowan(st);
 }
 
 /* ═══════════════ ZAPAS TABLETEK ═══════════════ */

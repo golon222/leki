@@ -1348,6 +1348,100 @@ head("Aplikacja mowi, gdy pudelko przestalo sie odzywac");
         "trafia do bloku ostrzezen w Ustawieniach, a nie do Diagnostyki");
 }
 
+/* ── Zaleglosci, ktore nie schodza z pudelka (B20) ──
+   Kuba wrocil z wyjazdu, pudelko zlapalo WiFi w domu, zameldowalo sie -
+   i jedyne, co sie zmienilo, to napis "10 zdarzen czeka w pamieci
+   pudelka". Dawki z czterech dni nie dojechaly ani wtedy, ani przy
+   kolejnych polaczeniach, a aplikacja pisala o tym tym samym spokojnym
+   zdaniem co o chwilowym braku zasiegu.
+
+   Dowod, ze to awaria: pudelko wysyla status DOPIERO po probie
+   oproznienia kolejki (flushQueue(); pushStatus();). Swiezy status
+   z niezerowym `queued` jest wiec zapisem z chwili, w ktorej pudelko
+   MIALO polaczenie i mimo to nic nie wyslalo.                         */
+head("Aplikacja odroznia brak zasiegu od zatkanej kolejki");
+{
+  const godz = h => Math.floor(Date.now()/1000 - h*3600);
+  const przy = (h, extra = {}) => {
+    A.renderStatus({ lastSeen: godz(h), ...extra });
+    return A.ostrzZatkana();
+  };
+
+  check(A.ZATKANA_SWIEZOSC_H > 4,
+        `prog swiezosci (${A.ZATKANA_SWIEZOSC_H} h) wiekszy niz maksymalny ` +
+        `backoff pudelka (4 h) - inaczej krzyczelibysmy na pudelko, ktore ` +
+        `po prostu jeszcze nie sprobowalo`);
+  check(A.ZATKANA_SWIEZOSC_H < A.MILCZY_PROG_H,
+        "i mniejszy niz prog milczenia - te dwa ostrzezenia nie moga sie nakladac");
+
+  A.renderStatus(null);
+  check(A.ostrzZatkana() === "", "brak statusu nie straszy");
+  check(przy(1) === "", "swiezy kontakt z pusta kolejka - cisza");
+  check(przy(1, { queued: 0 }) === "", "queued = 0 to nie jest problem");
+  check(przy(48, { queued: 10 }) === "",
+        "stary kontakt zostawiamy ostrzMilczy() - jedno zdarzenie, jeden komunikat");
+  A.renderStatus({ lastSeen: 0, queued: 10 });
+  check(A.ostrzZatkana() === "", "lastSeen = 0 to brak danych, nie rok 1970");
+
+  /* Scenariusz Kuby, co do liczby. */
+  const zatkana = przy(5, { queued: 10 });
+  check(zatkana !== "", "swiezy kontakt + niepusta kolejka = ostrzezenie");
+  check(/10<\/b> zdarzeń/.test(zatkana), "podaje liczbe i odmienia ja po polsku");
+  check(/nie jest brak zasięgu/.test(zatkana),
+        "mowi WPROST, ze to nie jest brak sieci - inaczej powtarzalibysmy klamstwo");
+  check(/ręcznie/.test(zatkana), "podaje wyjscie: wpisz dawki recznie");
+  check(/firmware/.test(zatkana), "i druga polowe wyjscia: wgraj nowszy firmware");
+
+  /* Oba ostrzezenia naraz byloby sprzeczne: "milczy od 2 dni" i
+     "laczylo sie 5 godzin temu" nie moga byc prawda jednoczesnie.   */
+  A.renderStatus({ lastSeen: godz(5), queued: 10 });
+  check(A.ostrzMilczy() === "" && A.ostrzZatkana() !== "",
+        "swiezy kontakt: mowi zatkana, milczy nie");
+  A.renderStatus({ lastSeen: godz(60), queued: 10 });
+  check(A.ostrzMilczy() !== "" && A.ostrzZatkana() === "",
+        "dawny kontakt: mowi milczy, zatkana nie");
+
+  /* Na wierzchu, nie w Diagnostyce - to samo kryterium co D11. */
+  A.renderStatus({ lastSeen: godz(3), queued: 7 });
+  A.renderOstrzezenia();
+  check(/nie schodzą z pudełka/.test(document.getElementById("setWarn").innerHTML),
+        "trafia do bloku ostrzezen w Ustawieniach");
+}
+
+/* ── Wolne miejsce w pamieci trwalej ──
+   Cala pamiec pudelka to jedna partycja 20 kB na kolejke, dziennik
+   wieczka, czarna skrzynke i token. Gdy sie zapelni, kazdy z tych
+   mechanizmow zaczyna gubic wpisy po cichu. nvsFail mowi, ze to juz
+   sie dzieje; nvsFree mowi, ze zaraz zacznie.                        */
+head("Pudelko melduje, ile zostalo mu pamieci");
+{
+  check(A.NVS_MALO > 0 && A.NVS_MALO < 200, `prog "malo" jest sensowny (${A.NVS_MALO})`);
+  check(A.nvsMalo({ nvsFree: 5 }) === true,  "5 wolnych wpisow to malo");
+  check(A.nvsMalo({ nvsFree: 500 }) === false, "500 to duzo");
+  /* Starszy firmware nie przysyla tego pola w ogole. Brak pomiaru NIE
+     jest pomiarem rownym zeru - inaczej kazde stare pudelko krzyczaloby
+     o pelnej pamieci, ktorej nikt nie zmierzyl.                        */
+  check(A.nvsMalo({}) === false, "brak pola = brak pomiaru, nie alarm");
+  check(A.nvsMalo({ nvsFree: -1 }) === false, "-1 znaczy 'nie dalo sie odczytac'");
+
+  A.renderStatus({ battery: 80, nvsFree: 3 });
+  const s = A.ostrzStraty();
+  check(/prawie pełna/.test(s), "prawie pelna pamiec trafia do ostrzezen o utracie danych");
+  check(/3 wolnych/.test(s), "z konkretna liczba, nie samym przymiotnikiem");
+  A.renderStatus({ battery: 80, nvsFree: 600 });
+  check(A.ostrzStraty() === "", "duzo miejsca - cisza");
+
+  /* Diagnostyka pokazuje liczbe zawsze, gdy pudelko ja przysyla. */
+  A.renderStatus({ battery: 80, lastSeen: Math.floor(Date.now()/1000), nvsFree: 512 });
+  A.renderDiag();
+  const info = document.getElementById("devInfo").innerHTML;
+  check(/wolnej pamięci: 512/.test(info), "liczba widoczna w Diagnostyce");
+  A.renderStatus({ battery: 80, lastSeen: Math.floor(Date.now()/1000) });
+  A.renderDiag();
+  check(!/wolnej pamięci/.test(document.getElementById("devInfo").innerHTML),
+        "starszy firmware bez tego pola nie dostaje pustego wiersza");
+}
+
 head("Kolejka zapisow w telefonie");
 check(/async function zapiszPewnie\(/.test(html), "istnieje zapis z gwarancja");
 check(!/await set\(ref\(db/.test(html) && !/await update\(ref\(db, `devices/.test(html),
