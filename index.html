@@ -342,33 +342,28 @@ button:focus-visible,.day:focus-visible{outline:2px solid var(--acc);outline-off
 
 /* ---------- nawigacja ---------- */
 nav{position:fixed;bottom:0;left:0;right:0;display:flex;z-index:30;
-    background:rgba(15,24,41,.92);-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);border-top:1px solid var(--line);
+    background:var(--bg2);border-top:1px solid var(--line);
     padding-bottom:env(safe-area-inset-bottom);
-    /* Wlasna warstwa kompozycji. Element position:fixed z rozmyciem tla
-       potrafi na iOS zostawac w tyle za przewijaniem - wtedy pasek
-       "rozjezdza sie" wzgledem tresci. Wymuszenie warstwy to naprawia.
+    /* D48: probowalismy translateZ(0) + backface-visibility:hidden (wlasna
+       warstwa kompozycji) przy zachowanym backdrop-filter. Kuba zglosil, ze
+       pasek nadal sie "rozjezdza" przy scrollowaniu w dol tak samo jak
+       wczesniej - hipoteza z D48 byla wiec zla albo niewystarczajaca.
 
-       D48 (zgloszenie Kuby): samo translateZ(0) nie wystarczylo, gdy
-       Ustawienia urosly na tyle, zeby naprawde trzeba je bylo przewijac.
-       Objaw byl konkretny: pasek zamrazal sie w zlym miejscu przy
-       scrollowaniu W DOL i wracal na miejsce dopiero po porzadnym
-       scrollu W GORE - to nie przypadkowe "czasem miga", tylko WebKit
-       zwlekajacy z przemalowaniem tej samej warstwy kompozycji, dopoki
-       nie zbierze dosc nowych klatek przewijania.
+       D49: zamiast kolejnej laty na to samo miejsce, usuniety zostal
+       backdrop-filter w calosci - to on jest najkosztowniejsza czescia tej
+       kompozycji (na iOS liczy sie na kazdej klatce przewijania od nowa,
+       bo musi znac aktualna tresc POD paskiem). Tlo zrobione nieprzezroczyste
+       (var(--bg2), bez alpha) zamiast polprzezroczystego+rozmytego - wyglada
+       niemal identycznie w tym ciemnym motywie, bo pod paskiem i tak zawsze
+       jest ciemne tlo aplikacji, ale nie wymaga juz zadnego rozmycia na
+       biezaco. translateZ(0) zostaje jako tania, standardowa podpowiedz
+       kompozycji.
 
-       backface-visibility:hidden to standardowy towarzysz translateZ(0)
-       w tej rodzinie usterek - wymusza traktowanie elementu jako WLASNEJ,
-       stabilnej warstwy zamiast dzielonej z tym, co pod spodem. Prefiks
-       -webkit- obok bezprefiksowego, bo starsze Safari go wymaga - tak
-       samo jak przy backdrop-filter kilka linii wyzej w tym samym pliku.
-
-       NIE ZWERYFIKOWANE NA PRAWDZIWYM IPHONE - to wciaz hipoteza, tyle
-       ze uzasadniona konkretnym opisem objawu, a nie zgadywaniem piatym
-       z rzedu. Jesli po tej zmianie dalej sie rozjezdza, kolejny krok to
-       zdjecie backdrop-filter z paska, bo to on jest najkosztowniejsza
-       czescia tej kompozycji.                                          */
+       NIE ZWERYFIKOWANE NA PRAWDZIWYM IPHONE - kolejna hipoteza, ale tym
+       razem eliminujaca caly podejrzany mechanizm zamiast go tylko obchodzic.
+       Jesli TO tez nie pomoze, podejrzenie przenosi sie na cos innego niz
+       kompozycja paska - patrz D49 w DECYZJE.md.                        */
     transform:translateZ(0);-webkit-transform:translateZ(0);
-    backface-visibility:hidden;-webkit-backface-visibility:hidden;
     will-change:transform}
 nav button{flex:1;background:none;border-radius:0;padding:9px 0 8px;font-size:10.5px;color:var(--dim2);
            display:flex;flex-direction:column;align-items:center;gap:3px;font-weight:600}
@@ -1183,7 +1178,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-11.13";
+const APP_VERSION = "2026-08-11.14";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
