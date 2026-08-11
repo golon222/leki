@@ -82,6 +82,25 @@ missing = sorted(set(re.findall(r'getElementById\("([\w-]+)"\)', js))
 if missing: bad += 1; print('  BLAD id bez odpowiednika w HTML:', missing)
 else: print('  OK   wszystkie getElementById maja swoj element')
 
+# Kazda sekcja ekranu musi miec sparowane znaczniki. Ekranow jest teraz
+# kilkanascie i powstaja przez przenoszenie blokow miedzy nimi - jeden
+# zgubiony </div> rozjezdza uklad dopiero na telefonie i niczego nie wywala.
+import re as _re
+_body = html[html.index('<div id="app"'):html.index('<script type="module">')]
+_zle = []
+for _m in _re.finditer(r'<section id="(tab-[\w-]+)"', _body):
+    _a = _m.start(); _b = _body.index('</section>', _a)
+    _sec = _body[_a:_b]
+    for _t in ('div', 'details', 'button', 'span'):
+        _o = len(_re.findall(rf'<{_t}[\s>]', _sec))
+        _c = len(_re.findall(rf'</{_t}>', _sec))
+        if _o != _c:
+            _zle.append(f'{_m.group(1)}: <{_t}> {_o}/{_c}')
+if _zle:
+    bad += 1; print('  BLAD niesparowane znaczniki w sekcjach: ' + '; '.join(_zle))
+else:
+    print('  OK   kazda sekcja ekranu ma sparowane znaczniki')
+
 handlers = set(re.findall(r'on(?:click|change)="(\w+)\(', html)) - {'if'}
 orphan = [h for h in handlers if f'window.{h}' not in js]
 if orphan: bad += 1; print('  BLAD handlery bez definicji:', orphan)

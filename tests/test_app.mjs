@@ -618,31 +618,57 @@ head("Diagnostyka na osobnym ekranie");
     check(naglowek(diag, karta) && !naglowek(ust, karta),
           `„${karta}" jest w Diagnostyce, nie w Ustawieniach`);
   }
-  /* Ustawienia maja zostac z rzeczami, ktore COS USTAWIAJA. */
-  check(naglowek(ust, "Lek i dawkowanie"), `„Lek i dawkowanie" zostaje w Ustawieniach`);
+  /* USTAWIENIA TO SPIS TRESCI (D43): kazda pozycja to kafelek, ktory tylko
+     przenosi na swoj ekran. Wczesniej byly to sekcje rozwijane w miejscu -
+     zeby dojsc do szostej rzeczy, trzeba bylo przewinac piec rozwinietych. */
+  const kafelki = [...ust.matchAll(/showTab\('(\w+)'\)/g)].map(m => m[1]);
+  for (const cel of ["lek", "sinr", "wifi", "dev", "diag"])
+    check(kafelki.includes(cel), `Ustawienia maja kafelek prowadzacy na "${cel}"`);
+  check(!ust.includes('<details class="card sek">'),
+        "i zadnej sekcji rozwijanej w samych Ustawieniach");
 
-  /* Obie opcje INR zostaja w USTAWIENIACH, ale pod jednym naglowkiem "INR",
-     a nie jako dwie osobne karty (prosba Kuby). Ekran INR ma pokazywac
-     WYNIKI, nie formularze do ich konfigurowania.                        */
-  check(naglowek(ust, "INR"), "opcje INR stoja w Ustawieniach pod naglowkiem „INR”");
-  const inrTab = wytnij("tab-inr");
-  check(!inrTab.includes('id="inrMin"') && !inrTab.includes('id="inrEvery"'),
-        "a ekran INR nie ma ich u siebie");
-  /* Jedna sekcja, nie dwie - to jedno zagadnienie. */
-  for (const stara of ["Zakres terapeutyczny INR", "Jak często mierzysz INR"])
-    check(!naglowek(ust, stara), `„${stara}" nie jest juz osobna karta`);
-  check(ust.includes('id="inrMin"') && ust.includes('id="inrEvery"'),
-        "obie opcje siedza w tej samej sekcji");
+  /* Kazdy kafelek musi prowadzic na ekran, ktory ISTNIEJE. Literowka w celu
+     dawalaby pusty ekran bez slowa wyjasnienia - i to dopiero na telefonie. */
+  for (const cel of new Set(kafelki))
+    check(html.includes(`<section id="tab-${cel}"`),
+          `ekran "${cel}" naprawde istnieje`);
 
-  /* Sekcje Ustawien sa ZWIJANE - ekran, na ktory wchodzi sie po jedna
-     rzecz, nie moze wymagac przewijania przez wszystkie pozostale.      */
-  const sekcje = (ust.match(/<details class="card sek">/g) || []).length;
-  check(sekcje >= 5, `Ustawienia zlozone ze zwijanych sekcji (${sekcje})`);
-  check(!/<details class="card sek"[^>]*\bopen\b/.test(ust),
-        "i zadna nie jest rozwinieta na starcie");
-  /* Wyjatki dawkowania maja WLASNA sekcje - w karcie dawkowania rosly
-     w sciane dat z kazdym miesiacem.                                    */
-  check(ust.includes('id="exTytul"'), "wyjatki maja wlasna, zwijana sekcje");
+  /* Tresc przeniosla sie na podekrany, a nie zniknela. */
+  check(wytnij("tab-lek").includes('id="defDose"'), "dawkowanie ma swoj ekran");
+  check(wytnij("tab-sinr").includes('id="inrMin"') &&
+        wytnij("tab-sinr").includes('id="inrEvery"'),
+        "obie opcje INR siedza razem na ekranie INR");
+  check(wytnij("tab-wifi").includes('id="netSsid"'), "siec WiFi ma swoj ekran");
+  check(wytnij("tab-dev").includes('id="appVersion"'), "urzadzenie ma swoj ekran");
+
+  /* Wyjatki zostaja lista ROZWIJALNA, ale przy dawkowaniu - tam, gdzie
+     dotycza (prosba Kuby). */
+  check(wytnij("tab-lek").includes('id="exTytul"'),
+        "wyjatki sa zwijana lista wewnatrz dawkowania");
+  check(!ust.includes('id="exTytul"'), "a nie osobna pozycja w Ustawieniach");
+
+  /* Raport zostaje w Ustawieniach i NA SAMYM DOLE - siega sie po niego
+     rzadko i zwykle swiadomie. */
+  check(naglowek(ust, "Raport dla lekarza"), "raport zostaje w Ustawieniach");
+  check(ust.indexOf("Raport dla lekarza") > ust.lastIndexOf('class="kafel"'),
+        "i stoi pod wszystkimi kafelkami");
+
+  /* Podekrany musza miec jak wrocic - inaczej jedynym wyjsciem jest dolny
+     pasek, ktory zabiera na sam poczatek. */
+  check(html.includes('id="backBtn"'), "jest wspolny przycisk powrotu");
+  for (const [id, def] of Object.entries(A.EKRANY))
+    if (def.wraca)
+      check(!!A.EKRANY[def.wraca], `ekran "${id}" wraca na istniejacy ekran`);
+
+  /* Listy z Diagnostyki maja wlasne ekrany, a w Diagnostyce zostaly same
+     przejscia. */
+  check(wytnij("tab-ev").includes('id="evLista"'), "zdarzenia maja wlasny ekran");
+  check(wytnij("tab-hist").includes('id="boxLog"'), "historia pudelka tez");
+  check(!diag.includes('id="evLista"') && !diag.includes('id="boxLog"'),
+        "a Diagnostyka nie trzyma juz zadnej z tych list u siebie");
+  check(diag.includes("showTab('ev')") && diag.includes("showTab('hist')"),
+        "tylko przyciski, ktore na nie przenosza");
+
   /* NAJWAZNIEJSZE: ostrzezenia nie moga sie schowac razem z kartami.
      Oznaczaja utrate danych, wiec musza byc widoczne bez wchodzenia glebiej. */
   check(ust.includes('id="setWarn"'),
@@ -650,7 +676,15 @@ head("Diagnostyka na osobnym ekranie");
   check(!diag.includes('id="setWarn"'),
         "ostrzezenia NIE przeniosly sie do Diagnostyki");
   check(/showTab\('diag'\)/.test(ust), "z Ustawien da sie wejsc w Diagnostyke");
-  check(/showTab\('set'\)/.test(diag), "z Diagnostyki da sie wrocic");
+  /* Powrot nie jest juz wklejany w kazda sekcje osobno - jest jeden wspolny
+     przycisk, a cel bierze sie z definicji ekranu. Dzieki temu nie da sie
+     dodac podekranu i ZAPOMNIEC o wyjsciu z niego.                       */
+  check(A.EKRANY.diag?.wraca === "set", "z Diagnostyki da sie wrocic do Ustawien");
+  check(A.EKRANY.ev?.wraca === "diag" && A.EKRANY.hist?.wraca === "diag",
+        "a ze zdarzen i historii - do Diagnostyki, skad sie na nie wchodzi");
+  for (const [id, def] of Object.entries(A.EKRANY))
+    check(def.nav === undefined || ["cal","inr","ana","set"].includes(def.nav),
+          `ekran "${id}" podswietla istniejacy przycisk dolnego paska`);
 }
 
 /* Ostrzezenia pokazuja sie tylko wtedy, gdy jest o czym ostrzegac. */
@@ -848,64 +882,108 @@ check(/main,nav,header\{display:none/.test(css), "reszta aplikacji chowana, zeby
 const mf = JSON.parse(readFileSync(new URL("../manifest.json", import.meta.url), "utf8"));
 check(mf.orientation === "portrait", "manifest tez prosi o pion (dziala poza iOS)");
 
-head("Diagnostyka: co przyslalo pudelko");
-const diag = document.getElementById("diagList");
+head("Diagnostyka: podsumowanie zamiast listy");
+/* Diagnostyka pokazuje juz tylko jedno zdanie o pokryciu - cala lista ma
+   wlasny ekran. Sprawdzamy, ze podsumowanie mowi prawde i ze nie zostala
+   po staremu zadna lista wklejona po drodze.                            */
+const podsum = document.getElementById("diagPodsum");
 
 D({ events: [] });
 A.renderDiag();
-check(/nie przysłało jeszcze/.test(diag.innerHTML), "brak zdarzen -> czytelny komunikat");
-check(/reguły\s+bezpieczeństwa/.test(diag.innerHTML),
-      "podpowiada, gdzie szukac, gdy pudelko wysyla, a aplikacja nie widzi");
+check(/nie przysłało jeszcze/.test(podsum.innerHTML), "brak zdarzen -> czytelny komunikat");
 
-/* Zdarzenie jest, wpisu w kalendarzu nie ma - to musi rzucac sie w oczy. */
 D({ events: [ { ts:t0800, type:"open", slot:0 } ], doses:{} });
 A.renderDiag();
-check(/BRAK w kalendarzu/.test(diag.innerHTML),
-      "otwarcie bez wpisu oznaczone jako brakujace");
-check(/2026-07-31/.test(diag.innerHTML), "pokazana doba lekowa zdarzenia");
-check(/08:00/.test(diag.innerHTML), "pokazana prawdziwa godzina otwarcia");
+check(/nie ma pokrycia/.test(podsum.innerHTML.replace(/\s+/g," ")),
+      "niepokryte zdarzenie widac juz w podsumowaniu");
+check(!/doba lekowa/.test(podsum.innerHTML), "ale bez wklejania calej listy");
 
-/* Ten sam przypadek, ale wpis juz jest.
-
-   Zdarzenia Z POKRYCIEM sa domyslnie zwiniete - lista powstala do pytania
-   "dlaczego tej dawki nie ma w kalendarzu", a czterdziesci zielonych
-   ptaszkow na nie nie odpowiada. Rozwijamy ja, zeby sprawdzic sam wiersz. */
 D({ events: [ { ts:t0800, type:"open", slot:0 } ],
     doses:{ "2026-07-31": { 0:{ status:"taken", dose:1, source:"device" } } } });
 A.renderDiag();
-check(/Wszystkie/.test(diag.innerHTML) && !/jest w kalendarzu/.test(diag.innerHTML),
-      "gdy wszystko sie zgadza, lista jest zwinieta do jednego zdania");
-window.diagPrzelacz();
-check(/jest w kalendarzu/.test(diag.innerHTML), "zdarzenie rozliczone oznaczone na zielono");
-window.diagPrzelacz();
-check(!/BRAK w kalendarzu/.test(diag.innerHTML), "i bez ostrzezenia");
+check(/Wszystkie/.test(podsum.innerHTML), "gdy wszystko sie zgadza, mowi to jednym zdaniem");
 
-/* Zdarzenia niedotyczace dawki nie moga straszyc czerwonym "BRAK" ani
-   liczyc sie jako "bez pokrycia" - uruchomienie nie jest dawka.        */
-D({ events: [ { ts:t0800, type:"boot" } ], doses:{} });
-A.renderDiag();
-check(/Wszystkie/.test(diag.innerHTML) && !/BRAK w kalendarzu/.test(diag.innerHTML),
-      "samo uruchomienie nie jest zglaszane jako brak pokrycia");
-window.diagPrzelacz();
-check(/nie dotyczy dawki/.test(diag.innerHTML), "uruchomienie opisane jako nieistotne");
-check(!/BRAK w kalendarzu/.test(diag.innerHTML), "i nie liczone jako zgubiona dawka");
-window.diagPrzelacz();
+head("Ekran zdarzen: lista i filtry");
+const evL = () => document.getElementById("evLista").innerHTML;
+const evP = () => document.getElementById("evPodsum").innerHTML;
 
-/* Sedno porzadkow: gdy cos NIE ma pokrycia, widac to bez klikania. */
-D({ events: [ { ts:t0800, type:"open", slot:0 },
-               { ts:t0800 - 86400, type:"open", slot:0 } ],
+/* Zdarzenie jest, wpisu w kalendarzu nie ma - to musi rzucac sie w oczy. */
+D({ events: [ { ts:t0800, type:"open", slot:0 } ], doses:{} });
+A.renderEvents();
+check(/BRAK w kalendarzu/.test(evL()), "otwarcie bez wpisu oznaczone jako brakujace");
+check(/2026-07-31/.test(evL()), "pokazana doba lekowa zdarzenia");
+check(/08:00/.test(evL()), "pokazana prawdziwa godzina otwarcia");
+
+D({ events: [ { ts:t0800, type:"open", slot:0 } ],
     doses:{ "2026-07-31": { 0:{ status:"taken", dose:1, source:"device" } } } });
-A.renderDiag();
-check(/nie ma\s*\n?\s*pokrycia|nie ma pokrycia/.test(diag.innerHTML.replace(/\s+/g," ")),
-      "niepokryte zdarzenie jest widoczne od razu, bez rozwijania");
-check((diag.innerHTML.match(/doba lekowa/g) || []).length === 1,
-      "i tylko ono - pokryte nie zasmiecaja listy");
+A.renderEvents();
+check(/jest w kalendarzu/.test(evL()), "zdarzenie rozliczone oznaczone na zielono");
+check(!/BRAK w kalendarzu/.test(evL()), "i bez ostrzezenia");
 
-/* Nocne otwarcie ma trafic do doby poprzedniej takze w diagnostyce. */
+/* Zdarzenia niedotyczace dawki nie moga straszyc czerwonym "BRAK". */
+D({ events: [ { ts:t0800, type:"boot" } ], doses:{} });
+A.renderEvents();
+check(/nie dotyczy dawki/.test(evL()), "uruchomienie opisane jako nieistotne");
+check(!/BRAK w kalendarzu/.test(evL()), "i nie liczone jako zgubiona dawka");
+
+/* Nocne otwarcie ma trafic do doby poprzedniej takze tutaj. */
 D({ events: [ { ts:nightTs, type:"open", slot:0 } ], doses:{} });
-A.renderDiag();
-check(/2026-08-01/.test(diag.innerHTML), "otwarcie o 02:00 opisane jako doba z 1 sierpnia");
-check(/02:00/.test(diag.innerHTML), "z zachowaniem prawdziwej godziny");
+A.renderEvents();
+check(/2026-08-01/.test(evL()), "otwarcie o 02:00 opisane jako doba z 1 sierpnia");
+check(/02:00/.test(evL()), "z zachowaniem prawdziwej godziny");
+
+/* --- FILTRY --- */
+{
+  const ter = Math.floor(Date.now()/1000);
+  const zdarzenia = [
+    { ts: ter - 600,          type:"open", slot:0 },   // 10 min temu
+    { ts: ter - 5*3600,       type:"open", slot:0 },   // 5 h temu
+    { ts: ter - 3*86400,      type:"open", slot:0 },   // 3 dni temu
+    { ts: ter - 30*86400,     type:"open", slot:0 },   // 30 dni temu
+  ];
+  const ile = () => (evL().match(/doba lekowa/g) || []).length;
+
+  D({ events: zdarzenia, doses:{} });
+  window.evFiltr("stan","all"); window.evFiltr("czas","all");
+  check(ile() === 4, `bez filtrow widac wszystkie cztery (${ile()})`);
+
+  window.evFiltr("czas","1h");
+  check(ile() === 1, `ostatnia godzina: jedno (${ile()})`);
+  window.evFiltr("czas","1d");
+  check(ile() === 2, `ostatni dzien: dwa (${ile()})`);
+  window.evFiltr("czas","7d");
+  check(ile() === 3, `ostatnie 7 dni: trzy (${ile()})`);
+  window.evFiltr("czas","reszta");
+  check(ile() === 1, `starsze: tylko to sprzed 30 dni (${ile()})`);
+
+  /* Cztery przedzialy czasu musza pokrywac KOMPLET - inaczej zdarzenie
+     wpadloby miedzy filtry i nie dalo sie go znalezc zadnym.            */
+  const suma = ["1h","1d","7d"].map(f => { window.evFiltr("czas",f); return ile(); });
+  window.evFiltr("czas","reszta");
+  check(suma[2] + ile() === 4, "ostatnie 7 dni + starsze razem daja komplet");
+
+  /* Filtr pokrycia dziala niezaleznie od czasu. */
+  D({ events: zdarzenia,
+      doses:{ [A.devKey(ter - 600)]: { 0:{ status:"taken", dose:1, source:"device" } } } });
+  window.evFiltr("czas","all"); window.evFiltr("stan","brak");
+  const bezPokr = ile();
+  window.evFiltr("stan","ok");
+  const zPokr = ile();
+  /* Nie sprawdzamy konkretnych liczb: dwa najswiezsze zdarzenia moga wypasc
+     w tej samej dobie lekowej i wtedy pokrycie ma nie jedno, tylko dwa.
+     Sedno jest inne - filtr ma DZIELIC liste i nic przy tym nie gubic.  */
+  check(bezPokr + zPokr === 4 && zPokr >= 1 && bezPokr >= 1,
+        `filtr pokrycia dzieli liste bez gubienia (bez: ${bezPokr}, z: ${zPokr})`);
+  check(/Pasuje/.test(evP()), "podsumowanie mowi, ile pasuje");
+
+  /* Zdarzenie bez znacznika czasu nie moze udawac swiezego ani starego. */
+  D({ events: [ { type:"open", slot:0 } ], doses:{} });
+  window.evFiltr("stan","all"); window.evFiltr("czas","1h");
+  check(ile() === 0, "zdarzenie bez czasu nie wpada do przedzialu czasowego");
+  window.evFiltr("czas","all");
+  check(ile() === 1, "ale widac je w „wszystkie”");
+  window.evFiltr("stan","all");
+}
 
 head("Bledy odczytu z bazy sa widoczne");
 check(html.includes("const onErr = where =>"), "kazdy nasluch ma obsluge bledu");

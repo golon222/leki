@@ -32,6 +32,8 @@ export { brakujePokrycia, doReconcile, reconcileDecyzja, opisLadowan, minutyDoPe
          dayDose, dayStatus, devKey, devHM, devDate, inrState,
          dawkaNaDzien, tydzienDawek, dzienBezLeku, wyjatekNaDzien, opisDawkowania,
          dniZapasu, ZAPAS_HORYZONT, renderNetStan,
+         EKRANY, renderEvents, renderKafelki, bezPokrycia, evPasuje,
+         EV_STANY, EV_CZASY, EV_LIMIT,
          inrOdstep, inrTerminKey, inrDoTerminu, dniTxt, renderOstrzezenia, ostrzStraty,
          collectRows, inrChart, nf, esc, renderCalendar, renderToday,
          renderInr, renderPills, renderSheet, settlePills, relTime, slotMin,

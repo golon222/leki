@@ -354,6 +354,34 @@ nav button svg{width:21px;height:21px}
 nav button.act{color:var(--acc)}
 .hide{display:none!important}
 
+/* ---------- powrot z podekranu ---------- */
+#backBtn{background:transparent;border:0;color:var(--acc);font-size:14px;font-weight:600;
+         padding:2px 0 10px;margin:0}
+#backBtn:active{opacity:.6}
+
+/* ---------- kafelki nawigacyjne ----------
+   Ustawienia to spis tresci, a nie sciana formularzy: kazda pozycja tylko
+   przenosi na swoj ekran. Wczesniej byly to sekcje rozwijane w miejscu -
+   dzialalo, ale zeby dojsc do szostej rzeczy, trzeba bylo przewinac piec
+   rozwinietych. Kafelek robi to samo jednym dotknieciem i zawsze tak samo. */
+.kafel{display:flex;align-items:center;gap:12px;width:100%;text-align:left;
+       padding:15px 16px;margin-top:10px;background:var(--card);border:1px solid var(--line);
+       border-radius:16px;color:var(--txt);font-size:15px;font-weight:600}
+.kafel:active{background:var(--card2)}
+.kafel .kop{flex:1;min-width:0}
+.kafel .kop .dim2{font-weight:400;margin-top:2px}
+/* Strzalka w prawo - ten sam ksztalt co w sekcjach zwijanych, tylko bez obrotu:
+   tam znaczyla "rozwinie sie tutaj", tu znaczy "przeniesie Cie dalej". */
+.kafel::after{content:"";width:8px;height:8px;flex:none;
+              border-right:2px solid var(--dim2);border-bottom:2px solid var(--dim2);
+              transform:rotate(-45deg)}
+
+/* ---------- filtry ---------- */
+.filtry{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.filtr{padding:7px 12px;border-radius:999px;font-size:12.5px;font-weight:600;
+       background:var(--card2);border:1px solid var(--line);color:var(--dim)}
+.filtr.act{background:rgba(94,234,212,.15);border-color:var(--acc);color:var(--acc)}
+
 /* ---------- sekcje zwijane ----------
    Ustawienia to ekran, na ktory wchodzi sie po JEDNA rzecz. Wszystko naraz
    rozwiniete znaczylo przewijanie przez piec kart, zeby dojsc do szostej -
@@ -422,6 +450,10 @@ nav button.act{color:var(--acc)}
 
 <!-- ═══════════════ APLIKACJA ═══════════════ -->
 <div id="app" class="hide">
+<!-- Przycisk powrotu stoi POZA nagłówkiem, nad treścią: w nagłówku musiałby
+     się mieścić obok tytułu, baterii i odświeżania, a na wąskim ekranie to
+     albo ścisk, albo znikający tytuł. -->
+<button id="backBtn" class="hide" onclick="wrocZEkranu()">← Ustawienia</button>
 <header>
   <div class="ttl">
     <h1 id="hTitle">Kalendarz</h1>
@@ -658,9 +690,60 @@ nav button.act{color:var(--acc)}
 <!-- ─────────── USTAWIENIA ─────────── -->
 <section id="tab-set" class="hide">
 
-  <details class="card sek">
-    <summary><h3>Lek i dawkowanie</h3></summary>
-    <div class="sekcia">
+  <!-- Ostrzezenia NA SAMEJ GORZE i poza kafelkami. Oznaczaja utrate danych,
+       a ostrzezenie, do ktorego trzeba wejsc, przestaje byc ostrzezeniem
+       (D11). Gdy wszystko gra, ten blok jest pusty i nic nie zajmuje. -->
+  <div id="setWarn" class="hide"></div>
+
+  <!-- Ustawienia to SPIS TRESCI. Kazda pozycja przenosi na swoj ekran,
+       zamiast rozwijac sie w miejscu (D43). -->
+  <button class="kafel" onclick="showTab('lek')">
+    <span class="kop">Lek i dawkowanie
+      <div class="dim2" id="kafelLek">—</div></span></button>
+
+  <button class="kafel" onclick="showTab('sinr')">
+    <span class="kop">INR
+      <div class="dim2" id="kafelInr">zakres terapeutyczny i odstęp pomiarów</div></span></button>
+
+  <button class="kafel" onclick="showTab('wifi')">
+    <span class="kop">Sieć WiFi pudełka
+      <div class="dim2" id="kafelWifi">—</div></span></button>
+
+  <button class="kafel" onclick="showTab('dev')">
+    <span class="kop">Urządzenie
+      <div class="dim2" id="kafelDev">stan pudełka, wersja, wylogowanie</div></span></button>
+
+  <button class="kafel" onclick="showTab('diag')">
+    <span class="kop">Diagnostyka
+      <div class="dim2">zdarzenia z pudełka, autotest, historia, test wieczka</div></span></button>
+
+  <!-- Raport zostaje TU i w tej samej postaci - to jedyna pozycja Ustawien,
+       ktorej sie uzywa, a nie ktora sie ustawia. Na samym dole, bo siega sie
+       po niego rzadko i zwykle swiadomie. -->
+  <div class="card" style="margin-top:16px">
+    <h3>Raport dla lekarza</h3>
+
+    <div class="muted">Przyjmowanie leku i wyniki INR w jednym dokumencie.</div>
+    <label>Zakres</label>
+    <select id="repRange">
+      <option value="30">ostatnie 30 dni</option>
+      <option value="90" selected>ostatnie 3 miesiące</option>
+      <option value="180">ostatnie 6 miesięcy</option>
+      <option value="365">ostatni rok</option>
+    </select>
+    <div class="row" style="margin-top:12px">
+      <button class="primary" style="flex:1" onclick="makeReport()">Drukuj / zapisz PDF</button>
+      <button class="ghost" onclick="exportCsv()">CSV</button>
+    </div>
+    <div class="dim2" style="margin-top:8px">
+      Na iPhonie: <i>Drukuj</i> → rozsuń podgląd dwoma palcami → <i>Udostępnij</i> → <i>Zapisz w plikach</i>.
+    </div>
+  </div>
+</section>
+
+<section id="tab-lek" class="hide">
+  <div class="card">
+
       <label>Nazwa leku</label><input id="drugName" placeholder="Warfin">
       <label>Moc tabletki</label>
       <select id="drugStrength">
@@ -702,13 +785,10 @@ nav button.act{color:var(--acc)}
         Dni wcześniejsze zostaną opisane jako „brak danych”, a nie jako pominięte —
         i nie będą zaniżać skuteczności w raporcie dla lekarza.
       </div>
-    </div>
-  </details>
+  </div>
 
-  <!-- Wyjatki maja WLASNA sekcje, domyslnie zamknieta i z liczba w naglowku.
-       Dodaje sie je dotknieciem dnia w kalendarzu, a nie tutaj - to jest
-       tylko podglad i kasowanie. Rozwiniete na stale robily z ustawien
-       sciane dat, ktora rosnie z kazdym miesiacem.                       -->
+  <!-- Wyjatki zostaja lista ROZWIJALNA, ale tutaj - przy dawkowaniu, ktorego
+       dotycza. Zakłada sie je dotknieciem dnia w kalendarzu; to jest podglad. -->
   <details class="card sek">
     <summary><h3 id="exTytul">Wyjątki na konkretne dni</h3></summary>
     <div class="sekcia">
@@ -719,12 +799,11 @@ nav button.act{color:var(--acc)}
       <div id="exList" style="margin-top:10px"></div>
     </div>
   </details>
+</section>
 
-  <!-- Obie opcje INR pod JEDNYM naglowkiem, a nie jako dwie osobne karty:
-       to jedno zagadnienie i szuka sie ich razem. -->
-  <details class="card sek">
-    <summary><h3>INR</h3></summary>
-    <div class="sekcia">
+<section id="tab-sinr" class="hide">
+  <div class="card">
+
       <label style="margin-top:0">Zakres terapeutyczny</label>
       <div class="dim2" style="margin:-4px 0 6px">Ustala go lekarz prowadzący. Najczęściej 2,0–3,0.</div>
       <div class="pair" style="grid-template-columns:minmax(0,1fr) minmax(0,1fr)">
@@ -741,12 +820,12 @@ nav button.act{color:var(--acc)}
         <select id="inrEvery" onchange="odswiezPodpowiedzInr()"></select></div>
       <div class="dim2" id="inrEveryHint" style="margin-top:6px"></div>
       <button class="primary" style="width:100%;margin-top:12px" onclick="saveInrEvery()">Zapisz odstęp</button>
-    </div>
-  </details>
+  </div>
+</section>
 
-  <details class="card sek">
-    <summary><h3>Sieć WiFi pudełka</h3></summary>
-    <div class="sekcia">
+<section id="tab-wifi" class="hide">
+  <div class="card">
+
     <div class="muted">
       Pudełko pamięta kilka sieci. Nową odbiera przy najbliższym połączeniu —
       więc żeby ją dostać, musi mieć łączność przez którąś ze starych.
@@ -784,33 +863,12 @@ nav button.act{color:var(--acc)}
       Wyślij sieć do pudełka</button>
     <div id="netMsg" class="dim2" style="text-align:center;margin-top:8px;min-height:15px"></div>
     <div id="netStan" style="margin-top:10px"></div>
-    </div>
-  </details>
+  </div>
+</section>
 
-  <details class="card sek">
-    <summary><h3>Raport dla lekarza</h3></summary>
-    <div class="sekcia">
-    <div class="muted">Przyjmowanie leku i wyniki INR w jednym dokumencie.</div>
-    <label>Zakres</label>
-    <select id="repRange">
-      <option value="30">ostatnie 30 dni</option>
-      <option value="90" selected>ostatnie 3 miesiące</option>
-      <option value="180">ostatnie 6 miesięcy</option>
-      <option value="365">ostatni rok</option>
-    </select>
-    <div class="row" style="margin-top:12px">
-      <button class="primary" style="flex:1" onclick="makeReport()">Drukuj / zapisz PDF</button>
-      <button class="ghost" onclick="exportCsv()">CSV</button>
-    </div>
-    <div class="dim2" style="margin-top:8px">
-      Na iPhonie: <i>Drukuj</i> → rozsuń podgląd dwoma palcami → <i>Udostępnij</i> → <i>Zapisz w plikach</i>.
-    </div>
-    </div>
-  </details>
+<section id="tab-dev" class="hide">
+  <div class="card">
 
-  <details class="card sek">
-    <summary><h3>Urządzenie</h3></summary>
-    <div class="sekcia">
     <div class="muted" id="devInfo" style="margin-top:6px"></div>
     <button class="ghost" style="margin-top:14px;width:100%" onclick="reconcile()">Przelicz kalendarz ze zdarzeń</button>
     <button class="ghost" style="margin-top:8px;width:100%" onclick="fbSignOut()">Wyloguj</button>
@@ -822,28 +880,9 @@ nav button.act{color:var(--acc)}
     <div class="dim2" style="margin-top:14px;text-align:center">
       Wersja aplikacji: <span id="appVersion">—</span>
     </div>
-    </div>
-  </details>
-
-  <!-- WEJSCIE DO DIAGNOSTYKI
-
-       Jedyna karta, ktora NIE jest zwijana - i to celowo. Mieszkaja w niej
-       ostrzezenia o utracie danych, a ostrzezenie schowane za przyciskiem
-       przestaje byc ostrzezeniem. Gdy wszystko gra, `setWarn` jest pusty
-       i karta nic nie zajmuje.                                          -->
-  <div class="card">
-    <h3>Diagnostyka</h3>
-    <p class="muted" style="margin:6px 0 12px">
-      Co przysłało pudełko, autotest, historia wybudzeń i test wieczka.
-      Zaglądasz tu, gdy coś nie gra — nie na co dzień.
-    </p>
-    <!-- Ostrzeżenia zostają TUTAJ, nie za przyciskiem. Puste, gdy wszystko gra. -->
-    <div id="setWarn" class="hide"></div>
-    <button class="btn" onclick="showTab('diag')" style="width:100%">
-      Otwórz diagnostykę
-    </button>
   </div>
 </section>
+
 
 <!-- ═══════════════ DIAGNOSTYKA ═══════════════
      Osobny ekran, celowo POZA dolną nawigacją — wchodzi się tu z Ustawień.
@@ -856,10 +895,6 @@ nav button.act{color:var(--acc)}
      mogłyby wisieć niezauważone.                                        -->
 <section id="tab-diag" class="hide">
   <div class="card">
-    <button class="btn" onclick="showTab('set')"
-            style="background:transparent;padding:0;margin-bottom:10px">
-      ← Ustawienia
-    </button>
     <h3>Diagnostyka</h3>
     <p class="muted" style="margin:6px 0 0">
       Stan pudełka i to, co przysłało. Przydaje się, gdy dawki nie widać
@@ -867,17 +902,29 @@ nav button.act{color:var(--acc)}
     </p>
   </div>
 
-  <!-- DIAGNOSTYKA: surowe zdarzenia z pudełka -->
+  <!-- DIAGNOSTYKA: same przejscia i narzedzia, bez list.
+
+       Listy zdarzen i historii wybudzen maja teraz wlasne ekrany. Powod jest
+       ten sam, dla ktorego Diagnostyka w ogole wyjechala z Ustawien (D11):
+       ekran, na ktorym wszystko jest naraz, wymaga przewijania przez rzeczy
+       nieszukane, zeby dojsc do szukanej.                                -->
   <div class="card">
     <h3>Co przysłało pudełko</h3>
-    <p class="muted" style="margin:6px 0 12px">
-      Surowa lista zdarzeń z urządzenia i dzień, do którego aplikacja je przypisała.
-      Jeśli dawki nie widać w kalendarzu, tutaj widać dlaczego.
+    <p class="muted" style="margin:6px 0 10px">
+      Surowa lista zdarzeń z urządzenia i dzień, do którego aplikacja je
+      przypisała. Jeśli dawki nie widać w kalendarzu, tam widać dlaczego.
     </p>
+    <div id="diagPodsum" class="dim2" style="margin-bottom:10px"></div>
+    <button class="btn" onclick="showTab('ev')" style="width:100%">
+      Pokaż wszystkie zdarzenia
+    </button>
+  </div>
+
+  <div class="card">
+    <h3>Narzędzia</h3>
     <div id="diagErr" class="hide" style="margin-bottom:10px;padding:10px;border-radius:12px;
          border:1px solid var(--bad);background:rgba(248,113,113,.10);font-size:13px"></div>
-    <div id="diagList" style="font-size:12.5px;line-height:1.6"></div>
-    <button class="primary" style="width:100%;margin-top:12px" onclick="testPolaczenia()">
+    <button class="primary" style="width:100%" onclick="testPolaczenia()">
       Sprawdź połączenie krok po kroku</button>
     <div id="diagTest" class="hide" style="margin-top:10px;font-size:12.5px;line-height:1.5"></div>
     <button class="ghost" style="width:100%;margin-top:10px" onclick="reconcile()">
@@ -921,14 +968,16 @@ nav button.act{color:var(--acc)}
     <div id="testList" style="font-size:12.5px;line-height:1.6"></div>
   </div>
 
-  <!-- CZARNA SKRZYNKA -->
+  <!-- CZARNA SKRZYNKA - wejscie. Sama historia ma wlasny ekran. -->
   <div class="card">
     <h3>Historia pudełka</h3>
     <p class="muted" style="margin:6px 0 12px">
       Co pudełko robiło przy każdym wybudzeniu — także wtedy, gdy nie miało
       zasięgu. Zapisuje to u siebie, więc przetrwa noc bez WiFi.
     </p>
-    <div id="boxLog" style="font-size:12.5px;line-height:1.55"></div>
+    <button class="btn" onclick="showTab('hist')" style="width:100%">
+      Pokaż całą historię
+    </button>
   </div>
 
   <!-- WEJSCIE DO TESTU WIECZKA -->
@@ -949,12 +998,48 @@ nav button.act{color:var(--acc)}
      Osobny ekran, celowo POZA dolną nawigacją — wchodzi się tu tylko
      z Ustawień. To narzędzie diagnostyczne na czas testu, nie stała
      część aplikacji.                                                  -->
+<!-- ═══════════════ ZDARZENIA Z PUDELKA ═══════════════
+     Pelna lista, ktora wczesniej siedziala w Diagnostyce i zawsze pokazywala
+     tylko wycinek. Tutaj jest cala, za to z filtrami - bo przy kilkuset
+     zdarzeniach "cala lista" bez zawezania jest tak samo bezuzyteczna jak
+     wycinek bez wyboru.                                                 -->
+<section id="tab-ev" class="hide">
+  <div class="card">
+    <h3>Zdarzenia z pudełka</h3>
+    <p class="muted" style="margin:6px 0 0">
+      Co przysłało urządzenie i czy trafiło do kalendarza.
+    </p>
+
+    <label style="margin-top:14px">Pokrycie w kalendarzu</label>
+    <div class="filtry" id="evFiltrStan"></div>
+
+    <label style="margin-top:14px">Kiedy</label>
+    <div class="filtry" id="evFiltrCzas"></div>
+
+    <div id="evPodsum" class="dim2" style="margin-top:12px"></div>
+  </div>
+
+  <div class="card">
+    <div id="evLista" style="font-size:12.5px;line-height:1.6"></div>
+  </div>
+</section>
+
+<!-- ═══════════════ HISTORIA PUDELKA (czarna skrzynka) ═══════════════ -->
+<section id="tab-hist" class="hide">
+  <div class="card">
+    <h3>Historia pudełka</h3>
+    <p class="muted" style="margin:6px 0 0">
+      Każde wybudzenie: kiedy, z jakiego powodu, jak się skończyło. Pudełko
+      zapisuje to u siebie, więc historia przetrwa noc bez zasięgu.
+    </p>
+  </div>
+  <div class="card">
+    <div id="boxLog" style="font-size:12.5px;line-height:1.55"></div>
+  </div>
+</section>
+
 <section id="tab-lid" class="hide">
   <div class="card">
-    <button class="btn" onclick="showTab('set')"
-            style="background:transparent;padding:0;margin-bottom:10px">
-      ← Ustawienia
-    </button>
     <h3>Dziennik wieczka</h3>
     <p class="muted" style="margin:6px 0 12px">
       Każda zmiana stanu kontaktronu zapisana przez pudełko. Przy otwarciach,
@@ -1055,7 +1140,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-11.8";
+const APP_VERSION = "2026-08-11.9";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -1840,6 +1925,11 @@ async function boot(){
 function renderAll(){
   renderCalendar(); renderToday(); renderPills(); renderInr();
   if (curTab === "ana") renderAnalysis();
+  /* Ekrany, które pokazują dane z bazy, muszą się odświeżać razem z resztą —
+     inaczej lista zdarzeń otwarta w chwili, gdy pudełko coś dosyła, zostaje
+     na starym stanie i wygląda, jakby zdarzenie nie doszło. */
+  if (curTab === "ev") renderEvents();
+  renderKafelki();
   /* Arkusz dnia trzeba odświeżyć razem z resztą — inaczej po zapisaniu
      zmiany pasek „Zmiana: … → …" zostawał na ekranie mimo zapisu.      */
   if (sheetDate && document.getElementById("sheet").classList.contains("show")) renderSheet();
@@ -3305,17 +3395,42 @@ function renderOstrzezenia(){
   el.classList.toggle("hide", !el.innerHTML.trim());
 }
 
+/* Czy zdarzenie ma pokrycie w kalendarzu. Dotyczy WYLACZNIE zdarzen o dawce -
+   otwarcie po godzinach czy meldunek baterii nie maja czego pokrywac.    */
+function bezPokrycia(e){
+  if (e.type !== "open" && e.type !== "missed") return false;
+  const k = e.ts ? devKey(e.ts) : null;
+  return !(k && (doses[k] || {})[0]);
+}
+
+function wierszZdarzenia(e){
+  const isDose = e.type === "open" || e.type === "missed";
+  const key = e.ts ? devKey(e.ts) : null;
+  const wpis = key ? (doses[key] || {})[0] : null;
+  const mark = !isDose ? `<span class="dim2">(nie dotyczy dawki)</span>`
+    : wpis ? `<span style="color:var(--ok)">✓ jest w kalendarzu — ${esc(wpis.status)}</span>`
+           : `<span style="color:var(--bad)">✗ BRAK w kalendarzu</span>`;
+  return `<div style="padding:7px 0;border-bottom:1px solid var(--line)">
+    <b>${esc(EVENT_NAMES[e.type] || e.type)}</b>
+    <span class="dim2">· ${e.ts ? devDayMon(e.ts) + " " + devHM(e.ts) : "bez czasu"}</span><br>
+    <span class="dim2">doba lekowa: ${key || "—"}</span> · ${mark}</div>`;
+}
+
+/* Diagnostyka pokazuje juz tylko PODSUMOWANIE - jedno zdanie o pokryciu
+   i slad po ostatnim uzupelnianiu kalendarza. Cala lista ma wlasny ekran
+   (D43), bo przy kilkuset zdarzeniach nie ma sensu jej nikomu podsuwac
+   po drodze do czegos innego.                                           */
 function renderDiag(){
-  const el = document.getElementById("diagList");
-  if (!el) { renderOstrzezenia(); return; }   // Diagnostyka schowana, ostrzeżenia nie
+  renderOstrzezenia();          // ostrzezenia zyja w Ustawieniach, nie tutaj
+  const el = document.getElementById("diagPodsum");
+  if (!el) return;
 
   /* Widoczny ślad po automatycznym uzupełnianiu. Bez tego "samo się nie
      zrobiło" i "zrobiło się, ale nie było czego dopisać" wyglądają
      identycznie - a to zupełnie różne sytuacje.                        */
   const rec = !lastRec
-    ? `<div class="dim2" style="margin-bottom:10px">Kalendarz nie był jeszcze
-         uzupełniany w tej sesji.</div>`
-    : `<div class="dim2" style="margin-bottom:10px">
+    ? `<div class="dim2">Kalendarz nie był jeszcze uzupełniany w tej sesji.</div>`
+    : `<div class="dim2">
          Ostatnie automatyczne uzupełnienie: <b>${new Date(lastRec.at)
            .toLocaleTimeString("pl-PL",{hour:"2-digit",minute:"2-digit",second:"2-digit"})}</b>
          · przeanalizowano ${lastRec.events} zdarzeń ·
@@ -3325,74 +3440,79 @@ function renderDiag(){
                          : "nic nie wymagało zmiany")}
        </div>`;
 
-  const kolejka = ostrzKolejka();
-  const warn    = ostrzReguly();
-  renderOstrzezenia();          // te same ostrzeżenia zostają widoczne w Ustawieniach
-
   if (!events.length){
-    el.innerHTML = kolejka + rec + warn + `<span class="dim2">Pudełko nie przysłało jeszcze żadnych zdarzeń.<br>
-      Jeśli w logu z komputera widzisz „push event HTTP 200”, a tutaj jest pusto,
-      to znaczy, że aplikacja nie ma prawa czytać tych danych — sprawdź reguły
-      bezpieczeństwa w Firebase.</span>`;
+    el.innerHTML = rec + `<div class="dim2" style="margin-top:6px">
+      Pudełko nie przysłało jeszcze żadnych zdarzeń.</div>`;
     return;
   }
-
-  /* DOMYSLNIE POKAZUJEMY TYLKO TO, CO SIE NIE ZGADZA.
-
-     Ta lista powstala do jednego pytania: "dlaczego tej dawki nie ma
-     w kalendarzu". Gdy wszystko ma pokrycie, czterdziesci wierszy
-     z zielonym ptaszkiem nie odpowiada na nic - tylko przykrywa soba
-     reszte Diagnostyki. Wiersz, ktory zawsze wyglada tak samo, przestaje
-     cokolwiek znaczyc; to ta sama zasada, co przy ostrzezeniach (D11).
-
-     Zostaje jedno zdanie podsumowania i wylacznie zdarzenia bez pokrycia.
-     Cala liste da sie rozwinac jednym przyciskiem - bo gdy juz czegos
-     szukasz, chcesz widziec wszystko.                                   */
-  const bezPokrycia = e => {
-    if (e.type !== "open" && e.type !== "missed") return false;
-    const k = e.ts ? devKey(e.ts) : null;
-    return !(k && (doses[k] || {})[0]);
-  };
   const problemy = events.filter(bezPokrycia);
-  const widoczne = diagWszystko ? events.slice(0, 40) : problemy.slice(0, 15);
-
-  const wiersz = e => {
-    const isDose = e.type === "open" || e.type === "missed";
-    const key = e.ts ? devKey(e.ts) : null;
-    const wpis = key ? (doses[key] || {})[0] : null;
-    const mark = !isDose ? `<span class="dim2">(nie dotyczy dawki)</span>`
-      : wpis ? `<span style="color:var(--ok)">✓ jest w kalendarzu — ${esc(wpis.status)}</span>`
-             : `<span style="color:var(--bad)">✗ BRAK w kalendarzu</span>`;
-    return `<div style="padding:7px 0;border-bottom:1px solid var(--line)">
-      <b>${esc(EVENT_NAMES[e.type] || e.type)}</b>
-      <span class="dim2">· ${e.ts ? devDayMon(e.ts) + " " + devHM(e.ts) : "bez czasu"}</span><br>
-      <span class="dim2">doba lekowa: ${key || "—"}</span> · ${mark}</div>`;
-  };
-
-  const podsumowanie = problemy.length
-    ? `<div style="margin-bottom:8px;color:var(--bad)"><b>${problemy.length}</b>
+  el.innerHTML = rec + (problemy.length
+    ? `<div style="margin-top:6px;color:var(--bad)"><b>${problemy.length}</b>
          ${lm(problemy.length, "zdarzenie nie ma", "zdarzenia nie mają", "zdarzeń nie ma")}
          pokrycia w kalendarzu <span class="dim2">(z ${events.length})</span></div>`
-    : `<div style="margin-bottom:8px;color:var(--ok)">✓ Wszystkie
+    : `<div style="margin-top:6px;color:var(--ok)">✓ Wszystkie
          <b>${events.length}</b> ${lm(events.length, "zdarzenie ma", "zdarzenia mają", "zdarzeń ma")}
-         pokrycie w kalendarzu.</div>`;
-
-  const przycisk = `<button class="ghost" style="width:100%;margin-top:10px"
-      onclick="diagPrzelacz()">${diagWszystko
-        ? "Pokaż tylko to, co się nie zgadza"
-        : `Pokaż wszystkie zdarzenia (${events.length})`}</button>`;
-
-  el.innerHTML = kolejka + rec + warn + podsumowanie
-    + widoczne.map(wiersz).join("")
-    + (diagWszystko && events.length > 40
-        ? `<div class="dim2" style="margin-top:8px">Pokazano 40 z ${events.length}.</div>` : "")
-    + przycisk;
+         pokrycie w kalendarzu.</div>`);
 }
 
-/* Rozwijanie pelnej listy. Stan trzymamy w module, a nie w DOM, zeby
-   przezyl kazde przerysowanie - a te lecą przy kazdej zmianie w bazie. */
-let diagWszystko = false;
-window.diagPrzelacz = () => { diagWszystko = !diagWszystko; renderDiag(); };
+/* ═══════════════ EKRAN ZDARZEN ═══════════════
+
+   Dwa filtry, bo to sa dwa rozne pytania i zadawane osobno: "co sie nie
+   zgadza" (pokrycie) i "co bylo ostatnio" (czas). Stan trzymamy w module,
+   nie w DOM - przerysowania lecą przy kazdej zmianie w bazie i zerowalyby
+   wybor pod palcem.                                                      */
+const EV_STANY = [["all","Wszystkie"], ["ok","Z pokryciem"], ["brak","Bez pokrycia"]];
+/* "reszta" to swiadomie NIE "wszystko starsze niz 7 dni" ujete jako zakres,
+   tylko dopelnienie pozostalych filtrow - dzieki temu cztery przedzialy
+   czasu pokrywaja komplet zdarzen i nic sie miedzy nimi nie gubi.       */
+const EV_CZASY = [["1h","Ostatnia godzina"], ["1d","Ostatni dzień"],
+                  ["7d","Ostatnie 7 dni"], ["reszta","Starsze"], ["all","Wszystkie"]];
+const EV_OKNA  = { "1h":3600, "1d":86400, "7d":604800 };
+const EV_LIMIT = 200;
+
+let evStan = "all", evCzas = "all";
+window.evFiltr = (co, v) => {
+  if (co === "stan") evStan = v; else evCzas = v;
+  renderEvents();
+};
+
+function evPasuje(e, teraz){
+  if (evStan === "ok"   && bezPokrycia(e)) return false;
+  if (evStan === "brak" && !bezPokrycia(e)) return false;
+  if (evCzas === "all") return true;
+  /* Zdarzenie bez znacznika czasu nie należy do żadnego przedziału poza
+     „wszystkie" — udawanie, że jest świeże albo stare, byłoby zmyślaniem. */
+  if (!e.ts) return false;
+  const wiek = teraz - e.ts;
+  if (evCzas === "reszta") return wiek > EV_OKNA["7d"];
+  return wiek <= EV_OKNA[evCzas];
+}
+
+function renderEvents(){
+  const lista = document.getElementById("evLista");
+  if (!lista) return;
+  const teraz = Math.floor(Date.now() / 1000);
+
+  const guzik = (grupa, akt) => ([v, nazwa]) =>
+    `<button class="filtr${v === akt ? " act" : ""}"
+       onclick="evFiltr('${grupa}','${v}')">${nazwa}</button>`;
+  document.getElementById("evFiltrStan").innerHTML =
+    EV_STANY.map(guzik("stan", evStan)).join("");
+  document.getElementById("evFiltrCzas").innerHTML =
+    EV_CZASY.map(guzik("czas", evCzas)).join("");
+
+  const pasujace = events.filter(e => evPasuje(e, teraz));
+  const widoczne = pasujace.slice(0, EV_LIMIT);
+
+  document.getElementById("evPodsum").innerHTML = !events.length
+    ? "Pudełko nie przysłało jeszcze żadnych zdarzeń."
+    : `Pasuje <b>${pasujace.length}</b> z ${events.length}` +
+      (pasujace.length > EV_LIMIT ? ` · pokazano pierwsze ${EV_LIMIT}` : "");
+
+  lista.innerHTML = widoczne.length
+    ? widoczne.map(wierszZdarzenia).join("")
+    : `<div class="dim2">Nic nie pasuje do tych filtrów.</div>`;
+}
 
 /* Baner „pudełko jest otwarte”. Pudełko zgłasza to samo z siebie po
    kwadransie od otwarcia, więc baner pojawia się mniej więcej wtedy,
@@ -3518,6 +3638,7 @@ function renderStatus(st){
   const chip = document.getElementById("batChip");
   renderOpenWarn(st);
   renderNetStan();              // lista znanych sieci przychodzi w statusie
+  renderKafelki();              // podpis kafelka WiFi też z niej korzysta
   renderOstrzezenia();          // liczniki strat przychodzą właśnie w statusie
 
   /* Pudełko jeszcze się nie odezwało — zamiast samotnej kreski i pustego
@@ -3736,7 +3857,26 @@ window.setPills = () => {
 };
 
 /* ═══════════════ USTAWIENIA ═══════════════ */
+/* Podpisy pod kafelkami. Kafelek bez podpisu to sama nazwa działu i trzeba
+   w niego wejść, żeby dowiedzieć się czegokolwiek — a najczęstsze pytania
+   („ile biorę", „czy pudełko ma sieć") da się odpowiedzieć już na spisie. */
+function renderKafelki(){
+  const lek = document.getElementById("kafelLek");
+  if (lek) lek.textContent =
+    `${cfg.drugName || "Lek"}${+cfg.drugStrength ? " " + cfg.drugStrength + " mg" : ""} · ${opisDawkowania()}`;
+
+  const wifi = document.getElementById("kafelWifi");
+  if (wifi){
+    const st = ostatniStatus || {};
+    const ile = String(st.nets || "").split("|").filter(Boolean).length;
+    wifi.textContent = st.ssid
+      ? `połączone przez ${st.ssid}` + (ile ? ` · zna ${ile}` : "")
+      : (ile ? `zna ${ile} ${ile === 1 ? "sieć" : "sieci"}` : "brak danych z pudełka");
+  }
+}
+
 function renderSettings(){
+  renderKafelki();
   document.getElementById("slotEditor").innerHTML = cfg.schedule.map((h,i)=>
     `<div class="row" style="margin-top:8px">
        <input type="time" value="${h}" onchange="cfgTime(${i},this.value)">
@@ -4530,28 +4670,71 @@ window.exportCsv = async () => {
 
 /* ═══════════════ NAWIGACJA ═══════════════ */
 let curTab = "cal";
+/* WSZYSTKIE EKRANY W JEDNYM MIEJSCU.
+
+   Wcześniej stały tu trzy osobne listy: nazwy zakładek do ukrywania, mapa
+   tytułów i łańcuch `if`-ów decydujący, co przerysować. Dodanie ekranu
+   znaczyło poprawienie każdej z nich, a pominięcie jednej dawało ekran bez
+   tytułu albo taki, który się nie odświeża — i to widać dopiero na telefonie.
+
+   `nav` mówi, który przycisk dolnego paska ma się podświetlić. Podekrany
+   nie mają własnego przycisku (cztery pozycje mieszczą się czytelnie, dziewięć
+   już nie), więc świeci ten, z którego się na nie wchodzi. `wraca` to cel
+   przycisku powrotu — bez niego z podekranu nie ma jak wyjść inaczej niż
+   przez dolny pasek, który wraca na sam początek.                        */
+const EKRANY = {
+  cal:  { tytul:"Kalendarz",           nav:"cal" },
+  inr:  { tytul:"Pomiary INR",         nav:"inr" },
+  ana:  { tytul:"Analiza",             nav:"ana" },
+  set:  { tytul:"Ustawienia",          nav:"set" },
+  lek:  { tytul:"Lek i dawkowanie",    nav:"set", wraca:"set" },
+  sinr: { tytul:"INR",                 nav:"set", wraca:"set" },
+  wifi: { tytul:"Sieć WiFi pudełka",   nav:"set", wraca:"set" },
+  dev:  { tytul:"Urządzenie",          nav:"set", wraca:"set" },
+  diag: { tytul:"Diagnostyka",         nav:"set", wraca:"set" },
+  ev:   { tytul:"Zdarzenia z pudełka", nav:"set", wraca:"diag" },
+  hist: { tytul:"Historia pudełka",    nav:"set", wraca:"diag" },
+  lid:  { tytul:"Dziennik wieczka",    nav:"set", wraca:"diag" },
+};
+
 window.showTab = t => {
+  if (!EKRANY[t]) t = "cal";
   curTab = t;
-  /* "lid" i "diag" to ekrany bez własnego przycisku w nawigacji — wchodzi się
-     na nie z Ustawień. W dolnym pasku podświetlony zostaje wtedy przycisk
-     Ustawień, żeby było widać, skąd się tu przyszło. Piątego przycisku celowo
-     nie ma: cztery pozycje mieszczą się czytelnie, pięć już nie.          */
-  const zUstawien = (t === "lid" || t === "diag");
-  ["cal","inr","ana","set"].forEach(x=>{
-    document.getElementById("tab-"+x).classList.toggle("hide", x!==t);
-    document.getElementById("nav-"+x).classList.toggle("act",
-      x === t || (zUstawien && x === "set"));
-  });
-  document.getElementById("tab-lid").classList.toggle("hide", t !== "lid");
-  document.getElementById("tab-diag").classList.toggle("hide", t !== "diag");
-  document.getElementById("hTitle").textContent =
-    { cal:"Kalendarz", inr:"Pomiary INR", ana:"Analiza", set:"Ustawienia",
-      lid:"Dziennik wieczka", diag:"Diagnostyka" }[t];
+  const def = EKRANY[t];
+
+  for (const id of Object.keys(EKRANY))
+    document.getElementById("tab-" + id)?.classList.toggle("hide", id !== t);
+  for (const x of ["cal","inr","ana","set"])
+    document.getElementById("nav-" + x)?.classList.toggle("act", x === def.nav);
+
+  document.getElementById("hTitle").textContent = def.tytul;
+
+  /* Jeden przycisk powrotu dla wszystkich podekranów, zamiast wklejania go
+     w każdy z osobna. Podpis mówi, DOKĄD wraca — „wstecz" na ekranie, na
+     który da się wejść z dwóch stron, nie mówi nic. */
+  const wstecz = document.getElementById("backBtn");
+  if (wstecz){
+    wstecz.classList.toggle("hide", !def.wraca);
+    if (def.wraca) wstecz.textContent = "← " + EKRANY[def.wraca].tytul;
+  }
+
   if (t === "ana")  renderAnalysis();
   if (t === "lid")  renderLidLog();
-  if (t === "diag") { renderDiag(); renderTesty(); renderBoxLog(); }
+  if (t === "set")  renderSettings();
+  if (t === "lek")  renderSettings();
+  if (t === "sinr") renderSettings();
+  if (t === "wifi") renderSettings();
+  if (t === "dev")  renderStatus(ostatniStatus);
+  if (t === "diag") { renderDiag(); renderTesty(); }
+  if (t === "ev")   renderEvents();
+  if (t === "hist") renderBoxLog();
   window.scrollTo({ top:0, behavior:"smooth" });
 };
+
+/* Powrót z podekranu. Cel bierzemy z definicji ekranu, na którym jesteśmy —
+   dzięki temu „Zdarzenia" wracają do Diagnostyki, a nie do Ustawień, mimo
+   że w dolnym pasku świeci się ten sam przycisk. */
+window.wrocZEkranu = () => showTab(EKRANY[curTab]?.wraca || "set");
 
 /* ═══════════════════════════════════════════════════════════════
  *  AUTOMATYCZNA AKTUALIZACJA
