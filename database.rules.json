@@ -44,6 +44,15 @@
               ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 10"
             }
           },
+          "wifiNowa": {
+            ".validate": "newData.hasChildren(['ssid'])",
+            "ssid": {
+              ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 32"
+            },
+            "pass": {
+              ".validate": "newData.isString() && newData.val().length <= 63"
+            }
+          },
           "drugName": {
             ".validate": "newData.isString() && newData.val().length <= 40"
           },

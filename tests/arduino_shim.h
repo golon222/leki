@@ -121,6 +121,16 @@ public:
     if (failKeys.count(k)) return 0;
     if (strict && !_started) return 0;
     us[k] = v; return sizeof(unsigned short); }
+  /* Licznik znanych sieci WiFi. Jak putUShort: prawdziwe NVS zwraca liczbe
+     zapisanych bajtow, a ZERO przy niepowodzeniu - i na tym zerze opiera sie
+     cala decyzja, czy wolno skasowac haslo z bazy.                       */
+  std::map<std::string, unsigned char> uc;
+  unsigned char getUChar(const char* k, unsigned char d = 0) {
+    auto it = uc.find(k); return it == uc.end() ? d : it->second; }
+  size_t putUChar(const char* k, unsigned char v) {
+    if (failKeys.count(k)) return 0;
+    if (strict && !_started) return 0;
+    uc[k] = v; return sizeof(unsigned char); }
   /* Daty ladowania trzymamy jako 32-bitowe znaczniki czasu. */
   std::map<std::string, unsigned int> ui;
   unsigned int getUInt(const char* k, unsigned int d = 0) {
@@ -139,6 +149,7 @@ public:
     bool bylo = str.erase(k) || us.erase(k) || sh.erase(k) || ul.erase(k) || ui.erase(k);
     return bylo; }
   void wipe() { str.clear(); us.clear(); sh.clear(); ul.clear(); ui.clear();
+                uc.clear();
                 failKeys.clear(); _started = false; zagniezdzoneBegin = 0; }
 };
 

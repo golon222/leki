@@ -79,6 +79,7 @@ uint32_t rtcDoseExDay[DOSE_EX_MAX] = { 0 };
 uint8_t  rtcDoseExVal[DOSE_EX_MAX] = { 0 };
 uint8_t  rtcDoseExCount   = 0;
 bool     rtcDosingLoaded  = false;
+uint8_t  rtcNetOstatnia   = 0;   // ktora siec z listy zadzialala ostatnio
 
 /* flushQueue() jest teraz wyciagane do testow, wiec potrzebuje atrapy
    wysylki. Tu nikt jej nie wola - wystarczy, ze istnieje.            */

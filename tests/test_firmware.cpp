@@ -50,6 +50,7 @@ uint32_t rtcDoseExDay[DOSE_EX_MAX] = { 0 };
 uint8_t  rtcDoseExVal[DOSE_EX_MAX] = { 0 };
 uint8_t  rtcDoseExCount   = 0;
 bool     rtcDosingLoaded  = false;
+uint8_t  rtcNetOstatnia   = 0;   // ktora siec z listy zadzialala ostatnio
 /* Zdejmuje rozpisanie - stan "nic nie wiem", w ktorym pudelko ma dzwonic. */
 void resetDosing(){
   for (int i = 0; i < 7; i++) rtcDoseWeek[i] = DOSE_NIEZNANA;
@@ -514,6 +515,63 @@ parseSchedule(String("08:00"));
         queueCount());
 }
 resetDosing();
+prefs.wipe();
+
+/* ================= 9a3. LISTA ZNANYCH SIECI ================= */
+head("Lista sieci WiFi");
+prefs.wipe();
+CHECK(wifiSieciCount()==0, "swieze pudelko nie zna zadnej sieci");
+CHECK(wifiSiecSsid(0)=="", "i nie zmysla nazwy");
+
+CHECK(wifiSiecDodaj(String("dom"), String("haslo1")), "pierwsza siec zapisana");
+CHECK(wifiSieciCount()==1, "licznik sieci = 1 (%d)", wifiSieciCount());
+CHECK(wifiSiecSsid(0)=="dom", "nazwa odczytana z pamieci");
+
+/* Nowa siec idzie na POCZATEK - to zwykle ta, ktorej wlasnie potrzebujemy. */
+wifiSiecDodaj(String("hotspot"), String("haslo2"));
+CHECK(wifiSiecSsid(0)=="hotspot" && wifiSiecSsid(1)=="dom",
+      "nowa siec ladu je na poczatku listy");
+CHECK(wifiSieciCount()==2, "obie sieci na liscie (%d)", wifiSieciCount());
+
+/* Ta sama nazwa ze zmienionym haslem ZASTEPUJE stary wpis. Inaczej zmiana
+   hasla do domowego WiFi zjadalaby drugie miejsce z czterech.          */
+wifiSiecDodaj(String("dom"), String("nowehaslo"));
+CHECK(wifiSieciCount()==2, "duplikat nie zwieksza listy (%d)", wifiSieciCount());
+CHECK(wifiSiecSsid(0)=="dom" && wifiSiecSsid(1)=="hotspot",
+      "zaktualizowana siec jest teraz pierwsza");
+
+/* Limit: piata siec wypycha najstarsza, a nie przepelnia tablicy. */
+prefs.wipe();
+for (int i = 0; i < WIFI_SIECI_MAX + 3; i++)
+  wifiSiecDodaj(String("siec") + String(i), String("h"));
+CHECK(wifiSieciCount()==WIFI_SIECI_MAX,
+      "lista nie przekracza limitu (%d z %d)", wifiSieciCount(), WIFI_SIECI_MAX);
+CHECK(wifiSiecSsid(0)==String("siec") + String(WIFI_SIECI_MAX + 2),
+      "na czele stoi ostatnio dodana");
+
+/* Nazwa pusta albo absurdalnie dluga nie moze wejsc na liste - bez tego
+   pudelko probowaloby sie laczyc z niczym i tracilo na to radio.       */
+prefs.wipe();
+CHECK(!wifiSiecDodaj(String(""), String("h")), "pusta nazwa odrzucona");
+CHECK(!wifiSiecDodaj(String(std::string(33, 'x').c_str()), String("h")),
+      "nazwa ponad 32 znaki odrzucona");
+CHECK(wifiSieciCount()==0, "i nic nie weszlo na liste (%d)", wifiSieciCount());
+
+/* NAJWAZNIEJSZY TEST TEJ SEKCJI.
+   Wynik false znaczy "siec NIE zostala zapisana", a na tej odpowiedzi opiera
+   sie decyzja, czy wolno skasowac haslo z bazy (zasada 6). Gdyby zapis
+   milczaco udawal sukces, haslo znikneloby z bazy, a pudelko nie znaloby
+   sieci - i nie byloby juz sposobu, zeby mu ja podac inaczej niz portalem. */
+prefs.wipe();
+prefs.failKeys.insert("n0s");
+CHECK(!wifiSiecDodaj(String("dom"), String("haslo")),
+      "nieudany zapis do pamieci MELDUJE porazke, a nie udaje sukcesu");
+prefs.failKeys.clear();
+prefs.wipe();
+prefs.failKeys.insert("netN");
+CHECK(!wifiSiecDodaj(String("dom"), String("haslo")),
+      "nieudany zapis licznika sieci tez jest porazka");
+prefs.failKeys.clear();
 prefs.wipe();
 
 /* ================= 9b. ZNACZNIKI PRZEZYWAJACE RESET ================= */

@@ -21,7 +21,7 @@ const DEF_CFG = { schedule:["08:00"], tz:"Europe/Warsaw",
   pillsCountedUntil:undefined, pillsBase:undefined, pillsBaseFrom:undefined,
   /* Bez tych dwoch schemat tygodniowy z jednego testu zostawalby w cfg na
      wszystkie nastepne - `__setState` DOKLADA pola, a nie podmienia calosc. */
-  doseWeek:undefined, doseDays:undefined };
+  doseWeek:undefined, doseDays:undefined, wifiNowa:undefined };
 const D = (o={}) => A.__setState({ doses:{}, inr:{}, events:[], ...o,
                                    cfg:{ ...DEF_CFG, ...(o.cfg||{}) } });
 
@@ -2091,6 +2091,59 @@ const op = A.opisDawkowania();
 check(op.startsWith("wg schematu:"), "nierowny schemat wypisany po dniach");
 check(op.split("·").length === 7, "siedem pozycji, po jednej na dzien");
 check(op.trim().endsWith(A.nf(TYDZ[0])), "kolejnosc od poniedzialku - niedziela na koncu");
+
+/* ═══════════ SIEC WiFi DLA PUDELKA ═══════════
+   Jedyne miejsce w aplikacji, gdzie uzytkownik wpisuje cudze haslo. Testy
+   pilnuja trzech rzeczy: ze haslo nie trafia na ekran, ze "czeka" nie miesza
+   sie z "doszlo", i ze zapis ma ksztalt, ktory przyjma reguly bazy.     */
+head("Siec WiFi dla pudelka");
+const netHtml = () => document.getElementById("netStan").innerHTML;
+
+D();
+A.renderStatus({ battery:80, nets:"dom|hotspot Kuby", ssid:"dom" });
+check(netHtml().includes("dom") && netHtml().includes("hotspot Kuby"),
+      "znane sieci wypisane ze statusu pudelka");
+check(netHtml().includes("teraz połączone przez"), "widac, przez ktora jest polaczone");
+check(!netHtml().includes("Czeka na pudełko"), "nic nie czeka, wiec nie strasz");
+
+D({ cfg:{ wifiNowa:{ ssid:"hotel-wifi", pass:"tajnehaslo123" } } });
+A.renderStatus({ battery:80, nets:"dom", ssid:"dom" });
+check(netHtml().includes("Czeka na pudełko"), "niedostarczona siec jest widoczna jako czekajaca");
+check(netHtml().includes("hotel-wifi"), "razem z nazwa");
+check(!netHtml().includes("tajnehaslo123"), "HASLO NIE POJAWIA SIE NA EKRANIE");
+
+D();
+A.renderStatus(null);
+check(netHtml().includes("nie zgłosiło"), "pudelko, ktore nigdy sie nie odezwalo, mowi to wprost");
+
+/* Zapis musi trafic dokladnie tam, skad czyta go firmware, i przejsc przez
+   reguly bazy - atrapa sprawdza je prawdziwym database.rules.json.      */
+A.__resetDb();
+D();
+document.getElementById("netSsid").value = "hotspot Kuby";
+document.getElementById("netPass").value = "tajnehaslo";
+await window.wyslijSiec();
+const zapis = A.__db.data?.devices?.pillbox01?.config?.wifiNowa;
+check(zapis?.ssid === "hotspot Kuby", "siec zapisana pod devices/<id>/config/wifiNowa");
+check(zapis?.pass === "tajnehaslo", "razem z haslem - pudelko skasuje je po odebraniu");
+check(document.getElementById("netPass").value === "",
+      "pole hasla czysci sie po wyslaniu");
+
+A.__resetDb();
+D();
+document.getElementById("netSsid").value = "otwarta-siec";
+document.getElementById("netPass").value = "";
+await window.wyslijSiec();
+const zapis2 = A.__db.data?.devices?.pillbox01?.config?.wifiNowa;
+check(zapis2 && !("pass" in zapis2),
+      "siec bez hasla nie wysyla pustego pola (reguly wymagaja napisu)");
+
+A.__resetDb();
+D();
+document.getElementById("netSsid").value = "   ";
+await window.wyslijSiec();
+check(!A.__db.data?.devices?.pillbox01?.config?.wifiNowa,
+      "sama spacja zamiast nazwy nie tworzy zapisu");
 
 head("Komunikaty zamiast blokujacych okienek");
 check(!/alert\(n \?/.test(html), "potwierdzenie uzupelnienia nie blokuje ekranu");

@@ -22,6 +22,8 @@ WANTED = [
     "trackBoxOpen",
     # awakeTooLong musi byc przed flushQueue, ktore go wola.
     "awakeTooLong", "extendAwake",
+    # Lista znanych sieci WiFi. netKlucz musi byc pierwszy - reszta go wola.
+    "netKlucz", "wifiSieciCount", "wifiSiecSsid", "wifiSiecPass", "wifiSiecDodaj",
     "tokenZPamieci", "zapomnijToken",
     "przesunZnaczniki", "queuePush", "queueCount", "queuePeek", "queuePop", "queueDrop",
     "queueShiftTimestamps", "rekordKompletny", "trwaleOdrzucony", "flushQueue",

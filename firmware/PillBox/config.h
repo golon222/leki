@@ -20,7 +20,7 @@
  * 1. IDENTYFIKATOR URZADZENIA
  * ------------------------------------------------------------------ */
 #define DEVICE_ID           "pillbox01"     // klucz w /devices/<DEVICE_ID>
-#define FW_VERSION          "1.30.0"   // widoczna w aplikacji - po wgraniu sprawdz, czy sie zmienila
+#define FW_VERSION          "1.31.0"   // widoczna w aplikacji - po wgraniu sprawdz, czy sie zmienila
 
 /* ---------------------------------------------------------------------
  * 2. FIREBASE  (Realtime Database + Auth email/haslo)
@@ -186,6 +186,22 @@
 #define AP_SSID             "PillBox-setup"
 #define AP_PASS             "pillbox123"
 #define PORTAL_TIMEOUT_S    300             // 5 minut na wpisanie hasla
+
+/* ---------------------------------------------------------------------
+ * 7a2. LISTA ZNANYCH SIECI
+ *     Pudelko pamieta kilka sieci, nie jedna. Po co: siec da sie wtedy
+ *     dodac Z APLIKACJI, a nie tylko portalem przy otwartym pudelku.
+ *
+ *     Paradoks jest pozorny. Zeby pudelko odebralo nowa siec, musi miec
+ *     lacznosc - wiec na liscie siedzi na stale HOTSPOT Z TELEFONU. Na
+ *     wyjezdzie wystarczy go wlaczyc: pudelko sie z nim laczy, odbiera
+ *     siec hotelowa i od tej pory dziala juz przez nia.
+ *
+ *     Kolejnosc prob zaczyna sie od tej, ktora zadzialala ostatnio, wiec
+ *     w domu to nadal JEDNA proba - reszta listy nic nie kosztuje.
+ * ------------------------------------------------------------------ */
+#define WIFI_SIECI_MAX      4               // ile sieci pamietamy
+#define WIFI_ALT_TIMEOUT_MS 8000            // krocej na kazda KOLEJNA probe
 
 #define HOUSEKEEP_MAX_S     43200           // max 12h snu (sync czasu i baterii)
                                             // mniej = dokladniejszy zegar, wiecej pradu

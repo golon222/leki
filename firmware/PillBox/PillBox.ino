@@ -92,6 +92,11 @@ RTC_DATA_ATTR uint8_t  rtcDoseExVal[DOSE_EX_MAX] = { 0 };  // ...i dawka na ten 
 RTC_DATA_ATTR uint8_t  rtcDoseExCount   = 0;
 RTC_DATA_ATTR bool     rtcDosingLoaded  = false;// czy wczytano juz z pamieci trwalej
 
+/* Ktora siec z listy zadzialala ostatnio. Zaczynanie prob od niej sprawia,
+   ze w domu polaczenie kosztuje dokladnie tyle samo, co przed cala ta
+   zmiana - jedna probe.                                                 */
+RTC_DATA_ATTR uint8_t  rtcNetOstatnia   = 0;
+
 /* --- Pudelko zostawione otwarte --------------------------------------- */
 RTC_DATA_ATTR uint32_t rtcOpenSinceTs   = 0;    // kiedy zauwazylismy otwarcie
 RTC_DATA_ATTR uint32_t rtcNextWarnTs    = 0;    // kiedy nastepny sygnal
@@ -1198,7 +1203,104 @@ void queueShiftTimestamps(int32_t delta) {
 
 /* =====================================================================
  *  6.  WiFi
+ *
+ *  LISTA SIECI, NIE JEDNA SIEC
+ *  Wczesniej bylo tu samo `WiFi.begin()` bez argumentow - czyli jedna siec
+ *  zapamietana przez sterownik, do zmiany wylacznie portalem przy otwartym
+ *  pudelku. Teraz pamietamy do WIFI_SIECI_MAX sieci, dzieki czemu siec da
+ *  sie DODAC Z APLIKACJI: na liscie stoi hotspot z telefonu, wiec na
+ *  wyjezdzie wystarczy go wlaczyc, zeby pudelko odebralo siec hotelowa.
+ *
+ *  Kolejnosc prob zaczyna sie od tej, ktora zadzialala ostatnio, wiec
+ *  w domu to nadal jedna proba i ani milisekundy radia wiecej.
  * ===================================================================== */
+
+/* Klucze w NVS: "n0s"/"n0p", "n1s"/"n1p", ... Osobne klucze, a nie jeden
+   sklejony napis, bo haslo do WiFi moze zawierac DOWOLNY znak - lacznie
+   z tym, ktorego uzylibysmy jako separatora.                            */
+static void netKlucz(char* buf, size_t n, int i, char rodzaj) {
+  snprintf(buf, n, "n%d%c", i, rodzaj);
+}
+
+int wifiSieciCount() {
+  prefs.begin(NVS_NAMESPACE, true);
+  int n = prefs.getUChar("netN", 0);
+  prefs.end();
+  return (n > WIFI_SIECI_MAX) ? WIFI_SIECI_MAX : n;
+}
+
+String wifiSiecSsid(int i) {
+  if (i < 0 || i >= WIFI_SIECI_MAX) return "";
+  char k[8]; netKlucz(k, sizeof(k), i, 's');
+  prefs.begin(NVS_NAMESPACE, true);
+  String s = prefs.getString(k, "");
+  prefs.end();
+  return s;
+}
+
+static String wifiSiecPass(int i) {
+  if (i < 0 || i >= WIFI_SIECI_MAX) return "";
+  char k[8]; netKlucz(k, sizeof(k), i, 'p');
+  prefs.begin(NVS_NAMESPACE, true);
+  String s = prefs.getString(k, "");
+  prefs.end();
+  return s;
+}
+
+/* Dopisuje siec na POCZATEK listy: ostatnio dodana jest najpewniej ta,
+   ktorej wlasnie potrzebujemy. Siec o tej samej nazwie zastepuje starszy
+   wpis zamiast go dublowac - inaczej zmiana hasla do domowego WiFi
+   zajmowalaby dwa miejsca z czterech.
+
+   Zwraca false, gdy zapis do pamieci trwalej sie nie udal. Wolajacy MUSI
+   to sprawdzic przed skasowaniem hasla z bazy (zasada 6).              */
+bool wifiSiecDodaj(const String& ssid, const String& pass) {
+  if (!ssid.length() || ssid.length() > 32) return false;
+
+  /* Najpierw czytamy cala liste - osobno, bo prefs.begin() nie moze sie
+     zagniezdzac (B22). */
+  String ss[WIFI_SIECI_MAX], pp[WIFI_SIECI_MAX];
+  int stare = wifiSieciCount();
+  for (int i = 0; i < stare; i++) { ss[i] = wifiSiecSsid(i); pp[i] = wifiSiecPass(i); }
+
+  String nowe_s[WIFI_SIECI_MAX], nowe_p[WIFI_SIECI_MAX];
+  nowe_s[0] = ssid; nowe_p[0] = pass;
+  int n = 1;
+  for (int i = 0; i < stare && n < WIFI_SIECI_MAX; i++) {
+    if (ss[i] == ssid || !ss[i].length()) continue;      // duplikat albo pusty
+    nowe_s[n] = ss[i]; nowe_p[n] = pp[i]; n++;
+  }
+
+  bool ok = true;
+  prefs.begin(NVS_NAMESPACE, false);
+  for (int i = 0; i < n; i++) {
+    char ks[8], kp[8];
+    netKlucz(ks, sizeof(ks), i, 's');
+    netKlucz(kp, sizeof(kp), i, 'p');
+    if (!nvsPutStr(ks, nowe_s[i])) ok = false;
+    if (!nvsPutStr(kp, nowe_p[i])) ok = false;
+  }
+  if (!prefs.putUChar("netN", (uint8_t)n)) ok = false;
+  prefs.end();
+
+  rtcNetOstatnia = 0;                       // nowa siec idzie na pierwszy ogien
+  LOG("[NET] siec '%s' na liscie (%d z %d)%s\n", ssid.c_str(), n, WIFI_SIECI_MAX,
+      ok ? "" : "  UWAGA: zapis do pamieci NIEUDANY");
+  return ok;
+}
+
+/* Jedna proba polaczenia. Pusty ssid = poswiadczenia zapamietane przez
+   sterownik (tak dzialalo pudelko, zanim pojawila sie lista).          */
+static bool wifiSprobuj(const String& ssid, const String& pass, uint32_t limitMs) {
+  if (ssid.length()) WiFi.begin(ssid.c_str(), pass.c_str());
+  else               WiFi.begin();
+
+  uint32_t t0 = millis();
+  while (WiFi.status() != WL_CONNECTED && millis() - t0 < limitMs && !awakeTooLong())
+    delay(200);
+  return WiFi.status() == WL_CONNECTED;
+}
+
 bool wifiConnect() {
   if (batterySaver) {
     LOGLN("[NET] tryb oszczedzania baterii - radio pozostaje wylaczone");
@@ -1212,17 +1314,34 @@ bool wifiConnect() {
      a to wlasnie ta sciezka wysyla stan po zamknieciu wieczka.        */
   delay(60);
   WiFi.setSleep(true);                      // modem-sleep w trakcie pracy
-  WiFi.begin();                             // uzyj poswiadczen zapisanych w NVS
 
-  /* Czekamy najwyzej WIFI_TIMEOUT_MS. Chwilowa awaria routera nie moze
-     zatrzymac urzadzenia na dluzej - zdarzenie laduje w kolejce, a
-     planNextSleep() ustawia wczesniejsze wybudzenie na ponowna probe.  */
-  uint32_t t0 = millis();
-  while (WiFi.status() != WL_CONNECTED && millis() - t0 < WIFI_TIMEOUT_MS
-         && !awakeTooLong()) {
-    delay(200);
+  /* Czekamy najwyzej WIFI_TIMEOUT_MS na PIERWSZA probe. Chwilowa awaria
+     routera nie moze zatrzymac urzadzenia na dluzej - zdarzenie laduje
+     w kolejce, a planNextSleep() ustawia wczesniejsze wybudzenie.
+
+     Kolejne sieci dostaja juz tylko WIFI_ALT_TIMEOUT_MS: sa tam na wypadek
+     wyjazdu, a nie po to, zeby przy kazdej awarii routera pudelko trzymalo
+     radio wlaczone przez minute.                                       */
+  int n = wifiSieciCount();
+  bool ok = false;
+
+  if (n == 0) {
+    /* Lista pusta - pudelko sprzed tej zmiany albo po skasowaniu pamieci.
+       Zachowujemy sie dokladnie jak wczesniej.                         */
+    ok = wifiSprobuj("", "", WIFI_TIMEOUT_MS);
+  } else {
+    for (int k = 0; k < n && !ok && !awakeTooLong(); k++) {
+      int i = (rtcNetOstatnia + k) % n;
+      String ssid = wifiSiecSsid(i);
+      if (!ssid.length()) continue;
+      ok = wifiSprobuj(ssid, wifiSiecPass(i), k == 0 ? WIFI_TIMEOUT_MS
+                                                     : WIFI_ALT_TIMEOUT_MS);
+      if (ok) rtcNetOstatnia = (uint8_t)i;
+      else LOG("[NET] '%s' nie odpowiada\n", ssid.c_str());
+    }
   }
-  bool ok = WiFi.status() == WL_CONNECTED;
+
+  ok = WiFi.status() == WL_CONNECTED;
   LOG("[NET] %s%s\n", ok ? "polaczono, IP=" : "BRAK POLACZENIA",
       ok ? WiFi.localIP().toString().c_str() : "");
 
@@ -1539,6 +1658,19 @@ bool pushStatus() {
   doc["lastSeen"] = (uint32_t)time(nullptr);
   doc["rssi"]     = WiFi.RSSI();
   doc["ssid"]     = WiFi.SSID();
+  /* Nazwy znanych sieci - SAME NAZWY, nigdy hasla. Bez tego aplikacja nie
+     ma jak pokazac, czy siec dodana z telefonu w ogole doszla.          */
+  {
+    String znane = "";
+    int ile = wifiSieciCount();
+    for (int i = 0; i < ile; i++) {
+      String s = wifiSiecSsid(i);
+      if (!s.length()) continue;
+      if (znane.length()) znane += "|";
+      znane += s;
+    }
+    doc["nets"] = znane;
+  }
   doc["fw"]       = FW_VERSION;
   doc["boots"]    = rtcBootCount;
   doc["queued"]   = queueCount();
@@ -1655,6 +1787,40 @@ void fetchConfig() {
   if (!doc["pillsLeft"].isNull()) {
     rtcPillsLeft = doc["pillsLeft"].as<int>();
     LOG("[FB ] zostalo tabletek: %d\n", rtcPillsLeft);
+  }
+
+  /* --- Nowa siec WiFi dodana z aplikacji ------------------------------
+     `wifiNowa` to skrzynka nadawcza na JEDNA siec, nie lista. Pudelko
+     pamieta swoja liste lokalnie, wiec aplikacja ma tylko powiedziec
+     "dolóz te" - i tyle.
+
+     KOLEJNOSC JEST TU CALA TRESCIA (zasada 6): najpierw zapis do pamieci
+     trwalej, potem sprawdzenie, czy sie udal, i DOPIERO wtedy kasowanie
+     hasla z bazy. Odwrotnie stracilibysmy siec, ktorej nikt juz nie zna -
+     a wraz z nia jedyna droge do pudelka poza portalem.
+
+     Haslo kasujemy, bo nie ma powodu, zeby lezalo w bazie dluzej niz do
+     najblizszego polaczenia. Reguly i tak pilnuja dostepu, ale krotszy
+     czas zycia jest po prostu tansza obrona niz kazda inna.            */
+  JsonObject nowa = doc["wifiNowa"].as<JsonObject>();
+  if (!nowa.isNull()) {
+    String ssid = nowa["ssid"] | "";
+    String pass = nowa["pass"] | "";
+    if (ssid.length() && ssid.length() <= 32) {
+      if (wifiSiecDodaj(ssid, pass)) {
+        int kod = rtdbSend("DELETE", "/devices/" DEVICE_ID "/config/wifiNowa.json", "");
+        LOG("[NET] siec '%s' przyjeta z aplikacji, kasowanie hasla z bazy: HTTP %d\n",
+            ssid.c_str(), kod);
+        /* Zostajemy przy sieci, ktora WLASNIE dziala. Nowa dostanie swoja
+           szanse dopiero wtedy, gdy ta przestanie odpowiadac - inaczej
+           kazde dodanie sieci kosztowaloby jedno nieudane laczenie.    */
+        int ile = wifiSieciCount();
+        for (int i = 0; i < ile; i++)
+          if (wifiSiecSsid(i) == WiFi.SSID()) { rtcNetOstatnia = (uint8_t)i; break; }
+      } else {
+        LOGLN("[NET] nie udalo sie zapisac sieci - haslo ZOSTAJE w bazie do nastepnej proby");
+      }
+    }
   }
 
   /* --- Rozpisanie tygodniowe -----------------------------------------
@@ -2282,6 +2448,10 @@ void startWifiPortal() {
   }
 
   LOG("[AP ] polaczono, IP=%s\n", WiFi.localIP().toString().c_str());
+  /* Siec z portalu ida na liste tak samo jak siec dodana z aplikacji -
+     jedno zrodlo prawdy. Wczesniej portal zostawial ja wylacznie
+     w pamieci sterownika, wiec kazda nastepna siec kasowala poprzednia. */
+  wifiSiecDodaj(pendingSsid, pendingPass);
   syncTimeNTP();
   timeSyncedThisWake = true;
   if (firebaseSignIn()) { fetchConfig(); flushQueue(); pushStatus(); }

@@ -23,8 +23,8 @@ bash tests/run_all.sh
 ```
 
 Musi przejść przed zmianą i po zmianie. Stan wyjściowy:
-**371 + 51 firmware, 650 (×6 pór doby) + 86 + 49 aplikacja, 48 zgodności,
-69 reguł bazy, 222 kontrole audytu — 0 błędów.**
+**387 + 51 firmware, 662 (×6 pór doby) + 86 + 49 aplikacja, 48 zgodności,
+76 reguł bazy, 222 kontrole audytu — 0 błędów.**
 
 Testy pracują na **prawdziwym kodzie**, nie na kopii: `tests/extract.py` wycina
 funkcje z `PillBox.ino`, `tests/build_app_module.mjs` buduje moduł z `index.html`.
@@ -92,6 +92,11 @@ Test to złapie, ale komunikat zrozumiesz szybciej, znając powód (D6, D13, D15
    przepada w całości. Nowe dane idą do nowej gałęzi.
 8. **Narzędzie diagnostyczne nie może uszkodzić danych o leku.**
    Stąd dziennik wieczka ma własny bufor zamiast kolejki dawek.
+
+9. **Hasło do WiFi kasujemy z bazy dopiero po potwierdzonym zapisie w NVS**
+   (D38). `wifiSiecDodaj()` zwraca wynik i ten wynik trzeba sprawdzić.
+   Odwrotna kolejność traci sieć, której nikt już nie zna — a z nią jedyną
+   drogę do pudełka poza portalem. Portal fizyczny zostaje na zawsze.
 
 Blok pomiaru napięcia **wolno** zmieniać (zakaz zniesiony). Audyt nie blokuje —
 zgłasza tylko uwagę, żeby zmiana przypadkowa nie wyglądała jak świadoma.

@@ -685,6 +685,36 @@ nav button.act{color:var(--acc)}
   </div>
 
   <div class="card">
+    <h3>Sieć WiFi pudełka</h3>
+    <div class="muted">
+      Pudełko pamięta kilka sieci. Nową odbiera przy najbliższym połączeniu —
+      więc żeby ją dostać, musi mieć łączność przez którąś ze starych.
+    </div>
+    <div class="dim2" style="margin-top:8px;line-height:1.5">
+      <b>Dlatego trzymaj tu swój hotspot.</b> Na wyjeździe włączasz hotspot
+      w telefonie, pudełko łączy się z nim i dopiero wtedy odbiera sieć
+      hotelową. Bez tego jedyną drogą jest portal przy otwartym pudełku
+      (przytrzymaj przycisk i naciśnij RESET).
+    </div>
+
+    <label style="margin-top:14px">Nazwa sieci (SSID)</label>
+    <input id="netSsid" maxlength="32" autocapitalize="off" autocorrect="off"
+           spellcheck="false" placeholder="np. hotspot Kuby">
+    <label>Hasło</label>
+    <input id="netPass" type="password" maxlength="63" autocomplete="off"
+           placeholder="puste, jeśli sieć otwarta">
+    <div class="dim2" style="margin-top:6px;font-size:12px">
+      Pudełko łączy się tylko z sieciami <b>2,4 GHz</b> — na 5 GHz się nie
+      połączy. W hotspocie iPhone’a wyłącz „Maksymalizuj zgodność”… właściwie
+      odwrotnie: <b>włącz</b> ją, bo dopiero wtedy hotspot nadaje na 2,4 GHz.
+    </div>
+    <button class="primary" style="width:100%;margin-top:12px" onclick="wyslijSiec()">
+      Wyślij sieć do pudełka</button>
+    <div id="netMsg" class="dim2" style="text-align:center;margin-top:8px;min-height:15px"></div>
+    <div id="netStan" style="margin-top:10px"></div>
+  </div>
+
+  <div class="card">
     <h3>Zakres terapeutyczny INR</h3>
     <div class="muted">Ustala go lekarz prowadzący. Najczęściej 2,0–3,0.</div>
     <div class="pair" style="grid-template-columns:minmax(0,1fr) minmax(0,1fr)">
@@ -967,7 +997,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-11.1";
+const APP_VERSION = "2026-08-11.2";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -3397,6 +3427,7 @@ function renderStatus(st){
   ostatniStatus = st;
   const chip = document.getElementById("batChip");
   renderOpenWarn(st);
+  renderNetStan();              // lista znanych sieci przychodzi w statusie
   renderOstrzezenia();          // liczniki strat przychodzą właśnie w statusie
 
   /* Pudełko jeszcze się nie odezwało — zamiast samotnej kreski i pustego
@@ -3638,6 +3669,7 @@ function renderSettings(){
   document.getElementById("defDose").value  = cfg.defaultDose ?? 1;
   renderWeekEditor();
   renderExceptions();
+  renderNetStan();
   document.getElementById("drugName").value = cfg.drugName || "Warfin";
   document.getElementById("drugStrength").value = String(cfg.drugStrength ?? 3);
   wypelnijListyZakresu();
@@ -3729,6 +3761,58 @@ function renderExceptions(){
       <button class="danger" onclick="usunWyjatek('${k}')">✕</button>
     </div>`;
   }).join("");
+}
+
+/* ───────── Sieć WiFi dla pudełka ─────────
+
+   Hasło leci do bazy i leży tam do czasu, aż pudełko je odbierze — potem
+   samo je stamtąd kasuje. Mówimy o tym wprost, bo to jedyne miejsce
+   w całej aplikacji, gdzie użytkownik wpisuje cudze hasło.              */
+window.wyslijSiec = async () => {
+  const ssid = document.getElementById("netSsid").value.trim();
+  const pass = document.getElementById("netPass").value;
+  const msg  = document.getElementById("netMsg");
+  if (!ssid){
+    msg.textContent = "Podaj nazwę sieci."; msg.style.color = "var(--bad)"; return;
+  }
+  if (ssid.length > 32 || pass.length > 63){
+    msg.textContent = "Nazwa do 32 znaków, hasło do 63."; msg.style.color = "var(--bad)"; return;
+  }
+  /* Zapis idzie jednym polem `wifiNowa`, a nie dwoma osobnymi - reguły bazy
+     wymagają `ssid`, więc samo hasło bez nazwy zostałoby odrzucone i to
+     w sposób, którego użytkownik by nie zrozumiał. */
+  cfg.wifiNowa = pass ? { ssid, pass } : { ssid };
+  await zapiszCfg({ wifiNowa: cfg.wifiNowa }, "Sieć WiFi");
+  document.getElementById("netPass").value = "";
+  msg.textContent = "Wysłane — pudełko odbierze przy najbliższym połączeniu.";
+  msg.style.color = "var(--ok)";
+  renderNetStan();
+};
+
+/* Trzy stany, każdy znaczy co innego dla tego, co masz zrobić dalej. */
+function renderNetStan(){
+  const box = document.getElementById("netStan");
+  if (!box) return;
+  const st = ostatniStatus || {};
+  const znane = String(st.nets || "").split("|").filter(Boolean);
+  const czeka = cfg.wifiNowa?.ssid;
+
+  let html = "";
+  if (czeka){
+    /* Pudełko kasuje `wifiNowa` dopiero PO zapisaniu sieci u siebie, więc
+       dopóki wpis tu jest, sieć na pewno nie doszła. */
+    html += `<div class="dim2" style="color:var(--warn)">
+      Czeka na pudełko: <b>${esc(czeka)}</b><br>
+      Wpis zniknie stąd sam, gdy pudełko go odbierze.</div>`;
+  }
+  if (znane.length){
+    html += `<div class="dim2" style="margin-top:${czeka?"8px":"0"}">
+      Pudełko zna: ${znane.map(s => `<b>${esc(s)}</b>`).join(" · ")}
+      ${st.ssid ? `<br>teraz połączone przez <b>${esc(st.ssid)}</b>` : ""}</div>`;
+  } else if (!czeka){
+    html += `<div class="dim2">Pudełko jeszcze nie zgłosiło żadnej znanej sieci.</div>`;
+  }
+  box.innerHTML = html;
 }
 
 window.usunWyjatek = async k => {

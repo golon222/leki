@@ -31,7 +31,7 @@ export { brakujePokrycia, doReconcile, reconcileDecyzja, opisLadowan, minutyDoPe
          cfg, doses, inr, events, tabletSVG, doseGraphic,
          dayDose, dayStatus, devKey, devHM, devDate, inrState,
          dawkaNaDzien, tydzienDawek, dzienBezLeku, wyjatekNaDzien, opisDawkowania,
-         dniZapasu, ZAPAS_HORYZONT,
+         dniZapasu, ZAPAS_HORYZONT, renderNetStan,
          inrOdstep, inrTerminKey, inrDoTerminu, dniTxt, renderOstrzezenia, ostrzStraty,
          collectRows, inrChart, nf, esc, renderCalendar, renderToday,
          renderInr, renderPills, renderSheet, settlePills, relTime, slotMin,

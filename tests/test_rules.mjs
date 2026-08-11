@@ -70,7 +70,21 @@ odrzuc("wyjatek jako napis",  "devices/pillbox1/config/doseDays/2026-08-14", "0"
 odrzuc("wyjatek ujemny",      "devices/pillbox1/config/doseDays/2026-08-14", -0.5);
 odrzuc("wyjatek ponad limit", "devices/pillbox1/config/doseDays/2026-08-14", 11);
 
+/* Skrzynka nadawcza na siec WiFi dodana z telefonu. Haslo lezy w bazie
+   tylko do najblizszego polaczenia - pudelko kasuje je po zapisaniu. */
+head("Siec WiFi dodawana z aplikacji");
+odrzuc("siec bez nazwy",     "devices/pillbox1/config/wifiNowa", { pass: "tajne123" });
+odrzuc("pusta nazwa sieci",  "devices/pillbox1/config/wifiNowa", { ssid: "", pass: "x" });
+odrzuc("nazwa ponad 32 znaki",
+       "devices/pillbox1/config/wifiNowa", { ssid: "s".repeat(33) });
+odrzuc("haslo ponad limit WPA2",
+       "devices/pillbox1/config/wifiNowa", { ssid: "dom", pass: "x".repeat(64) });
+odrzuc("nazwa sieci jako liczba", "devices/pillbox1/config/wifiNowa", { ssid: 5 });
+
 head("Silnik regul przepuszcza to, co poprawne");
+ok("siec z aplikacji",       "devices/pillbox1/config/wifiNowa",
+   { ssid: "hotspot Kuby", pass: "tajnehaslo" });
+ok("siec otwarta, bez hasla", "devices/pillbox1/config/wifiNowa", { ssid: "hotel-wifi" });
 ok("rozpisanie tygodniowe",  "devices/pillbox1/config/doseWeek", [1,1,1,0.5,1,1,1.5]);
 ok("dzien bez leku w schemacie", "devices/pillbox1/config/doseWeek", [0,1,1,1,1,1,1]);
 ok("wyjatek na konkretny dzien", "devices/pillbox1/config/doseDays/2026-08-14", 0.5);
@@ -139,7 +153,8 @@ head("Status pudelka przechodzi przez reguly");
 const POLA_STATUSU = polaJson("bool pushStatus(");
 const PRZYKLAD_STATUSU = {
   battery: 80, battRaw: 82, volt: 4.02, lastSeen: 1750000000, rssi: -60,
-  ssid: "dom", fw: "1.22.0", boots: 12, queued: 0, dropped: 0, nvsFail: 0,
+  ssid: "dom", nets: "dom|hotspot Kuby", fw: "1.22.0",
+  boots: 12, queued: 0, dropped: 0, nvsFail: 0,
   nvsFree: 512,
   charging: false, chargeSince: 0, chargeFromPct: -1, lastCharge: 0,
   prevCharge: 0, boxOpen: false, openSince: 0
