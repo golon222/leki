@@ -754,8 +754,19 @@ nav button.act{color:var(--acc)}
     <div class="dim2" style="margin-top:8px;line-height:1.5">
       <b>Dlatego trzymaj tu swój hotspot.</b> Na wyjeździe włączasz hotspot
       w telefonie, pudełko łączy się z nim i dopiero wtedy odbiera sieć
-      hotelową. Bez tego jedyną drogą jest portal przy otwartym pudełku
-      (przytrzymaj przycisk i naciśnij RESET).
+      hotelową.
+    </div>
+    <!-- Instrukcja awaryjna. Podajemy GEST NA UKRYTYM PRZYCISKU, a nie
+         "przytrzymaj przy RESECIE": RESET to fabryczny przycisk na samej
+         płytce, a pudełko jest docelowo zaklejone, więc dla Kuby ta droga
+         nie istnieje. Gest przy otwartym wieczku działa bez otwierania
+         obudowy i jest jedyną, która zawsze będzie dostępna.            -->
+    <div class="dim2" style="margin-top:8px;line-height:1.5">
+      Gdy pudełko nie łączy się z żadną znaną siecią: <b>otwórz je
+      i przytrzymaj ukryty przycisk przez 2 sekundy</b> — trzy piknięcia
+      znaczą, że włączyło własną sieć <b>PillBox-setup</b> (hasło
+      <b>pillbox123</b>). Połącz się z nią telefonem, a strona z wyborem
+      sieci otworzy się sama. Zamknięcie wieczka kończy parowanie.
     </div>
 
     <label style="margin-top:14px">Nazwa sieci (SSID)</label>
@@ -1044,7 +1055,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-11.6";
+const APP_VERSION = "2026-08-11.7";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
