@@ -123,6 +123,16 @@ label{font-size:12px;color:var(--dim2);display:block;margin:12px 0 5px;
    szary, wyblakly, z przerywanym obrysem. */
 .day.nodata {opacity:.32;border-style:dashed;color:var(--dim2)}
 
+/* Dzien rozpisany BEZ leku (zero w schemacie tygodniowym albo wyjatek na
+   date - np. odstawienie przed zabiegiem).
+
+   Nie moze wygladac ani jak pominiety (czerwony = zle sie stalo), ani jak
+   brak danych (wyblakly = nikt nie wie). Tu wszystko jest w porzadku i
+   wiadomo dlaczego, wiec: spokojny obrys bez wypelnienia i pozioma kreska
+   w miejscu, gdzie inne dni pokazuja liczbe tabletek.                    */
+.day.off {background:#111a2b;border-color:#26334d;color:var(--dim2);opacity:.75}
+.day.off .nodrug{font-size:11px;color:var(--dim2);line-height:1;margin-top:2px}
+
 /* ═══════════════ INFORMACJA ZWROTNA ═══════════════
    Najważniejsza rzecz w całej tej sekcji: użytkownik ma ZAWSZE wiedzieć,
    czy jego dotknięcie zostało przyjęte. Aplikacja, która po kliknięciu
@@ -633,6 +643,28 @@ nav button.act{color:var(--acc)}
     </select>
     <label>Standardowa dawka dzienna (tabletki)</label>
     <input id="defDose" type="number" step="0.5" min="0.5" max="10" inputmode="decimal">
+    <div class="dim2" style="margin-top:6px;font-size:12px">
+      Używana w dni, dla których nie rozpisano nic poniżej.
+    </div>
+    <label style="margin-top:14px">Rozpisanie tygodniowe</label>
+    <div class="dim2" style="margin:-4px 0 6px">
+      Warfarynę lekarz często rozpisuje nierówno — np. 1 tabletka codziennie,
+      a w środy pół. Zero znaczy „tego dnia bez leku”: pudełko nie przypomni,
+      a dzień nie policzy się jako pominięty.
+    </div>
+    <div id="weekEditor"></div>
+    <div class="row" style="margin-top:8px">
+      <button class="ghost" style="flex:1" onclick="rownajTydzien()">Wyrównaj wszystkie dni</button>
+    </div>
+    <div class="dim2" id="weekHint" style="margin-top:8px;font-size:12px"></div>
+
+    <label style="margin-top:14px">Wyjątki na konkretne dni</label>
+    <div class="dim2" style="margin:-4px 0 6px">
+      Np. odstawienie przed zabiegiem. Dodaje się je dotknięciem dnia
+      w kalendarzu; tutaj widać wszystkie naraz.
+    </div>
+    <div id="exList"></div>
+
     <label>Godziny przypomnień</label>
     <div class="dim2" style="margin:-4px 0 6px">Tabletkę bierzesz, kiedy chcesz — pudełko przypomni o tych godzinach, jeśli jeszcze jej nie wziąłeś.</div>
     <div id="slotEditor"></div>
@@ -935,7 +967,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-10.9";
+const APP_VERSION = "2026-08-11.1";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -961,6 +993,11 @@ let doses = {};      // { "2026-07-31": { "0": {dose, status, source, ts, note} 
 let inr   = {};      // { "2026-07-20": { value, ts, note } }
 let events = [];
 let viewYear, viewMonth, sheetDate = null, pendingDose = null;
+/* Plan na dzień otwarty w arkuszu, trzymany osobno od `pendingDose`.
+   „Ile mam wziąć" i „ile wziąłem" to dwie różne rzeczy i nie wolno ich
+   trzymać w jednej zmiennej — pomylenie ich kończy się wpisem, że dawka
+   została wzięta, bo ktoś tylko poprawił rozpisanie na przyszły czwartek. */
+let pendingPlan = null;
 let staleRules = false;   // baza odrzuca nowe pola -> reguly do odswiezenia
 let boxLog = [];          // czarna skrzynka pudelka
 let lidLog = {};          // dziennik wieczka: paczki wpisow z pudelka
@@ -1321,7 +1358,7 @@ window.testPolaczenia = async () => {
   /* 6. Prawdziwy zapis do kalendarza */
   const path = `users/${uid}/doses/${key}/0`;
   try {
-    await update(ref(db), { [path]: { status:"taken", dose: cfg.defaultDose ?? 1,
+    await update(ref(db), { [path]: { status:"taken", dose: dawkaNaDzien(key),
                                       source:"device", ts: last.ts, openTs: last.ts } });
     say(true, "Zapis do kalendarza przeszedł", path);
   } catch (e) {
@@ -1860,8 +1897,11 @@ async function doReconcile(silent = true){
          od ts, bo ts po ręcznej korekcie przestaje być wiarygodny, a
          statystyki por przyjmowania muszą opierać się wyłącznie na
          pomiarach z urządzenia.                                        */
+      /* Dawka z PLANU NA TEN DZIEŃ, nie z jednej liczby dla wszystkich dni.
+         Pudełko melduje tylko otwarcie — ile tabletek w nim leżało, wie
+         wyłącznie aplikacja, i to z rozpisania lekarza. */
       kandydaci[sciezka] =
-        { status:"taken", dose: cfg.defaultDose ?? 1, source:"device",
+        { status:"taken", dose: dawkaNaDzien(key), source:"device",
           ts: ev.ts, openTs: ev.ts };
     } else if (ev.type === "missed"){
       if (cur) continue;
@@ -1935,8 +1975,78 @@ window.shiftMonth = n => {
    Firmware rozumiał to od początku (`ONE_DOSE_PER_DAY = 1`). Aplikacja nie:
    liczyła `defaultDose × schedule.length`, więc dodanie drugiego
    przypomnienia zamieniało każdy poprawny dzień w „częściowy", a prognozę
-   zapasu tabletek dzieliło na pół. Dzienny cel to JEDNA dawka. */
-function dawekNaDzien(){ return cfg.defaultDose ?? 1; }
+   zapasu tabletek dzieliło na pół. Dzienny cel to JEDNA dawka.
+
+   Zmienna dawka niczego z tego nie rusza: dawka nadal jest JEDNA dziennie
+   i nadal siedzi w slocie 0. Zmienia się tylko LICZBA TABLETEK w tej jednej
+   dawce — bo przy warfarynie lekarz rozpisuje tydzień nierówno (np. 1 tabl.
+   codziennie, a w środy pół). Liczba dawek to wciąż 1, liczba tabletek to
+   `dawkaNaDzien(key)`. */
+
+/* Schemat tygodniowy jako siedem liczb, indeks = `Date.getDay()`, czyli
+   0 = niedziela. Ta sama konwencja co `tm_wday` w firmware — dzięki temu
+   pudełko i aplikacja liczą ten sam dzień tygodnia bez przeliczania.
+
+   Schemat NIEKOMPLETNY albo uszkodzony odrzucamy w całości i wracamy do
+   `defaultDose`. Wyciąganie z niego pojedynczych dni byłoby gorsze niż
+   nieużywanie go wcale: brakujące pole odczytane jako zero to cichy dzień
+   bez leku przeciwzakrzepowego, czyli dokładnie ten błąd, którego ta
+   aplikacja ma nie popełniać. Lepiej wrócić do dawki standardowej. */
+function tydzienDawek(){
+  const t = cfg.doseWeek;
+  if (!t || typeof t !== "object") return null;
+  const out = [];
+  for (let i = 0; i < 7; i++){
+    /* Firebase oddaje tablicę jako tablicę tylko wtedy, gdy klucze 0..6 są
+       kompletne; po drodze (np. gdy któryś dzień zniknie) potrafi oddać
+       obiekt. Czytamy więc obie postacie. */
+    const v = Array.isArray(t) ? t[i] : t[String(i)];
+    if (typeof v !== "number" || !isFinite(v) || v < 0 || v > 10) return null;
+    out.push(v);
+  }
+  return out;
+}
+
+/* Ile tabletek przypada na dany dzień. Trzy poziomy, od szczegółu do ogółu:
+     1. wyjątek na konkretną datę   — „w tę środę pół", „przed zabiegiem 0",
+     2. schemat tygodniowy          — stałe rozpisanie od lekarza,
+     3. `defaultDose`               — stara jedna liczba, zgodność wstecz.
+   Trzeci poziom zostaje na zawsze: w bazie Kuby leży dziś tylko on, a nowa
+   aplikacja musi działać, zanim cokolwiek ustawi. */
+function dawkaNaDzien(key){
+  const w = cfg.doseDays;
+  if (w && typeof w === "object"){
+    const v = w[key];
+    if (typeof v === "number" && isFinite(v) && v >= 0 && v <= 10) return v;
+  }
+  const tydz = tydzienDawek();
+  if (tydz) return tydz[new Date(key + "T12:00:00").getDay()];
+  return cfg.defaultDose ?? 1;
+}
+
+/* Czy tego dnia w ogóle bierzemy lek. Dzień z zerem w schemacie (odstawienie
+   przed zabiegiem, rozpisana przerwa) NIE jest dniem pominiętym — nie wolno
+   go liczyć do skuteczności ani malować na czerwono. */
+function dzienBezLeku(key){ return dawkaNaDzien(key) <= 0; }
+
+/* Czy dawka tego dnia bierze się z wyjątku na datę, czy ze schematu. Sama
+   liczba tego nie mówi, a na ekranie robi różnicę: „tak masz zapisane na ten
+   dzień" to co innego niż „tak masz rozpisany ten dzień tygodnia". */
+function wyjatekNaDzien(key){
+  const v = cfg.doseDays?.[key];
+  return typeof v === "number" && isFinite(v) && v >= 0 && v <= 10;
+}
+
+/* Krótki opis dawkowania do nagłówka i raportu. */
+function opisDawkowania(){
+  const t = tydzienDawek();
+  if (!t) return `${nf(cfg.defaultDose ?? 1)} tabl. dziennie`;
+  const rowne = t.every(v => Math.abs(v - t[0]) < 0.001);
+  if (rowne) return `${nf(t[0])} tabl. dziennie`;
+  /* Poniedziałek pierwszy — tak czyta człowiek, mimo że w tablicy indeks 0
+     to niedziela (konwencja `getDay()` / `tm_wday`). */
+  return "wg schematu: " + [1,2,3,4,5,6,0].map(i => nf(t[i])).join(" · ");
+}
 
 function dayDose(key){
   const rec = doses[key] || {};
@@ -1957,11 +2067,19 @@ function beforeTracking(key){ return key < trackingSince(); }
 
 function dayStatus(key){
   const { sum, any } = dayDose(key);
-  const target = dawekNaDzien();
+  const target = dawkaNaDzien(key);
   const past = key < todayKey();
   /* Wpis ręczny wygrywa nawet przed datą startu — skoro coś tam wpisałeś,
      to znaczy, że wiesz lepiej niż domyślna reguła. */
   if (!any && beforeTracking(key)) return "nodata";
+  /* Dzień rozpisany bez leku. Sprawdzane PRZED "missed", bo inaczej każda
+     zaplanowana przerwa robiłaby się czerwona i zaniżała skuteczność
+     w raporcie dla lekarza — czyli kłamała na niekorzyść.
+
+     Ale tylko dopóki nic tego dnia nie wzięto: jeśli wpis mówi, że tabletka
+     jednak poszła, ważniejsze jest to, co się STAŁO, niż to, co było
+     zaplanowane. Taki dzień pokazujemy normalnie. */
+  if (target <= 0 && sum <= 0) return "off";
   if (!any && !past) return "future";
   if (!any && past)  return "missed";
   if (sum <= 0)      return "missed";
@@ -2008,15 +2126,19 @@ function renderCalendar(){
     /* "nodata" to dni sprzed uruchomienia pudelka. Wczesniej wpadaly do
        mianownika i zanizaly skutecznosc miesiaca - dokladnie ten sam blad,
        ktory poprawilismy w Analizie, tylko tutaj przeoczony.            */
-    if (st !== "future" && st !== "nodata"){
+    /* "off" tez zostaje poza mianownikiem: dzien rozpisany bez leku nie jest
+       ani sukcesem, ani porazka - nie bylo czego brac.                    */
+    if (st !== "future" && st !== "nodata" && st !== "off"){
       total++;
       if (st === "taken") taken++; else if (st === "partial") taken += .5;
     }
     html += `<div class="day ${st} ${key===todayKey()?"today":""}${
         key===termKey?" inrdue":""}" data-k="${key}"${
-        key===termKey?` title="Tego dnia mija ${inrOdstep()} dni od ostatniego pomiaru INR"`:""}>
+        key===termKey?` title="Tego dnia mija ${inrOdstep()} dni od ostatniego pomiaru INR"`
+        : st==="off" ? ` title="Ten dzień masz rozpisany bez leku"` : ""}>
         ${inr[key] ? INR_MARK : (key===termKey ? INR_DUE_MARK : "")}${d}
-        ${sum>0 ? `<span class="dose">${nf(sum)}</span>` : ""}
+        ${sum>0 ? `<span class="dose">${nf(sum)}</span>`
+                : st==="off" ? `<span class="nodrug">—</span>` : ""}
       </div>`;
   }
   const grid = document.getElementById("calGrid");
@@ -2053,6 +2175,9 @@ function seriaDni(){
     const k = dateKey(dd);
     if (beforeTracking(k)) break;             // przed uruchomieniem nic nie wiemy
     const st = dayStatus(k);
+    /* Dzień rozpisany bez leku nie przerywa serii, ale też jej nie wydłuża —
+       nie było czego brać, więc nie ma czym się chwalić ani czego żałować. */
+    if (st === "off") continue;
     if (st === "taken" || st === "partial") n++;
     else break;
   }
@@ -2084,7 +2209,7 @@ function opisCzasu(min){
 
 function renderToday(){
   const key = todayKey(), { sum, any } = dayDose(key);
-  const target = dawekNaDzien();
+  const target = dawkaNaDzien(key);
   const el = document.getElementById("todayState");
   /* Na ekranie głównym tabletka jest bryłą. Kręci się dopiero wtedy, gdy
      dawka jest wzięta - ruch ma coś znaczyć, a nie być tapetą.        */
@@ -2094,9 +2219,17 @@ function renderToday(){
   document.getElementById("todayPill").innerHTML =
     `<img src="tabletka.gif" alt="Warfin" width="58" height="58"
           class="tabgif${any && sum > 0 ? " zazyta" : ""}">`;
-  if (!any){
+  if (target <= 0 && sum <= 0){
+    /* Dzień rozpisany bez leku. Musi być powiedziane wprost i spokojnym
+       kolorem — „jeszcze nie wzięte" na pomarańczowo w dniu odstawienia
+       to zachęta do wzięcia tabletki, której brać nie wolno. */
+    el.textContent = "Dziś bez leku";       el.style.color = "var(--dim)";
+    document.getElementById("todayWhen").textContent = wyjatekNaDzien(key)
+      ? "Tak masz zapisane na ten dzień" : "Tak masz rozpisany ten dzień tygodnia";
+  } else if (!any){
     el.textContent = "Jeszcze nie wzięte";  el.style.color = "var(--warn)";
-    document.getElementById("todayWhen").textContent = `Przypomnienie o ${cfg.schedule[0] || "—"}`;
+    document.getElementById("todayWhen").textContent =
+      `${nf(target)} tabl. · przypomnienie o ${cfg.schedule[0] || "—"}`;
   } else if (sum <= 0){
     el.textContent = "Pominięte";           el.style.color = "var(--bad)";
     document.getElementById("todayWhen").textContent = "Możesz to poprawić w kalendarzu";
@@ -2120,13 +2253,14 @@ function renderToday(){
   }
 
   document.getElementById("hSub").textContent =
-    `${cfg.drugName || "Lek"}${+cfg.drugStrength ? " " + cfg.drugStrength + " mg" : ""} · ${nf(cfg.defaultDose??1)} tabl. dziennie`;
+    `${cfg.drugName || "Lek"}${+cfg.drugStrength ? " " + cfg.drugStrength + " mg" : ""} · ${opisDawkowania()}`;
 }
 
 /* ═══════════════ ARKUSZ DNIA ═══════════════ */
 window.openSheet = key => {
   sheetDate = key;
   pendingDose = dayDose(key).sum;
+  pendingPlan = dawkaNaDzien(key);
   const d = new Date(key + "T12:00:00");
   document.getElementById("sheetDate").textContent =
     d.toLocaleDateString("pl-PL", { weekday:"long", day:"numeric", month:"long" });
@@ -2141,6 +2275,13 @@ function renderSheet(){
   const dirty = Math.abs(pendingDose - saved) > 0.001;
   const src = rec.source === "device" ? "zarejestrowane przez pudełko"
             : rec.source === "manual" ? "wpis ręczny" : "brak wpisu";
+
+  /* Plan na ten dzień — ile tabletek TRZEBA wziąć, w odróżnieniu od tego,
+     ile wzięto. Tędy robi się odstawienie przed zabiegiem: klikasz dzień
+     w kalendarzu i zjeżdżasz planem do zera.                            */
+  const planZapisany = dawkaNaDzien(sheetDate);
+  const planDirty = Math.abs((pendingPlan ?? planZapisany) - planZapisany) > 0.001;
+  const zWyjatku = wyjatekNaDzien(sheetDate);
 
   document.getElementById("sheetBody").innerHTML = `
     <div class="pillrow">${doseGraphic(pendingDose, 62)}</div>
@@ -2164,6 +2305,26 @@ function renderSheet(){
         <button class="ghost" style="width:100%;margin-top:6px" onclick="resetDose()">Cofnij</button>
       </div>` : ``}
 
+    <div class="card" style="margin:14px 0 0;padding:12px 14px">
+      <div class="row between">
+        <span class="muted">Plan na ten dzień</span>
+        <b style="font-size:17px">${nf(pendingPlan ?? planZapisany)} tabl.</b>
+      </div>
+      <div class="dim2" style="margin-top:2px">
+        ${zWyjatku ? "wyjątek zapisany na tę datę" : "ze schematu tygodniowego"}
+      </div>
+      <div class="row" style="margin-top:10px;gap:8px">
+        <button class="stepbtn" onclick="stepPlan(-0.5)"
+                ${(pendingPlan ?? planZapisany)<=0?"disabled":""}>−</button>
+        <button class="stepbtn" onclick="stepPlan(0.5)">+</button>
+        ${planDirty ? `<button class="primary" style="flex:1" onclick="commitPlan()">
+             Zapisz plan</button>
+           <button class="ghost" onclick="resetPlan()">Cofnij</button>`
+         : zWyjatku ? `<button class="ghost" style="flex:1" onclick="clearPlan()">
+             Wróć do schematu</button>` : ``}
+      </div>
+    </div>
+
     <label>Notatka</label>
     <input id="dayNote" placeholder="np. wzięte po kolacji" value="${esc(rec.note||"")}"
            onchange="saveNote(this.value)">
@@ -2180,6 +2341,44 @@ window.stepDose = d => {
   renderSheet();
 };
 window.resetDose = () => { pendingDose = dayDose(sheetDate).sum; renderSheet(); };
+
+window.stepPlan = d => {
+  const teraz = pendingPlan ?? dawkaNaDzien(sheetDate);
+  pendingPlan = Math.min(10, Math.max(0, Math.round((teraz + d) * 2) / 2));
+  renderSheet();
+};
+window.resetPlan = () => { pendingPlan = dawkaNaDzien(sheetDate); renderSheet(); };
+
+/* Wyjątek zapisujemy pod pojedynczą datą, a nie jako cały obiekt `doseDays`.
+   Nadpisanie całości skasowałoby wyjątki dopisane w międzyczasie z drugiego
+   urządzenia — ta sama rodzina, co wyścigi z B27/B28/B29.               */
+window.commitPlan = async () => {
+  const dzien = sheetDate, plan = pendingPlan;
+  const dateTxt = new Date(dzien+"T12:00:00").toLocaleDateString("pl-PL",
+    { weekday:"long", day:"numeric", month:"long" });
+  const ok = await askConfirm(plan <= 0 ? "Dzień bez leku?" : "Zmienić plan na ten dzień?",
+    plan <= 0
+      ? `${dateTxt}: tego dnia nie bierzesz leku. Pudełko nie będzie przypominać, ` +
+        `a dzień nie policzy się jako pominięty.`
+      : `${dateTxt}: ${nf(plan)} tabl. zamiast ${nf(dawkaNaDzien(dzien))} ze schematu.`);
+  if (!ok) return;
+  cfg.doseDays = { ...(cfg.doseDays || {}), [dzien]: plan };
+  await zapiszCfg({ [`doseDays/${dzien}`]: plan }, "Plan dnia");
+  pendingPlan = plan;
+  renderAll(); renderSheet();
+};
+
+window.clearPlan = async () => {
+  const dzien = sheetDate;
+  const kopia = { ...(cfg.doseDays || {}) };
+  delete kopia[dzien];
+  cfg.doseDays = kopia;
+  /* `null` w aktualizacji wielościeżkowej kasuje klucz — inaczej niż zapis
+     zera, który znaczyłby „tego dnia nie bierzesz leku". */
+  await zapiszCfg({ [`doseDays/${dzien}`]: null }, "Plan dnia");
+  pendingPlan = dawkaNaDzien(dzien);
+  renderAll(); renderSheet();
+};
 
 window.commitDose = async () => {
   const saved = dayDose(sheetDate).sum;
@@ -3348,6 +3547,34 @@ async function settlePills(){
                   "Stan opakowania");
 }
 
+/* Na ile dni starczy `left` tabletek.
+
+   Przy równym dawkowaniu wystarczyłoby dzielenie, ale przy rozpisaniu
+   nierównym (1 · 1 · ½ · 1 · 1 · 1½ · 0) średnia tygodniowa myli się o kilka
+   dni w obie strony — a to jest liczba, na podstawie której Kuba decyduje,
+   kiedy iść po receptę. Dlatego idziemy dzień po dniu i odejmujemy tyle, ile
+   TEGO dnia przypada.
+
+   `dzisWziete` mówi, od kiedy liczyć: jeśli dzisiejsza dawka już poszła, to
+   pierwszym dniem do pokrycia jest jutro.
+
+   Zwraca `dlugo`, gdy zapas przekracza horyzont liczenia — przy schemacie
+   z samymi zerami nie zabraknie go nigdy i „starczy na 400 dni" byłoby
+   równie prawdziwe, co bez sensu.                                        */
+const ZAPAS_HORYZONT = 400;
+function dniZapasu(left, dzisWziete){
+  let zostalo = left, dni = 0, k = todayKey();
+  if (dzisWziete) k = dayAfter(k);
+  for (let i = 0; i < ZAPAS_HORYZONT; i++){
+    const d = dawkaNaDzien(k);
+    if (d > 0 && zostalo < d - 0.001) return { dni, dlugo:false };
+    zostalo -= d;
+    dni++;
+    k = dayAfter(k);
+  }
+  return { dni, dlugo:true };
+}
+
 function renderPills(){
   const big = document.getElementById("pillsBig"), sub = document.getElementById("pillsSub");
   const bar = document.getElementById("pillsBar");
@@ -3357,12 +3584,13 @@ function renderPills(){
   const takenToday = Object.values(doses[todayKey()]||{})
     .filter(r=>r.status==="taken").reduce((a,r)=>a+(r.dose??1),0);
   const left = Math.max(0, cfg.pillsLeft - takenToday);
-  const perDay = dawekNaDzien();
-  const days = perDay > 0 ? Math.floor(left/perDay) : 0;
-  const col = days < 7 ? "var(--bad)" : days < 14 ? "var(--warn)" : "var(--ok)";
+  const { dni: days, dlugo } = dniZapasu(left, takenToday > 0);
+  const col = dlugo ? "var(--ok)"
+            : days < 7 ? "var(--bad)" : days < 14 ? "var(--warn)" : "var(--ok)";
   big.textContent = nf(left); big.style.color = col;
   bar.style.width = Math.min(100, left/100*100) + "%"; bar.style.background = col;
-  sub.textContent = `starczy na ok. ${days} dni` + (days < 7 ? " — czas po receptę" : "");
+  sub.textContent = dlugo ? "zapas na bardzo długo"
+    : `starczy na ok. ${days} dni` + (days < 7 ? " — czas po receptę" : "");
 }
 
 /* Ręczny wpis to policzone tabletki LEŻĄCE TERAZ w opakowaniu, więc baza
@@ -3408,12 +3636,109 @@ function renderSettings(){
   const ts = document.getElementById("trackFrom");
   if (ts) ts.value = trackingSince();
   document.getElementById("defDose").value  = cfg.defaultDose ?? 1;
+  renderWeekEditor();
+  renderExceptions();
   document.getElementById("drugName").value = cfg.drugName || "Warfin";
   document.getElementById("drugStrength").value = String(cfg.drugStrength ?? 3);
   wypelnijListyZakresu();
   wypelnijListeOdstepu();
   odswiezPodpowiedzInr();
 }
+/* Kolejność na ekranie zaczyna się od poniedziałku, bo tak czyta człowiek.
+   W danych indeks 0 to niedziela — konwencja `Date.getDay()` i `tm_wday`,
+   wspólna z firmware. Ta tablica jest jedynym miejscem, gdzie te dwie
+   kolejności się spotykają; nigdzie indziej nie wolno ich mieszać.      */
+const DOW_KOLEJNOSC = [1,2,3,4,5,6,0];
+
+/* Wartości z pól tygodnia, w postaci danych (indeks 0 = niedziela).
+   Pole puste albo z bzdurą czytamy jako dawkę standardową, a nie jako zero:
+   zero znaczy „bez leku" i nie może powstać przez przypadek.            */
+function tydzienZPol(){
+  const dom = cfg.defaultDose ?? 1;
+  const out = Array(7).fill(dom);
+  for (const i of DOW_KOLEJNOSC){
+    const el = document.getElementById(`dw${i}`);
+    if (!el) continue;
+    const v = parseFloat(String(el.value).replace(",", "."));
+    out[i] = (isFinite(v) && v >= 0 && v <= 10) ? Math.round(v * 2) / 2 : dom;
+  }
+  return out;
+}
+
+function renderWeekEditor(){
+  const box = document.getElementById("weekEditor");
+  if (!box) return;
+  const t = tydzienDawek() || Array(7).fill(cfg.defaultDose ?? 1);
+  box.innerHTML = DOW_KOLEJNOSC.map(i => `
+    <div class="row between" style="margin-top:6px;gap:10px">
+      <span style="flex:1">${DOW_PL[(i+6)%7]}</span>
+      <input id="dw${i}" type="number" step="0.5" min="0" max="10" inputmode="decimal"
+             value="${t[i]}" onchange="tydzienZmieniony()"
+             style="width:96px;margin:0;text-align:center">
+    </div>`).join("");
+  odswiezPodpowiedzTygodnia();
+}
+
+/* Podpowiedź mówi wprost, co z tego wyjdzie — łącznie z liczbą tabletek na
+   tydzień, bo to jedyna liczba, którą da się porównać z zaleceniem lekarza
+   („28 mg tygodniowo"). */
+function odswiezPodpowiedzTygodnia(){
+  const el = document.getElementById("weekHint");
+  if (!el) return;
+  const t = tydzienZPol();
+  const suma = t.reduce((a,b)=>a+b, 0);
+  const rowne = t.every(v => Math.abs(v - t[0]) < 0.001);
+  const wolne = t.filter(v => v <= 0).length;
+  const mg = +cfg.drugStrength;
+  el.innerHTML = rowne
+    ? `Wszystkie dni równe — obowiązuje dawka standardowa ${nf(t[0])} tabl.`
+    : `Tygodniowo <b>${nf(suma)}</b> tabl.` +
+      (mg ? ` (${nf(suma * mg)} mg)` : "") +
+      (wolne ? ` · dni bez leku: ${wolne}` : "");
+}
+window.tydzienZmieniony = () => odswiezPodpowiedzTygodnia();
+window.rownajTydzien = () => {
+  const dom = cfg.defaultDose ?? 1;
+  for (const i of DOW_KOLEJNOSC){
+    const el = document.getElementById(`dw${i}`);
+    if (el) el.value = dom;
+  }
+  odswiezPodpowiedzTygodnia();
+};
+
+function renderExceptions(){
+  const box = document.getElementById("exList");
+  if (!box) return;
+  /* Przeszłe wyjątki zostawiamy w danych (raport ma pokazywać prawdę
+     o tamtym dniu), ale na liście do zarządzania pokazujemy tylko te, które
+     jeszcze przed nami — inaczej po roku byłaby to ściana dat.          */
+  const dzis = todayKey();
+  const klucze = Object.keys(cfg.doseDays || {})
+    .filter(k => /^\d{4}-\d{2}-\d{2}$/.test(k) && k >= dzis).sort();
+  if (!klucze.length){
+    box.innerHTML = `<div class="dim2">Brak wyjątków na najbliższe dni.</div>`;
+    return;
+  }
+  box.innerHTML = klucze.map(k => {
+    const v = cfg.doseDays[k];
+    const d = new Date(k + "T12:00:00").toLocaleDateString("pl-PL",
+      { weekday:"short", day:"numeric", month:"long" });
+    return `<div class="row between" style="margin-top:6px;gap:10px">
+      <span style="flex:1">${esc(d)}</span>
+      <b>${v <= 0 ? "bez leku" : nf(v) + " tabl."}</b>
+      <button class="danger" onclick="usunWyjatek('${k}')">✕</button>
+    </div>`;
+  }).join("");
+}
+
+window.usunWyjatek = async k => {
+  const kopia = { ...(cfg.doseDays || {}) };
+  delete kopia[k];
+  cfg.doseDays = kopia;
+  await zapiszCfg({ [`doseDays/${k}`]: null }, "Plan dnia");
+  renderAll();
+};
+
 /* Zmiana w liście od razu pokazuje przesunięcie - bez zapisywania. */
 window.tzChanged = () => {
   cfg.tz = document.getElementById("tzSelect").value || TZ_DEFAULT;
@@ -3447,9 +3772,19 @@ window.saveConfig = async () => {
   cfg.defaultDose  = Math.min(10, Math.max(0.5, +document.getElementById("defDose").value || 1));
   cfg.drugName     = document.getElementById("drugName").value.trim() || "Warfin";
   cfg.drugStrength = +document.getElementById("drugStrength").value;
+
+  /* Tydzień rozpisany równo i zgodnie z dawką standardową to po prostu brak
+     rozpisania — kasujemy go, żeby w bazie nie leżały dwa źródła tej samej
+     prawdy. Dzięki temu „Wyrównaj wszystkie dni" naprawdę wraca do stanu
+     sprzed rozpisania, a pole dawki standardowej znowu na coś wpływa.   */
+  const tydz  = tydzienZPol();
+  const rowny = tydz.every(v => Math.abs(v - cfg.defaultDose) < 0.001);
+  cfg.doseWeek = rowny ? null : tydz;
+
   await zapiszCfg({
     schedule: cfg.schedule, tz: cfg.tz, tzOffsetMin: cfg.tzOffsetMin,
     trackingSince: cfg.trackingSince, defaultDose: cfg.defaultDose,
+    doseWeek: cfg.doseWeek,
     drugName: cfg.drugName, drugStrength: cfg.drugStrength }, "Ustawienia");
   renderAll();
   toast("Zapisano · pudełko pobierze przy najbliższym połączeniu", "ok", 3200);
@@ -3624,6 +3959,11 @@ function analyze(days){
     const rec = (doses[key]||{})[0];
     const { sum, any } = dayDose(key);
     const dow = (d.getDay()+6)%7;
+    /* Dzień rozpisany bez leku wypada z całej statystyki - tak samo jak dni
+       sprzed uruchomienia pudełka. Nie było czego wziąć, więc ani nie chwali,
+       ani nie obciąża. Bez tego środa wolna od leku ciągnęłaby regularność
+       środy w dół do zera przez cały rok. */
+    if (dawkaNaDzien(key) <= 0 && sum <= 0) continue;
 
     const isTaken = any && sum > 0;
     if (any || key < todayKey()){
@@ -3675,6 +4015,8 @@ function inrContext(dateStr, window = 7){
     if (beforeTracking(key) && !dayDose(key).any) continue;
     const rec = (doses[key]||{})[0];
     const { sum, any } = dayDose(key);
+    /* Jak w analyze(): dzień rozpisany bez leku nie wchodzi do mianownika. */
+    if (dawkaNaDzien(key) <= 0 && sum <= 0) continue;
     total++;
     if (any && sum > 0){ taken++; doseSum += sum;
       const m = openMinutes(rec); if (m != null) times.push(m); }
@@ -3780,10 +4122,14 @@ function collectRows(days){
     const d = new Date(end); d.setDate(end.getDate()-i);
     const key = dateKey(d), rec = (doses[key]||{})[0], { sum, any } = dayDose(key);
     const noData = !any && beforeTracking(key);
+    /* Dzień rozpisany bez leku ma własny status, żeby nie wpadł do rubryki
+       „pominięte" — lekarz czytający raport zobaczyłby zaniżoną skuteczność
+       tam, gdzie sam zalecił przerwę. */
+    const bezLeku = !noData && dawkaNaDzien(key) <= 0 && sum <= 0;
     rows.push({ key,
-      status: noData ? "nodata"
+      status: noData ? "nodata" : bezLeku ? "off"
             : !any ? (key < todayKey() ? "missed" : "") : (sum > 0 ? "taken" : "missed"),
-      dose: noData ? "" : (any && sum > 0 ? nf(sum) : (key < todayKey() ? "0" : "")),
+      dose: noData || bezLeku ? "" : (any && sum > 0 ? nf(sum) : (key < todayKey() ? "0" : "")),
       time: openTimeOf(rec) != null ? devHM(openTimeOf(rec)) : "",
       src:  rec ? (rec.source === "device" ? "pudełko" : "ręcznie") : "",
       note: rec?.note || "",
@@ -3791,7 +4137,8 @@ function collectRows(days){
   }
   return rows;
 }
-const ST_PL = { taken:"wzięte", missed:"nie wzięte", nodata:"brak danych", "":"—" };
+const ST_PL = { taken:"wzięte", missed:"nie wzięte", nodata:"brak danych",
+                off:"bez leku (wg rozpisania)", "":"—" };
 
 window.makeReport = () => {
   const days = +document.getElementById("repRange").value;
@@ -3810,7 +4157,7 @@ window.makeReport = () => {
     <div class="meta">
       Pacjent: ${esc(auth.currentUser?.email || "—")} &nbsp;·&nbsp;
       Lek: ${esc(cfg.drugName)}${+cfg.drugStrength ? " " + cfg.drugStrength + " mg" : ""},
-      dawka standardowa ${nf(cfg.defaultDose??1)} tabl./dobę &nbsp;·&nbsp;
+      dawkowanie: ${esc(opisDawkowania())} &nbsp;·&nbsp;
       Okres: ${rows[0]?.key} — ${rows[rows.length-1]?.key} &nbsp;·&nbsp;
       Wygenerowano: ${new Date().toLocaleString("pl-PL")}<br>
       Źródło: automatyczny rejestrator otwarć pojemnika (${DEVICE_ID}) oraz korekty pacjenta.

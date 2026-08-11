@@ -18,7 +18,10 @@ const head  = t => console.log("\n=== " + t + " ===");
 const DEF_CFG = { schedule:["08:00"], tz:"Europe/Warsaw",
   tzOffsetMin:120, trackingSince:"2000-01-01", defaultDose:1,
   drugName:"Warfin", drugStrength:5, inrMin:2.0, inrMax:3.0, pillsLeft:undefined,
-  pillsCountedUntil:undefined, pillsBase:undefined, pillsBaseFrom:undefined };
+  pillsCountedUntil:undefined, pillsBase:undefined, pillsBaseFrom:undefined,
+  /* Bez tych dwoch schemat tygodniowy z jednego testu zostawalby w cfg na
+     wszystkie nastepne - `__setState` DOKLADA pola, a nie podmienia calosc. */
+  doseWeek:undefined, doseDays:undefined };
 const D = (o={}) => A.__setState({ doses:{}, inr:{}, events:[], ...o,
                                    cfg:{ ...DEF_CFG, ...(o.cfg||{}) } });
 
@@ -1951,6 +1954,143 @@ check(/strokeDashoffset/.test(html), "wypelnienie liczone z procentu");
 check(/proc >= 90 \? "var\(--ok\)"/.test(html), "kolor zalezy od wyniku");
 check(/st !== "future" && st !== "nodata"/.test(html),
       "dni sprzed uruchomienia nie zanizaja skutecznosci miesiaca");
+
+/* ═══════════ ZMIENNA DAWKA ═══════════
+   Warfaryne lekarz rozpisuje nierowno, a przed zabiegiem odstawia sie ja
+   calkiem. Najgrozniejszy blad w tej okolicy to CICHE ZERO: dzien, ktory
+   przez uszkodzone albo niepelne dane wyglada na "bez leku", choc lek tego
+   dnia nalezalo wziac. Drugi w kolejnosci - dzien wolny liczony jako
+   pominiety, bo zaniza skutecznosc w raporcie dla lekarza.              */
+head("Zmienna dawka - schemat tygodniowy");
+
+const dow = k => new Date(k + "T12:00:00").getDay();
+/* Indeks 0 = niedziela, jak Date.getDay() i tm_wday w firmware. */
+const TYDZ = [0, 1, 1, 0.5, 1, 1, 1.5];   // nd, pn, wt, sr, cz, pt, sb
+
+D();
+check(A.dawkaNaDzien(today) === 1, "bez schematu obowiazuje dawka standardowa");
+check(A.tydzienDawek() === null, "i tydzien nie jest rozpisany");
+
+D({ cfg:{ doseWeek: TYDZ } });
+check(A.dawkaNaDzien(today) === TYDZ[dow(today)], "dawka brana z dnia tygodnia");
+check(A.dawkaNaDzien(shift(-3)) === TYDZ[dow(shift(-3))], "takze dla dnia w przeszlosci");
+
+/* Firebase oddaje tablice jako obiekt, gdy klucze nie sa kompletne od zera -
+   obie postacie musza dzialac tak samo. */
+D({ cfg:{ doseWeek: {0:0, 1:1, 2:1, 3:0.5, 4:1, 5:1, 6:1.5} } });
+check(A.dawkaNaDzien(today) === TYDZ[dow(today)], "schemat zapisany jako obiekt czyta sie tak samo");
+
+/* NAJWAZNIEJSZY TEST W TEJ SEKCJI. Schemat, w ktorym brakuje dnia, nie moze
+   dac zera dla brakujacego dnia - to bylaby pominieta dawka leku
+   przeciwzakrzepowego bez jednego slowa ostrzezenia.                    */
+D({ cfg:{ doseWeek: [1,1,1,1,1,1], defaultDose: 2 } });
+check(A.tydzienDawek() === null, "niekompletny schemat odrzucony w calosci");
+check(A.dawkaNaDzien(today) === 2, "brakujacy dzien NIE daje zera, tylko dawke standardowa");
+D({ cfg:{ doseWeek: [1,1,"pol",1,1,1,1], defaultDose: 2 } });
+check(A.dawkaNaDzien(today) === 2, "smiec w schemacie tez cofa do dawki standardowej");
+D({ cfg:{ doseWeek: [1,1,1,1,1,1,99], defaultDose: 2 } });
+check(A.dawkaNaDzien(today) === 2, "wartosc poza zakresem regul bazy odrzuca caly schemat");
+
+head("Zmienna dawka - wyjatki na konkretny dzien");
+const jutro = shift(1);
+D({ cfg:{ doseWeek: TYDZ, doseDays: { [jutro]: 0 } } });
+check(A.dawkaNaDzien(jutro) === 0, "wyjatek na date bije schemat tygodniowy");
+check(A.wyjatekNaDzien(jutro) === true, "i wiadomo, ze to wyjatek, a nie schemat");
+check(A.wyjatekNaDzien(today) === false, "dzien bez wyjatku tego nie udaje");
+check(A.dzienBezLeku(jutro) === true, "odstawienie przed zabiegiem to dzien bez leku");
+
+D({ cfg:{ doseDays: { [jutro]: -1 } } });
+check(A.dawkaNaDzien(jutro) === 1, "wyjatek z wartoscia spoza regul bazy jest ignorowany");
+
+head("Dzien bez leku nie jest dniem pominietym");
+/* Niedziela ma w TYDZ zero. Szukamy jej wstecz, zeby test nie zalezal od
+   tego, ktory dzien tygodnia akurat jest dzis. */
+let niedziela = null;
+for (let i = 1; i <= 7 && !niedziela; i++) if (dow(shift(-i)) === 0) niedziela = shift(-i);
+
+D({ cfg:{ doseWeek: TYDZ } });
+check(A.dayStatus(niedziela) === "off", "dzien rozpisany bez leku ma wlasny status, nie 'missed'");
+check(A.dayStatus(shift(-1)) !== "off" || dow(shift(-1)) === 0,
+      "dzien z lekiem nie robi sie nagle wolny");
+
+D({ cfg:{ doseWeek: TYDZ }, doses:{ [niedziela]: { 0:{ status:"taken", dose:1, source:"manual" } } } });
+check(A.dayStatus(niedziela) === "taken",
+      "ale gdy tabletka jednak poszla, wazniejsze jest to, co sie STALO");
+
+/* Skutecznosc miesiaca ma wlasna petle liczaca w renderCalendar(), niezalezna
+   od analyze() - wiec sprawdzamy ja osobno. Bierzemy miesiac w calosci
+   wypelniony wzietymi dawkami POZA niedzielami: skutecznosc ma wyjsc 100%,
+   a nie "6 z 7", bo niedziel w ogole nie bylo czego brac.               */
+const mies = { rok: 2026, m: 5 };                       // czerwiec 2026
+const dniMies = new Date(mies.rok, mies.m + 1, 0).getDate();
+const dosesMies = {};
+let dniZLekiem = 0;
+for (let d = 1; d <= dniMies; d++){
+  const k = `${mies.rok}-${String(mies.m+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+  if (dow(k) === 0) continue;
+  dosesMies[k] = { 0:{ status:"taken", dose:1 } };
+  dniZLekiem++;
+}
+D({ cfg:{ doseWeek: [0,1,1,1,1,1,1] }, doses: dosesMies });
+A.__setView(mies.rok, mies.m);
+A.renderCalendar();
+check(document.getElementById("adherence").textContent === "100%",
+      "niedziele bez leku nie zanizaja skutecznosci miesiaca");
+check(document.getElementById("adhSub").textContent.includes(`z ${dniZLekiem} dni`),
+      "i nie wchodza do mianownika");
+check(document.getElementById("calGrid").innerHTML.includes("day off"),
+      "kalendarz rysuje dzien bez leku wlasna klasa");
+
+head("Dzien bez leku poza statystyka");
+/* analyze() liczy dni tygodnia w porzadku pn..nd, wiec niedziela to indeks 6. */
+const dosesPelne = {};
+for (let i = 1; i <= 14; i++){
+  const k = shift(-i);
+  if (dow(k) !== 0) dosesPelne[k] = { 0:{ status:"taken", dose:1, source:"device", ts:1, openTs:1 } };
+}
+D({ cfg:{ doseWeek: [0,1,1,1,1,1,1] }, doses: dosesPelne });
+const anOff = A.analyze(15);
+check(anOff.byDow[6].total === 0, "niedziela bez leku nie wchodzi do statystyki dnia tygodnia");
+check(anOff.missed === 0, "i nie jest liczona jako pominieta");
+
+const rowsOff = A.collectRows(14).filter(r => dow(r.key) === 0);
+check(rowsOff.length > 0, "w 14 dniach raportu jest przynajmniej jedna niedziela");
+check(rowsOff.every(r => r.status === "off"), "raport oznacza ja jako dzien bez leku");
+check(rowsOff.every(r => r.dose === ""), "i nie wpisuje jej zera tabletek");
+
+/* Seria dni: dzien wolny jej nie przerywa i nie wydluza. */
+let oczekiwanaSeria = 0;
+const dosesSeria = {};
+for (let i = 1; i <= 10; i++){
+  const k = shift(-i);
+  if (dow(k) !== 0){ dosesSeria[k] = { 0:{ status:"taken", dose:1 } }; oczekiwanaSeria++; }
+}
+D({ cfg:{ doseWeek: [0,1,1,1,1,1,1] }, doses: dosesSeria });
+check(A.seriaDni() === oczekiwanaSeria, "dzien bez leku nie przerywa serii ani jej nie wydluza");
+
+head("Zapas tabletek przy nierownym rozpisaniu");
+D({ cfg:{ doseWeek: [1,1,1,1,1,1,1] } });
+check(A.dniZapasu(10, true).dni === 10, "przy rownej dawce 10 tabletek to 10 dni");
+check(A.dniZapasu(10, true).dlugo === false, "i nie jest to 'bardzo dlugo'");
+
+D({ cfg:{ doseWeek: [0,1,1,1,1,1,1] } });
+check(A.dniZapasu(7, true).dni >= 8, "dzien wolny w tygodniu wydluza zapas");
+
+D({ cfg:{ doseWeek: [0,0,0,0,0,0,0], defaultDose:1 } });
+check(A.dniZapasu(10, true).dlugo === true,
+      "same dni bez leku - zapas nie konczy sie nigdy i nie zapetlamy sie w liczeniu");
+
+D({ cfg:{ doseWeek: [2,2,2,2,2,2,2] } });
+check(A.dniZapasu(7, true).dni === 3, "przy dwoch tabletkach dziennie 7 sztuk to 3 pelne dni");
+
+head("Opis dawkowania");
+D({ cfg:{ doseWeek: [1,1,1,1,1,1,1], defaultDose:1 } });
+check(A.opisDawkowania().includes("tabl. dziennie"), "rowny schemat opisany jak jedna dawka");
+D({ cfg:{ doseWeek: TYDZ } });
+const op = A.opisDawkowania();
+check(op.startsWith("wg schematu:"), "nierowny schemat wypisany po dniach");
+check(op.split("·").length === 7, "siedem pozycji, po jednej na dzien");
+check(op.trim().endsWith(A.nf(TYDZ[0])), "kolejnosc od poniedzialku - niedziela na koncu");
 
 head("Komunikaty zamiast blokujacych okienek");
 check(!/alert\(n \?/.test(html), "potwierdzenie uzupelnienia nie blokuje ekranu");

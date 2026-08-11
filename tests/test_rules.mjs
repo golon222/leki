@@ -54,7 +54,27 @@ odrzuc("zapis poza drzewem regul",       "cokolwiek/tam", { a: 1 });
 odrzuc("notatka dluzsza niz limit",
        "users/u1/doses/2026-08-01/0", { status: "taken", note: "x".repeat(301) });
 
+/* Zmienna dawka. Zero jest DOZWOLONE (dzien bez leku, np. przed zabiegiem),
+   ale tylko w rozpisaniu - dawka standardowa zero nie ma sensu i dalej jest
+   odrzucana wyzej przez regule defaultDose.                              */
+head("Rozpisanie tygodniowe i wyjatki na dzien");
+odrzuc("schemat tygodniowy bez wszystkich dni",
+       "devices/pillbox1/config/doseWeek", [1,1,1,1,1,1]);
+odrzuc("dzien schematu jako napis",
+       "devices/pillbox1/config/doseWeek", [1,1,"pol",1,1,1,1]);
+odrzuc("dzien schematu ponad limit",
+       "devices/pillbox1/config/doseWeek", [1,1,1,1,1,1,11]);
+odrzuc("dzien schematu ujemny",
+       "devices/pillbox1/config/doseWeek", [1,1,1,1,1,1,-1]);
+odrzuc("wyjatek jako napis",  "devices/pillbox1/config/doseDays/2026-08-14", "0");
+odrzuc("wyjatek ujemny",      "devices/pillbox1/config/doseDays/2026-08-14", -0.5);
+odrzuc("wyjatek ponad limit", "devices/pillbox1/config/doseDays/2026-08-14", 11);
+
 head("Silnik regul przepuszcza to, co poprawne");
+ok("rozpisanie tygodniowe",  "devices/pillbox1/config/doseWeek", [1,1,1,0.5,1,1,1.5]);
+ok("dzien bez leku w schemacie", "devices/pillbox1/config/doseWeek", [0,1,1,1,1,1,1]);
+ok("wyjatek na konkretny dzien", "devices/pillbox1/config/doseDays/2026-08-14", 0.5);
+ok("odstawienie przed zabiegiem", "devices/pillbox1/config/doseDays/2026-08-14", 0);
 ok("zdarzenie z pudelka",  "devices/pillbox1/events/e1",
    { ts: 1750000000, type: "open", battery: 80, volt: 4.02, slot: 0, fw: "1.22.0" });
 ok("dawka z urzadzenia",   "users/u1/doses/2026-08-01/0",

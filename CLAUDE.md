@@ -23,8 +23,8 @@ bash tests/run_all.sh
 ```
 
 Musi przejść przed zmianą i po zmianie. Stan wyjściowy:
-**349 + 51 firmware, 615 (×6 pór doby) + 86 + 49 aplikacja, 48 zgodności,
-58 reguł bazy, 220 kontroli audytu — 0 błędów.**
+**349 + 51 firmware, 650 (×6 pór doby) + 86 + 49 aplikacja, 48 zgodności,
+69 reguł bazy, 220 kontroli audytu — 0 błędów.**
 
 Testy pracują na **prawdziwym kodzie**, nie na kopii: `tests/extract.py` wycina
 funkcje z `PillBox.ino`, `tests/build_app_module.mjs` buduje moduł z `index.html`.
@@ -67,6 +67,14 @@ Test to złapie, ale komunikat zrozumiesz szybciej, znając powód (D6, D13, D15
    w slocie **0**. Druga pozycja w harmonogramie znaczy „przypomnij jeszcze
    raz o 23:00", a nie „weź drugą tabletkę". Nie licz dawek przez
    `schedule.length` — od tego był błąd B9.
+4c. **Dawek dziennie jest jedna, ale TABLETEK w niej zmienna liczba** (D36).
+   `dawkaNaDzien(key)`: wyjątek na datę → rozpisanie tygodniowe → `defaultDose`.
+   Indeks w `doseWeek` to `getDay()`/`tm_wday`, czyli **0 = niedziela** —
+   tak samo w firmware. Schemat niekompletny odrzucamy w całości i wracamy
+   do `defaultDose`: brakujące pole odczytane jako zero to cichy dzień bez
+   leku przeciwzakrzepowego. Dzień z zerem ma status `off` i **nie wchodzi
+   ani do licznika, ani do mianownika** skuteczności — w czterech miejscach,
+   każde z własną pętlą.
 5. **Każdy zapis użytkownika w aplikacji idzie przez `zapiszPewnie()`.**
    Nigdy gołe `set()`. Firebase offline nie odrzuca obietnicy, tylko wisi —
    ekran pokazuje sukces, dane nie docierają. Test tego pilnuje.
