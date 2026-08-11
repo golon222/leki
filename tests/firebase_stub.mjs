@@ -141,3 +141,31 @@ export const update = async (r, val) => {
     setPath(__db.data, r.path ? `${r.path}/${k}` : k, v);
   }
 };
+
+/* runTransaction() - kluczowe dla D35 (koniec wyscigu w doReconcile).
+
+   Prawdziwy Firebase wola funkcje aktualizujaca z BIEZACA wartoscia z
+   SERWERA - nie z lokalnej podrecznej kopii klienta. To wlasnie ta
+   roznica zamyka cala rodzine bledow B27/B28: zaden lokalny stan (stary,
+   nieaktualny, sprzed odswiezenia) nie moze juz wplynac na wynik.
+
+   Zwracajac `undefined` z funkcji aktualizujacej PORZUCAMY transakcje -
+   nic sie nie zapisuje, `committed` wraca `false`. Inaczej niz set/update,
+   __db.tryb sprawdzamy DOPIERO PO wywolaniu funkcji aktualizujacej -
+   dokladnie jak prawdziwy SDK: brak sieci nie przeszkadza ODCZYTAC
+   biezacej wartosci z podrecznej kopii, przeszkadza dopiero PRZY ZAPISIE. */
+export const runTransaction = async (r, aktualizuj) => {
+  const obecna = (() => {
+    const parts = (r.path || "").split("/").filter(Boolean);
+    let cur = __db.data;
+    for (const p of parts) cur = (cur && typeof cur === "object") ? cur[p] : undefined;
+    return cur ?? null;
+  })();
+  const nowa = aktualizuj(obecna);
+  if (nowa === undefined) return { committed: false, snapshot: { val: () => obecna } };
+  waliduj(r.path, nowa);
+  await wedlugTrybu();
+  __db.writes.push({ op:"transaction", path:r.path, val:nowa });
+  setPath(__db.data, r.path, nowa);
+  return { committed: true, snapshot: { val: () => nowa } };
+};

@@ -915,7 +915,7 @@ import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut,
          setPersistence, indexedDBLocalPersistence, browserLocalPersistence }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { getDatabase, ref, onValue, set, update, remove, query, orderByChild,
-         limitToLast, goOnline, get }
+         limitToLast, goOnline, get, runTransaction }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 
 /* ═══════════════════════════════════════════════════════════════
@@ -935,7 +935,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-10.8";
+const APP_VERSION = "2026-08-10.9";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -1748,13 +1748,68 @@ function brakujePokrycia(){
   return false;
 }
 
+/* Decyduje, czy KANDYDAT wolno zapisac na miejscu OBECNEJ wartosci w bazie.
+   To jest jedyne miejsce, ktore rozstrzyga "moj zapis czy zapis pudelka" -
+   i dziala na wartosci przekazanej przez runTransaction(), czyli PRAWDZIWEJ,
+   biezacej wartosci serwera w chwili proby zapisu. Zwraca nowa wartosc do
+   zapisania, albo undefined, gdy transakcje trzeba porzucic.
+
+   TU BYL BLAD (B27/B28), i to w dwoch rundach. Ta sama decyzja stala
+   wczesniej na LOKALNEJ kopii `doses` w telefonie - a ta kopia potrafila
+   byc nieaktualna z wielu niezaleznych powodow (kolejka offline, dwa
+   nasluchy nadpisujace sie nawzajem po `goOnline()`, twardy restart
+   aplikacji w trakcie synchronizacji). Kazda z tych przyczyn dawala TEN
+   SAM objaw: reczny wpis "wraca" po odswiezeniu.
+
+   Zamiast gonic kolejna przyczyne nieaktualnosci, usuwamy zaleznosc od
+   niej calkiem. Ta funkcja nie widzi lokalnego `doses` w ogole - dostaje
+   wprost to, co WLASNIE lezy w bazie, wiec zadna nieaktualnosc telefonu
+   nie ma juz jak wplynac na wynik.                                     */
+function reconcileDecyzja(obecna, kandydat){
+  if (obecna && obecna.source === "manual") return undefined;   // ręczna korekta wygrywa zawsze
+  if (kandydat.status === "missed") {
+    /* „POMINIĘTE" TYLKO TWORZY WPIS. Nigdy nie zmienia istniejącego -
+       cokolwiek już w kalendarzu jest, zostaje. To bezpieczny kierunek:
+       „pominięte" jest domyślnym pesymistycznym odczytem, a jedyne, co
+       potrafi je unieważnić, to otwarcie pudełka albo człowiek.        */
+    return obecna ? undefined : kandydat;
+  }
+  /* kandydat.status === "taken" (zdarzenie "open") */
+  if (obecna && obecna.status === "taken") return undefined;
+  return kandydat;
+}
+
+/* Zapisuje JEDNA dawke transakcja, z ponowieniem bez `openTs` gdy stare
+   reguly bazy odrzuca pole dodane pozniej (patrz D-... nizej w kodzie -
+   ten sam mechanizm co mial dawny zbiorczy zapis).                     */
+async function zapiszReconcile(sciezka, kandydat){
+  try {
+    const w = await runTransaction(ref(db, sciezka), obecna => reconcileDecyzja(obecna, kandydat));
+    return { zapisano: w.committed, staleRules: false, err: null };
+  } catch (e) {
+    console.error("zapis kalendarza:", sciezka, e);
+    try {
+      const { openTs, ...slim } = kandydat;
+      const w2 = await runTransaction(ref(db, sciezka), obecna => reconcileDecyzja(obecna, slim));
+      return { zapisano: w2.committed, staleRules: true, err: null };
+    } catch (e2) {
+      console.error("zapis kalendarza (bez openTs):", sciezka, e2);
+      return { zapisano: false, staleRules: false, err: e2?.message || String(e2) };
+    }
+  }
+}
+
 async function doReconcile(silent = true){
   if (!uid){ if (!silent) toast("Najpierw zaloguj się w aplikacji.", "err"); return; }
   if (!events.length){
     if (!silent) toast("Pudełko nie przysłało jeszcze żadnych zdarzeń.", "info");
     return;
   }
-  const updates = {};
+  /* Kandydaci wybrani LOKALNIE - to tylko PROPOZYCJA, zeby nie odpalac
+     transakcji na sciezkach, ktore i tak nic nie zmienia. Ostateczna
+     decyzja i tak zapada nizej, w reconcileDecyzja(), na zywym stanie
+     serwera - wiec nieaktualnosc tej propozycji juz nie ma znaczenia.  */
+  const kandydaci = {};
   for (const ev of events){
     if (!ev.ts) continue;
     const key = devKey(ev.ts);
@@ -1780,23 +1835,23 @@ async function doReconcile(silent = true){
     const slot = 0;
 
     const cur = doses?.[key]?.[slot];
-    if (cur && cur.source === "manual") continue;      // ręczna korekta wygrywa zawsze
+    if (cur && cur.source === "manual") continue;      // szybka sciezka - patrz komentarz wyzej
 
     const sciezka = `users/${uid}/doses/${key}/${slot}`;
 
     /* UWAGA na kolejność.
 
        Wcześniej decyzja zależała wyłącznie od tego, które zdarzenie trafiło
-       do pętli później — bo wpis do `updates` po prostu nadpisywał poprzedni.
-       Zdarzenia przychodzą posortowane od najnowszego, więc STARSZE
-       „pominięte" nadpisywało NOWSZE „wzięte" i dzień robił się czerwony,
-       mimo że pudełko zarejestrowało otwarcie.
+       do pętli później — bo wpis do `kandydaci` po prostu nadpisywał
+       poprzedni. Zdarzenia przychodzą posortowane od najnowszego, więc
+       STARSZE „pominięte" nadpisywało NOWSZE „wzięte" i dzień robił się
+       czerwony, mimo że pudełko zarejestrowało otwarcie.
 
        Reguła jest teraz jawna i niezależna od kolejności:
          • otwarcie zawsze bije pominięcie,
          • wśród otwarć wygrywa NAJWCZEŚNIEJSZE — to ono jest dawką,
            kolejne tego dnia to zaglądanie do pudełka.                   */
-    const juz = updates[sciezka];
+    const juz = kandydaci[sciezka];
 
     if (ev.type === "open"){
       if (cur && cur.status === "taken") continue;
@@ -1805,88 +1860,57 @@ async function doReconcile(silent = true){
          od ts, bo ts po ręcznej korekcie przestaje być wiarygodny, a
          statystyki por przyjmowania muszą opierać się wyłącznie na
          pomiarach z urządzenia.                                        */
-      updates[sciezka] =
+      kandydaci[sciezka] =
         { status:"taken", dose: cfg.defaultDose ?? 1, source:"device",
           ts: ev.ts, openTs: ev.ts };
     } else if (ev.type === "missed"){
-      /* „POMINIĘTE" TYLKO TWORZY WPIS. Nigdy nie zmienia istniejącego.
-
-         TU BYŁ BŁĄD (B27). Stało tu `if (cur && cur.status === "taken")`,
-         czyli pominięte nadpisywało wszystko, co nie było „wzięte" —
-         w tym RĘCZNĄ korektę. Chronił przed tym warunek `source === "manual"`
-         na górze pętli, ale on czyta lokalną kopię `doses`. Wystarczy, że ta
-         kopia jest o chwilę nieaktualna — a `wakeUp()` przeładowuje ją
-         DOKŁADNIE przy powrocie do aplikacji — i ochrona nie ma czego
-         sprawdzić.
-
-         Objaw u Kuby: wpisywał 8 sierpnia ręcznie, wychodził z aplikacji,
-         wracał — i dzień znowu był czerwony.
-
-         Reguła jest teraz taka, że nie da się jej ominąć wyścigiem:
-         zdarzenie „pominięte" wolno wyłącznie ZAŁOŻYĆ brakujący wpis.
-         Cokolwiek już w kalendarzu jest — zostaje. To bezpieczny kierunek:
-         „pominięte" i tak jest domyślnym pesymistycznym odczytem, a jedyne,
-         co potrafi je unieważnić, to otwarcie pudełka albo człowiek. */
-      if (cur) continue;                    // w kalendarzu coś już jest — nie ruszamy
-      if (juz) continue;                    // cokolwiek już ustalono, zostaje
-      updates[sciezka] =
-        { status:"missed", dose:0, source:"device", ts: ev.ts };
+      if (cur) continue;
+      if (juz) continue;
+      kandydaci[sciezka] = { status:"missed", dose:0, source:"device", ts: ev.ts };
     }
   }
-  const n = Object.keys(updates).length;
-  lastRec = { at: Date.now(), n, err: null, events: events.length };
-  if (n) {
-    try {
-      await update(ref(db), updates);
-      staleRules = false;
-    } catch (e) {
-      /* Najczęstsza przyczyna odrzucenia: w bazie siedzą STARE reguły
-         bezpieczeństwa. Reguła dla pojedynczej dawki ma "$other": false,
-         czyli odrzuca cały wpis, jeśli trafi w nim choć jedno pole, którego
-         nie zna. Pole openTs (prawdziwa godzina otwarcia) doszło później niż
-         pierwsze wgranie reguł — więc kto ich nie odświeżył, temu każdy zapis
-         leci w kosz. Po stronie aplikacji wyglądało to jak kompletna cisza.
 
-         Zamiast poddać się, próbujemy jeszcze raz bez pól dodanych później.
-         Kalendarz zaczyna działać od razu, a użytkownik dostaje wyraźną
-         informację, że reguły trzeba zaktualizować.                       */
-      console.error("zapis kalendarza:", e);
-      /* Cicha porazka jest tu najgorsza z mozliwych. Automat dziala w tle,
-         wiec gdy zapis nie przechodzi, kalendarz po prostu zostaje pusty i
-         wyglada to jak "nie zsynchronizowalo sie" - bez slowa wyjasnienia.
-         Komunikat pokazujemy TAKZE w trybie cichym.                    */
-      lastRec = { ...(lastRec || {}), err: String(e?.message || e) };
-      toast("Kalendarz nie przyjął danych z pudełka — sprawdź Diagnostykę", "err", 4500);
-      const slim = {};
-      for (const [p, v] of Object.entries(updates)) {
-        const { openTs, ...rest } = v;
-        slim[p] = rest;
-      }
-      try {
-        await update(ref(db), slim);
-        staleRules = true;
-        renderDiag();
-        console.warn("zapisano bez openTs — reguly w bazie sa przestarzale");
-        if (!silent)
-          alert("Kalendarz uzupełniony, ale reguły bezpieczeństwa w Firebase są " +
-                "przestarzałe.\n\nPrzez to gubiona jest dokładna godzina otwarcia " +
-                "(potrzebna w Analizie).\n\nWgraj na nowo plik database.rules.json " +
-                "w konsoli Firebase → Realtime Database → Rules → Publish.");
-      } catch (e2) {
-        console.error("zapis kalendarza (druga proba):", e2);
-        lastRec.err = e2?.message || String(e2);
-        renderDiag();
-        alert("Nie udało się zapisać do bazy.\n\n" + (e2?.message || e2) +
-              "\n\nSprawdź reguły bezpieczeństwa w Firebase.");
-        return;
-      }
-    }
+  const sciezki = Object.keys(kandydaci);
+  if (!sciezki.length) {
+    lastRec = { at: Date.now(), n: 0, err: null, events: events.length };
+    staleRules = false;
+    renderDiag();
+    if (!silent) toast(`Kalendarz aktualny · przeanalizowano ${events.length} zdarzeń`, "ok");
+    return;
   }
+
+  /* KAZDA sciezka to WLASNA transakcja, rownolegle. Nie jest to juz jeden
+     zbiorczy `update()` - i to swiadomie: kazda doba jest niezalezna od
+     pozostalych, wiec nie ma po co je wiazac w jedna atomowa calosc,
+     a rozdzielenie na transakcje jest wlasnie tym, co zamyka wyscig.    */
+  const wyniki = await Promise.all(
+    sciezki.map(sciezka => zapiszReconcile(sciezka, kandydaci[sciezka])));
+
+  const n = wyniki.filter(w => w.zapisano).length;
+  const bledy = wyniki.filter(w => w.err);
+  const przestarzale = wyniki.some(w => w.staleRules);
+
+  lastRec = { at: Date.now(), n, err: bledy.length ? bledy[0].err : null, events: events.length };
+  staleRules = przestarzale;
   renderDiag();
-  if (!silent) {
-    if (n) toast(`Uzupełniono ${n} ${n === 1 ? "dzień" : "dni"} w kalendarzu`, "ok");
-    else   toast(`Kalendarz aktualny · przeanalizowano ${events.length} zdarzeń`, "ok");
+
+  if (bledy.length) {
+    /* Cicha porazka jest tu najgorsza z mozliwych. Automat dziala w tle,
+       wiec gdy zapis nie przechodzi, kalendarz po prostu zostaje pusty i
+       wyglada to jak "nie zsynchronizowalo sie" - bez slowa wyjasnienia.
+       Komunikat pokazujemy TAKZE w trybie cichym.                      */
+    toast("Kalendarz nie przyjął danych z pudełka — sprawdź Diagnostykę", "err", 4500);
+    if (!silent)
+      alert("Nie udało się zapisać do bazy.\n\n" + bledy[0].err +
+            "\n\nSprawdź reguły bezpieczeństwa w Firebase.");
+    return;
   }
+  if (przestarzale && !silent)
+    alert("Kalendarz uzupełniony, ale reguły bezpieczeństwa w Firebase są " +
+          "przestarzałe.\n\nPrzez to gubiona jest dokładna godzina otwarcia " +
+          "(potrzebna w Analizie).\n\nWgraj na nowo plik database.rules.json " +
+          "w konsoli Firebase → Realtime Database → Rules → Publish.");
+  if (!silent && n) toast(`Uzupełniono ${n} ${n === 1 ? "dzień" : "dni"} w kalendarzu`, "ok");
 }
 window.reconcile = () => doReconcile(false);
 

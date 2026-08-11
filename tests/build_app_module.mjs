@@ -21,13 +21,13 @@ const header = `
 import { initializeApp, getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut,
          setPersistence, indexedDBLocalPersistence, browserLocalPersistence,
          getDatabase, ref, onValue, set, update, remove, query, orderByChild, limitToLast,
-         goOnline, get,
+         goOnline, get, runTransaction,
          __db, __resetDb } from "./firebase_stub.mjs";
 import "./dom_stub.mjs";
 `;
 
 const footer = `
-export { brakujePokrycia, doReconcile, opisLadowan, minutyDoPelna, opisLadowania, renderAll, toast, tablet3D, cieniuj, TAB3D_SEGMENTOW, busy, seriaDni, doNastepnej, opisCzasu,
+export { brakujePokrycia, doReconcile, reconcileDecyzja, opisLadowan, minutyDoPelna, opisLadowania, renderAll, toast, tablet3D, cieniuj, TAB3D_SEGMENTOW, busy, seriaDni, doNastepnej, opisCzasu,
          cfg, doses, inr, events, tabletSVG, doseGraphic,
          dayDose, dayStatus, devKey, devHM, devDate, inrState,
          inrOdstep, inrTerminKey, inrDoTerminu, dniTxt, renderOstrzezenia, ostrzStraty,

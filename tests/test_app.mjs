@@ -115,10 +115,13 @@ await globalThis.reconcile();
 check(A.__db.writes.length===0, "'missed' nie kasuje juz zapisanego przyjecia");
 
 head("Odpornosc na duplikaty i brak numeru dawki");
+/* Zapis idzie teraz TRANSAKCJA na sciezke (D35), nie jednym zbiorczym
+   update() - kazdy wpis ma wiec wlasne pole `path`, a nie klucze wewnatrz
+   `val`. Liczymy WIEC unikalne sciezki, nie klucze obiektu wartosci.    */
 A.__resetDb();
 D({ events:[ { ts:t0800, type:"open", slot:0 }, { ts:t0800+120, type:"open", slot:0 } ] });
 await globalThis.reconcile();
-const paths = new Set(A.__db.writes.flatMap(x => Object.keys(x.val||{})));
+const paths = new Set(A.__db.writes.map(x => x.path));
 check(paths.size===1, "dwa otwarcia tego samego dnia -> jeden wpis (" + paths.size + ")");
 
 A.__resetDb();
@@ -550,8 +553,13 @@ check(html.includes("Nie udało się zapisać do bazy"), "nieudany zapis pokazuj
 check(/console\.error\("zapis kalendarza:"/.test(html), "blad trafia takze do konsoli");
 
 head("Stare reguly bazy nie moga blokowac kalendarza");
-check(html.includes("const { openTs, ...rest } = v"),
+/* D35: zapis idzie teraz przez zapiszReconcile() (transakcja + ponowienie),
+   nie jednym zbiorczym update() ze zbiorcza petla po `updates` - stad nowy
+   ksztalt retry-bez-openTs.                                             */
+check(html.includes("const { openTs, ...slim } = kandydat"),
       "przy odrzuceniu zapisu druga proba idzie bez pol dodanych pozniej");
+check(/staleRules\s*=\s*przestarzale/.test(html),
+      "staleRules odzwierciedla WYNIK ponowien, nie jest ustawiane na sztywno");
 check(html.includes("staleRules = true"), "aplikacja zapamietuje, ze reguly sa stare");
 check(/Regu\u0142y bezpiecze\u0144stwa s\u0105 przestarza\u0142e/.test(html),
       "i mowi o tym wprost w diagnostyce");
@@ -1084,6 +1092,81 @@ head("Kolejka zaleglych zapisow dostaje szanse na starcie aplikacji");
   const reconnect = html.slice(html.indexOf('".info/connected"'), html.indexOf('".info/connected"') + 1200);
   check(/await\s+oczekWyslij\s*\(\s*\)/.test(reconnect),
         "powrot polaczenia tez CZEKA na oczekWyslij() przed wakeUp()");
+}
+
+/* ── D35: koniec CALEJ RODZINY wyscigow B27/B28, nie tylko jednego objawu ──
+   Kuba zgloscil DOKLADNY przebieg: recznie wpisuje 8 sierpnia, dziala,
+   moze odswiezac wielokrotnie, wszystko OK. Twardy restart aplikacji -
+   od razu po otwarciu WCIAZ widac poprawny wpis. Dopiero po kolejnym
+   odswiezeniu (przyciskiem albo gestem) dawka znika, a Firebase Console
+   w tym samym momencie pokazuje... poprawny reczny wpis w bazie. Czyli
+   to NIE byl zapis nadpisany - to byl zly ODCZYT/RENDER po stronie
+   telefonu z powodu nieaktualnej lokalnej kopii `doses` w chwili, gdy
+   doReconcile() liczyl decyzje.
+
+   Zamiast gonic KOLEJNA przyczyne tej nieaktualnosci (bylo ich juz
+   kilka: kolejka offline, brak await, wyscig dwoch nasluchow po
+   goOnline()), decyzja "czy nadpisac" przenosi sie do runTransaction() -
+   ktora dostaje PRAWDZIWA, biezaca wartosc SERWERA, nie lokalny `doses`.
+   Zamyka to CALA klase bledu, niezaleznie od tego, SKAD bierze sie
+   kolejna nieaktualnosc telefonu.                                       */
+head("reconcileDecyzja() - czysta logika transakcji");
+{
+  const taken   = { status:"taken", dose:1, source:"device", ts:1000 };
+  const manual  = { status:"taken", dose:0.5, source:"manual", ts:1000 };
+  const missed  = { status:"missed", dose:0, source:"device", ts:1000 };
+  const openEv  = { status:"taken", dose:1, source:"device", ts:2000, openTs:2000 };
+
+  check(A.reconcileDecyzja(null, missed) === missed,
+        "pusta doba: 'pominiete' zaklada wpis");
+  check(A.reconcileDecyzja(taken, missed) === undefined,
+        "doba z jakimkolwiek wpisem: 'pominiete' nic nie rusza");
+  check(A.reconcileDecyzja(missed, missed) === undefined,
+        "'pominiete' nie rusza NAWET juz istniejacego 'pominietego' - " +
+        "istnienie wpisu wystarcza, nie trzeba sprawdzac jego statusu");
+  check(A.reconcileDecyzja(manual, missed) === undefined,
+        "reczny wpis: 'pominiete' nic nie rusza");
+  check(A.reconcileDecyzja(manual, openEv) === undefined,
+        "reczny wpis: nawet fizyczne otwarcie pudelka go nie rusza");
+  check(A.reconcileDecyzja(null, openEv) === openEv,
+        "pusta doba: otwarcie zaklada wpis");
+  check(A.reconcileDecyzja(taken, openEv) === undefined,
+        "juz wziete: kolejne otwarcie tego samego dnia nic nie zmienia");
+}
+
+head("doReconcile() nie da sie oszukac nieaktualna lokalna kopia doses");
+{
+  const dzien = "2026-08-08", sciezka = `users/testuid/doses/${dzien}/0`;
+
+  /* DOKLADNIE scenariusz Kuby: baza (SERWER) juz ma reczny wpis, ale
+     lokalna zmienna `doses` w telefonie tego jeszcze nie wie - bo
+     akurat wtedy uruchamia sie doReconcile z nieaktualnym stanem.       */
+  A.__resetDb();
+  A.__db.data = { users: { testuid: { doses: { [dzien]: { 0:
+    { status:"taken", dose:1, source:"manual", ts:1786183200 } } } } } };
+  A.__setState({ events: [{ id:"m1", ts:1786183200, type:"missed", slot:0 }],
+                 doses: {} });                     // <- lokalna kopia PUSTA, celowo
+  await A.doReconcile(true);
+
+  check(A.__db.writes.length === 0,
+        `zaden zapis nie poszedl mimo nieaktualnej lokalnej kopii (${A.__db.writes.length})`);
+  check(A.__db.data.users.testuid.doses[dzien]["0"].source === "manual",
+        "reczny wpis w bazie przezyl reconcile nietkniety");
+
+  /* Ten sam wyscig, ale z otwarciem zamiast pominietego - tez nie moze
+     przebic recznej korekty, choc lokalnie wyglada jak pusta doba.      */
+  A.__resetDb();
+  A.__db.data = { users: { testuid: { doses: { [dzien]: { 0:
+    { status:"taken", dose:0.5, source:"manual", ts:1786183200 } } } } } };
+  A.__setState({ events: [{ id:"o1", ts:1786183200, type:"open", slot:0 }],
+                 doses: {} });
+  await A.doReconcile(true);
+  check(A.__db.writes.length === 0,
+        "otwarcie tez nie przebija recznej korekty przy nieaktualnej kopii lokalnej");
+  check(A.__db.data.users.testuid.doses[dzien]["0"].dose === 0.5,
+        "dawka 0.5 z recznego wpisu zostaje taka, jaka byla");
+
+  A.__resetDb(); A.__setState({ events: [], doses: {} });
 }
 
 head("Odmowa bazy nie udaje braku sieci");

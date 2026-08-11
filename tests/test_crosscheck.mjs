@@ -57,8 +57,9 @@ async function slotAplikacji(ts, offsetMin, harmonogram) {
     events: [{ ts, type: "open" }]          // bez pola slot - niech liczy sama
   });
   await A.doReconcile(true);
-  const zapisy = A.__db.writes.flatMap(w => Object.keys(w.val || {}));
-  const sciezka = zapisy.find(k => k.includes("/doses/"));
+  /* Zapis idzie transakcja na sciezke (D35) - `path` jest wlasnym polem
+     wpisu, nie kluczem wewnatrz `val` jak przy dawnym zbiorczym update(). */
+  const sciezka = A.__db.writes.map(w => w.path).find(p => p && p.includes("/doses/"));
   return sciezka ? Number(sciezka.split("/").pop()) : -1;
 }
 
@@ -211,7 +212,8 @@ head("Dawka trafia do WLASCIWEJ doby, nie tylko do wlasciwego slotu");
     A.__setState({ cfg: { schedule: ["20:00","23:00"], tzOffsetMin: OFF, defaultDose: 1 },
                    doses: {}, events: [{ ts, type: "open" }] });
     await A.doReconcile(true);
-    const klucz = Object.keys(A.__db.writes[0]?.val || {})[0] || "";
+    /* Transakcja (D35): sciezka jest polem `path` wpisu, nie kluczem `val`. */
+    const klucz = A.__db.writes[0]?.path || "";
     const oczekiwana = `users/testuid/doses/${A.devKey(ts)}/0`;
     check(klucz === oczekiwana,
           `${String(g).padStart(2,"0")}:${String(m).padStart(2,"0")} -> ${klucz || "NIC"} (oczekiwano ${oczekiwana})`);

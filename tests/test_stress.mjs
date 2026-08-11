@@ -244,7 +244,10 @@ head("Duplikaty i zla kolejnosc zdarzen");
   A.__resetDb();
   D({ events: ev });
   await globalThis.reconcile();
-  const sciezki = new Set(A.__db.writes.flatMap(x => Object.keys(x.val || {})));
+  /* Zapis idzie transakcja na sciezke (D35), wiec `path` jest wlasnym
+     polem wpisu - nie kluczem wewnatrz `val`, jak przy dawnym zbiorczym
+     update().                                                          */
+  const sciezki = new Set(A.__db.writes.map(x => x.path));
   check(sciezki.size === 1, `dwadziescia duplikatow -> jeden wpis (${sciezki.size})`);
 
   /* "missed" przyslane PO "open" nie moze skasowac wzietej dawki. */
