@@ -20,7 +20,7 @@
  * 1. IDENTYFIKATOR URZADZENIA
  * ------------------------------------------------------------------ */
 #define DEVICE_ID           "pillbox01"     // klucz w /devices/<DEVICE_ID>
-#define FW_VERSION          "1.29.0"   // widoczna w aplikacji - po wgraniu sprawdz, czy sie zmienila
+#define FW_VERSION          "1.30.0"   // widoczna w aplikacji - po wgraniu sprawdz, czy sie zmienila
 
 /* ---------------------------------------------------------------------
  * 2. FIREBASE  (Realtime Database + Auth email/haslo)
@@ -201,6 +201,24 @@
  * ------------------------------------------------------------------ */
 #define RETRY_BASE_S        900             // pierwsza ponowna proba po 15 min
 #define RETRY_MAX_S         14400           // nie rzadziej niz co 4 h
+
+/* ---------------------------------------------------------------------
+ * 7b2. DNI BEZ LEKU
+ *     Warfaryne lekarz rozpisuje nierowno, a przed zabiegiem odstawia ja
+ *     calkiem. W dniu rozpisanym na ZERO pudelko nie ma o czym przypominac
+ *     - dzwonek zachecalby wtedy do wziecia tabletki, ktorej brac nie wolno.
+ *
+ *     ZASADA BEZPIECZENSTWA: wyciszamy sie WYLACZNIE wtedy, gdy wiemy na
+ *     pewno, ze dzis przypada zero. Brak rozpisania, nieznany zegar, dane
+ *     nie do odczytania - dzwonimy. W razie watpliwosci lepiej przypomniec
+ *     o dawce niepotrzebnie niz przemilczec potrzebna.
+ *
+ *     DOSE_NIEZNANA to wartosc "nic o tym dniu nie wiem". Dawki trzymamy
+ *     w dziesiatych czesciach tabletki (10 = jedna tabletka), zeby zmiescic
+ *     polowki w jednym bajcie.
+ * ------------------------------------------------------------------ */
+#define DOSE_EX_MAX         8               // ile wyjatkow na daty pamietamy
+#define DOSE_NIEZNANA       255             // "brak rozpisania na ten dzien"
 
 /* ---------------------------------------------------------------------
  * 7c. ROLOWANIE DOBY

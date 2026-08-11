@@ -42,6 +42,20 @@ uint32_t awakeDeadlineMs = AWAKE_LIMIT_MS;
 uint16_t rtcNvsFail      = 0;
 uint16_t rtcQueueDropped = 0;
 
+/* --- atrapy dla dni bez leku --- */
+uint8_t  rtcDoseWeek[7]   = { DOSE_NIEZNANA, DOSE_NIEZNANA, DOSE_NIEZNANA,
+                              DOSE_NIEZNANA, DOSE_NIEZNANA, DOSE_NIEZNANA,
+                              DOSE_NIEZNANA };
+uint32_t rtcDoseExDay[DOSE_EX_MAX] = { 0 };
+uint8_t  rtcDoseExVal[DOSE_EX_MAX] = { 0 };
+uint8_t  rtcDoseExCount   = 0;
+bool     rtcDosingLoaded  = false;
+/* Zdejmuje rozpisanie - stan "nic nie wiem", w ktorym pudelko ma dzwonic. */
+void resetDosing(){
+  for (int i = 0; i < 7; i++) rtcDoseWeek[i] = DOSE_NIEZNANA;
+  rtcDoseExCount = 0;
+}
+
 /* --- atrapy dla pilnowania otwartego wieczka --- */
 uint32_t rtcLastOpenTs    = 0;
 uint32_t rtcLastPushTs    = 0;
@@ -395,6 +409,112 @@ CHECK(r.indexOf(String("missed")) > 0, "typ zdarzenia: %s", r.c_str());
 /* powtorne wywolanie tego samego dnia nie duplikuje */
 checkDayRollover();
 CHECK(queueCount()==1, "brak duplikatu przy ponownym wybudzeniu (%u)", queueCount());
+
+/* ================= 9a2. DNI BEZ LEKU ================= */
+head("Rozpisanie tygodniowe - czytanie i odrzucanie");
+resetDosing();
+parseDoseWeek(String("0|10|10|5|10|10|15"));
+CHECK(rtcDoseWeek[0]==0 && rtcDoseWeek[3]==5 && rtcDoseWeek[6]==15,
+      "siedem poprawnych liczb wchodzi w calosci");
+
+/* NAJWAZNIEJSZY TEST W TEJ SEKCJI - ten sam, co po stronie aplikacji.
+   Brakujacy dzien odczytany jako zero byl by cichym dniem bez leku
+   przeciwzakrzepowego, wiec niepelne rozpisanie musi zniknac CALE.   */
+parseDoseWeek(String("10|10|10|10|10|10"));
+CHECK(rtcDoseWeek[0]==DOSE_NIEZNANA && rtcDoseWeek[5]==DOSE_NIEZNANA,
+      "szesc dni zamiast siedmiu kasuje CALE rozpisanie, nie daje zera");
+parseDoseWeek(String(""));
+CHECK(rtcDoseWeek[2]==DOSE_NIEZNANA, "pusty napis tez nie zostawia zer");
+parseDoseWeek(String("10|10|10|10|10|10|10"));
+CHECK(rtcDoseWeek[4]==10, "poprawne rozpisanie wraca po odrzuceniu zlego");
+
+head("Wyjatki na konkretne daty");
+CHECK(dateKeyToNum("2026-08-14")==20260814u, "data z aplikacji na liczbe");
+CHECK(dateKeyToNum("2026-8-14")==0,  "skrocona data odrzucona");
+CHECK(dateKeyToNum("nie-data-xx")==0, "napis bez cyfr odrzucony");
+CHECK(dateKeyToNum(nullptr)==0, "brak klucza nie wywraca parsera");
+
+resetDosing();
+parseDoseWeek(String("10|10|10|10|10|10|10"));
+parseDoseEx(String("20260814:0|20260815:5"));
+CHECK(rtcDoseExCount==2, "dwa wyjatki wczytane (%u)", rtcDoseExCount);
+CHECK(dawkaNaDobe(20260814u, 1)==0, "wyjatek bije rozpisanie tygodniowe");
+CHECK(dawkaNaDobe(20260815u, 1)==5, "polowka z wyjatku");
+CHECK(dawkaNaDobe(20260816u, 1)==10, "dzien bez wyjatku bierze z tygodnia");
+
+resetDosing();
+CHECK(dawkaNaDobe(20260816u, 1)==DOSE_NIEZNANA,
+      "bez rozpisania odpowiedz brzmi 'nie wiem', a nie 'zero'");
+CHECK(dawkaNaDobe(20260816u, 9)==DOSE_NIEZNANA, "dzien tygodnia poza zakresem nie czyta poza tablice");
+
+head("Dzien bez leku - kiedy pudelko milczy, a kiedy dzwoni");
+resetDosing();
+parseDoseWeek(String("0|10|10|10|10|10|10"));   // niedziela bez leku
+{
+  /* Szukamy prawdziwej niedzieli, zeby test nie zalezal od tego, na jaki
+     dzien tygodnia wypada konkretna data w kalendarzu.               */
+  time_t niedz = 0;
+  for (int d = 1; d <= 7; d++) {
+    time_t t = local(2026, 8, d, 12, 0);
+    if (localWeekday(t) == 0) { niedz = t; break; }
+  }
+  CHECK(niedz != 0, "w pierwszym tygodniu sierpnia jest niedziela");
+  rtcTimeValid = true;
+  FAKE_NOW = niedz;
+  CHECK(dzisBezLeku(), "w niedziele rozpisana na zero - cisza");
+  FAKE_NOW = niedz + 86400;
+  CHECK(!dzisBezLeku(), "nazajutrz juz nie");
+
+  /* Bez zegara nie wiadomo, ktory jest dzien - wtedy DZWONIMY. */
+  FAKE_NOW = niedz;
+  rtcTimeValid = false;
+  CHECK(!dzisBezLeku(), "bez znanego zegara nie wyciszamy sie NIGDY");
+  rtcTimeValid = true;
+
+  resetDosing();
+  CHECK(!dzisBezLeku(), "bez rozpisania tez dzwonimy");
+}
+
+head("Doba bez leku nie jest doba pominieta");
+prefs.wipe();
+parseSchedule(String("08:00"));
+{
+  time_t ts31 = local(2026, 7, 31, 23, 59);
+  int wd = localWeekday(ts31);
+
+  /* Najpierw kontrola: przy zwyklym rozpisaniu 31 lipca MA sie zglosic. */
+  resetDosing();
+  parseDoseWeek(String("10|10|10|10|10|10|10"));
+  rtcTakenDay = 0; rtcRolloverDay = 20260731u;
+  FAKE_NOW = local(2026, 8, 1, 3, 1);
+  checkDayRollover();
+  CHECK(queueCount()==1, "dzien z lekiem nadal trafia do kolejki jako pominiety (%u)",
+        queueCount());
+
+  /* A teraz to samo, gdy ten dzien tygodnia jest rozpisany na zero. */
+  prefs.wipe();
+  resetDosing();
+  parseDoseWeek(String("10|10|10|10|10|10|10"));
+  rtcDoseWeek[wd] = 0;
+  rtcTakenDay = 0; rtcRolloverDay = 20260731u;
+  FAKE_NOW = local(2026, 8, 1, 3, 1);
+  checkDayRollover();
+  CHECK(queueCount()==0, "doba rozpisana bez leku nie zglasza pominietej dawki (%u)",
+        queueCount());
+
+  /* Wyjatek na date dziala tak samo - to nim robi sie odstawienie. */
+  prefs.wipe();
+  resetDosing();
+  parseDoseWeek(String("10|10|10|10|10|10|10"));
+  parseDoseEx(String("20260731:0"));
+  rtcTakenDay = 0; rtcRolloverDay = 20260731u;
+  FAKE_NOW = local(2026, 8, 1, 3, 1);
+  checkDayRollover();
+  CHECK(queueCount()==0, "odstawienie przed zabiegiem tez nie jest pominieciem (%u)",
+        queueCount());
+}
+resetDosing();
+prefs.wipe();
 
 /* ================= 9b. ZNACZNIKI PRZEZYWAJACE RESET ================= */
 head("Znacznik dawki przezywa reset plytki");

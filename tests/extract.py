@@ -12,6 +12,9 @@ WANTED = [
     "readBatteryRaw", "battPercentFromCurve", "resetBatteryFilter",
     "battSmooth", "readBattery", "zapiszKoniecLadowania", "trackCharging",
     "parseSchedule", "slotMinutes", "localDayNumber", "localMinutesOfDay",
+    # Dni bez leku - musza byc przed checkDayRollover, ktore je wola.
+    "localWeekday", "dateKeyToNum", "dawkaNaDobe", "dzisBezLeku",
+    "parseDoseWeek", "parseDoseEx",
     "matchSlot", "secondsToDayBoundary", "secondsToNextSlot",
     "openWarnSecondsLeft",
     "jsonEscape",   # przed lidLogJson - ta go wola

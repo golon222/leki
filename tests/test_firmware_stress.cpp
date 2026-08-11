@@ -66,6 +66,17 @@ void beepBoxOpen() { FAKE_BEEPS++; }
 
 uint16_t rtcNvsFail      = 0;
 uint16_t rtcQueueDropped = 0;
+
+/* Rozpisanie dawek. Domyslnie "nic nie wiem" - w tym stanie pudelko ma
+   dzwonic normalnie i zglaszac pominiete dawki.                        */
+uint8_t  rtcDoseWeek[7]   = { DOSE_NIEZNANA, DOSE_NIEZNANA, DOSE_NIEZNANA,
+                              DOSE_NIEZNANA, DOSE_NIEZNANA, DOSE_NIEZNANA,
+                              DOSE_NIEZNANA };
+uint32_t rtcDoseExDay[DOSE_EX_MAX] = { 0 };
+uint8_t  rtcDoseExVal[DOSE_EX_MAX] = { 0 };
+uint8_t  rtcDoseExCount   = 0;
+bool     rtcDosingLoaded  = false;
+
 /* flushQueue() jest teraz wyciagane do testow, wiec potrzebuje atrapy
    wysylki. Tu nikt jej nie wola - wystarczy, ze istnieje.            */
 int pushEventRecord(const String&) { return 200; }

@@ -23,8 +23,8 @@ bash tests/run_all.sh
 ```
 
 Musi przejść przed zmianą i po zmianie. Stan wyjściowy:
-**349 + 51 firmware, 650 (×6 pór doby) + 86 + 49 aplikacja, 48 zgodności,
-69 reguł bazy, 220 kontroli audytu — 0 błędów.**
+**371 + 51 firmware, 650 (×6 pór doby) + 86 + 49 aplikacja, 48 zgodności,
+69 reguł bazy, 222 kontrole audytu — 0 błędów.**
 
 Testy pracują na **prawdziwym kodzie**, nie na kopii: `tests/extract.py` wycina
 funkcje z `PillBox.ino`, `tests/build_app_module.mjs` buduje moduł z `index.html`.
@@ -75,6 +75,9 @@ Test to złapie, ale komunikat zrozumiesz szybciej, znając powód (D6, D13, D15
    leku przeciwzakrzepowego. Dzień z zerem ma status `off` i **nie wchodzi
    ani do licznika, ani do mianownika** skuteczności — w czterech miejscach,
    każde z własną pętlą.
+   Pudełko zna to samo rozpisanie (`rtcDoseWeek`, `rtcDoseExDay`) i w dniu
+   rozpisanym na zero **nie dzwoni i nie zgłasza „missed"**. Wycisza się
+   **wyłącznie przy pewnym zerze**: bez zegara albo bez rozpisania dzwoni.
 5. **Każdy zapis użytkownika w aplikacji idzie przez `zapiszPewnie()`.**
    Nigdy gołe `set()`. Firebase offline nie odrzuca obietnicy, tylko wisi —
    ekran pokazuje sukces, dane nie docierają. Test tego pilnuje.

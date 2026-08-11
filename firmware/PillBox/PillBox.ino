@@ -78,6 +78,20 @@ RTC_DATA_ATTR uint32_t rtcLastPushTs    = 0;    // kiedy ostatnio poszedl status
 RTC_DATA_ATTR int16_t  rtcLastPushPct   = -1;   // z jakim procentem baterii
 RTC_DATA_ATTR uint16_t rtcLogWyslanyIdx = 0xFFFF;// stan czarnej skrzynki przy ostatniej wysylce
 
+/* --- Dni bez leku (rozpisanie tygodniowe + wyjatki na daty) ------------
+   Dawki w dziesiatych czesciach tabletki: 10 = jedna, 5 = polowka, 0 = dzien
+   bez leku. DOSE_NIEZNANA = nie wiemy nic o tym dniu i wtedy DZWONIMY.
+   Indeks tygodnia to tm_wday, czyli 0 = niedziela - ta sama konwencja co
+   Date.getDay() w aplikacji, zeby oba konce liczyly ten sam dzien.      */
+RTC_DATA_ATTR uint8_t  rtcDoseWeek[7]   = { DOSE_NIEZNANA, DOSE_NIEZNANA,
+                                            DOSE_NIEZNANA, DOSE_NIEZNANA,
+                                            DOSE_NIEZNANA, DOSE_NIEZNANA,
+                                            DOSE_NIEZNANA };
+RTC_DATA_ATTR uint32_t rtcDoseExDay[DOSE_EX_MAX] = { 0 };  // YYYYMMDD wyjatku
+RTC_DATA_ATTR uint8_t  rtcDoseExVal[DOSE_EX_MAX] = { 0 };  // ...i dawka na ten dzien
+RTC_DATA_ATTR uint8_t  rtcDoseExCount   = 0;
+RTC_DATA_ATTR bool     rtcDosingLoaded  = false;// czy wczytano juz z pamieci trwalej
+
 /* --- Pudelko zostawione otwarte --------------------------------------- */
 RTC_DATA_ATTR uint32_t rtcOpenSinceTs   = 0;    // kiedy zauwazylismy otwarcie
 RTC_DATA_ATTR uint32_t rtcNextWarnTs    = 0;    // kiedy nastepny sygnal
@@ -711,6 +725,132 @@ uint32_t secondsToDayBoundary(time_t utc) {
   time_t shifted = utc + (time_t)rtcTzOffsetMin * 60 - (time_t)DAY_START_HOUR * 3600;
   uint32_t secOfDay = (uint32_t)(shifted % 86400);
   return 86400UL - secOfDay + 60UL;
+}
+
+/* =====================================================================
+ *  4a.  DNI BEZ LEKU
+ *
+ *  Dawka jest nadal JEDNA dziennie (ONE_DOSE_PER_DAY) - zmienna jest tylko
+ *  liczba tabletek w tej jednej dawce. Pudelko potrzebuje z tego dokladnie
+ *  jednej informacji: czy dzis przypada ZERO, bo wtedy nie ma o czym
+ *  przypominac.
+ *
+ *  ZASADA, ta sama co po stronie aplikacji: rozpisanie NIEPELNE odrzucamy
+ *  w calosci. Brakujacy dzien odczytany jako zero to cichy dzien bez leku
+ *  przeciwzakrzepowego - a to jest dokladnie ten rodzaj bledu, ktorego to
+ *  urzadzenie ma nie popelniac. Nie wiemy = dzwonimy.
+ * ===================================================================== */
+
+/* Dzien tygodnia doby LEKOWEJ: 0 = niedziela.
+   To `tm_wday`, czyli ta sama konwencja co `Date.getDay()` w aplikacji -
+   dzieki temu oba konce trafiaja w ten sam dzien bez przeliczania.
+   Przesuniecie o DAY_START_HOUR jak w localDayNumber(): tabletka wzieta
+   o 01:00 nalezy jeszcze do dnia poprzedniego, takze przy liczeniu
+   dnia tygodnia.                                                        */
+int localWeekday(time_t utc) {
+  time_t local = utc + (time_t)rtcTzOffsetMin * 60 - (time_t)DAY_START_HOUR * 3600;
+  struct tm tmv;
+  gmtime_r(&local, &tmv);
+  return tmv.tm_wday;
+}
+
+/* "2026-08-14" -> 20260814. Zero, gdy to nie jest data. */
+uint32_t dateKeyToNum(const char* k) {
+  if (!k) return 0;
+  int len = strlen(k);
+  if (len != 10 || k[4] != '-' || k[7] != '-') return 0;
+  for (int i = 0; i < len; i++)
+    if (i != 4 && i != 7 && (k[i] < '0' || k[i] > '9')) return 0;
+  return (uint32_t)atol(String(k).substring(0, 4).c_str()) * 10000UL
+       + (uint32_t)atol(String(k).substring(5, 7).c_str()) * 100UL
+       + (uint32_t)atol(String(k).substring(8, 10).c_str());
+}
+
+/* Ile tabletek (w dziesiatych) przypada na te dobe lekowa.
+   DOSE_NIEZNANA znaczy "nie wiem" - nigdy "zero".                       */
+uint8_t dawkaNaDobe(uint32_t dayNum, int wday) {
+  for (uint8_t i = 0; i < rtcDoseExCount && i < DOSE_EX_MAX; i++)
+    if (rtcDoseExDay[i] == dayNum) return rtcDoseExVal[i];
+  if (wday < 0 || wday > 6) return DOSE_NIEZNANA;
+  return rtcDoseWeek[wday];
+}
+
+/* Czy dzisiejsza doba lekowa jest rozpisana BEZ leku.
+   Zwraca true WYLACZNIE przy pewnym zerze: bez zegara nie wiemy, ktory jest
+   dzien, wiec dzwonimy normalnie.                                        */
+bool dzisBezLeku() {
+  if (!rtcTimeValid) return false;
+  time_t now = time(nullptr);
+  return dawkaNaDobe(localDayNumber(now), localWeekday(now)) == 0;
+}
+
+/* Rozpisanie tygodniowe z postaci "255|10|10|5|10|10|15" (dziesiate czesci
+   tabletki, 255 = nieznana). Cokolwiek innego niz SIEDEM poprawnych liczb
+   kasuje rozpisanie w calosci.                                           */
+void parseDoseWeek(const String& s) {
+  uint8_t tmp[7];
+  int n = 0, start = 0;
+  while (n < 7 && start <= (int)s.length()) {
+    int sep = s.indexOf('|', start);
+    if (sep < 0) sep = s.length();
+    String it = s.substring(start, sep);
+    it.trim();
+    if (!it.length()) break;
+    long v = it.toInt();
+    tmp[n++] = (v >= 0 && v <= 100) ? (uint8_t)v : DOSE_NIEZNANA;
+    if (sep >= (int)s.length()) break;
+    start = sep + 1;
+  }
+  for (int i = 0; i < 7; i++) rtcDoseWeek[i] = (n == 7) ? tmp[i] : DOSE_NIEZNANA;
+}
+
+/* Wyjatki z postaci "20260814:0|20260815:5". */
+void parseDoseEx(const String& s) {
+  rtcDoseExCount = 0;
+  int start = 0;
+  while (start < (int)s.length() && rtcDoseExCount < DOSE_EX_MAX) {
+    int sep = s.indexOf('|', start);
+    if (sep < 0) sep = s.length();
+    String it = s.substring(start, sep);
+    int dwukropek = it.indexOf(':');
+    if (dwukropek > 0) {
+      uint32_t d = (uint32_t)atol(it.substring(0, dwukropek).c_str());
+      long v = it.substring(dwukropek + 1).toInt();
+      if (d >= 20000101UL && v >= 0 && v <= 100) {
+        rtcDoseExDay[rtcDoseExCount] = d;
+        rtcDoseExVal[rtcDoseExCount] = (uint8_t)v;
+        rtcDoseExCount++;
+      }
+    }
+    if (sep >= (int)s.length()) break;
+    start = sep + 1;
+  }
+}
+
+void saveDosing(const String& tydzien, const String& wyjatki) {
+  prefs.begin(NVS_NAMESPACE, false);
+  nvsPutStr("dw",  tydzien);
+  nvsPutStr("dex", wyjatki);
+  prefs.end();
+  parseDoseWeek(tydzien);
+  parseDoseEx(wyjatki);
+  rtcDosingLoaded = true;
+}
+
+/* Po twardym restarcie pamiec RTC jest wyzerowana, a rozpisanie musi
+   przetrwac - inaczej pierwsze wybudzenie po resecie zadzwoniloby w dniu
+   odstawienia. Dlatego to samo, co robi loadSchedule() dla godzin.      */
+void loadDosing() {
+  if (rtcDosingLoaded) return;
+  prefs.begin(NVS_NAMESPACE, true);
+  String w = prefs.getString("dw",  "");
+  String e = prefs.getString("dex", "");
+  prefs.end();
+  parseDoseWeek(w);
+  parseDoseEx(e);
+  rtcDosingLoaded = true;
+  LOG("[DOS] rozpisanie: %s  wyjatki: %u\n",
+      w.length() ? w.c_str() : "(brak)", (unsigned)rtcDoseExCount);
 }
 
 /* =====================================================================
@@ -1516,6 +1656,91 @@ void fetchConfig() {
     rtcPillsLeft = doc["pillsLeft"].as<int>();
     LOG("[FB ] zostalo tabletek: %d\n", rtcPillsLeft);
   }
+
+  /* --- Rozpisanie tygodniowe -----------------------------------------
+     Do stringa ida DZIESIATE czesci tabletki, zeby polowka zmiescila sie
+     w bajcie. Cokolwiek podejrzanego - choc jeden dzien brakujacy, nie
+     bedacy liczba albo poza zakresem regul bazy - kasuje CALE rozpisanie
+     i wracamy do dzwonienia codziennie. Nie wiemy = dzwonimy.          */
+  String dw = "";
+  JsonVariant weekV = doc["doseWeek"];
+  if (!weekV.isNull()) {
+    for (int i = 0; i < 7; i++) {
+      /* Firebase oddaje tablice jako tablice tylko przy kompletnych
+         kluczach 0..6; niekompletna wraca jako obiekt. Czytamy obie
+         postacie, tak samo jak aplikacja.                             */
+      char klucz[2] = { (char)('0' + i), 0 };
+      JsonVariant v = weekV[i];
+      if (v.isNull()) v = weekV[klucz];
+      if (!v.is<float>() && !v.is<int>()) { dw = ""; break; }
+      float f = v.as<float>();
+      if (!(f >= 0.0f && f <= 10.0f)) { dw = ""; break; }
+      if (dw.length()) dw += "|";
+      dw += String((int)lroundf(f * 10.0f));
+    }
+  }
+
+  /* --- Wyjatki na konkretne daty --------------------------------------
+     Bierzemy wylacznie dni OD DZIS w przod i najwyzej DOSE_EX_MAX
+     najblizszych: przeszle sa juz historia (rozlicza je aplikacja), a
+     pamiec RTC jest za cenna, zeby trzymac w niej caly rok wstecz.    */
+  uint32_t exDni[DOSE_EX_MAX];
+  uint8_t  exWar[DOSE_EX_MAX];
+  int      exN = 0;
+  JsonObject exObj = doc["doseDays"].as<JsonObject>();
+  if (!exObj.isNull()) {
+    uint32_t dzis = rtcTimeValid ? localDayNumber(time(nullptr)) : 0;
+    for (JsonPair kv : exObj) {
+      uint32_t d = dateKeyToNum(kv.key().c_str());
+      if (!d || d < dzis) continue;
+      JsonVariant v = kv.value();
+      if (!v.is<float>() && !v.is<int>()) continue;
+      float f = v.as<float>();
+      if (!(f >= 0.0f && f <= 10.0f)) continue;
+      uint8_t w = (uint8_t)lroundf(f * 10.0f);
+      /* Wstawianie z sortowaniem rosnaco po dacie: gdy wyjatkow jest
+         wiecej niz miejsca, maja zostac te NAJBLIZSZE.                */
+      int poz = 0;
+      for (int j = 0; j < exN && j < DOSE_EX_MAX; j++) {
+        if (exDni[j] >= d) break;
+        poz = j + 1;
+      }
+      if (poz >= DOSE_EX_MAX) continue;
+      for (int j = (exN < DOSE_EX_MAX ? exN : DOSE_EX_MAX - 1); j > poz; j--) {
+        exDni[j] = exDni[j-1];
+        exWar[j] = exWar[j-1];
+      }
+      exDni[poz] = d;
+      exWar[poz] = w;
+      if (exN < DOSE_EX_MAX) exN++;
+    }
+  }
+  String dex = "";
+  for (int i = 0; i < exN; i++) {
+    if (dex.length()) dex += "|";
+    dex += String((unsigned long)exDni[i]) + ":" + String((int)exWar[i]);
+  }
+
+  /* Zapis do pamieci trwalej tylko przy zmianie - NVS ma skonczona liczbe
+     cykli, a config pobieramy przy kazdym polaczeniu.                  */
+  String terazW = "", terazE = "";
+  for (int i = 0; i < 7; i++) {
+    if (terazW.length()) terazW += "|";
+    terazW += String((int)rtcDoseWeek[i]);
+  }
+  bool brakRozpisania = true;
+  for (int i = 0; i < 7; i++) if (rtcDoseWeek[i] != DOSE_NIEZNANA) brakRozpisania = false;
+  if (brakRozpisania) terazW = "";
+  for (uint8_t i = 0; i < rtcDoseExCount; i++) {
+    if (terazE.length()) terazE += "|";
+    terazE += String((unsigned long)rtcDoseExDay[i]) + ":" + String((int)rtcDoseExVal[i]);
+  }
+  if (dw != terazW || dex != terazE) {
+    saveDosing(dw, dex);
+    LOG("[DOS] nowe rozpisanie: %s  wyjatki: %s\n",
+        dw.length()  ? dw.c_str()  : "(brak)",
+        dex.length() ? dex.c_str() : "(brak)");
+  }
 }
 
 /* Wysyla zaleglosci z kolejki - choćby z 10 dni bez internetu.
@@ -1750,6 +1975,14 @@ void checkDayRollover() {
     if (doba < rtcRolloverDay) continue;
     if (doba == rtcTakenDay) {
       LOG("[DAY] doba %lu zamknieta poprawnie\n", (unsigned long)doba);
+      continue;
+    }
+    /* Doba rozpisana BEZ leku nie jest doba pominieta. Bez tego kazdy dzien
+       odstawienia przed zabiegiem trafialby do kalendarza jako czerwony,
+       a stamtad do raportu dla lekarza jako zaniżona skutecznosc.
+       dawkaNaDobe() zwraca zero wylacznie wtedy, gdy wiemy to na pewno.  */
+    if (dawkaNaDobe(doba, localWeekday((time_t)ts)) == 0) {
+      LOG("[DAY] doba %lu rozpisana bez leku - nie zglaszam\n", (unsigned long)doba);
       continue;
     }
     queuePush(makeRecordAt("missed", slotCount == 1 ? 0 : -1, ts));
@@ -2887,6 +3120,7 @@ void setup() {
 
   readBattery();
   loadSchedule();
+  loadDosing();
   /* loadDayMarkers() wywolane juz na samym poczatku setup() - musi byc
      przed sygnalem o powtorce, a nie dopiero tutaj.                   */
 
@@ -3140,6 +3374,24 @@ void setup() {
         slot = -1;
       }
 #endif
+
+      /* Dzien rozpisany BEZ leku - nie ma o czym przypominac.
+
+         To nie jest oszczednosc baterii, tylko bezpieczenstwo: dzwonek
+         w dniu odstawienia przed zabiegiem zacheca do wziecia tabletki,
+         ktorej brac nie wolno. Nie zglaszamy tez "missed" - dzien bez leku
+         nie jest dniem pominietym i aplikacja liczy go tak samo.
+
+         dzisBezLeku() zwraca true WYLACZNIE przy pewnym zerze: bez zegara
+         albo bez rozpisania dzwonimy normalnie.                          */
+      if (slot >= 0 && dzisBezLeku()) {
+        LOGLN("[ALM] dzien rozpisany bez leku - cisza");
+        note("dzien bez leku");
+        rtcPendingSlot = -1;
+        rtcAlarmRetries = 0;
+        oznaczAlarmObsluzony();
+        slot = -1;
+      }
 
       if (slot >= 0) {
         rtcPendingSlot = slot;
