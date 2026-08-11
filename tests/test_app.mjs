@@ -1057,21 +1057,33 @@ head("Pominiete z pudelka nie kasuje tego, co juz jest w kalendarzu");
    pierwszym polaczeniu - kolejka nigdy nie dostawala szansy na starcie.  */
 head("Kolejka zaleglych zapisow dostaje szanse na starcie aplikacji");
 {
-  const od = html.indexOf("function boot(){");
-  check(od >= 0, "znaleziono function boot(){");
+  const od = html.indexOf("async function boot(){");
+  check(od >= 0, "boot() jest async - inaczej await na oczekWyslij() nie ma sensu");
   /* Komentarz przy tej naprawie CELOWO pisze `oczekWyslij()` w prozie -
      goly regex zlapalby wiec sam opis bledu, a nie prawdziwe wywolanie.
      Usuwamy komentarze blokowe przed szukaniem, tak jak audit_firmware.py
      robi to swoim strip() z tego samego powodu.                        */
-  const bezKomentarzy = html.slice(od, od + 2500).replace(/\/\*[\s\S]*?\*\//g, "");
-  const pierwszeWywolanie = bezKomentarzy.search(/\boczekWyslij\s*\(\s*\)/);
-  check(pierwszeWywolanie >= 0, "boot() wola oczekWyslij() (poza komentarzem)");
+  const bezKomentarzy = html.slice(od, od + 3500).replace(/\/\*[\s\S]*?\*\//g, "");
+  /* SAM `await` JEST SEDNEM NAPRAWY (B28, druga runda).
+     Pierwsza wersja wolala oczekWyslij() bez await - funkcja startowala,
+     ale boot() lecial dalej i rejestrowal nasluchy, zanim zalegly zapis
+     zdazyl dojsc do serwera. Test na samo WYSTAPIENIE wywolania (bez
+     sprawdzenia await) przechodzil na tamtej wersji - i nie zlapalby jej. */
+  const pierwszeWywolanie = bezKomentarzy.search(/\bawait\s+oczekWyslij\s*\(\s*\)/);
+  check(pierwszeWywolanie >= 0, "boot() CZEKA na oczekWyslij(), nie tylko go woła");
   /* Musi byc PRZED nasluchami onValue - inaczej zdarzy sie ten sam wyscig,
      ktory naprawilismy juz w doReconcile (D33): nasluch doses zdazy
      przeczytac SERWEROWY stan zanim kolejka zdazy go poprawic.          */
   const pierwszyOnValue = bezKomentarzy.search(/\bonValue\s*\(/);
   check(pierwszeWywolanie >= 0 && pierwszyOnValue >= 0 && pierwszeWywolanie < pierwszyOnValue,
-        `oczekWyslij() (poz. ${pierwszeWywolanie}) przed pierwszym onValue (poz. ${pierwszyOnValue})`);
+        `await oczekWyslij() (poz. ${pierwszeWywolanie}) przed pierwszym onValue (poz. ${pierwszyOnValue})`);
+
+  /* Drugi call site: powrot laczności (.info/connected false->true) mial
+     dokladnie ten sam blad - oczekWyslij() bez await, a wakeUp() zaraz
+     obok pobieral dane natychmiast, wyscigajac sie z zalegloscia.       */
+  const reconnect = html.slice(html.indexOf('".info/connected"'), html.indexOf('".info/connected"') + 1200);
+  check(/await\s+oczekWyslij\s*\(\s*\)/.test(reconnect),
+        "powrot polaczenia tez CZEKA na oczekWyslij() przed wakeUp()");
 }
 
 head("Odmowa bazy nie udaje braku sieci");

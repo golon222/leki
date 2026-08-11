@@ -935,7 +935,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-10.7";
+const APP_VERSION = "2026-08-10.8";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -1388,7 +1388,7 @@ onAuthStateChanged(auth, u => {
 });
 
 /* ═══════════════ START ═══════════════ */
-function boot(){
+async function boot(){
   /* ZALEGŁA KOLEJKA MUSI DOSTAĆ SZANSĘ NA STARCIE, NIE TYLKO PRZY RECONNECT.
 
      TU BYŁ BŁĄD (B28), zgłoszony przez Kubę: „wpisuję ręcznie tego 8,
@@ -1407,8 +1407,22 @@ function boot(){
      dopóki ktoś sam nie kliknął „Spróbuj teraz". Kalendarz przy każdym
      kolejnym otwarciu aplikacji czytał więc dane sprzed tego zapisu i
      wyglądało to jak cofnięcie ręcznej korekty, choć korekta nigdy
-     nawet nie dotarła do bazy.                                        */
-  oczekWyslij();
+     nawet nie dotarła do bazy.
+
+     DRUGI BŁĄD, W TEJ SAMEJ NAPRAWIE: `oczekWyslij()` stał tu BEZ `await`.
+     Wywołanie startowało funkcję, ale `boot()` leciał dalej i rejestrował
+     nasłuchy `onValue` NATYCHMIAST — zanim zaległy zapis zdążył dotrzeć do
+     serwera. Nasłuch zdarzeń widział jeszcze pustą (albo starą) dobę 8
+     sierpnia, sam uruchamiał uzupełnianie, a to pisało świeże „missed" -
+     które ścigało się z Twoim zapisem o ten sam wpis w bazie i czasem
+     wygrywało. Dowód: `users/.../doses/2026-08-08/0` pokazywał
+     `source:"device"` ze świeżym `ts`, mimo ręcznego wpisu chwilę wcześniej.
+
+     `await` zmienia kolejność z "wysłane" na "dostarczone, zanim ktokolwiek
+     zdąży to nadpisać". Gdy kolejka jest pusta (normalny przypadek),
+     `oczekWyslij()` wraca od razu - `if (!lista.length) return 0;` na
+     samej górze - więc to nie spowalnia zwykłego startu ani o milisekundę. */
+  await oczekWyslij();
   /* Otwieramy miesiac biezacej doby lekowej. Tuz po polnocy pierwszego dnia
      miesiaca inaczej pokazalby sie nowy miesiac, a podswietlony dzien
      lezalby w poprzednim - czyli poza ekranem.                         */
@@ -1626,10 +1640,15 @@ function boot(){
     if (kropka) kropka.classList.toggle("zywe", teraz);
 
     if (bylPolaczony === false && teraz) {
-      /* Wróciliśmy do żywych - dociągamy wszystko, co przespaliśmy. */
+      /* Wróciliśmy do żywych - dociągamy wszystko, co przespaliśmy.
+
+         TEN SAM BŁĄD CO W boot() (B28/D34), w drugim miejscu. `oczekWyslij()`
+         bez `await` startował zaległy zapis, ale `wakeUp()` zaraz obok
+         pobierał dane NATYCHMIAST - często zanim zaległość zdążyła dojść do
+         serwera. Kolejność w kodzie sugerowała "najpierw zaległości", a
+         faktyczna kolejność wykonania była odwrotna.                     */
       console.log("polaczenie z baza wznowione");
-      oczekWyslij();          // najpierw zaleglosci, potem odswiezenie
-      wakeUp();
+      (async () => { await oczekWyslij(); wakeUp(); })();
     }
     if (bylPolaczony === true && !teraz) {
       console.warn("polaczenie z baza zerwane");
