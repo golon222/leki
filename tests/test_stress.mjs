@@ -112,9 +112,17 @@ head("Tresc od uzytkownika nie moze stac sie kodem");
   const caly = ["calGrid","todayWhen","hSub","inrList","boxLog","diagList","anaBody"]
     .map(id => document.getElementById(id).innerHTML).join("");
   check(!caly.includes("<img src=x"), "znaczniki HTML sa zamieniane na tekst");
-  /* Po ucieczce zostaje niegrozny tekst: onerror=&quot;...&quot;. Grozne
-     byloby dopiero onerror z PRAWDZIWYM cudzyslowem, czyli dzialajacy atrybut. */
-  check(!/onerror\s*=\s*["']/.test(caly), "atrybut zdarzenia nie jest wykonywalny");
+  /* Atrybut zdarzenia jest grozny WYLACZNIE wewnatrz prawdziwego znacznika.
+     Sam cudzyslow w tekscie nie znaczy nic - a przegladarka, wstawiajac tresc
+     przez textContent, escapuje `&`, `<` i `>`, ale cudzyslowa NIE. Pytanie
+     brzmi wiec: czy powstal wykonywalny atrybut w otwartym tagu, a nie: czy
+     gdziekolwiek w tekscie wystepuje slowo onerror z cudzyslowem.        */
+  /* Szukamy `onerror`, a nie dowolnego `on*`: aplikacja sama generuje
+     onclick/onchange w swoich przyciskach i to jest jej wlasny, zaufany kod.
+     `onerror` w otwartym znaczniku nie ma prawa powstac inaczej niz
+     z wstrzyknietej tresci.                                             */
+  check(!/<\s*[a-zA-Z][^>]*\bonerror\s*=/.test(caly),
+        "atrybut zdarzenia nie jest wykonywalny (nie powstal otwarty znacznik)");
   check(caly.includes("&lt;img"), "znacznik zostal zamieniony na encje");
   check(A.esc(zly).includes("&lt;img"), "funkcja esc faktycznie ucieka znaki");
   check(A.esc(`"cudzyslow"`).includes("&quot;"), "cudzyslowy tez");

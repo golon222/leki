@@ -1044,7 +1044,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-11.5";
+const APP_VERSION = "2026-08-11.6";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -3386,6 +3386,17 @@ window.diagPrzelacz = () => { diagWszystko = !diagWszystko; renderDiag(); };
 /* Baner „pudełko jest otwarte”. Pudełko zgłasza to samo z siebie po
    kwadransie od otwarcia, więc baner pojawia się mniej więcej wtedy,
    kiedy usłyszysz pierwszy sygnał.                                    */
+/* Po ilu godzinach ciszy stan „otwarte" przestaje być wiadomością o TERAZ.
+
+   Przy otwartym wieczku pudełko budzi się często: pierwszy sygnał po
+   OPEN_WARN_FIRST_S (15 min), potem co OPEN_WARN_REPEAT_S (30 min) — i przy
+   każdym z tych wybudzeń melduje stan. Trzy godziny ciszy to więc już nie
+   jest normalna przerwa, tylko brak kontaktu.
+
+   Świadomie mniej niż MILCZY_PROG_H (26 h): tamten próg pilnuje, czy pudełko
+   w ogóle żyje, ten — czy KONKRETNY stan jest jeszcze aktualny.          */
+const OPEN_SWIEZOSC_H = 3;
+
 function renderOpenWarn(st){
   const box = document.getElementById("openWarn");
   if (!box) return;
@@ -3395,8 +3406,29 @@ function renderOpenWarn(st){
 
   const since = st.openSince || 0;
   const when  = document.getElementById("openWarnWhen");
+
+  /* TU BYL PROBLEM, ktory zglosil Kuba: baner mowil „otwarte od 5 h" jako
+     fakt biezacy, choc pudelko nie odezwalo sie od wgrania firmware i wcale
+     nie wiadomo, czy nadal jest otwarte. Licznik rosl sam z siebie, bo liczyl
+     od `openSince` do TERAZ — a nie do chwili, w ktorej pudelko to widzialo.
+
+     Zasada, kolejny raz w tym projekcie (D25, D32): komunikat, ktory brzmi
+     tak samo przy „wiem to teraz" i przy „wiedzialem to wczoraj", usypia. */
+  const widziane = +st.lastSeen || 0;
+  const cisza = widziane ? (Date.now()/1000 - widziane) / 3600 : 0;
+  if (widziane && cisza > OPEN_SWIEZOSC_H){
+    when.innerHTML = `<b>Ostatnia wiadomość z pudełka: ${
+      esc(relTime(Date.now()/1000 - widziane))}.</b>
+      Od tamtej pory milczy, więc nie wiadomo, czy wieczko nadal jest
+      otwarte — najpierw sprawdź, czy pudełko ma zasięg.`;
+    return;
+  }
+
   if (since > 1){
-    const mins = Math.max(0, Math.round(Date.now()/1000 - since) / 60);
+    /* Liczymy do chwili, w ktorej pudelko OSTATNIO to widzialo, a nie do
+       „teraz" - inaczej licznik rosnie takze wtedy, gdy nikt nic nie mierzy. */
+    const doKiedy = widziane || Math.round(Date.now()/1000);
+    const mins = Math.max(0, (doKiedy - since) / 60);
     when.textContent = mins < 60
       ? `Otwarte od ${Math.round(mins)} min (od ${devHM(since)}).`
       : `Otwarte od ${Math.floor(mins/60)} h ${Math.round(mins%60)} min (od ${devHM(since)}).`;

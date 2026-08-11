@@ -1313,6 +1313,14 @@ bool wifiSiecDodaj(const String& ssid, const String& pass) {
 /* Jedna proba polaczenia. Pusty ssid = poswiadczenia zapamietane przez
    sterownik (tak dzialalo pudelko, zanim pojawila sie lista).          */
 static bool wifiSprobuj(const String& ssid, const String& pass, uint32_t limitMs) {
+  /* Rozlaczenie przed kazda proba. Bez tego druga i kolejne WiFi.begin()
+     trafiaja w sterownik, ktory wciaz probuje poprzedniej sieci, i potrafia
+     zostac po cichu zignorowane - a wtedy caly przeglad listy jest tylko
+     czekaniem na to samo niepowodzenie.                                 */
+  if (WiFi.status() != WL_IDLE_STATUS) {
+    WiFi.disconnect(false, false);
+    delay(80);
+  }
   if (ssid.length()) WiFi.begin(ssid.c_str(), pass.c_str());
   else               WiFi.begin();
 
@@ -1346,20 +1354,33 @@ bool wifiConnect() {
   int n = wifiSieciCount();
   bool ok = false;
 
-  if (n == 0) {
-    /* Lista pusta - pudelko sprzed tej zmiany albo po skasowaniu pamieci.
-       Zachowujemy sie dokladnie jak wczesniej.                         */
-    ok = wifiSprobuj("", "", WIFI_TIMEOUT_MS);
-  } else {
-    for (int k = 0; k < n && !ok && !awakeTooLong(); k++) {
-      int i = (rtcNetOstatnia + k) % n;
-      String ssid = wifiSiecSsid(i);
-      if (!ssid.length()) continue;
-      ok = wifiSprobuj(ssid, wifiSiecPass(i), k == 0 ? WIFI_TIMEOUT_MS
-                                                     : WIFI_ALT_TIMEOUT_MS);
-      if (ok) rtcNetOstatnia = (uint8_t)i;
-      else LOG("[NET] '%s' nie odpowiada\n", ssid.c_str());
-    }
+  for (int k = 0; k < n && !ok && !awakeTooLong(); k++) {
+    int i = (rtcNetOstatnia + k) % n;
+    String ssid = wifiSiecSsid(i);
+    if (!ssid.length()) continue;
+    ok = wifiSprobuj(ssid, wifiSiecPass(i), k == 0 ? WIFI_TIMEOUT_MS
+                                                   : WIFI_ALT_TIMEOUT_MS);
+    if (ok) rtcNetOstatnia = (uint8_t)i;
+    else LOG("[NET] '%s' nie odpowiada\n", ssid.c_str());
+  }
+
+  /* OSTATNIA DESKA RATUNKU: poswiadczenia zapamietane przez sterownik.
+
+     Tak dzialalo pudelko przez cale miesiace, zanim pojawila sie lista -
+     i wlasnie dlatego ta sciezka MUSI zostac. Pierwsza wersja tej funkcji
+     probowala jej wylacznie przy pustej liscie, czyli nowa funkcja odcinala
+     jedyna dzialajaca droge powrotu: wystarczylo, ze lista zawierala jeden
+     bledny wpis, a pudelko przestawalo sie laczyc CALKIEM - mimo poprawnych
+     poswiadczen lezacych obok w tej samej pamieci. Objawialo sie to
+     najgorzej jak mozna: aplikacja pokazywala stan zamrozony w chwili
+     wgrania firmware i nic nie mowilo, ze cokolwiek jest nie tak.
+
+     Zasada, ta sama co przy portalu fizycznym: nowa droga nie moze zabierac
+     starej, dopoki nie udowodni, ze dziala.                             */
+  if (!ok && !awakeTooLong()) {
+    if (n) LOGLN("[NET] zadna siec z listy nie odpowiada - probuje zapamietanej");
+    ok = wifiSprobuj("", "", n ? WIFI_ALT_TIMEOUT_MS : WIFI_TIMEOUT_MS);
+    if (ok && n) LOGLN("[NET] polaczono poswiadczeniami sterownika, nie z listy");
   }
 
   ok = WiFi.status() == WL_CONNECTED;

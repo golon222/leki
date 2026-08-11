@@ -2186,6 +2186,32 @@ await window.wyslijSiec();
 check(!A.__db.data?.devices?.pillbox01?.config?.wifiNowa,
       "sama spacja zamiast nazwy nie tworzy zapisu");
 
+/* ═══════════ STAN OTWARCIA A SWIEZOSC STATUSU ═══════════
+   Kuba zglosil: "caly czas jest ze otwarte jest pudelko i podlaczone do
+   ladowania, tak jakby lapal to co bylo przy wgraniu firmware". Baner mowil
+   o stanie sprzed godzin tak samo, jak o stanie sprzed minuty.          */
+head("Otwarte wieczko: teraz czy kiedys");
+const openTxt = () => document.getElementById("openWarnWhen").innerHTML;
+const terazS = Math.floor(Date.now()/1000);
+
+D();
+A.renderStatus({ battery:80, boxOpen:true, openSince: terazS - 1800, lastSeen: terazS - 60 });
+check(openTxt().includes("Otwarte od"), "swiezy status mowi wprost, od kiedy otwarte");
+check(!openTxt().includes("milczy"), "i nie strasza cisza, ktorej nie ma");
+
+A.renderStatus({ battery:80, boxOpen:true, openSince: terazS - 1800,
+                 lastSeen: terazS - 6*3600 });
+check(openTxt().includes("milczy"),
+      "stan sprzed godzin jest opisany jako STARY, a nie jako fakt biezacy");
+check(openTxt().includes("Ostatnia wiadomość"), "z podaniem, kiedy pudelko to widzialo");
+check(!openTxt().includes("Otwarte od"), "i nie udaje, ze wie, co jest teraz");
+
+/* Licznik "otwarte od X" nie moze rosnac, gdy nikt tego nie mierzy. */
+A.renderStatus({ battery:80, boxOpen:true, openSince: terazS - 7200,
+                 lastSeen: terazS - 3600 });
+check(openTxt().includes("1 h"),
+      `liczone do chwili, gdy pudelko to widzialo, a nie do "teraz" (${openTxt().trim()})`);
+
 head("Komunikaty zamiast blokujacych okienek");
 check(!/alert\(n \?/.test(html), "potwierdzenie uzupelnienia nie blokuje ekranu");
 check(html.includes('toast("Zapisano · pudełko pobierze przy najbliższym połączeniu"'),

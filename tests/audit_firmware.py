@@ -821,6 +821,29 @@ if _rep:
     ok("beepQueued()" in _po and re.search(r"if\s*\(\s*!\s*\w+\s*\)", _po) is not None,
        "i dzwiek zalezy od tego wyniku, a nie gra bezwarunkowo")
 
+# ---------- 9b. Droga powrotu do sieci ----------
+# Lista sieci NIE MOZE odcinac poswiadczen zapamietanych przez sterownik.
+# Tak pudelko laczylo sie przez cale miesiace i to jest jedyna droga
+# powrotu, gdy lista zawiera bledny wpis. Pierwsza wersja wifiConnect()
+# probowala jej wylacznie przy PUSTEJ liscie - i jeden zly wpis odcinal
+# pudelko calkiem, a aplikacja pokazywala stan zamrozony bez slowa
+# wyjasnienia. Ta kontrola pilnuje, zeby to nie wrocilo.
+_wc = cialo("bool wifiConnect()")
+if _wc:
+    _sprobuj_puste = re.search(r'wifiSprobuj\(\s*""\s*,\s*""', _wc)
+    ok(_sprobuj_puste is not None,
+       "wifiConnect() probuje poswiadczen zapamietanych przez sterownik")
+    if _sprobuj_puste:
+        # Musi stac PO petli po liscie i byc warunkowane niepowodzeniem,
+        # a nie pustoscia listy.
+        _przed = _wc[:_sprobuj_puste.start()]
+        ok(re.search(r"if\s*\(\s*!\s*ok\b", _przed) is not None,
+           "i robi to po nieudanych probach z listy, a nie tylko przy pustej liscie")
+        ok("for (" in _przed,
+           "czyli dopiero po przejrzeniu calej listy sieci")
+else:
+    ok(False, "nie znaleziono wifiConnect() do sprawdzenia")
+
 # ---------- 10. Rzeczy do uzupelnienia przez uzytkownika ----------
 todo = "TUTAJ_WPISZ_HASLO_C" in cfg
 warn(todo, "DEVICE_PASSWORD nie jest jeszcze uzupelnione w config.h")
