@@ -9,6 +9,16 @@
  *      node test_stress.mjs
  * ===================================================================== */
 import * as A from "./app_module.mjs";
+import { readFileSync } from "node:fs";
+
+/* Zrodlo prawdy o tym, jakie id NAPRAWDE istnieja w aplikacji. Atrapa DOM
+   tworzy pusty element dla kazdego nieznanego id (dom_stub.mjs), wiec
+   sprawdzenie po samym `document.getElementById(id)` nigdy nie zawodzi -
+   nawet dla id, ktorego w index.html nie ma. Bez tego zrodla test
+   "znaczniki HTML sa zamieniane na tekst" moglby przejsc, sprawdzajac
+   pieciu duchow i jeden prawdziwy element, i nikt by tego nie zauwazyl.  */
+const _html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+const idIstnieje = id => _html.includes(`id="${id}"`);
 
 let PASS = 0, FAIL = 0;
 const check = (c, m) => c ? PASS++ : (FAIL++, console.log("  FAIL  " + m));
@@ -106,11 +116,26 @@ head("Tresc od uzytkownika nie moze stac sie kodem");
   D({ cfg:{ ...bazowyCfg, drugName: zly },
       doses:{ [dzien(1)]: { 0:{ status:"taken", dose:1, note: zly } } },
       inr:{ [dzien(1)]: { value:2.5, note: zly } },
+      /* type ze zdarzenia trafia na ekran Zdarzen (evLista) - to nastepca
+         dawnej "diagList", ktora sprawdzala dokladnie to samo, zanim D43
+         przeniosl pelna liste zdarzen na wlasny ekran.                 */
+      events:[ { ts:1785600000, type: zly } ],
       boxLog:[`1785600000|timer|${zly}|80|0`] });
   A.renderAll(); A.renderBoxLog(); A.renderDiag();
+  window.evFiltr("stan","all"); window.evFiltr("czas","all");  // nic nie odfiltrowuje wpisu
 
-  const caly = ["calGrid","todayWhen","hSub","inrList","boxLog","diagList","anaBody"]
-    .map(id => document.getElementById(id).innerHTML).join("");
+  /* NAJWAZNIEJSZE W TYM TESCIE: kazdy z tych id MUSI istniec w PRAWDZIWYM
+     index.html. Bez tej kontroli dwa id ("diagList", "anaBody" - jedno
+     usuniete w D43, drugie nigdy nie istnialo) udawaly test przez cala te
+     sekcje: atrapa DOM tworzyla dla nich puste elementy, a puste innerHTML
+     nigdy nie zawiera "<img src=x", wiec check przechodzil bez sprawdzenia
+     niczego. Trzecia z rzedu wersja tej samej lekcji co D30/D39: cos
+     lagodniejsze od rzeczywistosci mierzy inna rzecz niz sie mysli.     */
+  const idki = ["calGrid","todayWhen","hSub","inrList","boxLog","evLista"];
+  for (const id of idki)
+    check(idIstnieje(id), `element "${id}" naprawde istnieje w index.html`);
+
+  const caly = idki.map(id => document.getElementById(id).innerHTML).join("");
   check(!caly.includes("<img src=x"), "znaczniki HTML sa zamieniane na tekst");
   /* Atrybut zdarzenia jest grozny WYLACZNIE wewnatrz prawdziwego znacznika.
      Sam cudzyslow w tekscie nie znaczy nic - a przegladarka, wstawiajac tresc
