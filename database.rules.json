@@ -56,6 +56,18 @@
               ".validate": "newData.isNumber() && newData.val() > 0"
             }
           },
+          "wifiCmd": {
+            ".validate": "newData.hasChildren(['akcja','ssid'])",
+            "akcja": {
+              ".validate": "newData.isString() && (newData.val() === 'usun' || newData.val() === 'priorytet')"
+            },
+            "ssid": {
+              ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 32"
+            },
+            "ts": {
+              ".validate": "newData.isNumber() && newData.val() > 0"
+            }
+          },
           "drugName": {
             ".validate": "newData.isString() && newData.val().length <= 40"
           },

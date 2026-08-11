@@ -20,7 +20,7 @@
  * 1. IDENTYFIKATOR URZADZENIA
  * ------------------------------------------------------------------ */
 #define DEVICE_ID           "pillbox01"     // klucz w /devices/<DEVICE_ID>
-#define FW_VERSION          "1.33.0"   // widoczna w aplikacji - po wgraniu sprawdz, czy sie zmienila
+#define FW_VERSION          "1.34.0"   // widoczna w aplikacji - po wgraniu sprawdz, czy sie zmienila
 
 /* ---------------------------------------------------------------------
  * 2. FIREBASE  (Realtime Database + Auth email/haslo)
@@ -202,6 +202,14 @@
  * ------------------------------------------------------------------ */
 #define WIFI_SIECI_MAX      4               // ile sieci pamietamy
 #define WIFI_ALT_TIMEOUT_MS 8000            // krocej na kazda KOLEJNA probe
+
+/*     Wyniki usuwania sieci. Osobne wartosci, a nie samo true/false, bo
+ *     "nie ma takiej sieci" i "nie usune, bo to jedyna droga do mnie" to
+ *     dwie rozne odpowiedzi i uzytkownik musi je odroznic.              */
+#define WIFI_USUN_OK        0
+#define WIFI_USUN_BRAK      1               // nie ma jej na liscie
+#define WIFI_USUN_OSTATNIA  2               // jedyna i wlasnie przez nia gadamy
+#define WIFI_USUN_BLAD      3               // zapis do pamieci sie nie udal
 
 #define HOUSEKEEP_MAX_S     43200           // max 12h snu (sync czasu i baterii)
                                             // mniej = dokladniejszy zegar, wiecej pradu

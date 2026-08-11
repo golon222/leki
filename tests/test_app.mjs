@@ -21,7 +21,7 @@ const DEF_CFG = { schedule:["08:00"], tz:"Europe/Warsaw",
   pillsCountedUntil:undefined, pillsBase:undefined, pillsBaseFrom:undefined,
   /* Bez tych dwoch schemat tygodniowy z jednego testu zostawalby w cfg na
      wszystkie nastepne - `__setState` DOKLADA pola, a nie podmienia calosc. */
-  doseWeek:undefined, doseDays:undefined, wifiNowa:undefined };
+  doseWeek:undefined, doseDays:undefined, wifiNowa:undefined, wifiCmd:undefined };
 const D = (o={}) => A.__setState({ doses:{}, inr:{}, events:[], ...o,
                                    cfg:{ ...DEF_CFG, ...(o.cfg||{}) } });
 
@@ -2123,7 +2123,16 @@ D();
 A.renderStatus({ battery:80, nets:"dom|hotspot Kuby", ssid:"dom" });
 check(netHtml().includes("dom") && netHtml().includes("hotspot Kuby"),
       "znane sieci wypisane ze statusu pudelka");
-check(netHtml().includes("teraz połączone przez"), "widac, przez ktora jest polaczone");
+check(netHtml().includes("połączone teraz"), "widac, przez ktora jest polaczone");
+check(netHtml().includes("Przełącz"), "przy pozostalych sieciach jest przycisk przelaczenia");
+/* Siec, przez ktora WLASNIE gadamy, nie dostaje "Przelacz" - nie ma na co. */
+check((netHtml().match(/Przełącz/g) || []).length === 1,
+      "ale nie przy tej, przez ktora pudelko juz jest polaczone");
+check(netHtml().includes("siecUsun("), "i przycisk usuwania");
+/* Nazwa sieci NIE MOZE trafiac do onclick - hotspot iPhone bywa nazwany
+   "Kuba's iPhone", a esc() nie escapuje apostrofu. Do handlera idzie indeks. */
+check(/siecUsun\(\d+\)/.test(netHtml()) && !/siecUsun\('/.test(netHtml()),
+      "do handlera idzie INDEKS, nie nazwa sieci");
 check(!netHtml().includes("Czeka na pudełko"), "nic nie czeka, wiec nie strasz");
 
 D({ cfg:{ wifiNowa:{ ssid:"hotel-wifi", pass:"tajnehaslo123" } } });
@@ -2156,6 +2165,48 @@ D({ cfg:{ wifiNowa:{ ssid:"iPhone" } } });
 A.renderStatus({ battery:80, lastSeen:9999 });
 check(netHtml().includes("Czeka na pudełko"),
       "wpis bez znacznika czasu (stara wersja) nie strasza falszywym bledem");
+
+head("Zarzadzanie lista sieci z aplikacji");
+/* Jedyna siec nie moze dostac przycisku kasowania: pudelko i tak by go nie
+   wykonalo (i slusznie - to jedyna droga do niego), wiec przycisk tylko
+   obiecywalby cos, co sie nie stanie.                                    */
+D();
+A.renderStatus({ battery:80, nets:"dom", ssid:"dom" });
+check(!netHtml().includes("siecUsun("), "przy jedynej sieci nie ma czym jej usunac");
+check(netHtml().includes("Jedynej sieci nie da się usunąć"), "i jest napisane dlaczego");
+
+/* Polecenie idzie ta sama droga co nowa siec i tak samo widac, ze czeka. */
+A.__resetDb();
+D();
+A.renderStatus({ battery:80, nets:"dom|hotspot Kuby", ssid:"dom" });
+/* askConfirm() czeka na dotkniecie - w tescie potwierdzamy je recznie. */
+const pUsun = window.siecUsun(1);
+window.cfResolve(true);
+await pUsun;
+const cmd = A.__db.data?.devices?.pillbox01?.config?.wifiCmd;
+check(cmd?.akcja === "usun" && cmd?.ssid === "hotspot Kuby",
+      "usuniecie zapisane jako polecenie dla pudelka");
+check(typeof cmd?.ts === "number", "ze znacznikiem czasu");
+check(netHtml().includes("Czeka na pudełko"), "i widac, ze czeka na wykonanie");
+
+A.__resetDb();
+D();
+A.renderStatus({ battery:80, nets:"dom|hotspot Kuby", ssid:"dom" });
+const pPrzel = window.siecPrzelacz(1);
+window.cfResolve(true);
+await pPrzel;
+const cmd2 = A.__db.data?.devices?.pillbox01?.config?.wifiCmd;
+check(cmd2?.akcja === "priorytet" && cmd2?.ssid === "hotspot Kuby",
+      "przelaczenie tez jest poleceniem, a nie natychmiastowa zmiana");
+
+/* Indeks spoza listy nie moze wyslac polecenia z pusta nazwa - reguly bazy
+   by je odrzucily, a uzytkownik zobaczylby blad bez zwiazku z tym, co zrobil. */
+A.__resetDb();
+D();
+A.renderStatus({ battery:80, nets:"dom", ssid:"dom" });
+await window.siecUsun(7);          // wychodzi przed pytaniem, wiec bez cfResolve
+check(!A.__db.data?.devices?.pillbox01?.config?.wifiCmd,
+      "klikniecie w nieistniejacy wiersz nie tworzy zapisu");
 
 /* Zapis musi trafic dokladnie tam, skad czyta go firmware, i przejsc przez
    reguly bazy - atrapa sprawdza je prawdziwym database.rules.json.      */

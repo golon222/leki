@@ -1275,14 +1275,59 @@ static String wifiSiecPass(int i) {
 
    Zwraca false, gdy zapis do pamieci trwalej sie nie udal. Wolajacy MUSI
    to sprawdzic przed skasowaniem hasla z bazy (zasada 6).              */
+/* Zapisuje CALA liste naraz. Wydzielone, bo dotykaja jej trzy operacje
+   (dodanie, usuniecie, zmiana kolejnosci) i kazda wlasna kopia tego kodu
+   bylaby trzecia okazja do pomylki w tym samym miejscu.
+
+   Klucze POWYZEJ nowej dlugosci kasujemy, zeby ODZYSKAC MIEJSCE W NVS.
+   Odczytu to nie zmienia - `netN` i tak ogranicza petle, a kazdy zapis
+   nadpisuje wszystkie czytane klucze, wiec skasowana siec nie wrocilaby
+   tak czy inaczej. Ale cala pamiec trwala pudelka to jedna partycja ~20 kB
+   na kolejke, dziennik wieczka, czarna skrzynke i token (D25), a haslo do
+   WiFi potrafi miec 63 znaki. Zostawianie w niej martwych wpisow to
+   oddawanie miejsca, ktorego gdzie indziej brakuje.                    */
+static bool wifiListeZapisz(const String* ss, const String* pp, int n) {
+  bool ok = true;
+  prefs.begin(NVS_NAMESPACE, false);
+  for (int i = 0; i < n; i++) {
+    char ks[8], kp[8];
+    netKlucz(ks, sizeof(ks), i, 's');
+    netKlucz(kp, sizeof(kp), i, 'p');
+    if (!nvsPutStr(ks, ss[i])) ok = false;
+    if (!nvsPutStr(kp, pp[i])) ok = false;
+  }
+  for (int i = n; i < WIFI_SIECI_MAX; i++) {
+    char ks[8], kp[8];
+    netKlucz(ks, sizeof(ks), i, 's');
+    netKlucz(kp, sizeof(kp), i, 'p');
+    prefs.remove(ks);
+    prefs.remove(kp);
+  }
+  if (!prefs.putUChar("netN", (uint8_t)n)) ok = false;
+  prefs.end();
+  return ok;
+}
+
+/* Czyta cala liste do tablic. Osobno od zapisu, bo prefs.begin() nie moze
+   sie zagniezdzac (B22).                                               */
+static int wifiListeCzytaj(String* ss, String* pp) {
+  int n = wifiSieciCount();
+  for (int i = 0; i < n; i++) { ss[i] = wifiSiecSsid(i); pp[i] = wifiSiecPass(i); }
+  return n;
+}
+
+/* Dopisuje siec na POCZATEK listy: ostatnio dodana jest najpewniej ta,
+   ktorej wlasnie potrzebujemy. Siec o tej samej nazwie zastepuje starszy
+   wpis zamiast go dublowac - inaczej zmiana hasla do domowego WiFi
+   zajmowalaby dwa miejsca z czterech.
+
+   Zwraca false, gdy zapis do pamieci trwalej sie nie udal. Wolajacy MUSI
+   to sprawdzic przed skasowaniem hasla z bazy (zasada 6).              */
 bool wifiSiecDodaj(const String& ssid, const String& pass) {
   if (!ssid.length() || ssid.length() > 32) return false;
 
-  /* Najpierw czytamy cala liste - osobno, bo prefs.begin() nie moze sie
-     zagniezdzac (B22). */
   String ss[WIFI_SIECI_MAX], pp[WIFI_SIECI_MAX];
-  int stare = wifiSieciCount();
-  for (int i = 0; i < stare; i++) { ss[i] = wifiSiecSsid(i); pp[i] = wifiSiecPass(i); }
+  int stare = wifiListeCzytaj(ss, pp);
 
   String nowe_s[WIFI_SIECI_MAX], nowe_p[WIFI_SIECI_MAX];
   nowe_s[0] = ssid; nowe_p[0] = pass;
@@ -1292,20 +1337,78 @@ bool wifiSiecDodaj(const String& ssid, const String& pass) {
     nowe_s[n] = ss[i]; nowe_p[n] = pp[i]; n++;
   }
 
-  bool ok = true;
-  prefs.begin(NVS_NAMESPACE, false);
-  for (int i = 0; i < n; i++) {
-    char ks[8], kp[8];
-    netKlucz(ks, sizeof(ks), i, 's');
-    netKlucz(kp, sizeof(kp), i, 'p');
-    if (!nvsPutStr(ks, nowe_s[i])) ok = false;
-    if (!nvsPutStr(kp, nowe_p[i])) ok = false;
-  }
-  if (!prefs.putUChar("netN", (uint8_t)n)) ok = false;
-  prefs.end();
-
+  bool ok = wifiListeZapisz(nowe_s, nowe_p, n);
   rtcNetOstatnia = 0;                       // nowa siec idzie na pierwszy ogien
   LOG("[NET] siec '%s' na liscie (%d z %d)%s\n", ssid.c_str(), n, WIFI_SIECI_MAX,
+      ok ? "" : "  UWAGA: zapis do pamieci NIEUDANY");
+  return ok;
+}
+
+/* Usuwa siec o podanej nazwie.
+
+   ZABEZPIECZENIE, ktorego nie wolno zdejmowac: nie pozwalamy usunac sieci,
+   przez ktora pudelko jest WLASNIE polaczone, jesli jest OSTATNIA na liscie.
+   Zostalyby wtedy tylko poswiadczenia sterownika - a te wskazuja dokladnie
+   te sama siec, wiec efekt bylby zerowy albo, po ich nadpisaniu, katastro-
+   falny: urzadzenie bez zadnej drogi powrotu poza portalem fizycznym.
+
+   Usuniecie sieci, przez ktora akurat NIE jestesmy polaczeni, albo takiej,
+   po ktorej zostaja inne - jest bezpieczne i przechodzi.               */
+int wifiSiecUsun(const String& ssid) {
+  if (!ssid.length()) return WIFI_USUN_BRAK;
+
+  String ss[WIFI_SIECI_MAX], pp[WIFI_SIECI_MAX];
+  int stare = wifiListeCzytaj(ss, pp);
+
+  int znaleziona = -1;
+  for (int i = 0; i < stare; i++) if (ss[i] == ssid) { znaleziona = i; break; }
+  if (znaleziona < 0) return WIFI_USUN_BRAK;
+
+  if (stare == 1 && WiFi.status() == WL_CONNECTED && WiFi.SSID() == ssid)
+    return WIFI_USUN_OSTATNIA;
+
+  String nowe_s[WIFI_SIECI_MAX], nowe_p[WIFI_SIECI_MAX];
+  int n = 0;
+  for (int i = 0; i < stare; i++) {
+    if (i == znaleziona) continue;
+    nowe_s[n] = ss[i]; nowe_p[n] = pp[i]; n++;
+  }
+
+  bool ok = wifiListeZapisz(nowe_s, nowe_p, n);
+  rtcNetOstatnia = 0;                       // indeksy sie przesunely
+  LOG("[NET] siec '%s' usunieta, zostaje %d%s\n", ssid.c_str(), n,
+      ok ? "" : "  UWAGA: zapis do pamieci NIEUDANY");
+  return ok ? WIFI_USUN_OK : WIFI_USUN_BLAD;
+}
+
+/* Przesuwa siec na poczatek listy - pudelko sprobuje jej PIERWSZEJ.
+
+   To jest "przelacz na te siec" w wersji, ktora nie moze urwac lacznosci:
+   nie rozlaczamy niczego tu i teraz, tylko zmieniamy kolejnosc prob. Gdyby
+   nowa siec okazala sie nieosiagalna, pudelko zejdzie po liscie do starej
+   i nic sie nie stanie.                                                */
+bool wifiSiecPriorytet(const String& ssid) {
+  if (!ssid.length()) return false;
+
+  String ss[WIFI_SIECI_MAX], pp[WIFI_SIECI_MAX];
+  int stare = wifiListeCzytaj(ss, pp);
+
+  int znaleziona = -1;
+  for (int i = 0; i < stare; i++) if (ss[i] == ssid) { znaleziona = i; break; }
+  if (znaleziona < 0) return false;
+  if (znaleziona == 0) { rtcNetOstatnia = 0; return true; }   // juz pierwsza
+
+  String nowe_s[WIFI_SIECI_MAX], nowe_p[WIFI_SIECI_MAX];
+  nowe_s[0] = ss[znaleziona]; nowe_p[0] = pp[znaleziona];
+  int n = 1;
+  for (int i = 0; i < stare; i++) {
+    if (i == znaleziona) continue;
+    nowe_s[n] = ss[i]; nowe_p[n] = pp[i]; n++;
+  }
+
+  bool ok = wifiListeZapisz(nowe_s, nowe_p, n);
+  rtcNetOstatnia = 0;
+  LOG("[NET] siec '%s' na czele listy%s\n", ssid.c_str(),
       ok ? "" : "  UWAGA: zapis do pamieci NIEUDANY");
   return ok;
 }
@@ -1870,6 +1973,46 @@ void fetchConfig() {
         LOGLN("[NET] nie udalo sie zapisac sieci - haslo ZOSTAJE w bazie do nastepnej proby");
       }
     }
+  }
+
+  /* --- Polecenie na liscie sieci: usun / uzywaj tej --------------------
+     Ta sama skrzynka nadawcza co `wifiNowa`, tylko bez hasla: aplikacja
+     mowi CO zrobic, a pudelko odpowiada przez `netMsg`. Wpis kasujemy po
+     wykonaniu, zeby polecenie nie powtarzalo sie w kolko - takze wtedy,
+     gdy sie NIE UDALO. Nieusuwalne polecenie probowaloby sie wykonac przy
+     kazdym polaczeniu i nigdy nie dalo sie go odwolac.                  */
+  JsonObject cmd = doc["wifiCmd"].as<JsonObject>();
+  if (!cmd.isNull()) {
+    String akcja = cmd["akcja"] | "";
+    String cel   = cmd["ssid"]  | "";
+
+    if (akcja == "usun") {
+      int wynik = wifiSiecUsun(cel);
+      switch (wynik) {
+        case WIFI_USUN_OK:
+          snprintf(rtcNetMsg, sizeof(rtcNetMsg), "usunieto siec");
+          break;
+        case WIFI_USUN_BRAK:
+          snprintf(rtcNetMsg, sizeof(rtcNetMsg), "nie znam tej sieci");
+          break;
+        case WIFI_USUN_OSTATNIA:
+          snprintf(rtcNetMsg, sizeof(rtcNetMsg), "to jedyna siec - nie usuwam");
+          break;
+        default:
+          snprintf(rtcNetMsg, sizeof(rtcNetMsg), "usuwanie: blad zapisu");
+          break;
+      }
+    } else if (akcja == "priorytet") {
+      bool ok2 = wifiSiecPriorytet(cel);
+      snprintf(rtcNetMsg, sizeof(rtcNetMsg),
+               ok2 ? "ta siec bedzie probowana pierwsza" : "nie znam tej sieci");
+    } else {
+      snprintf(rtcNetMsg, sizeof(rtcNetMsg), "nieznane polecenie sieci");
+    }
+
+    int kod = rtdbSend("DELETE", "/devices/" DEVICE_ID "/config/wifiCmd.json", "");
+    LOG("[NET] polecenie '%s' na '%s' -> %s (kasowanie HTTP %d)\n",
+        akcja.c_str(), cel.c_str(), rtcNetMsg, kod);
   }
 
   /* --- Rozpisanie tygodniowe -----------------------------------------

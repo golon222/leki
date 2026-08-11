@@ -188,3 +188,22 @@ struct FakeSerial {
   template<class A>    void println(A&&)   {}
 };
 extern FakeSerial Serial;
+
+/* ---------- atrapa WiFi ----------
+   Tylko tyle, ile potrzebuje logika listy sieci: czy jestesmy polaczeni
+   i z czym. Zabezpieczenie "nie usuwaj jedynej sieci, przez ktora wlasnie
+   gadamy" opiera sie dokladnie na tych dwoch odpowiedziach, wiec bez nich
+   nie dalo by sie go przetestowac.                                      */
+#define WL_IDLE_STATUS 0
+#define WL_CONNECTED   3
+
+struct FakeWiFi {
+  int _status = WL_IDLE_STATUS;
+  String _ssid = String("");
+  int status() const { return _status; }
+  String SSID() const { return _ssid; }
+  /* Wygodne ustawianie stanu w testach. */
+  void _polacz(const char* ssid) { _status = WL_CONNECTED; _ssid = String(ssid); }
+  void _rozlacz() { _status = WL_IDLE_STATUS; _ssid = String(""); }
+};
+inline FakeWiFi WiFi;

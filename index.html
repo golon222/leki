@@ -1055,7 +1055,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-11.7";
+const APP_VERSION = "2026-08-11.8";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -3931,15 +3931,87 @@ function renderNetStan(){
   } else if (st.netMsg){
     html += `<div class="dim2">Ostatnia sieć z aplikacji: <b>${esc(st.netMsg)}</b></div>`;
   }
+  /* Polecenie na liście sieci czeka tak samo jak nowa sieć — i tak samo
+     znika samo, gdy pudełko je wykona. */
+  const cmd = cfg.wifiCmd;
+  if (cmd?.ssid){
+    html += `<div class="dim2" style="color:var(--warn);margin-top:${czeka?"8px":"0"}">
+      Czeka na pudełko: ${cmd.akcja === "usun" ? "usunięcie" : "przełączenie na"}
+      <b>${esc(cmd.ssid)}</b></div>`;
+  }
+
   if (znane.length){
-    html += `<div class="dim2" style="margin-top:${czeka?"8px":"0"}">
-      Pudełko zna: ${znane.map(s => `<b>${esc(s)}</b>`).join(" · ")}
-      ${st.ssid ? `<br>teraz połączone przez <b>${esc(st.ssid)}</b>` : ""}</div>`;
+    /* Lista z przyciskami zamiast samych nazw: „przełącz" i „usuń" to
+       dokładnie to, po co się tu wchodzi. Sieć, przez którą pudełko jest
+       WŁAŚNIE połączone, nie dostaje przycisku przełączania — nie ma na co
+       przełączać — a przy jedynej sieci nie ma też kasowania, bo pudełko
+       i tak by go nie wykonało (i słusznie: to jedyna droga do niego). */
+    html += `<div style="margin-top:${(czeka || cmd?.ssid) ? "10px" : "0"}">
+      <div class="dim2" style="margin-bottom:6px">Sieci zapisane w pudełku:</div>` +
+      znane.map((s, i) => {
+        const teraz = st.ssid === s;
+        const jedyna = znane.length === 1;
+        /* Do handlera idzie INDEKS, nie nazwa. `esc()` nie escapuje
+           apostrofu, a hotspot iPhone'a często nazywa się „Kuba's iPhone" —
+           taka nazwa wyszłaby z ciągu w atrybucie onclick i stała się kodem.
+           Liczba nie ma jak. Nazwę handler odczytuje sam, z bieżącej listy. */
+        return `<div class="row between" style="margin-top:6px;gap:8px">
+          <span style="flex:1">${esc(s)}${teraz
+            ? ` <span class="dim2">· połączone teraz</span>` : ""}</span>
+          ${teraz ? "" : `<button class="ghost" style="padding:7px 11px;font-size:13px"
+              onclick="siecPrzelacz(${i})">Przełącz</button>`}
+          ${jedyna ? "" : `<button class="danger" style="padding:7px 11px;font-size:13px"
+              onclick="siecUsun(${i})">✕</button>`}
+        </div>`;
+      }).join("") + `</div>`;
+    if (znane.length === 1){
+      html += `<div class="dim2" style="margin-top:8px">
+        Jedynej sieci nie da się usunąć — pudełko straciłoby drogę do Ciebie.
+        Najpierw dodaj drugą.</div>`;
+    }
   } else if (!czeka){
     html += `<div class="dim2">Pudełko jeszcze nie zgłosiło żadnej znanej sieci.</div>`;
   }
   box.innerHTML = html;
 }
+
+/* Polecenia na liście sieci. Oba idą tą samą drogą co nowa sieć: wpis
+   w bazie, który pudełko wykonuje i kasuje. Nie ma tu żadnego „natychmiast" —
+   pudełko śpi i wykona to przy najbliższym połączeniu.                  */
+async function wyslijPolecenieSieci(akcja, ssid, opis){
+  cfg.wifiCmd = { akcja, ssid, ts: Math.floor(Date.now()/1000) };
+  await zapiszCfg({ wifiCmd: cfg.wifiCmd }, opis);
+  renderNetStan();
+}
+
+/* Nazwa sieci spod indeksu, czytana z BIEŻĄCEJ listy — nie z tej, która była
+   na ekranie w chwili rysowania. Status przychodzi na żywo, więc między
+   narysowaniem przycisku a jego kliknięciem lista może się zmienić, a to są
+   operacje, których nie chcemy wykonać na innej sieci, niż się widziało. */
+function siecZIndeksu(i){
+  const znane = String(ostatniStatus?.nets || "").split("|").filter(Boolean);
+  return znane[i] || "";
+}
+
+window.siecPrzelacz = async i => {
+  const ssid = siecZIndeksu(i);
+  if (!ssid) return;
+  const ok = await askConfirm("Przełączyć na tę sieć?",
+    `Pudełko będzie próbowało „${ssid}" jako pierwszej. Jeśli akurat nie ` +
+    `będzie jej w zasięgu, wróci do pozostałych — łączności to nie urwie.`);
+  if (!ok) return;
+  await wyslijPolecenieSieci("priorytet", ssid, "Przełączenie sieci");
+};
+
+window.siecUsun = async i => {
+  const ssid = siecZIndeksu(i);
+  if (!ssid) return;
+  const ok = await askConfirm("Usunąć tę sieć z pudełka?",
+    `„${ssid}" zniknie z pamięci pudełka. Żeby wrócić, trzeba będzie podać ` +
+    `ją razem z hasłem jeszcze raz.`);
+  if (!ok) return;
+  await wyslijPolecenieSieci("usun", ssid, "Usunięcie sieci");
+};
 
 window.usunWyjatek = async k => {
   const kopia = { ...(cfg.doseDays || {}) };

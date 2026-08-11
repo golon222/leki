@@ -81,7 +81,20 @@ odrzuc("haslo ponad limit WPA2",
        "devices/pillbox1/config/wifiNowa", { ssid: "dom", pass: "x".repeat(64) });
 odrzuc("nazwa sieci jako liczba", "devices/pillbox1/config/wifiNowa", { ssid: 5 });
 
+/* Polecenia na liscie sieci: usun / uzywaj tej. Bez hasla - aplikacja mowi
+   CO zrobic, a nie podaje poswiadczen. */
+odrzuc("polecenie bez akcji",  "devices/pillbox1/config/wifiCmd", { ssid: "dom" });
+odrzuc("polecenie bez sieci",  "devices/pillbox1/config/wifiCmd", { akcja: "usun" });
+odrzuc("akcja spoza slownika", "devices/pillbox1/config/wifiCmd",
+       { akcja: "sformatuj", ssid: "dom" });
+odrzuc("pusta nazwa w poleceniu", "devices/pillbox1/config/wifiCmd",
+       { akcja: "usun", ssid: "" });
+
 head("Silnik regul przepuszcza to, co poprawne");
+ok("usuniecie sieci",  "devices/pillbox1/config/wifiCmd",
+   { akcja: "usun", ssid: "hotspot Kuby", ts: 1750000000 });
+ok("przelaczenie sieci", "devices/pillbox1/config/wifiCmd",
+   { akcja: "priorytet", ssid: "dom", ts: 1750000000 });
 ok("siec z aplikacji",       "devices/pillbox1/config/wifiNowa",
    { ssid: "hotspot Kuby", pass: "tajnehaslo" });
 ok("siec otwarta, bez hasla", "devices/pillbox1/config/wifiNowa", { ssid: "hotel-wifi" });

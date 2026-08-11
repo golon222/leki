@@ -614,6 +614,81 @@ CHECK(!wifiSiecDodaj(String("dom"), String("haslo")),
 prefs.failKeys.clear();
 prefs.wipe();
 
+/* ================= 9a4. USUWANIE I KOLEJNOSC SIECI ================= */
+head("Usuwanie sieci z listy");
+prefs.wipe();
+WiFi._rozlacz();
+wifiSiecDodaj(String("dom"), String("h1"));
+wifiSiecDodaj(String("hotspot"), String("h2"));
+wifiSiecDodaj(String("praca"), String("h3"));
+CHECK(wifiSieciCount()==3, "trzy sieci na starcie (%d)", wifiSieciCount());
+
+CHECK(wifiSiecUsun(String("dom"))==WIFI_USUN_OK, "siec z srodka listy usuwa sie");
+CHECK(wifiSieciCount()==2, "zostaja dwie (%d)", wifiSieciCount());
+CHECK(wifiSiecSsid(0)=="praca" && wifiSiecSsid(1)=="hotspot",
+      "a pozostale zachowuja kolejnosc");
+CHECK(wifiSiecUsun(String("nie-ma-takiej"))==WIFI_USUN_BRAK,
+      "nieznana siec to osobna odpowiedz, nie cicha zgoda");
+
+/* NAJWAZNIEJSZE ZABEZPIECZENIE: nie wolno usunac jedynej sieci, przez ktora
+   pudelko wlasnie rozmawia - zostaloby bez drogi powrotu poza portalem. */
+prefs.wipe();
+wifiSiecDodaj(String("dom"), String("h1"));
+WiFi._polacz("dom");
+CHECK(wifiSiecUsun(String("dom"))==WIFI_USUN_OSTATNIA,
+      "jedyna siec, przez ktora jestesmy polaczeni, NIE daje sie usunac");
+CHECK(wifiSieciCount()==1, "i naprawde zostaje na liscie (%d)", wifiSieciCount());
+
+/* Ta sama siec, ale gdy jest DRUGA - usuwanie jest juz bezpieczne. */
+wifiSiecDodaj(String("hotspot"), String("h2"));
+WiFi._polacz("dom");
+CHECK(wifiSiecUsun(String("dom"))==WIFI_USUN_OK,
+      "gdy jest zapasowa, polaczona siec wolno usunac");
+CHECK(wifiSieciCount()==1 && wifiSiecSsid(0)=="hotspot", "zostaje zapasowa");
+
+/* Skrocenie listy oddaje miejsce w NVS. Odczytu to nie zmienia (netN i tak
+   ogranicza petle), wiec sprawdzamy to, co naprawde jest stawka: czy martwe
+   klucze zniknely z pamieci. Cala partycja to ~20 kB na wszystko (D25),
+   a haslo do WiFi miewa 63 znaki.                                       */
+prefs.wipe();
+WiFi._rozlacz();
+wifiSiecDodaj(String("a"), String("1"));
+wifiSiecDodaj(String("b"), String("2"));
+wifiSiecDodaj(String("c"), String("3"));
+CHECK(prefs.str.count("n2s")==1, "trzecia siec faktycznie zajmuje miejsce w NVS");
+wifiSiecUsun(String("a"));
+wifiSiecUsun(String("b"));
+CHECK(wifiSieciCount()==1, "zostala jedna (%d)", wifiSieciCount());
+CHECK(prefs.str.count("n1s")==0 && prefs.str.count("n2s")==0,
+      "a klucze po skroconej liscie sa skasowane, nie porzucone");
+CHECK(prefs.str.count("n1p")==0 && prefs.str.count("n2p")==0,
+      "razem z haslami - to one zajmuja najwiecej");
+CHECK(prefs.str.count("n0s")==1 && wifiSiecSsid(0)=="c", "a to, co zostalo, dziala");
+
+head("Kolejnosc prob: przelaczanie sieci");
+prefs.wipe();
+WiFi._rozlacz();
+wifiSiecDodaj(String("dom"), String("h1"));
+wifiSiecDodaj(String("hotspot"), String("h2"));
+CHECK(wifiSiecSsid(0)=="hotspot", "ostatnio dodana jest pierwsza");
+CHECK(wifiSiecPriorytet(String("dom")), "przelaczenie na 'dom' przyjete");
+CHECK(wifiSiecSsid(0)=="dom" && wifiSiecSsid(1)=="hotspot",
+      "wskazana siec staje na czele listy");
+CHECK(wifiSieciCount()==2, "bez gubienia pozostalych (%d)", wifiSieciCount());
+CHECK(!wifiSiecPriorytet(String("nie-ma-takiej")), "nieznanej sieci nie da sie wybrac");
+CHECK(wifiSiecPriorytet(String("dom")), "wskazanie tej, ktora juz jest pierwsza, jest bezpieczne");
+CHECK(wifiSieciCount()==2 && wifiSiecSsid(0)=="dom", "i niczego nie psuje");
+/* Haslo musi wedrowac razem z nazwa - inaczej po przelaczeniu pudelko
+   probowaloby sie laczyc z wlasciwa siecia i cudzym haslem. */
+prefs.wipe();
+wifiSiecDodaj(String("dom"), String("tajne-dom"));
+wifiSiecDodaj(String("hotspot"), String("tajne-hot"));
+wifiSiecPriorytet(String("dom"));
+CHECK(wifiSiecPass(0)=="tajne-dom" && wifiSiecPass(1)=="tajne-hot",
+      "hasla ida za nazwami przy zmianie kolejnosci");
+prefs.wipe();
+WiFi._rozlacz();
+
 /* ================= 9b. ZNACZNIKI PRZEZYWAJACE RESET ================= */
 head("Znacznik dawki przezywa reset plytki");
 prefs.wipe();
