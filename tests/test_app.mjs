@@ -621,13 +621,18 @@ head("Diagnostyka na osobnym ekranie");
   /* Ustawienia maja zostac z rzeczami, ktore COS USTAWIAJA. */
   check(naglowek(ust, "Lek i dawkowanie"), `„Lek i dawkowanie" zostaje w Ustawieniach`);
 
-  /* Ustawienia INR mieszkaja przy DANYCH INR, a nie w Ustawieniach: obie
-     dotycza wylacznie tamtego ekranu i tam sie ich szuka (prosba Kuby).  */
+  /* Obie opcje INR zostaja w USTAWIENIACH, ale pod jednym naglowkiem "INR",
+     a nie jako dwie osobne karty (prosba Kuby). Ekran INR ma pokazywac
+     WYNIKI, nie formularze do ich konfigurowania.                        */
+  check(naglowek(ust, "INR"), "opcje INR stoja w Ustawieniach pod naglowkiem „INR”");
   const inrTab = wytnij("tab-inr");
-  for (const karta of ["Zakres terapeutyczny", "Jak często mierzysz INR"]){
-    check(naglowek(inrTab, karta) && !naglowek(ust, karta),
-          `„${karta}" stoi na ekranie INR, nie w Ustawieniach`);
-  }
+  check(!inrTab.includes('id="inrMin"') && !inrTab.includes('id="inrEvery"'),
+        "a ekran INR nie ma ich u siebie");
+  /* Jedna sekcja, nie dwie - to jedno zagadnienie. */
+  for (const stara of ["Zakres terapeutyczny INR", "Jak często mierzysz INR"])
+    check(!naglowek(ust, stara), `„${stara}" nie jest juz osobna karta`);
+  check(ust.includes('id="inrMin"') && ust.includes('id="inrEvery"'),
+        "obie opcje siedza w tej samej sekcji");
 
   /* Sekcje Ustawien sa ZWIJANE - ekran, na ktory wchodzi sie po jedna
      rzecz, nie moze wymagac przewijania przez wszystkie pozostale.      */

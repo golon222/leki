@@ -607,32 +607,6 @@ nav button.act{color:var(--acc)}
     <div class="inrlist" id="inrList" style="margin-top:6px"></div>
   </div>
 
-  <!-- Ustawienia INR mieszkaja TUTAJ, a nie w Ustawieniach: obie dotycza
-       wylacznie tego ekranu i tu sie ich szuka. -->
-  <details class="card sek">
-    <summary><h3>Zakres terapeutyczny</h3></summary>
-    <div class="sekcia">
-      <div class="muted">Ustala go lekarz prowadzący. Najczęściej 2,0–3,0.</div>
-      <div class="pair" style="grid-template-columns:minmax(0,1fr) minmax(0,1fr)">
-        <div><label>Od</label><select id="inrMin" onchange="inrZakresZmieniony()"></select></div>
-        <div><label>Do</label><select id="inrMax"></select></div>
-      </div>
-      <button class="primary" style="width:100%;margin-top:12px" onclick="saveInrRange()">Zapisz zakres</button>
-    </div>
-  </details>
-
-  <details class="card sek">
-    <summary><h3>Jak często mierzysz INR</h3></summary>
-    <div class="sekcia">
-      <div class="muted">Odstęp ustala lekarz — aplikacja tylko odlicza dni.
-        Termin liczy się od ostatniego wyniku i pojawia się w kalendarzu jako
-        pomarańczowy znak.</div>
-      <div><label>Co ile</label>
-        <select id="inrEvery" onchange="odswiezPodpowiedzInr()"></select></div>
-      <div class="dim2" id="inrEveryHint" style="margin-top:6px"></div>
-      <button class="primary" style="width:100%;margin-top:12px" onclick="saveInrEvery()">Zapisz odstęp</button>
-    </div>
-  </details>
 </section>
 
 <!-- ─────────── ANALIZA ─────────── -->
@@ -743,6 +717,30 @@ nav button.act{color:var(--acc)}
         w kalendarzu — tutaj tylko je przeglądasz i kasujesz.
       </div>
       <div id="exList" style="margin-top:10px"></div>
+    </div>
+  </details>
+
+  <!-- Obie opcje INR pod JEDNYM naglowkiem, a nie jako dwie osobne karty:
+       to jedno zagadnienie i szuka sie ich razem. -->
+  <details class="card sek">
+    <summary><h3>INR</h3></summary>
+    <div class="sekcia">
+      <label style="margin-top:0">Zakres terapeutyczny</label>
+      <div class="dim2" style="margin:-4px 0 6px">Ustala go lekarz prowadzący. Najczęściej 2,0–3,0.</div>
+      <div class="pair" style="grid-template-columns:minmax(0,1fr) minmax(0,1fr)">
+        <div><label>Od</label><select id="inrMin" onchange="inrZakresZmieniony()"></select></div>
+        <div><label>Do</label><select id="inrMax"></select></div>
+      </div>
+      <button class="primary" style="width:100%;margin-top:12px" onclick="saveInrRange()">Zapisz zakres</button>
+
+      <label style="margin-top:18px">Jak często mierzysz</label>
+      <div class="dim2" style="margin:-4px 0 6px">Odstęp ustala lekarz — aplikacja tylko odlicza dni.
+        Termin liczy się od ostatniego wyniku i pojawia się w kalendarzu jako
+        pomarańczowy znak.</div>
+      <div><label>Co ile</label>
+        <select id="inrEvery" onchange="odswiezPodpowiedzInr()"></select></div>
+      <div class="dim2" id="inrEveryHint" style="margin-top:6px"></div>
+      <button class="primary" style="width:100%;margin-top:12px" onclick="saveInrEvery()">Zapisz odstęp</button>
     </div>
   </details>
 
@@ -1046,7 +1044,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-11.4";
+const APP_VERSION = "2026-08-11.5";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
