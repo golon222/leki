@@ -354,9 +354,12 @@ nav button svg{width:21px;height:21px}
 nav button.act{color:var(--acc)}
 .hide{display:none!important}
 
-/* ---------- powrot z podekranu ---------- */
-#backBtn{background:transparent;border:0;color:var(--acc);font-size:14px;font-weight:600;
-         padding:2px 0 10px;margin:0}
+/* ---------- powrot z podekranu ----------
+   Powierzchnia dotyku ma miec sensowna wysokosc: sam tekst to cel wielkosci
+   litery, a to jest przycisk, ktorego uzywa sie najczesciej ze wszystkich
+   na podekranie.                                                          */
+#backBtn{display:block;background:transparent;border:0;color:var(--acc);
+         font-size:15px;font-weight:600;padding:4px 4px 12px;margin:0 0 2px}
 #backBtn:active{opacity:.6}
 
 /* ---------- kafelki nawigacyjne ----------
@@ -450,10 +453,6 @@ nav button.act{color:var(--acc)}
 
 <!-- ═══════════════ APLIKACJA ═══════════════ -->
 <div id="app" class="hide">
-<!-- Przycisk powrotu stoi POZA nagłówkiem, nad treścią: w nagłówku musiałby
-     się mieścić obok tytułu, baterii i odświeżania, a na wąskim ekranie to
-     albo ścisk, albo znikający tytuł. -->
-<button id="backBtn" class="hide" onclick="wrocZEkranu()">← Ustawienia</button>
 <header>
   <div class="ttl">
     <h1 id="hTitle">Kalendarz</h1>
@@ -470,6 +469,14 @@ nav button.act{color:var(--acc)}
 </header>
 
 <main>
+
+<!-- Przycisk powrotu jest PIERWSZYM elementem tresci, a nie stoi nad
+     naglowkiem. Nagłówek jest `position:sticky` i sam rezerwuje miejsce na
+     pasek statusu iOS swoim `env(safe-area-inset-top)` - cokolwiek wstawione
+     NAD nim ląduje pod zegarkiem i baterią systemu, czyli poza zasięgiem
+     palca, a przy okazji spycha cały układ w dół. Tak właśnie zniknął ten
+     przycisk za pierwszym podejściem. -->
+<button id="backBtn" class="hide" onclick="wrocZEkranu()">← Ustawienia</button>
 
 <!-- ─────────── KALENDARZ ─────────── -->
 <div id="pull">
@@ -1140,7 +1147,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-11.9";
+const APP_VERSION = "2026-08-11.10";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);

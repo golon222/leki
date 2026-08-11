@@ -101,6 +101,21 @@ if _zle:
 else:
     print('  OK   kazda sekcja ekranu ma sparowane znaczniki')
 
+# Nad <header> nie moze stac NIC. Naglowek jest position:sticky i sam
+# rezerwuje miejsce na pasek statusu iOS (env(safe-area-inset-top)), wiec
+# element wstawiony przed nim laduje pod zegarkiem systemu - poza zasiegiem
+# palca - i spycha caly uklad w dol. Tak zniknal przycisk powrotu.
+_m = _re.search(r'<div id="app"[^>]*>(.*?)<header>', html, _re.S)
+if not _m:
+    bad += 1; print('  BLAD nie znaleziono naglowka aplikacji')
+else:
+    _miedzy = _re.sub(r'<!--.*?-->', '', _m.group(1), flags=_re.S).strip()
+    if _miedzy:
+        bad += 1
+        print('  BLAD miedzy <div id="app"> a <header> stoi tresc: ' + _miedzy[:60])
+    else:
+        print('  OK   nic nie stoi nad naglowkiem (pasek statusu iOS)')
+
 handlers = set(re.findall(r'on(?:click|change)="(\w+)\(', html)) - {'if'}
 orphan = [h for h in handlers if f'window.{h}' not in js]
 if orphan: bad += 1; print('  BLAD handlery bez definicji:', orphan)

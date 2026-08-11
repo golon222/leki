@@ -2341,6 +2341,79 @@ A.renderStatus({ battery:80, boxOpen:true, openSince: terazS - 7200,
 check(openTxt().includes("1 h"),
       `liczone do chwili, gdy pudelko to widzialo, a nie do "teraz" (${openTxt().trim()})`);
 
+/* ═══════════ ZAPISY PO ROZBICIU USTAWIEN NA EKRANY ═══════════
+
+   Pytanie Kuby po przebudowie brzmialo wprost: "czy sprawdziles, czy
+   przeniesienie tego nie spowoduje, ze rzeczy beda sie zapisywac w zlym
+   miejscu?". Samo sprawdzenie, ze pola ISTNIEJA, na to nie odpowiada -
+   formularz moze byc kompletny i pisac nie tam, gdzie czyta go pudelko.
+   Dlatego tu wypelniamy pola tak, jak robi to palec, wolamy prawdziwe
+   funkcje zapisu i patrzymy, CO NAPRAWDE wyladowalo w bazie. Atrapa
+   sprawdza przy tym kazdy zapis prawdziwym database.rules.json.        */
+head("Zapisy z podekranow trafiaja tam, gdzie czyta je pudelko");
+{
+  const cfgWBazie = () => A.__db.data?.devices?.pillbox01?.config || {};
+
+  /* --- ekran "Lek i dawkowanie" --- */
+  A.__resetDb();
+  D();
+  A.renderSettings();                       // wypelnia pola z cfg, jak przy wejsciu
+  document.getElementById("drugName").value = "Warfin";
+  document.getElementById("drugStrength").value = "3";
+  document.getElementById("defDose").value = "1.5";
+  document.getElementById("dw3").value = "0";       // sroda bez leku
+  await window.saveConfig();
+
+  const c = cfgWBazie();
+  check(c.drugName === "Warfin", "nazwa leku trafia do devices/<id>/config");
+  check(c.drugStrength === 3, "moc tabletki tez");
+  check(c.defaultDose === 1.5, `dawka standardowa (${c.defaultDose})`);
+  check(Array.isArray(c.doseWeek) && c.doseWeek.length === 7,
+        "rozpisanie tygodniowe idzie jako komplet siedmiu dni");
+  check(c.doseWeek?.[3] === 0, "a zero ze srody nie gubi sie po drodze");
+  check(Array.isArray(c.schedule) && c.schedule.length >= 1,
+        "harmonogram przypomnien zapisany razem z reszta");
+
+  /* --- ekran "INR" --- */
+  A.__resetDb();
+  D();
+  A.renderSettings();
+  document.getElementById("inrMin").value = "2.5";
+  document.getElementById("inrMax").value = "3.5";
+  await window.saveInrRange();
+  check(cfgWBazie().inrMin === 2.5 && cfgWBazie().inrMax === 3.5,
+        "zakres terapeutyczny zapisany z ekranu INR");
+
+  A.__resetDb();
+  D();
+  A.renderSettings();
+  document.getElementById("inrEvery").value = "28";
+  await window.saveInrEvery();
+  check(cfgWBazie().inrEveryDays === 28, "odstep pomiarow tez");
+
+  /* --- ekran "Sieć WiFi" --- */
+  A.__resetDb();
+  D();
+  document.getElementById("netSsid").value = "hotspot Kuby";
+  document.getElementById("netPass").value = "tajnehaslo";
+  await window.wyslijSiec();
+  check(cfgWBazie().wifiNowa?.ssid === "hotspot Kuby",
+        "siec z ekranu WiFi idzie do config/wifiNowa");
+
+  /* --- ekran "Urządzenie": stan opakowania --- */
+  A.__resetDb();
+  D();
+  await window.addPills(30);
+  check(cfgWBazie().pillsBase === 30, "stan opakowania zapisany po staremu");
+
+  /* Zaden z tych zapisow nie moze isc poza `devices/<id>/config` - to jedyne
+     miejsce, z ktorego pudelko czyta ustawienia.                         */
+  const sciezki = Object.keys(A.__db.zapisy || {});
+  check(sciezki.every(k => !k.startsWith("users/") || k.includes("/doses/")
+                        || k.includes("/inr/") || k.includes("/lidMarks/")),
+        "nic nie wyladowalo w przypadkowej galezi bazy");
+}
+
 head("Komunikaty zamiast blokujacych okienek");
 check(!/alert\(n \?/.test(html), "potwierdzenie uzupelnienia nie blokuje ekranu");
 check(html.includes('toast("Zapisano · pudełko pobierze przy najbliższym połączeniu"'),
