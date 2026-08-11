@@ -40,6 +40,7 @@ uint32_t rtcTakenDay = 0;
 uint32_t rtcRolloverDay = 0;
 uint32_t awakeDeadlineMs = AWAKE_LIMIT_MS;
 uint16_t rtcNvsFail      = 0;
+char     rtcNvsFailKey[10] = "";  // ktory klucz nie zapisal sie ostatnio (D46)
 uint16_t rtcQueueDropped = 0;
 
 /* --- atrapy dla dni bez leku --- */
@@ -315,14 +316,43 @@ CHECK(!rekordKompletny(String("")), "pusty rekord wykryty");
 
 /* ================= 5c. NIEUDANY ZAPIS DO NVS (B5) ================= */
 head("Nieudany zapis do pamieci nie udaje udanego");
-prefs.wipe(); rtcNvsFail = 0;
+prefs.wipe(); rtcNvsFail = 0; rtcNvsFailKey[0] = 0;
 prefs.failKeys.insert("q0");
 CHECK(!queuePush(makeRecordAt("open", 0, 1750000000u)), "queuePush melduje niepowodzenie");
 CHECK(queueCount()==0, "licznik nie podniesiony - brak wpisu-widma (%u)", queueCount());
 CHECK(rtcNvsFail==1, "awaria policzona: %u", rtcNvsFail);
+/* D46: sam licznik mowi "cos przepadlo", nie mowi CO. Bez klucza kazdy
+   incydent - wpis kolejki (realna strata dawki) czy token logowania
+   (bez znaczenia) - wyglada w aplikacji identycznie.                   */
+CHECK(String(rtcNvsFailKey)=="q0",
+      "zapamietany klucz nieudanego zapisu: '%s'", rtcNvsFailKey);
 prefs.failKeys.clear();
 CHECK(queuePush(makeRecordAt("open", 0, 1750000001u)), "po ustaniu awarii zapis wchodzi");
 CHECK(queueCount()==1, "i tym razem licznik rosnie (%u)", queueCount());
+
+/* nvsPutU16 zapamietuje klucz tak samo jak nvsPutStr - to DWIE oddzielne
+   funkcje i latwo poprawic jedna, zapominajac o drugiej.               */
+prefs.wipe(); rtcNvsFail = 0; rtcNvsFailKey[0] = 0;
+prefs.failKeys.insert("qc");
+prefs.begin(NVS_NAMESPACE, false);
+CHECK(!nvsPutU16("qc", 5), "nvsPutU16 tez melduje niepowodzenie");
+prefs.end();
+CHECK(String(rtcNvsFailKey)=="qc", "i tez zapamietuje klucz: '%s'", rtcNvsFailKey);
+prefs.failKeys.clear();
+
+/* Kolejny nieudany zapis NADPISUJE poprzedni klucz - trzymamy tylko
+   OSTATNI, nie historie. Przy powtarzajacym sie problemie ostatni klucz
+   i tak jest reprezentatywny; przy jednorazowym jest jedynym.          */
+prefs.wipe(); rtcNvsFail = 0; rtcNvsFailKey[0] = 0;
+prefs.failKeys.insert("dw"); prefs.failKeys.insert("tok");
+prefs.begin(NVS_NAMESPACE, false);
+nvsPutStr("dw", String("10|10|10|10|10|10|10"));
+nvsPutStr("tok", String("abc.def.ghi"));
+prefs.end();
+CHECK(rtcNvsFail==2, "oba niepowodzenia policzone (%u)", rtcNvsFail);
+CHECK(String(rtcNvsFailKey)=="tok", "a klucz to OSTATNI z nich: '%s'", rtcNvsFailKey);
+prefs.failKeys.clear();
+prefs.wipe(); rtcNvsFail = 0; rtcNvsFailKey[0] = 0;
 
 /* Wpis-widmo z czasow przed poprawka: licznik mowi "1", tresci brak.
    Nieczytelny wpis na czele blokowalby wysylke w nieskonczonosc.     */

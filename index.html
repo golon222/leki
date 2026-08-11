@@ -1147,7 +1147,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-11.10";
+const APP_VERSION = "2026-08-11.11";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -3335,21 +3335,58 @@ function nvsMalo(st){
   return typeof st?.nvsFree === "number" && st.nvsFree >= 0 && st.nvsFree < NVS_MALO;
 }
 
+/* Sam licznik `nvsFail` mówi tylko "coś przepadło" — a "coś" bywa wpisem
+   kolejki (realna strata dawki) albo tokenem logowania (bez znaczenia,
+   odświeży się sam). Bez rozróżnienia każdy pojedynczy incydent brzmiał
+   tak samo groźnie, a to jest dokładnie ta sama pułapka, co przy
+   "czekam" kontra "stoję" (D25, D32): komunikat, który nie odróżnia
+   dwóch różnych sytuacji, usypia przy tej naprawdę groźnej.
+   `klucz` to `nvsFailKey` z pudełka — krótki skrót klucza NVS, nie pełna
+   nazwa, więc rozpoznajemy go po wzorcu, a nie po dopasowaniu 1:1.      */
+function opisNvsFailKey(klucz){
+  if (!klucz) return null;
+  if (/^q\d+$/.test(klucz))
+    return { grozne:true, co:"wpis kolejki — mogła przepaść dawka albo otwarcie pudełka" };
+  if (/^n\d[sp]$/.test(klucz) || klucz === "netN")
+    return { grozne:true, co:"sieć WiFi — wyślij ją z aplikacji jeszcze raz" };
+  if (klucz === "sched")
+    return { grozne:false, co:"harmonogram przypomnień — pudełko zapisze go ponownie samo" };
+  if (klucz === "dw" || klucz === "dex")
+    return { grozne:false, co:"rozpisanie dawki — pudełko zapisze je ponownie samo" };
+  if (klucz === "tok")
+    return { grozne:false, co:"token logowania — bez znaczenia, zaloguje się ponownie samo" };
+  if (/^lb/.test(klucz))
+    return { grozne:false, co:"wpis czarnej skrzynki — czysto diagnostyczny" };
+  if (/^ll/.test(klucz))
+    return { grozne:false, co:"dziennik wieczka — nie dotyczy dawek" };
+  return { grozne:true, co:`klucz „${esc(klucz)}” — nierozpoznany, sprawdź ostrożnie` };
+}
+
 function ostrzStraty(){
   const st = ostatniStatus || {};
   const dropped = st.dropped || 0, nvs = st.nvsFail || 0;
   if (!dropped && !nvs && !nvsMalo(st)) return "";
+  const info = nvs ? opisNvsFailKey(st.nvsFailKey) : null;
+  /* Bez klucza (starszy firmware sprzed tej zmiany, albo pudełko jeszcze
+     nie zdążyło zameldować) nie wiadomo nic więcej niż liczba — wtedy
+     zostaje ostrożne, ogólne ostrzeżenie zamiast udawania pewności. */
+  const grozne = !info || info.grozne;
+
   const czesci = [];
   if (nvsMalo(st)) czesci.push(`pamięć trwała jest prawie pełna (${st.nvsFree} wolnych wpisów)`);
   if (dropped) czesci.push(`<b>${dropped}</b> ${dropped === 1 ? "zdarzenie zostało odrzucone"
                                                              : "zdarzeń zostało odrzuconych"} przez bazę`);
   if (nvs)     czesci.push(`<b>${nvs}</b> ${nvs === 1 ? "zapis do pamięci pudełka się nie udał"
-                                                      : "zapisów do pamięci pudełka się nie udało"}`);
+                                                      : "zapisów do pamięci pudełka się nie udało"}` +
+                            (info ? ` (ostatni: ${info.co})` : ""));
+
   return `<div style="margin-bottom:10px;padding:10px;border-radius:12px;
        border:1px solid var(--bad);background:rgba(248,113,113,.10)">
        <b style="color:var(--bad)">Pudełko zgłasza utratę danych</b><br>
-       <span class="dim2">${czesci.join(" · ")}. Kalendarz może nie mieć kompletu
-       zdarzeń z tego okresu — sprawdź dni, których dotyczy, i uzupełnij ręcznie.
+       <span class="dim2">${czesci.join(" · ")}.${grozne
+         ? " Kalendarz może nie mieć kompletu zdarzeń z tego okresu — sprawdź dni, " +
+           "których dotyczy, i uzupełnij ręcznie."
+         : " To nie dotyczy dawek ani kalendarza."}
        Licznik zeruje się po odłączeniu zasilania.</span>
      </div>`;
 }

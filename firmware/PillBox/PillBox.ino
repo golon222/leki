@@ -117,6 +117,13 @@ RTC_DATA_ATTR uint8_t  rtcBattUp        = 0;    // ile odczytow z rzedu bylo wyz
    krzyknac - inaczej byloby to jedyne miejsce w projekcie, gdzie dane
    znikaja w sposob z zalozenia niewykrywalny.                          */
 RTC_DATA_ATTR uint16_t rtcNvsFail       = 0;    // nieudane zapisy do pamieci trwalej
+/* KTORY klucz nie zapisal sie OSTATNIO. Sam licznik mowi "cos przepadlo",
+   ale nie mowi co - a to jest roznica miedzy "nic sie nie stalo" (token,
+   wpis diagnostyczny) a "zgubiona dawka" (wpis kolejki). Bez tego kazdy
+   taki alarm u Kuby konczyl sie zgadywaniem. Klucze NVS w tym pliku sa
+   budowane w buforach char[8] ("q119", "n2p", "lb31"...), wiec 10 znakow
+   starcza z zapasem, razem z koncowym zerem.                            */
+RTC_DATA_ATTR char     rtcNvsFailKey[10] = "";
 RTC_DATA_ATTR uint16_t rtcQueueDropped  = 0;    // wpisy zdjete z kolejki bez wyslania
 
 /* =====================================================================
@@ -175,6 +182,8 @@ bool nvsPutStr(const char* key, const String& val) {
   }
   if (prefs.putString(key, val) > 0) return true;
   if (rtcNvsFail < 65535) rtcNvsFail++;
+  strncpy(rtcNvsFailKey, key, sizeof(rtcNvsFailKey) - 1);
+  rtcNvsFailKey[sizeof(rtcNvsFailKey) - 1] = 0;
   LOG("[NVS] ZAPIS NIEUDANY: %s\n", key);
   return false;
 }
@@ -182,6 +191,8 @@ bool nvsPutStr(const char* key, const String& val) {
 bool nvsPutU16(const char* key, uint16_t val) {
   if (prefs.putUShort(key, val) > 0) return true;
   if (rtcNvsFail < 65535) rtcNvsFail++;
+  strncpy(rtcNvsFailKey, key, sizeof(rtcNvsFailKey) - 1);
+  rtcNvsFailKey[sizeof(rtcNvsFailKey) - 1] = 0;
   LOG("[NVS] ZAPIS NIEUDANY: %s\n", key);
   return false;
 }
@@ -1825,6 +1836,9 @@ bool pushStatus() {
   /* Ciche straty przestaja byc ciche. Aplikacja krzyczy, gdy > 0.      */
   doc["dropped"]  = rtcQueueDropped;
   doc["nvsFail"]  = rtcNvsFail;
+  /* Ktory klucz nie zapisal sie OSTATNIO - zeby "cos przepadlo" nie konczylo
+     sie zgadywaniem, czy to byla dawka, czy diagnostyczny drobiazg.      */
+  doc["nvsFailKey"] = rtcNvsFailKey;
   /* Wolne miejsce w pamieci trwalej. rtcNvsFail mowi, ze juz jest zle;
      to pole pozwala aplikacji ostrzec, ZANIM bedzie.                   */
   doc["nvsFree"]  = nvsWolneWpisy();

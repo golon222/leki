@@ -712,6 +712,45 @@ A.renderStatus({ battery:80 });
 check(!document.getElementById("setWarn").innerHTML.trim(),
       "status bez licznikow strat nie zostawia ostrzezenia");
 
+/* Klucz nieudanego zapisu (D46). Sam licznik nvsFail mowi tylko "cos
+   przepadlo" - "cos" bywa wpisem kolejki (realna strata dawki) albo
+   tokenem logowania (bez znaczenia). Zgloszenie Kuby "to sie pojawilo
+   po aktualizacji" pokazalo, ze bez rozroznienia kazdy pojedynczy
+   incydent brzmi tak samo grozne, wiec doszla klasyfikacja klucza.     */
+head("Ktory klucz nie zapisal sie - rozroznienie grozne/niegrozne");
+check(A.opisNvsFailKey("") === null, "pusty klucz (starszy firmware) nie daje falszywej pewnosci");
+check(A.opisNvsFailKey(null) === null, "brak klucza tez");
+
+for (const k of ["q0", "q37", "q119"])
+  check(A.opisNvsFailKey(k).grozne, `"${k}" (wpis kolejki) jest grozny`);
+for (const k of ["n0s", "n3p", "netN"])
+  check(A.opisNvsFailKey(k).grozne, `"${k}" (lista WiFi) jest grozny`);
+for (const k of ["sched", "dw", "dex", "tok", "lb3", "lbIdx", "llCnt", "llLost"])
+  check(!A.opisNvsFailKey(k).grozne, `"${k}" samo sie naprawia - nie jest grozny`);
+check(A.opisNvsFailKey("cosdziwnego").grozne,
+      "nierozpoznany klucz jest OSTROZNIE traktowany jako grozny, nie olewany");
+
+A.renderStatus({ battery:80, nvsFail:1, nvsFailKey:"tok" });
+{
+  const w = document.getElementById("setWarn").innerHTML;
+  check(/token logowania/.test(w), "niegrozny klucz opisany po imieniu");
+  check(!/Kalendarz może nie mieć kompletu/.test(w),
+        "i NIE straszy kalendarzem, ktorego to nie dotyczy");
+}
+A.renderStatus({ battery:80, nvsFail:1, nvsFailKey:"q42" });
+{
+  const w = document.getElementById("setWarn").innerHTML;
+  check(/wpis kolejki/.test(w), "grozny klucz tez opisany po imieniu");
+  check(/Kalendarz może nie mieć kompletu/.test(w),
+        "i straszy kalendarzem, bo tu naprawde moze brakowac dawki");
+}
+A.renderStatus({ battery:80, nvsFail:1 });
+{
+  const w = document.getElementById("setWarn").innerHTML;
+  check(/Kalendarz może nie mieć kompletu/.test(w),
+        "bez klucza (stary firmware) zostaje OSTROZNE ogolne ostrzezenie, nie cisza");
+}
+
 head("Legenda kalendarza");
 /* Ikonka bez podpisu to zagadka. Legenda pod kalendarzem musi ja tlumaczyc,
    i to tym samym ksztaltem, ktorego uzywa INR_DUE_MARK - inaczej te dwa

@@ -67,6 +67,7 @@ bool boxIsOpen()   { return FAKE_BOX_OPEN; }
 void beepBoxOpen() { FAKE_BEEPS++; }
 
 uint16_t rtcNvsFail      = 0;
+char     rtcNvsFailKey[10] = "";  // ktory klucz nie zapisal sie ostatnio (D46)
 uint16_t rtcQueueDropped = 0;
 
 /* Rozpisanie dawek - tu zawsze "nic nie wiem", bo ten program sprawdza
