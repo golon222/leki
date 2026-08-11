@@ -751,6 +751,36 @@ A.renderStatus({ battery:80, nvsFail:1 });
         "bez klucza (stary firmware) zostaje OSTROZNE ogolne ostrzezenie, nie cisza");
 }
 
+/* Historia nieudanych zapisow (D47). Kuba: "może w bazie damy jakiś zapis,
+   żeby te nieudane tam wrzucał" - z gałęzi nvsfaillog, na ekranie Historii
+   pudełka, obok wybudzen, zeby dalo sie porownac czasy golym okiem.     */
+head("Historia nieudanych zapisow - karta w Historii pudelka");
+const karta = () => document.getElementById("nvsFailLogCard");
+const nvsL  = () => document.getElementById("nvsFailLog").innerHTML;
+
+A.__setState({ nvsFailLog: {} });
+A.renderNvsFailLog();
+check(karta().style.display === "none", "bez historii karta jest ukryta, nie pusta");
+
+A.__setState({ nvsFailLog: {
+  p1: { wpisy: { 0: { ts: 1754935200, klucz: "tok" } } },
+  p2: { wpisy: { 0: { ts: 1754938800, klucz: "q42" },
+                 1: { ts: 0,          klucz: "dw"  } } },
+} });
+A.renderNvsFailLog();
+check(karta().style.display !== "none", "z historia karta sie pokazuje");
+check(nvsL().includes("Łącznie 3"), "paczki z roznych wezlow sklejone w jedna liste");
+check(/tok/.test(nvsL()) && /q42/.test(nvsL()) && /dw/.test(nvsL()),
+      "wszystkie trzy wpisy widoczne");
+check(/czas nieznany/.test(nvsL()), "wpis bez zegara (ts=0) opisany, a nie zmyslony");
+/* Sortowanie po czasie, najnowsze pierwsze - ten sam porzadek co Historia
+   pudelka obok, zeby porownanie dwoch list bylo naturalne. */
+check(nvsL().indexOf("q42") < nvsL().indexOf("tok"),
+      "nowszy wpis (q42) pokazany przed starszym (tok)");
+/* Ta sama klasyfikacja co w ostrzeżeniu Ustawień (D46) - jedna prawda
+   o tym, co jest grozne, a nie dwie rozne oceny w dwoch miejscach. */
+check(/token logowania/.test(nvsL()), "klucz opisany po imieniu, tak jak w D46");
+
 head("Legenda kalendarza");
 /* Ikonka bez podpisu to zagadka. Legenda pod kalendarzem musi ja tlumaczyc,
    i to tym samym ksztaltem, ktorego uzywa INR_DUE_MARK - inaczej te dwa

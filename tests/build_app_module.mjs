@@ -33,6 +33,7 @@ export { brakujePokrycia, doReconcile, reconcileDecyzja, opisLadowan, minutyDoPe
          dawkaNaDzien, tydzienDawek, dzienBezLeku, wyjatekNaDzien, opisDawkowania,
          dniZapasu, ZAPAS_HORYZONT, renderNetStan,
          EKRANY, renderEvents, renderKafelki, bezPokrycia, evPasuje, opisNvsFailKey,
+         nvsFailLog, renderNvsFailLog,
          EV_STANY, EV_CZASY, EV_LIMIT,
          inrOdstep, inrTerminKey, inrDoTerminu, dniTxt, renderOstrzezenia, ostrzStraty,
          collectRows, inrChart, nf, esc, renderCalendar, renderToday,
@@ -53,6 +54,7 @@ export function __setState(o){
   if (o.inr)    { for (const k of Object.keys(inr))   delete inr[k];   Object.assign(inr, o.inr); }
   if (o.events) { events.length = 0; events.push(...o.events); }
   if (o.boxLog) { boxLog = o.boxLog; }
+  if (o.nvsFailLog) { nvsFailLog = o.nvsFailLog; }
 }
 /* Kalendarz domysla sie biezacego miesiaca, gdy viewYear/viewMonth nie sa
    jeszcze ustawione (patrz komentarz w renderCalendar()). Testy sprawdzajace

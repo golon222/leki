@@ -124,6 +124,28 @@ RTC_DATA_ATTR uint16_t rtcNvsFail       = 0;    // nieudane zapisy do pamieci tr
    budowane w buforach char[8] ("q119", "n2p", "lb31"...), wiec 10 znakow
    starcza z zapasem, razem z koncowym zerem.                            */
 RTC_DATA_ATTR char     rtcNvsFailKey[10] = "";
+
+/* HISTORIA nieudanych zapisow, nie tylko ostatni. Kuba: "może w bazie
+   damy jakiś zapis, żeby te nieudane tam wrzucał" - z samej LICZBY i
+   OSTATNIEGO klucza nie da sie sprawdzic hipotezy typu "to sie dzieje
+   po alarmie" - trzeba widziec CZAS kazdego incydentu z osobna.
+
+   Pierscien w PAMIECI RTC, nie w NVS: zapisywanie awarii NVS przez zapis
+   do NVS jest cyrkularne - gdyby to WLASNIE ta pamiec akurat szwankowala,
+   probowalibysmy udokumentowac awarie w miejscu, ktore wlasnie zawodzi.
+   RTC przezywa deep sleep (to jedyny tryb snu, jaki to urzadzenie zna)
+   i nie kosztuje ani jednego cyklu zapisu flash.
+
+   rtcNvsFailLogTotal rosnie z kazdym niepowodzeniem, tak jak rtcNvsFail -
+   wiecej niz NVS_FAILLOG_SLOTS nadpisuje najstarsze wpisy w pierscieniu.
+   rtcNvsFailLogSent pamieta, ile z nich juz POTWIERDZONO w bazie, zeby
+   pushStatus() nie wysylal w kolko tego samego.                        */
+#define NVS_FAILLOG_SLOTS 8
+RTC_DATA_ATTR uint32_t rtcNvsFailLogTs[NVS_FAILLOG_SLOTS]     = {0};
+RTC_DATA_ATTR char     rtcNvsFailLogKey[NVS_FAILLOG_SLOTS][10] = {{0}};
+RTC_DATA_ATTR uint16_t rtcNvsFailLogTotal = 0;
+RTC_DATA_ATTR uint16_t rtcNvsFailLogSent  = 0;
+
 RTC_DATA_ATTR uint16_t rtcQueueDropped  = 0;    // wpisy zdjete z kolejki bez wyslania
 
 /* =====================================================================
@@ -156,6 +178,21 @@ enum Gest { GEST_BRAK, GEST_TEST, GEST_PORTAL };
 
 Preferences prefs;
 
+/* Jedno miejsce notujace niepowodzenie - wolane z OBU funkcji nizej, zeby
+   poprawka w jednej z nich nie zapomniala o drugiej (raz juz tak bylo -
+   D46 dopisywalo rtcNvsFailKey w dwoch kopiach z rzedu).                */
+static void zanotujNvsFail(const char* key) {
+  if (rtcNvsFail < 65535) rtcNvsFail++;
+  strncpy(rtcNvsFailKey, key, sizeof(rtcNvsFailKey) - 1);
+  rtcNvsFailKey[sizeof(rtcNvsFailKey) - 1] = 0;
+
+  uint16_t slot = rtcNvsFailLogTotal % NVS_FAILLOG_SLOTS;
+  rtcNvsFailLogTs[slot] = rtcTimeValid ? (uint32_t)time(nullptr) : 0;
+  strncpy(rtcNvsFailLogKey[slot], key, sizeof(rtcNvsFailLogKey[slot]) - 1);
+  rtcNvsFailLogKey[slot][sizeof(rtcNvsFailLogKey[slot]) - 1] = 0;
+  if (rtcNvsFailLogTotal < 65535) rtcNvsFailLogTotal++;
+}
+
 /* --- Zapisy do NVS, ktore nie udaja, ze sie udaly ---------------------
    putString() i putUShort() zwracaja liczbe zapisanych bajtow, a ZERO gdy
    zapis przepadl (pamiec pelna, uszkodzony wpis). Kod wyrzucal te wartosc
@@ -181,18 +218,14 @@ bool nvsPutStr(const char* key, const String& val) {
     return true;
   }
   if (prefs.putString(key, val) > 0) return true;
-  if (rtcNvsFail < 65535) rtcNvsFail++;
-  strncpy(rtcNvsFailKey, key, sizeof(rtcNvsFailKey) - 1);
-  rtcNvsFailKey[sizeof(rtcNvsFailKey) - 1] = 0;
+  zanotujNvsFail(key);
   LOG("[NVS] ZAPIS NIEUDANY: %s\n", key);
   return false;
 }
 
 bool nvsPutU16(const char* key, uint16_t val) {
   if (prefs.putUShort(key, val) > 0) return true;
-  if (rtcNvsFail < 65535) rtcNvsFail++;
-  strncpy(rtcNvsFailKey, key, sizeof(rtcNvsFailKey) - 1);
-  rtcNvsFailKey[sizeof(rtcNvsFailKey) - 1] = 0;
+  zanotujNvsFail(key);
   LOG("[NVS] ZAPIS NIEUDANY: %s\n", key);
   return false;
 }
@@ -1037,6 +1070,37 @@ void lidLogClear() {
   prefs.end();
   LOG("[LID] dziennik wyslany i skasowany (%u wpisow)\n", cnt);
 }
+
+/* Czy sa jakies NIEPOTWIERDZONE wpisy dziennika nieudanych zapisow. */
+bool nvsFailLogDoWyslania() {
+  return rtcNvsFailLogSent != rtcNvsFailLogTotal;
+}
+
+/* JSON tylko z wpisow, ktore jeszcze nie doszly do bazy.
+
+   Pierscien ma NVS_FAILLOG_SLOTS miejsc - jesli miedzy polaczeniami
+   zdarzy sie ich wiecej, najstarsze juz zostaly nadpisane. Wysylamy wiec
+   przeciecie: to, co jeszcze niewyslane, ORAZ to, co wciaz jest w
+   pierscieniu - a nie probujemy zrekonstruowac tego, co juz przepadlo.  */
+String nvsFailLogJson() {
+  uint16_t od = rtcNvsFailLogSent;
+  if (rtcNvsFailLogTotal - od > NVS_FAILLOG_SLOTS)
+    od = rtcNvsFailLogTotal - NVS_FAILLOG_SLOTS;
+
+  String out = "{\"wpisy\":[";
+  bool pierwszy = true;
+  for (uint16_t i = od; i != rtcNvsFailLogTotal; i++) {
+    uint16_t slot = i % NVS_FAILLOG_SLOTS;
+    if (!pierwszy) out += ",";
+    pierwszy = false;
+    out += "{\"ts\":" + String(rtcNvsFailLogTs[slot]) +
+           ",\"klucz\":\"" + jsonEscape(String(rtcNvsFailLogKey[slot])) + "\"}";
+  }
+  out += "]}";
+  return out;
+}
+
+void nvsFailLogOznaczWyslany() { rtcNvsFailLogSent = rtcNvsFailLogTotal; }
 
 /* Wywolywane przy KAZDYM wybudzeniu, przed reszta logiki.
    Zwraca true, jesli wlasnie zabrzmial sygnal "zostawiles mnie otwarte". */
@@ -1917,6 +1981,22 @@ bool pushStatus() {
       lidLogClear();
     else
       LOGLN("[LID] dziennik NIE doszedl - zostaje w pamieci do nastepnego razu");
+  }
+
+  /* Historia nieudanych zapisow NVS (D47, prosba Kuby: "może w bazie damy
+     jakiś zapis, żeby te nieudane tam wrzucał"). Ten sam wzor co dziennik
+     wieczka - wlasny klucz na paczke, kasowanie/oznaczenie dopiero po
+     potwierdzeniu. "Kasowanie" jest tu przesuwaniem znacznika `sent`, bo
+     dane siedza w RTC, nie w NVS - zeby nie dokladac kolejnych zapisow do
+     pamieci, ktora akurat moze zawodzic.                                */
+  if (ok && nvsFailLogDoWyslania()) {
+    String sciezka = "/devices/" DEVICE_ID "/nvsfaillog/";
+    sciezka += rtcTimeValid ? String((uint32_t)time(nullptr)) : String("b" + String(rtcBootCount));
+    sciezka += ".json";
+    if (rtdbSend("PUT", sciezka, nvsFailLogJson()) / 100 == 2)
+      nvsFailLogOznaczWyslany();
+    else
+      LOGLN("[NVS] dziennik niepowodzen NIE doszedl - zostaje do nastepnego razu");
   }
   return ok;
 }

@@ -176,6 +176,28 @@ check(POLA_STATUSU.every(p => p in PRZYKLAD_STATUSU),
       `pola statusu nieopisane w tescie: ${POLA_STATUSU.filter(p => !(p in PRZYKLAD_STATUSU))}`);
 ok("pelny status z pushStatus()", "devices/pillbox1/status", PRZYKLAD_STATUSU);
 
+/* Historia nieudanych zapisow NVS (D47) - lepiona recznie w nvsFailLogJson(),
+   tak jak lidLogJson() ponizej, wiec te same zasady: pola bierzemy z opisu,
+   nie z parsowania funkcji, bo wynik to zserializowany String, nie doc[]. */
+head("Historia nieudanych zapisow NVS przechodzi przez reguly");
+ok("paczka z jednym wpisem", "devices/pillbox1/nvsfaillog/p1",
+   { wpisy: { 0: { ts: 1750000000, klucz: "q37" } } });
+ok("paczka z kilkoma wpisami", "devices/pillbox1/nvsfaillog/p1",
+   { wpisy: { 0: { ts: 1750000000, klucz: "q37" }, 1: { ts: 1750000100, klucz: "tok" } } });
+ok("ts=0, gdy zegar byl nieznany", "devices/pillbox1/nvsfaillog/p1",
+   { wpisy: { 0: { ts: 0, klucz: "dw" } } });
+odrzuc("paczka bez wpisy", "devices/pillbox1/nvsfaillog/p1", { cos: 1 });
+odrzuc("wpis bez klucza", "devices/pillbox1/nvsfaillog/p1",
+       { wpisy: { 0: { ts: 1750000000 } } });
+odrzuc("wpis bez ts", "devices/pillbox1/nvsfaillog/p1",
+       { wpisy: { 0: { klucz: "q37" } } });
+odrzuc("ts ujemny", "devices/pillbox1/nvsfaillog/p1",
+       { wpisy: { 0: { ts: -1, klucz: "q37" } } });
+odrzuc("nieznane pole w paczce ($other:false)", "devices/pillbox1/nvsfaillog/p1",
+       { wpisy: { 0: { ts: 1, klucz: "q37" } }, cokolwiek: 1 });
+odrzuc("nieznane pole we wpisie ($other:false)", "devices/pillbox1/nvsfaillog/p1",
+       { wpisy: { 0: { ts: 1, klucz: "q37", dodatkowe: 1 } } });
+
 /* pushLidState() lepi JSON recznie w snprintf, wiec pola bierzemy stamtad. */
 {
   const i = ino.indexOf("bool pushLidState(");

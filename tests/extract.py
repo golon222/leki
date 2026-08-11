@@ -8,7 +8,8 @@ DEST = pathlib.Path(__file__).parent / "logic.inc"
 
 WANTED = [
     # Pomocniki NVS musza byc PRZED wszystkim, co z nich korzysta.
-    "nvsPutStr", "nvsPutU16",
+    # zanotujNvsFail przed nvsPutStr/nvsPutU16 - to one je woluja.
+    "zanotujNvsFail", "nvsPutStr", "nvsPutU16",
     "readBatteryRaw", "battPercentFromCurve", "resetBatteryFilter",
     "battSmooth", "readBattery", "zapiszKoniecLadowania", "trackCharging",
     "parseSchedule", "slotMinutes", "localDayNumber", "localMinutesOfDay",
@@ -19,6 +20,8 @@ WANTED = [
     "openWarnSecondsLeft",
     "jsonEscape",   # przed lidLogJson - ta go wola
     "wakeName", "lidLogAdd", "lidLogCount", "lidLogJson", "lidLogClear",
+    # Historia nieudanych zapisow NVS - tez wola jsonEscape.
+    "nvsFailLogDoWyslania", "nvsFailLogJson", "nvsFailLogOznaczWyslany",
     "trackBoxOpen",
     # awakeTooLong musi byc przed flushQueue, ktore go wola.
     "awakeTooLong", "extendAwake",

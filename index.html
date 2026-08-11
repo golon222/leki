@@ -1043,6 +1043,20 @@ nav button.act{color:var(--acc)}
   <div class="card">
     <div id="boxLog" style="font-size:12.5px;line-height:1.55"></div>
   </div>
+
+  <!-- Historia nieudanych zapisow (D47) - CELOWO na tym samym ekranie co
+       wybudzenia, zeby dalo sie porownac czasy obu list golym okiem:
+       "czy to sie dzieje po alarmie" jest pytaniem o dwie kolumny czasu
+       obok siebie, nie o dwa oddzielne ekrany do przelaczania.          -->
+  <div class="card" id="nvsFailLogCard" style="display:none">
+    <h3>Historia nieudanych zapisów</h3>
+    <p class="muted" style="margin:6px 0 12px">
+      Każdy zapis do pamięci pudełka, który się nie udał, z dokładnym czasem —
+      żeby dało się sprawdzić, czy powtarza się przy konkretnej porze albo
+      czynności (np. zaraz po alarmie).
+    </p>
+    <div id="nvsFailLog" style="font-size:12.5px;line-height:1.55"></div>
+  </div>
 </section>
 
 <section id="tab-lid" class="hide">
@@ -1147,7 +1161,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-11.11";
+const APP_VERSION = "2026-08-11.12";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -1180,6 +1194,7 @@ let viewYear, viewMonth, sheetDate = null, pendingDose = null;
 let pendingPlan = null;
 let staleRules = false;   // baza odrzuca nowe pola -> reguly do odswiezenia
 let boxLog = [];          // czarna skrzynka pudelka
+let nvsFailLog = {};      // paczki historii nieudanych zapisow NVS (D47)
 let lidLog = {};          // dziennik wieczka: paczki wpisow z pudelka
 let lidMarks = {};        // "to ja otwieralem" - znaczniki uzytkownika
 let lastRec = null;       // slad po ostatnim uzupelnieniu kalendarza
@@ -1740,6 +1755,10 @@ async function boot(){
   onValue(ref(db, `devices/${DEVICE_ID}/log`), s => {
     boxLog = s.val() || []; renderBoxLog(); renderTesty();
   }, onErr("odczyt historii pudełka"));
+
+  onValue(ref(db, `devices/${DEVICE_ID}/nvsfaillog`), s => {
+    nvsFailLog = s.val() || {}; renderNvsFailLog();
+  }, onErr("odczyt historii nieudanych zapisów"));
 
   onValue(ref(db, `devices/${DEVICE_ID}/lidlog`), s => {
     lidLog = s.val() || {}; renderLidLog();
@@ -2927,6 +2946,41 @@ function renderBoxLog(){
 
 let logWszystko = false;
 window.logPrzelacz = () => { logWszystko = !logWszystko; renderBoxLog(); };
+
+/* Historia nieudanych zapisow do pamieci pudelka (D47, prosba Kuby: "może
+   w bazie damy jakiś zapis, żeby te nieudane tam wrzucał"). Pudelko wysyla
+   paczki pod osobnymi kluczami (ten sam wzor co dziennik wieczka - kasuje
+   je u siebie po wyslaniu, wiec wspolny wezel nadpisywalby poprzednia
+   paczke), tutaj sklejamy je z powrotem w jedna liste posortowana po
+   czasie - zeby dalo sie porownac z historia wybudzen na tym samym
+   ekranie i sprawdzic hipotezy typu "to sie dzieje po alarmie".        */
+function renderNvsFailLog(){
+  const karta = document.getElementById("nvsFailLogCard");
+  const el = document.getElementById("nvsFailLog");
+  if (!karta || !el) return;
+
+  const wpisy = [];
+  for (const paczka of Object.values(nvsFailLog)){
+    for (const w of Object.values(paczka?.wpisy || {}))
+      if (w && typeof w.klucz === "string") wpisy.push(w);
+  }
+  /* Karta jest niewidoczna, dopoki nie ma historii - to ekran diagnostyczny
+     na sytuacje wyjatkowa, nie element, ktory ma stac pusty na co dzien. */
+  karta.style.display = wpisy.length ? "" : "none";
+  if (!wpisy.length) return;
+
+  wpisy.sort((a, b) => (b.ts||0) - (a.ts||0));
+  el.innerHTML = wpisy.map(w => {
+    const kiedy = +w.ts > 0 ? `${devDayMon(+w.ts)} ${devHM(+w.ts)}` : "czas nieznany (bez zegara)";
+    const info = opisNvsFailKey(w.klucz);
+    return `<div style="padding:6px 0;border-bottom:1px solid var(--line)">
+      <b>${esc(kiedy)}</b> <span class="dim2">· klucz „${esc(w.klucz)}"</span><br>
+      <span style="color:${info?.grozne===false ? "var(--ok)" : "var(--bad)"}">
+        ${esc(info ? info.co : "nierozpoznany")}</span></div>`;
+  }).join("") +
+  `<div class="dim2" style="margin-top:8px">Łącznie ${wpisy.length}
+   ${lm(wpisy.length, "zapisany incydent", "zapisane incydenty", "zapisanych incydentów")}.</div>`;
+}
 
 /* ═══════════════════════════════════════════════════════════════
    DZIENNIK WIECZKA — narzędzie na czas testu terenowego.
@@ -4771,7 +4825,7 @@ window.showTab = t => {
   if (t === "dev")  renderStatus(ostatniStatus);
   if (t === "diag") { renderDiag(); renderTesty(); }
   if (t === "ev")   renderEvents();
-  if (t === "hist") renderBoxLog();
+  if (t === "hist") { renderBoxLog(); renderNvsFailLog(); }
   window.scrollTo({ top:0, behavior:"smooth" });
 };
 

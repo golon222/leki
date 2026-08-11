@@ -132,6 +132,28 @@
               ".validate": false
             }
           }
+        },
+        "nvsfaillog": {
+          "$paczkaId": {
+            ".validate": "newData.hasChildren(['wpisy'])",
+            "wpisy": {
+              "$i": {
+                ".validate": "newData.hasChildren(['ts','klucz'])",
+                "ts": {
+                  ".validate": "newData.isNumber() && newData.val() >= 0"
+                },
+                "klucz": {
+                  ".validate": "newData.isString() && newData.val().length <= 12"
+                },
+                "$other": {
+                  ".validate": false
+                }
+              }
+            },
+            "$other": {
+              ".validate": false
+            }
+          }
         }
       }
     },

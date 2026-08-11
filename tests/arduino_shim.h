@@ -30,6 +30,13 @@ public:
   String(const std::string& c) : s(c) {}
   String(int v) { char b[24]; snprintf(b, sizeof b, "%d", v); s = b; }
   String(unsigned long v) { char b[24]; snprintf(b, sizeof b, "%lu", v); s = b; }
+  /* Jawny przeciazenie dla uint32_t: na 64-bitowym Linuksie (na tym testy
+     licza) to inny typ niz unsigned long (4 vs 8 bajtow), a rozdzielczosc
+     miedzy String(int) i String(unsigned long) dla unsigned int bywa
+     niejednoznaczna. Prawdziwy rdzen ESP32 ma ten przeciazenie wprost -
+     tu bez niego kompilacja testow moglaby sie nie udac na tym samym
+     kodzie, ktory na plytce dziala bez zarzutu.                        */
+  String(uint32_t v) { char b[24]; snprintf(b, sizeof b, "%u", v); s = b; }
   int length() const { return (int)s.size(); }
   const char* c_str() const { return s.c_str(); }
   char charAt(int i) const { return i >= 0 && i < (int)s.size() ? s[i] : 0; }

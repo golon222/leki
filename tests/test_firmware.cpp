@@ -41,6 +41,11 @@ uint32_t rtcRolloverDay = 0;
 uint32_t awakeDeadlineMs = AWAKE_LIMIT_MS;
 uint16_t rtcNvsFail      = 0;
 char     rtcNvsFailKey[10] = "";  // ktory klucz nie zapisal sie ostatnio (D46)
+#define NVS_FAILLOG_SLOTS 8
+uint32_t rtcNvsFailLogTs[NVS_FAILLOG_SLOTS]     = {0};
+char     rtcNvsFailLogKey[NVS_FAILLOG_SLOTS][10] = {{0}};
+uint16_t rtcNvsFailLogTotal = 0;
+uint16_t rtcNvsFailLogSent  = 0;
 uint16_t rtcQueueDropped = 0;
 
 /* --- atrapy dla dni bez leku --- */
@@ -353,6 +358,80 @@ CHECK(rtcNvsFail==2, "oba niepowodzenia policzone (%u)", rtcNvsFail);
 CHECK(String(rtcNvsFailKey)=="tok", "a klucz to OSTATNI z nich: '%s'", rtcNvsFailKey);
 prefs.failKeys.clear();
 prefs.wipe(); rtcNvsFail = 0; rtcNvsFailKey[0] = 0;
+
+/* ================= 5d. HISTORIA NIEUDANYCH ZAPISOW (D47) ================
+   Kuba: "może w bazie damy jakiś zapis, żeby te nieudane tam wrzucał" - z
+   samej liczby i ostatniego klucza nie da sie sprawdzic hipotezy typu
+   "to sie dzieje po alarmie". Trzeba widziec CZAS kazdego incydentu.    */
+head("Historia nieudanych zapisow - pierscien w RTC");
+auto zresetujDziennik = [](){
+  rtcNvsFailLogTotal = 0; rtcNvsFailLogSent = 0;
+  for (int i = 0; i < NVS_FAILLOG_SLOTS; i++) { rtcNvsFailLogTs[i]=0; rtcNvsFailLogKey[i][0]=0; }
+};
+zresetujDziennik(); rtcTimeValid = true;
+CHECK(!nvsFailLogDoWyslania(), "pusty dziennik - nic do wyslania");
+CHECK(nvsFailLogJson()==String("{\"wpisy\":[]}"), "i pusta tablica w JSON");
+
+prefs.wipe();
+prefs.failKeys.insert("q5");
+FAKE_NOW = local(2026, 8, 11, 20, 0);
+prefs.begin(NVS_NAMESPACE, false);
+nvsPutStr("q5", String("cokolwiek"));
+prefs.end();
+CHECK(nvsFailLogDoWyslania(), "po jednym niepowodzeniu jest co wyslac");
+String j1 = nvsFailLogJson();
+CHECK(j1.indexOf("\"klucz\":\"q5\"") >= 0, "JSON zawiera klucz: %s", j1.c_str());
+CHECK(j1.indexOf(String((unsigned long)FAKE_NOW).c_str()) >= 0,
+      "i prawdziwy czas niepowodzenia: %s", j1.c_str());
+nvsFailLogOznaczWyslany();
+CHECK(!nvsFailLogDoWyslania(), "po potwierdzeniu nie ma juz nic do wyslania");
+CHECK(nvsFailLogJson()==String("{\"wpisy\":[]}"), "kolejny JSON znow pusty");
+prefs.failKeys.clear();
+
+/* Bez znanego zegara wpis i tak powstaje - z czasem 0, a nie zgubiony. */
+zresetujDziennik(); prefs.wipe();
+rtcTimeValid = false;
+prefs.failKeys.insert("dw");
+prefs.begin(NVS_NAMESPACE, false);
+nvsPutStr("dw", String("cokolwiek"));
+prefs.end();
+CHECK(nvsFailLogJson().indexOf("\"ts\":0") >= 0,
+      "brak zegara -> ts=0, nie zmyslony czas: %s", nvsFailLogJson().c_str());
+rtcTimeValid = true;
+prefs.failKeys.clear();
+
+/* Wiecej niz NVS_FAILLOG_SLOTS niepowodzen: pierscien zachowuje NAJNOWSZE,
+   a JSON nie probuje zrekonstruowac tego, co juz nadpisane.             */
+zresetujDziennik(); prefs.wipe();
+for (int i = 0; i < NVS_FAILLOG_SLOTS + 3; i++) {
+  char klucz[8]; snprintf(klucz, sizeof(klucz), "k%d", i);
+  prefs.failKeys.insert(klucz);
+  prefs.begin(NVS_NAMESPACE, false);
+  nvsPutStr(klucz, String("x"));
+  prefs.end();
+  prefs.failKeys.clear();
+}
+CHECK(rtcNvsFailLogTotal == NVS_FAILLOG_SLOTS + 3,
+      "licznik rosnie ponad pojemnosc pierscienia (%u)", rtcNvsFailLogTotal);
+{
+  String j = nvsFailLogJson();
+  CHECK(j.indexOf("\"klucz\":\"k2\"") < 0, "najstarsze (k2) juz nadpisane, nie ma go w JSON");
+  CHECK(j.indexOf(String("\"klucz\":\"k" + String(NVS_FAILLOG_SLOTS+2) + "\"").c_str()) >= 0,
+        "ale najnowszy wpis jest: %s", j.c_str());
+  /* NAJWAZNIEJSZE W TYM TEScie: samo "k2 nie wystepuje" przechodzi takze
+     bez obcinania zakresu w nvsFailLogJson() - fizyczne nadpisanie slotu
+     w pierscieniu i tak je usuwa. Prawdziwa stawka to LICZBA wpisow: bez
+     obciecia petla probuje odtworzyc wszystkie 11 (total-sent), z czego
+     3 sa duplikatami danych z nadpisanych slotow. Liczymy wystapienia
+     "klucz" wprost - to jedyny sposob odroznic te dwa przypadki.        */
+  int ile = 0;
+  for (int p = j.indexOf("\"klucz\""); p >= 0; p = j.indexOf("\"klucz\"", p+1)) ile++;
+  CHECK(ile == NVS_FAILLOG_SLOTS,
+        "dokladnie tyle wpisow, ile miejsc w pierscieniu, bez duplikatow (%d)", ile);
+}
+nvsFailLogOznaczWyslany();
+CHECK(!nvsFailLogDoWyslania(), "po wyslaniu paczki znow nic nie czeka");
+zresetujDziennik();
 
 /* Wpis-widmo z czasow przed poprawka: licznik mowi "1", tresci brak.
    Nieczytelny wpis na czele blokowalby wysylke w nieskonczonosc.     */

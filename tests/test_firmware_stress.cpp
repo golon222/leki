@@ -66,6 +66,11 @@ void beepBoxOpen() { FAKE_BEEPS++; }
 
 uint16_t rtcNvsFail      = 0;
 char     rtcNvsFailKey[10] = "";  // ktory klucz nie zapisal sie ostatnio (D46)
+#define NVS_FAILLOG_SLOTS 8
+uint32_t rtcNvsFailLogTs[NVS_FAILLOG_SLOTS]     = {0};
+char     rtcNvsFailLogKey[NVS_FAILLOG_SLOTS][10] = {{0}};
+uint16_t rtcNvsFailLogTotal = 0;
+uint16_t rtcNvsFailLogSent  = 0;
 uint16_t rtcQueueDropped = 0;
 
 /* Rozpisanie dawek. Domyslnie "nic nie wiem" - w tym stanie pudelko ma
