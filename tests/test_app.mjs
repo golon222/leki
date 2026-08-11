@@ -619,10 +619,25 @@ head("Diagnostyka na osobnym ekranie");
           `„${karta}" jest w Diagnostyce, nie w Ustawieniach`);
   }
   /* Ustawienia maja zostac z rzeczami, ktore COS USTAWIAJA. */
-  for (const karta of ["Lek i dawkowanie", "Zakres terapeutyczny INR",
-                       "Jak często mierzysz INR"]){
-    check(naglowek(ust, karta), `„${karta}" zostaje w Ustawieniach`);
+  check(naglowek(ust, "Lek i dawkowanie"), `„Lek i dawkowanie" zostaje w Ustawieniach`);
+
+  /* Ustawienia INR mieszkaja przy DANYCH INR, a nie w Ustawieniach: obie
+     dotycza wylacznie tamtego ekranu i tam sie ich szuka (prosba Kuby).  */
+  const inrTab = wytnij("tab-inr");
+  for (const karta of ["Zakres terapeutyczny", "Jak często mierzysz INR"]){
+    check(naglowek(inrTab, karta) && !naglowek(ust, karta),
+          `„${karta}" stoi na ekranie INR, nie w Ustawieniach`);
   }
+
+  /* Sekcje Ustawien sa ZWIJANE - ekran, na ktory wchodzi sie po jedna
+     rzecz, nie moze wymagac przewijania przez wszystkie pozostale.      */
+  const sekcje = (ust.match(/<details class="card sek">/g) || []).length;
+  check(sekcje >= 5, `Ustawienia zlozone ze zwijanych sekcji (${sekcje})`);
+  check(!/<details class="card sek"[^>]*\bopen\b/.test(ust),
+        "i zadna nie jest rozwinieta na starcie");
+  /* Wyjatki dawkowania maja WLASNA sekcje - w karcie dawkowania rosly
+     w sciane dat z kazdym miesiacem.                                    */
+  check(ust.includes('id="exTytul"'), "wyjatki maja wlasna, zwijana sekcje");
   /* NAJWAZNIEJSZE: ostrzezenia nie moga sie schowac razem z kartami.
      Oznaczaja utrate danych, wiec musza byc widoczne bez wchodzenia glebiej. */
   check(ust.includes('id="setWarn"'),
@@ -2115,6 +2130,27 @@ check(!netHtml().includes("tajnehaslo123"), "HASLO NIE POJAWIA SIE NA EKRANIE");
 D();
 A.renderStatus(null);
 check(netHtml().includes("nie zgłosiło"), "pudelko, ktore nigdy sie nie odezwalo, mowi to wprost");
+
+/* "Nie doszla" ma dwa znaczenia i tylko jedno kaze czekac. Bez tego
+   rozroznienia ekran mowil "czeka" takze wtedy, gdy nic juz nie przyjdzie -
+   i wlasnie na to Kuba patrzyl przez kwadrans.                          */
+D({ cfg:{ wifiNowa:{ ssid:"iPhone", ts:1000 } } });
+A.renderStatus({ battery:80, nets:"Orange", ssid:"Orange", lastSeen:5000,
+                 netMsg:"zapis do pamieci NIEUDANY" });
+check(netHtml().includes("nie przyjęło"),
+      "pudelko polaczone PO wysylce, a siec nadal czeka = to nie jest czekanie");
+check(netHtml().includes("zapis do pamieci NIEUDANY"), "powod prosto z pudelka");
+check(!netHtml().includes("Czeka na pudełko"), "i nie usypia slowem 'czeka'");
+
+D({ cfg:{ wifiNowa:{ ssid:"iPhone", ts:5000 } } });
+A.renderStatus({ battery:80, nets:"Orange", ssid:"Orange", lastSeen:1000 });
+check(netHtml().includes("Czeka na pudełko"),
+      "ale gdy pudelko od wysylki milczy, czekanie jest prawda");
+
+D({ cfg:{ wifiNowa:{ ssid:"iPhone" } } });
+A.renderStatus({ battery:80, lastSeen:9999 });
+check(netHtml().includes("Czeka na pudełko"),
+      "wpis bez znacznika czasu (stara wersja) nie strasza falszywym bledem");
 
 /* Zapis musi trafic dokladnie tam, skad czyta go firmware, i przejsc przez
    reguly bazy - atrapa sprawdza je prawdziwym database.rules.json.      */

@@ -51,6 +51,9 @@
             },
             "pass": {
               ".validate": "newData.isString() && newData.val().length <= 63"
+            },
+            "ts": {
+              ".validate": "newData.isNumber() && newData.val() > 0"
             }
           },
           "drugName": {

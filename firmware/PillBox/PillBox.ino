@@ -97,6 +97,11 @@ RTC_DATA_ATTR bool     rtcDosingLoaded  = false;// czy wczytano juz z pamieci tr
    zmiana - jedna probe.                                                 */
 RTC_DATA_ATTR uint8_t  rtcNetOstatnia   = 0;
 
+/* Co sie stalo z ostatnia siecia przyslana z aplikacji. Idzie do statusu,
+   zeby nie trzeba bylo ZGADYWAC, czemu siec "nie chce sie wyslac" - raz juz
+   kosztowalo to runde zgadywania.                                        */
+RTC_DATA_ATTR char     rtcNetMsg[48]    = "";
+
 /* --- Pudelko zostawione otwarte --------------------------------------- */
 RTC_DATA_ATTR uint32_t rtcOpenSinceTs   = 0;    // kiedy zauwazylismy otwarcie
 RTC_DATA_ATTR uint32_t rtcNextWarnTs    = 0;    // kiedy nastepny sygnal
@@ -152,6 +157,22 @@ Preferences prefs;
 
    Stoja TUTAJ, przed pierwszym uzyciem - reszta pliku czyta je od gory.  */
 bool nvsPutStr(const char* key, const String& val) {
+  /* PUSTA WARTOSC TO PRZYPADEK SZCZEGOLNY, nie awaria.
+
+     putString("") zwraca ZERO - dokladnie tyle samo, co zapis nieudany.
+     Odroznic tego sie nie da, wiec pustej wartosci nie zapisujemy wcale:
+     kasujemy klucz. Przy odczycie wychodzi na to samo (getString oddaje
+     wtedy wartosc domyslna, czyli pusta), a wynik jest jednoznaczny.
+
+     Bez tego kazdy zapis pustego napisu - haslo do sieci OTWARTEJ, pusta
+     lista wyjatkow dawkowania - podnosil licznik "utrata danych" i kazal
+     aplikacji krzyczec o awarii, ktorej nie bylo. Gorzej: `wifiSiecDodaj()`
+     zwracalo wtedy false, wiec haslo nie bylo kasowane z bazy, a siec
+     wygladala na nieprzyjeta mimo poprawnego zapisu.                     */
+  if (val.length() == 0) {
+    prefs.remove(key);
+    return true;
+  }
   if (prefs.putString(key, val) > 0) return true;
   if (rtcNvsFail < 65535) rtcNvsFail++;
   LOG("[NVS] ZAPIS NIEUDANY: %s\n", key);
@@ -1671,6 +1692,9 @@ bool pushStatus() {
     }
     doc["nets"] = znane;
   }
+  /* Wynik ostatniej proby przyjecia sieci z aplikacji. Puste, dopoki
+     zadnej nie bylo - i to tez jest informacja.                        */
+  doc["netMsg"] = rtcNetMsg;
   doc["fw"]       = FW_VERSION;
   doc["boots"]    = rtcBootCount;
   doc["queued"]   = queueCount();
@@ -1806,9 +1830,12 @@ void fetchConfig() {
   if (!nowa.isNull()) {
     String ssid = nowa["ssid"] | "";
     String pass = nowa["pass"] | "";
-    if (ssid.length() && ssid.length() <= 32) {
+    if (!ssid.length() || ssid.length() > 32) {
+      snprintf(rtcNetMsg, sizeof(rtcNetMsg), "odrzucona: zla nazwa sieci");
+    } else {
       if (wifiSiecDodaj(ssid, pass)) {
         int kod = rtdbSend("DELETE", "/devices/" DEVICE_ID "/config/wifiNowa.json", "");
+        snprintf(rtcNetMsg, sizeof(rtcNetMsg), "przyjeta, kasowanie hasla HTTP %d", kod);
         LOG("[NET] siec '%s' przyjeta z aplikacji, kasowanie hasla z bazy: HTTP %d\n",
             ssid.c_str(), kod);
         /* Zostajemy przy sieci, ktora WLASNIE dziala. Nowa dostanie swoja
@@ -1818,6 +1845,7 @@ void fetchConfig() {
         for (int i = 0; i < ile; i++)
           if (wifiSiecSsid(i) == WiFi.SSID()) { rtcNetOstatnia = (uint8_t)i; break; }
       } else {
+        snprintf(rtcNetMsg, sizeof(rtcNetMsg), "zapis do pamieci NIEUDANY");
         LOGLN("[NET] nie udalo sie zapisac sieci - haslo ZOSTAJE w bazie do nastepnej proby");
       }
     }

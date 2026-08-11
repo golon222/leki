@@ -354,6 +354,31 @@ nav button svg{width:21px;height:21px}
 nav button.act{color:var(--acc)}
 .hide{display:none!important}
 
+/* ---------- sekcje zwijane ----------
+   Ustawienia to ekran, na ktory wchodzi sie po JEDNA rzecz. Wszystko naraz
+   rozwiniete znaczylo przewijanie przez piec kart, zeby dojsc do szostej -
+   a wyjatki dawkowania robily z tego sciane dat. Teraz kazda sekcja to
+   przycisk; otwiera sie ta, ktorej szukasz.
+
+   <details> zamiast wlasnego akordeonu: stan trzyma przegladarka, dziala
+   bez JavaScriptu i bez ani jednego handlera do utrzymania.             */
+.sek{padding:0;overflow:hidden}
+.sek>summary{list-style:none;cursor:pointer;padding:16px 18px;display:flex;
+             align-items:center;gap:10px;user-select:none;-webkit-tap-highlight-color:transparent}
+.sek>summary::-webkit-details-marker{display:none}
+.sek>summary h3{margin:0;flex:1}
+/* Strzalka obraca sie po otwarciu - jedyny wskaznik, ze to sie rozwija. */
+.sek>summary::after{content:"";width:8px;height:8px;flex:none;margin-right:2px;
+                    border-right:2px solid var(--dim2);border-bottom:2px solid var(--dim2);
+                    transform:rotate(-45deg);transition:transform .18s}
+.sek[open]>summary::after{transform:rotate(45deg)}
+.sek[open]>summary{border-bottom:1px solid var(--line)}
+.sek>summary:active{background:var(--card2)}
+.sekcia{padding:14px 18px 18px}
+/* Pierwsza etykieta w rozwinietej sekcji nie potrzebuje gornego odstepu -
+   ma go juz od samej sekcji. */
+.sekcia>label:first-child{margin-top:0}
+
 /* ---------- raport ---------- */
 #report{display:none}
 @media print{
@@ -581,6 +606,33 @@ nav button.act{color:var(--acc)}
     <h3>Historia pomiarów</h3>
     <div class="inrlist" id="inrList" style="margin-top:6px"></div>
   </div>
+
+  <!-- Ustawienia INR mieszkaja TUTAJ, a nie w Ustawieniach: obie dotycza
+       wylacznie tego ekranu i tu sie ich szuka. -->
+  <details class="card sek">
+    <summary><h3>Zakres terapeutyczny</h3></summary>
+    <div class="sekcia">
+      <div class="muted">Ustala go lekarz prowadzący. Najczęściej 2,0–3,0.</div>
+      <div class="pair" style="grid-template-columns:minmax(0,1fr) minmax(0,1fr)">
+        <div><label>Od</label><select id="inrMin" onchange="inrZakresZmieniony()"></select></div>
+        <div><label>Do</label><select id="inrMax"></select></div>
+      </div>
+      <button class="primary" style="width:100%;margin-top:12px" onclick="saveInrRange()">Zapisz zakres</button>
+    </div>
+  </details>
+
+  <details class="card sek">
+    <summary><h3>Jak często mierzysz INR</h3></summary>
+    <div class="sekcia">
+      <div class="muted">Odstęp ustala lekarz — aplikacja tylko odlicza dni.
+        Termin liczy się od ostatniego wyniku i pojawia się w kalendarzu jako
+        pomarańczowy znak.</div>
+      <div><label>Co ile</label>
+        <select id="inrEvery" onchange="odswiezPodpowiedzInr()"></select></div>
+      <div class="dim2" id="inrEveryHint" style="margin-top:6px"></div>
+      <button class="primary" style="width:100%;margin-top:12px" onclick="saveInrEvery()">Zapisz odstęp</button>
+    </div>
+  </details>
 </section>
 
 <!-- ─────────── ANALIZA ─────────── -->
@@ -632,60 +684,71 @@ nav button.act{color:var(--acc)}
 <!-- ─────────── USTAWIENIA ─────────── -->
 <section id="tab-set" class="hide">
 
-  <div class="card">
-    <h3>Lek i dawkowanie</h3>
-    <label>Nazwa leku</label><input id="drugName" placeholder="Warfin">
-    <label>Moc tabletki</label>
-    <select id="drugStrength">
-      <option value="5">5 mg — tabletka różowa</option>
-      <option value="3">3 mg — tabletka niebieska</option>
-      <option value="0">inna — tabletka biała</option>
-    </select>
-    <label>Standardowa dawka dzienna (tabletki)</label>
-    <input id="defDose" type="number" step="0.5" min="0.5" max="10" inputmode="decimal">
-    <div class="dim2" style="margin-top:6px;font-size:12px">
-      Używana w dni, dla których nie rozpisano nic poniżej.
-    </div>
-    <label style="margin-top:14px">Rozpisanie tygodniowe</label>
-    <div class="dim2" style="margin:-4px 0 6px">
-      Warfarynę lekarz często rozpisuje nierówno — np. 1 tabletka codziennie,
-      a w środy pół. Zero znaczy „tego dnia bez leku”: pudełko nie przypomni,
-      a dzień nie policzy się jako pominięty.
-    </div>
-    <div id="weekEditor"></div>
-    <div class="row" style="margin-top:8px">
-      <button class="ghost" style="flex:1" onclick="rownajTydzien()">Wyrównaj wszystkie dni</button>
-    </div>
-    <div class="dim2" id="weekHint" style="margin-top:8px;font-size:12px"></div>
+  <details class="card sek">
+    <summary><h3>Lek i dawkowanie</h3></summary>
+    <div class="sekcia">
+      <label>Nazwa leku</label><input id="drugName" placeholder="Warfin">
+      <label>Moc tabletki</label>
+      <select id="drugStrength">
+        <option value="5">5 mg — tabletka różowa</option>
+        <option value="3">3 mg — tabletka niebieska</option>
+        <option value="0">inna — tabletka biała</option>
+      </select>
+      <label>Standardowa dawka dzienna (tabletki)</label>
+      <input id="defDose" type="number" step="0.5" min="0.5" max="10" inputmode="decimal">
+      <div class="dim2" style="margin-top:6px;font-size:12px">
+        Używana w dni, dla których nie rozpisano nic poniżej.
+      </div>
+      <label style="margin-top:14px">Rozpisanie tygodniowe</label>
+      <div class="dim2" style="margin:-4px 0 6px">
+        Warfarynę lekarz często rozpisuje nierówno — np. 1 tabletka codziennie,
+        a w środy pół. Zero znaczy „tego dnia bez leku”: pudełko nie przypomni,
+        a dzień nie policzy się jako pominięty.
+      </div>
+      <div id="weekEditor"></div>
+      <div class="row" style="margin-top:8px">
+        <button class="ghost" style="flex:1" onclick="rownajTydzien()">Wyrównaj wszystkie dni</button>
+      </div>
+      <div class="dim2" id="weekHint" style="margin-top:8px;font-size:12px"></div>
 
-    <label style="margin-top:14px">Wyjątki na konkretne dni</label>
-    <div class="dim2" style="margin:-4px 0 6px">
-      Np. odstawienie przed zabiegiem. Dodaje się je dotknięciem dnia
-      w kalendarzu; tutaj widać wszystkie naraz.
-    </div>
-    <div id="exList"></div>
+      <label style="margin-top:14px">Godziny przypomnień</label>
+      <div class="dim2" style="margin:-4px 0 6px">Tabletkę bierzesz, kiedy chcesz — pudełko przypomni o tych godzinach, jeśli jeszcze jej nie wziąłeś.</div>
+      <div id="slotEditor"></div>
+      <div class="row" style="margin-top:10px">
+        <button class="ghost" onclick="addSlot()">+ Dodaj przypomnienie</button>
+        <button class="primary" style="flex:1" onclick="saveConfig()">Zapisz</button>
+      </div>
+      <label>Strefa czasowa</label>
+      <select id="tzSelect" onchange="tzChanged()"></select>
+      <div class="dim2" id="tzInfo" style="margin-top:6px;font-size:12px"></div>
 
-    <label>Godziny przypomnień</label>
-    <div class="dim2" style="margin:-4px 0 6px">Tabletkę bierzesz, kiedy chcesz — pudełko przypomni o tych godzinach, jeśli jeszcze jej nie wziąłeś.</div>
-    <div id="slotEditor"></div>
-    <div class="row" style="margin-top:10px">
-      <button class="ghost" onclick="addSlot()">+ Dodaj przypomnienie</button>
-      <button class="primary" style="flex:1" onclick="saveConfig()">Zapisz</button>
+      <label style="margin-top:14px">Pudełko działa od</label>
+      <input id="trackFrom" type="date">
+      <div class="dim2" style="margin-top:6px;font-size:12px">
+        Dni wcześniejsze zostaną opisane jako „brak danych”, a nie jako pominięte —
+        i nie będą zaniżać skuteczności w raporcie dla lekarza.
+      </div>
     </div>
-    <label>Strefa czasowa</label>
-    <select id="tzSelect" onchange="tzChanged()"></select>
-    <div class="dim2" id="tzInfo" style="margin-top:6px;font-size:12px"></div>
+  </details>
 
-    <label style="margin-top:14px">Pudełko działa od</label>
-    <input id="trackFrom" type="date">
-    <div class="dim2" style="margin-top:6px;font-size:12px">
-      Dni wcześniejsze zostaną opisane jako „brak danych”, a nie jako pominięte —
-      i nie będą zaniżać skuteczności w raporcie dla lekarza.
+  <!-- Wyjatki maja WLASNA sekcje, domyslnie zamknieta i z liczba w naglowku.
+       Dodaje sie je dotknieciem dnia w kalendarzu, a nie tutaj - to jest
+       tylko podglad i kasowanie. Rozwiniete na stale robily z ustawien
+       sciane dat, ktora rosnie z kazdym miesiacem.                       -->
+  <details class="card sek">
+    <summary><h3 id="exTytul">Wyjątki na konkretne dni</h3></summary>
+    <div class="sekcia">
+      <div class="muted">
+        Np. odstawienie przed zabiegiem. Dodaje się je dotknięciem dnia
+        w kalendarzu — tutaj tylko je przeglądasz i kasujesz.
+      </div>
+      <div id="exList" style="margin-top:10px"></div>
     </div>
-  </div>
+  </details>
 
-  <div class="card">
-    <h3>Sieć WiFi pudełka</h3>
+  <details class="card sek">
+    <summary><h3>Sieć WiFi pudełka</h3></summary>
+    <div class="sekcia">
     <div class="muted">
       Pudełko pamięta kilka sieci. Nową odbiera przy najbliższym połączeniu —
       więc żeby ją dostać, musi mieć łączność przez którąś ze starych.
@@ -712,34 +775,12 @@ nav button.act{color:var(--acc)}
       Wyślij sieć do pudełka</button>
     <div id="netMsg" class="dim2" style="text-align:center;margin-top:8px;min-height:15px"></div>
     <div id="netStan" style="margin-top:10px"></div>
-  </div>
-
-  <div class="card">
-    <h3>Zakres terapeutyczny INR</h3>
-    <div class="muted">Ustala go lekarz prowadzący. Najczęściej 2,0–3,0.</div>
-    <div class="pair" style="grid-template-columns:minmax(0,1fr) minmax(0,1fr)">
-      <div><label>Od</label><select id="inrMin" onchange="inrZakresZmieniony()"></select></div>
-      <div><label>Do</label><select id="inrMax"></select></div>
     </div>
-    <button class="primary" style="width:100%;margin-top:12px" onclick="saveInrRange()">Zapisz zakres</button>
-  </div>
+  </details>
 
-  <div class="card">
-    <h3>Jak często mierzysz INR</h3>
-    <!-- Wyjasnienie stoi TUTAJ, a nie pod kalendarzem. Tam byl akapit, ktory
-         zabieral miejsce przy kazdym spojrzeniu na kalendarz, a potrzebny jest
-         raz - w chwili ustawiania odstepu.                                  -->
-    <div class="muted">Odstęp ustala lekarz — aplikacja tylko odlicza dni.
-      Termin liczy się od ostatniego wyniku i pojawia się w kalendarzu jako
-      pomarańczowy znak.</div>
-    <div><label>Co ile</label>
-      <select id="inrEvery" onchange="odswiezPodpowiedzInr()"></select></div>
-    <div class="dim2" id="inrEveryHint" style="margin-top:6px"></div>
-    <button class="primary" style="width:100%;margin-top:12px" onclick="saveInrEvery()">Zapisz odstęp</button>
-  </div>
-
-  <div class="card">
-    <h3>Raport dla lekarza</h3>
+  <details class="card sek">
+    <summary><h3>Raport dla lekarza</h3></summary>
+    <div class="sekcia">
     <div class="muted">Przyjmowanie leku i wyniki INR w jednym dokumencie.</div>
     <label>Zakres</label>
     <select id="repRange">
@@ -755,10 +796,12 @@ nav button.act{color:var(--acc)}
     <div class="dim2" style="margin-top:8px">
       Na iPhonie: <i>Drukuj</i> → rozsuń podgląd dwoma palcami → <i>Udostępnij</i> → <i>Zapisz w plikach</i>.
     </div>
-  </div>
+    </div>
+  </details>
 
-  <div class="card">
-    <h3>Urządzenie</h3>
+  <details class="card sek">
+    <summary><h3>Urządzenie</h3></summary>
+    <div class="sekcia">
     <div class="muted" id="devInfo" style="margin-top:6px"></div>
     <button class="ghost" style="margin-top:14px;width:100%" onclick="reconcile()">Przelicz kalendarz ze zdarzeń</button>
     <button class="ghost" style="margin-top:8px;width:100%" onclick="fbSignOut()">Wyloguj</button>
@@ -770,9 +813,15 @@ nav button.act{color:var(--acc)}
     <div class="dim2" style="margin-top:14px;text-align:center">
       Wersja aplikacji: <span id="appVersion">—</span>
     </div>
-  </div>
+    </div>
+  </details>
 
-  <!-- WEJSCIE DO DIAGNOSTYKI -->
+  <!-- WEJSCIE DO DIAGNOSTYKI
+
+       Jedyna karta, ktora NIE jest zwijana - i to celowo. Mieszkaja w niej
+       ostrzezenia o utracie danych, a ostrzezenie schowane za przyciskiem
+       przestaje byc ostrzezeniem. Gdy wszystko gra, `setWarn` jest pusty
+       i karta nic nie zajmuje.                                          -->
   <div class="card">
     <h3>Diagnostyka</h3>
     <p class="muted" style="margin:6px 0 12px">
@@ -997,7 +1046,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-11.3";
+const APP_VERSION = "2026-08-11.4";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -3738,6 +3787,7 @@ window.rownajTydzien = () => {
   odswiezPodpowiedzTygodnia();
 };
 
+const EX_POKAZ = 6;
 function renderExceptions(){
   const box = document.getElementById("exList");
   if (!box) return;
@@ -3745,12 +3795,24 @@ function renderExceptions(){
      o tamtym dniu), ale na liście do zarządzania pokazujemy tylko te, które
      jeszcze przed nami — inaczej po roku byłaby to ściana dat.          */
   const dzis = todayKey();
-  const klucze = Object.keys(cfg.doseDays || {})
+  const wszystkie = Object.keys(cfg.doseDays || {})
     .filter(k => /^\d{4}-\d{2}-\d{2}$/.test(k) && k >= dzis).sort();
-  if (!klucze.length){
+
+  /* Liczba w nagłówku sekcji: dzięki niej widać, że coś tam jest, bez
+     rozwijania — a sekcja może zostać zamknięta. */
+  const tytul = document.getElementById("exTytul");
+  if (tytul) tytul.textContent = wszystkie.length
+    ? `Wyjątki na konkretne dni (${wszystkie.length})`
+    : "Wyjątki na konkretne dni";
+
+  if (!wszystkie.length){
     box.innerHTML = `<div class="dim2">Brak wyjątków na najbliższe dni.</div>`;
     return;
   }
+  /* Pokazujemy najbliższe. Reszta jest w kalendarzu, tam gdzie się ją
+     zakłada — lista stu dat nie pomogłaby nikomu. */
+  const klucze = wszystkie.slice(0, EX_POKAZ);
+  const reszta = wszystkie.length - klucze.length;
   box.innerHTML = klucze.map(k => {
     const v = cfg.doseDays[k];
     const d = new Date(k + "T12:00:00").toLocaleDateString("pl-PL",
@@ -3760,7 +3822,11 @@ function renderExceptions(){
       <b>${v <= 0 ? "bez leku" : nf(v) + " tabl."}</b>
       <button class="danger" onclick="usunWyjatek('${k}')">✕</button>
     </div>`;
-  }).join("");
+  }).join("") + (reszta
+    ? `<div class="dim2" style="margin-top:10px">
+         i jeszcze ${reszta} ${reszta === 1 ? "dzień" : "dni"} dalej —
+         szukaj ich w kalendarzu.</div>`
+    : "");
 }
 
 /* ───────── Sieć WiFi dla pudełka ─────────
@@ -3781,7 +3847,11 @@ window.wyslijSiec = async () => {
   /* Zapis idzie jednym polem `wifiNowa`, a nie dwoma osobnymi - reguły bazy
      wymagają `ssid`, więc samo hasło bez nazwy zostałoby odrzucone i to
      w sposób, którego użytkownik by nie zrozumiał. */
-  cfg.wifiNowa = pass ? { ssid, pass } : { ssid };
+  /* `ts` nie jest ozdobą: bez niego nie da się odróżnić „pudełko jeszcze się
+     nie łączyło" od „łączyło się i sieci NIE przyjęło". Pierwsze znaczy
+     poczekaj, drugie — sprawdź nazwę. Bez tego rozróżnienia ekran mówiłby
+     „czeka" także wtedy, gdy nic już nie przyjdzie.                      */
+  cfg.wifiNowa = { ssid, ts: Math.floor(Date.now()/1000), ...(pass ? { pass } : {}) };
   await zapiszCfg({ wifiNowa: cfg.wifiNowa }, "Sieć WiFi");
   document.getElementById("netPass").value = "";
   msg.textContent = "Wysłane — pudełko odbierze przy najbliższym połączeniu.";
@@ -3800,10 +3870,25 @@ function renderNetStan(){
   let html = "";
   if (czeka){
     /* Pudełko kasuje `wifiNowa` dopiero PO zapisaniu sieci u siebie, więc
-       dopóki wpis tu jest, sieć na pewno nie doszła. */
-    html += `<div class="dim2" style="color:var(--warn)">
-      Czeka na pudełko: <b>${esc(czeka)}</b><br>
-      Wpis zniknie stąd sam, gdy pudełko go odbierze.</div>`;
+       dopóki wpis tu jest, sieć na pewno nie doszła.
+
+       Ale „nie doszła" ma dwa różne znaczenia i tylko jedno z nich każe
+       czekać. Jeśli pudełko łączyło się z bazą PO wysłaniu, to sieć widziało
+       i odrzuciło — czekanie nic tu nie da.                              */
+    const wyslane = +cfg.wifiNowa?.ts || 0;
+    const widziane = +st.lastSeen || 0;
+    const minelo = wyslane && widziane && widziane > wyslane + 60;
+    html += minelo
+      ? `<div class="dim2" style="color:var(--bad)">
+           <b>Pudełko łączyło się po wysłaniu i sieci nie przyjęło.</b><br>
+           ${st.netMsg ? `Powód z pudełka: <b>${esc(st.netMsg)}</b><br>` : ""}
+           Sprawdź nazwę sieci — musi się zgadzać co do znaku, razem
+           z wielkimi literami.</div>`
+      : `<div class="dim2" style="color:var(--warn)">
+           Czeka na pudełko: <b>${esc(czeka)}</b><br>
+           Wpis zniknie stąd sam, gdy pudełko go odbierze.</div>`;
+  } else if (st.netMsg){
+    html += `<div class="dim2">Ostatnia sieć z aplikacji: <b>${esc(st.netMsg)}</b></div>`;
   }
   if (znane.length){
     html += `<div class="dim2" style="margin-top:${czeka?"8px":"0"}">

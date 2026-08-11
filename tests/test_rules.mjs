@@ -153,7 +153,7 @@ head("Status pudelka przechodzi przez reguly");
 const POLA_STATUSU = polaJson("bool pushStatus(");
 const PRZYKLAD_STATUSU = {
   battery: 80, battRaw: 82, volt: 4.02, lastSeen: 1750000000, rssi: -60,
-  ssid: "dom", nets: "dom|hotspot Kuby", fw: "1.22.0",
+  ssid: "dom", nets: "dom|hotspot Kuby", netMsg: "przyjeta, kasowanie hasla HTTP 200", fw: "1.22.0",
   boots: 12, queued: 0, dropped: 0, nvsFail: 0,
   nvsFree: 512,
   charging: false, chargeSince: 0, chargeFromPct: -1, lastCharge: 0,

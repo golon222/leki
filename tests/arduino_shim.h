@@ -114,7 +114,15 @@ public:
   size_t putString(const char* k, const String& v) {
     if (failKeys.count(k)) return 0;
     if (strict && !_started) return 0;      // NVS: zapis bez uchwytu nie przechodzi
-    str[k] = v.s; return v.s.size() + 1; }
+    str[k] = v.s;
+    /* PRAWDZIWE putString zwraca liczbe ZAPISANYCH BAJTOW, wiec dla pustego
+       napisu ZERO - czyli tyle samo, co zapis nieudany. Atrapa zwracala tu
+       `size()+1` i przez to pusty zapis wygladal na udany, a cala klasa
+       bledow byla dla testow NIEWIDZIALNA. Kosztowalo to falszywy alarm
+       "utrata danych" u Kuby i siec WiFi, ktora nie chciala sie przyjac.
+       Trzeci raz ta sama lekcja co w D30: atrapa lagodniejsza od oryginalu
+       mierzy inna rzecz niz sie mysli.                                   */
+    return v.s.size(); }
   unsigned short getUShort(const char* k, unsigned short d = 0) {
     auto it = us.find(k); return it == us.end() ? d : it->second; }
   size_t putUShort(const char* k, unsigned short v) {

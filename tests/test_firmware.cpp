@@ -517,6 +517,46 @@ parseSchedule(String("08:00"));
 resetDosing();
 prefs.wipe();
 
+/* ================= 9a2b. PUSTY ZAPIS TO NIE AWARIA ================= */
+head("Pusty zapis do pamieci nie jest utrata danych");
+/* putString("") zwraca ZERO, czyli tyle samo, co zapis nieudany. Kosztowalo
+   to falszywy alarm "pudelko zglasza utrate danych" i siec WiFi, ktora nie
+   chciala sie przyjac, bo haslo bylo puste.                             */
+prefs.wipe();
+rtcNvsFail = 0;
+prefs.begin(NVS_NAMESPACE, false);
+CHECK(nvsPutStr("pusty", String("")), "zapis pustej wartosci MELDUJE SUKCES");
+prefs.end();
+CHECK(rtcNvsFail==0, "i nie podnosi licznika utraty danych (%u)", rtcNvsFail);
+CHECK(prefs.getString("pusty", "nic")=="nic",
+      "pusty klucz czyta sie jako wartosc domyslna");
+
+/* Prawdziwa awaria nadal MUSI byc widoczna - inaczej naprawa zamiotlaby
+   pod dywan cala rodzine bledu 3.5.                                     */
+prefs.wipe(); rtcNvsFail = 0;
+prefs.failKeys.insert("cos");
+prefs.begin(NVS_NAMESPACE, false);
+CHECK(!nvsPutStr("cos", String("tresc")), "prawdziwa awaria dalej melduje porazke");
+prefs.end();
+CHECK(rtcNvsFail==1, "i dalej podnosi licznik (%u)", rtcNvsFail);
+prefs.failKeys.clear();
+
+/* Siec OTWARTA - hotel, lotnisko - nie ma hasla i musi sie zapisac. */
+prefs.wipe(); rtcNvsFail = 0;
+CHECK(wifiSiecDodaj(String("hotel-wifi"), String("")),
+      "siec bez hasla zapisuje sie poprawnie");
+CHECK(wifiSieciCount()==1, "i jest na liscie (%d)", wifiSieciCount());
+CHECK(wifiSiecSsid(0)=="hotel-wifi", "z wlasciwa nazwa");
+CHECK(rtcNvsFail==0, "bez ani jednego falszywego alarmu (%u)", rtcNvsFail);
+
+/* Rozpisanie bez zadnego wyjatku na date - `dex` jest wtedy pusty. */
+prefs.wipe(); rtcNvsFail = 0;
+saveDosing(String("10|10|10|10|10|10|10"), String(""));
+CHECK(rtcNvsFail==0, "puste wyjatki dawkowania to tez nie awaria (%u)", rtcNvsFail);
+CHECK(rtcDoseWeek[0]==10, "a rozpisanie i tak weszlo");
+resetDosing();
+prefs.wipe(); rtcNvsFail = 0;
+
 /* ================= 9a3. LISTA ZNANYCH SIECI ================= */
 head("Lista sieci WiFi");
 prefs.wipe();
