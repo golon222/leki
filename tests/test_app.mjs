@@ -311,11 +311,13 @@ check(an.n===4, "cztery dni z zarejestrowana godzina (" + an.n + ")");
 check(an.taken===4 && an.missed===1, "4 wziete, 1 pominieta (" + an.taken + "/" + an.missed + ")");
 check(an.median===485, "mediana 08:05 = " + A.hm(an.median));
 check(an.earliest===470 && an.latest===630, "zakres " + A.hm(an.earliest) + "–" + A.hm(an.latest));
-check(an.plan===480, "godzina planowana 08:00");
 /* Zwartosc mierzona wzgledem WLASNEJ sredniej (517 min), nie wzgledem
    godziny przypomnienia - nikt Kubie pory nie zapisal. D54.          */
 check(an.withinMean60===3, "trzy dawki w ±60 min od wlasnej sredniej (" + an.withinMean60 + ")");
-check(an.beforeReminder===2, "dwie dawki przed godzina przypomnienia (" + an.beforeReminder + ")");
+/* Analiza nie wie nic o przypomnieniach: godzine mozna zmienic, a przypomnien
+   moze byc kilka - kazda liczba od nich zalezna zestarzeje sie cicho. D55. */
+check(an.plan===undefined && an.beforeReminder===undefined,
+      "analiza nie zna godziny przypomnienia");
 check(an.meanDev===undefined && an.within30===undefined,
       "odchylenie od planu i punktualnosc znikly z analizy");
 check(an.hist[8]===2 && an.hist[7]===1 && an.hist[10]===1,
@@ -337,7 +339,6 @@ check(A.hm(an.mean)==="23:27", "srednia 23:27, a nie poludnie: " + A.hm(an.mean)
 check(Math.round(an.sd)===37, "rozrzut ±37 min zamiast ±683 (±" + Math.round(an.sd) + ")");
 check(an.earliest===22*60+50 && an.latest===4,
       "najwczesniej 22:50, najpozniej 00:04: " + A.hm(an.earliest) + " – " + A.hm(an.latest));
-check(an.beforeReminder===0, "obie dawki PO godzinie przypomnienia (" + an.beforeReminder + ")");
 /* Obie mieszcza sie w ±60 min od WLASNEJ sredniej (23:27), choc od godziny
    przypomnienia (20:00) dzieli je 3-4 godziny. Zwartosc to nie zgodnosc. */
 check(an.withinMean60===2, "obie dawki w ±60 min od wlasnej sredniej (" + an.withinMean60 + ")");
@@ -346,15 +347,24 @@ check(A.sredniaPora([1435, 5])===0,
 check(A.sredniaPora([])===null, "brak godzin nie daje zmyslonej sredniej");
 check(A.kwantyl([], 0.25)===null, "kwantyl z pustej listy to null");
 
-head("Ile dawek przed godzina przypomnienia");
+head("Przedzial, w ktorym miesci sie polowa dawek");
 D({ cfg:{ schedule:["20:00"], defaultDose:1 }, doses:{
   [shift(-1)]: dose(1, 14, 0), [shift(-2)]: dose(2, 18, 0),
   [shift(-3)]: dose(3, 20, 0), [shift(-4)]: dose(4, 23, 0),
 }});
 an = A.analyze(5);
-check(an.beforeReminder===3, "trzy dawki do 20:00 wlacznie (" + an.beforeReminder + ")");
 check(A.hm(an.q1)==="17:00" && A.hm(an.q3)==="20:45",
       "polowa dawek miedzy " + A.hm(an.q1) + " a " + A.hm(an.q3));
+/* Ta sama statystyka przy DWOCH przypomnieniach i przy zmienionej godzinie -
+   liczby musza wyjsc identyczne, bo opisuja otwarcia, nie harmonogram. D55. */
+const q1a = an.q1, q3a = an.q3, srA = an.mean, zwA = an.withinMean60;
+D({ cfg:{ schedule:["07:30","23:00"], defaultDose:1 }, doses:{
+  [shift(-1)]: dose(1, 14, 0), [shift(-2)]: dose(2, 18, 0),
+  [shift(-3)]: dose(3, 20, 0), [shift(-4)]: dose(4, 23, 0),
+}});
+an = A.analyze(5);
+check(an.q1===q1a && an.q3===q3a && an.mean===srA && an.withinMean60===zwA,
+      "dwa przypomnienia o innych porach nie ruszaja statystyki godzin");
 
 head("Reczne korekty nie zaklamuja godzin");
 D({ cfg:{ schedule:["08:00"] }, doses:{
@@ -497,14 +507,21 @@ check(document.getElementById("anMean").textContent.includes(":"), "srednia godz
 check(document.getElementById("anHours").innerHTML.includes("<rect"), "histogram godzin narysowany");
 check(document.getElementById("anDow").innerHTML.includes("<rect"), "wykres dni tygodnia narysowany");
 check(document.getElementById("anInr").innerHTML.includes("regularności"), "zestawienie INR obecne");
-check(/^\d+ z \d+$/.test(document.getElementById("anBefore").textContent),
-      "dawki przed przypomnieniem: " + document.getElementById("anBefore").textContent);
+check(/^\d+ z \d+$/.test(document.getElementById("anNear").textContent),
+      "dawki blisko sredniej: " + document.getElementById("anNear").textContent);
 /* Kafelek ma mowic, O KTOREJ Kuba bierze lek - a nie o ile "spoznil sie"
-   wzgledem 20:00. Przypomnienie to nie termin (CLAUDE.md 4b, D53).      */
+   wzgledem 20:00 ani kiedy pudelko przypomina. Godzine przypomnienia mozna
+   zmienic, a przypomnien moze byc kilka (CLAUDE.md 4b, D53, D55).       */
 const poraTxt = document.getElementById("anPora").innerHTML;
 check(poraTxt.includes("Średnio bierzesz lek o"), "kafelek podaje srednia godzine: " + poraTxt);
 check(!poraTxt.includes("zaplanowaną godziną") && !poraTxt.includes("przed zaplanowaną"),
       "kafelek nie ocenia juz odchylenia od planu");
+/* Cala karta analizy - nie tylko zdanie pod kafelkami - ma milczec
+   o przypomnieniach. Sprawdzamy tekst kafelkow razem z podpisami.      */
+const kartaTxt = ["anMean","anMeanSub","anSpread","anSpreadSub","anNear","anNearSub"]
+  .map(id => document.getElementById(id).textContent).join(" ") + " " + poraTxt;
+check(!/przypomnien/i.test(kartaTxt) && !/przypomni/i.test(kartaTxt),
+      "karta analizy nie wspomina o przypomnieniach: " + kartaTxt);
 
 /* Os wykresu idzie w kolejnosci doby lekowej: 22:00 stoi PRZED 00:00,
    bo to sasiadujace ze soba pory tego samego wieczora. D53.          */

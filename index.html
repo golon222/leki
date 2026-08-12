@@ -685,16 +685,15 @@ nav button.act{color:var(--acc)}
         <div class="dim2" id="anMeanSub"></div></div>
       <div class="stat"><div class="sv" id="anSpread">–</div><div class="sl">rozrzut</div>
         <div class="dim2" id="anSpreadSub"></div></div>
-      <div class="stat"><div class="sv" id="anBefore">–</div><div class="sl">przed przypomnieniem</div>
-        <div class="dim2" id="anBeforeSub"></div></div>
+      <div class="stat"><div class="sv" id="anNear">–</div><div class="sl">blisko średniej</div>
+        <div class="dim2" id="anNearSub"></div></div>
     </div>
     <div id="anPora" style="margin-top:14px;font-size:13.5px;line-height:1.6"></div>
   </div>
 
   <div class="card">
     <h3>O której bierzesz lek</h3>
-    <div class="muted" style="margin-bottom:6px">Liczba dni w każdej godzinie, od początku doby lekowej.
-      Turkusowy słupek to godzina przypomnienia.</div>
+    <div class="muted" style="margin-bottom:6px">Liczba dni w każdej godzinie, od początku doby lekowej.</div>
     <div id="anHours"></div>
   </div>
 
@@ -1179,7 +1178,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-12.23";
+const APP_VERSION = "2026-08-12.24";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -4505,7 +4504,11 @@ function analyze(days){
   const end = medDate(new Date());
   const times = [], hist = Array(24).fill(0);
   const byDow = Array.from({length:7}, () => ({ taken:0, total:0, times:[] }));
-  const plan = slotMin(cfg.schedule[0] || "08:00");
+  /* Analiza NIE WIE nic o przypomnieniach — i tak ma zostać. Były tu dwie
+     liczby liczone od `cfg.schedule[0]` i obie kłamały podwójnie: godzinę
+     przypomnienia można zmienić w każdej chwili, a przypomnień może być
+     więcej niż jedno (druga pozycja to „przypomnij jeszcze raz", CLAUDE.md
+     4b). Statystyka opisuje więc wyłącznie to, co się STAŁO. D55.       */
   let taken = 0, missed = 0, doseSum = 0;
 
   for (let i = days-1; i >= 0; i--){
@@ -4551,17 +4554,12 @@ function analyze(days){
      Ta liczba mówi jedyną rzecz, która przy warfarynie naprawdę znaczy:
      czy pory trzymają się siebie nawzajem. Nie ocenia, o której. D54. */
   const withinMean60 = meanF == null ? 0 : ramy.filter(f => Math.abs(f - meanF) <= 60).length;
-  /* Ile dawek poszło, ZANIM wypadła godzina przypomnienia. Nie jest to ocena
-     punktualności — przypomnienie ma tylko sprawdzić, czy tabletka już była
-     (CLAUDE.md 4b). Porównanie w ramie doby, żeby 00:04 wyszło PO 20:00. */
-  const planF = doRamyDoby(plan);
-  const beforeReminder = ramy.filter(f => f <= planF).length;
 
-  return { days, taken, missed, total: taken+missed, doseSum, plan,
+  return { days, taken, missed, total: taken+missed, doseSum,
     times: ramy.map(zRamyDoby), n, median, mean, sd, hist, byDow,
     q1: n ? zRamyDoby(kwantyl(ramy, 0.25)) : null,
     q3: n ? zRamyDoby(kwantyl(ramy, 0.75)) : null,
-    beforeReminder, withinMean60,
+    withinMean60,
     earliest: n ? zRamyDoby(ramy[0]) : null, latest: n ? zRamyDoby(ramy[n-1]) : null };
 }
 const A_dateKey = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
@@ -4619,25 +4617,23 @@ function renderAnalysis(){
 
   setTxt("anAdh", a.total ? Math.round(a.taken/a.total*100)+"%" : "–");
   setTxt("anAdhSub", `${a.taken} z ${a.total} dawek`);
-  /* Kafelek mówi, O KTÓREJ Kuba bierze lek — nie, o ile „spóźnił się" wobec
-     20:00. Godzina z harmonogramu to pora PRZYPOMNIENIA, a nie termin, do
-     którego trzeba zdążyć (CLAUDE.md 4b) — więc nie ma tu ani odchylenia od
-     planu, ani „punktualności", bo obie liczby oceniały coś, czego pudełko
-     wcale nie wymaga. Zostają fakty: średnia, rozrzut, przedział. D53.  */
+  /* Kafelek mówi, O KTÓREJ Kuba bierze lek — i ani słowa o przypomnieniach.
+     Godziny z harmonogramu można zmienić w każdej chwili, a przypomnień może
+     być kilka, więc każde zdanie w rodzaju „przed 20:00" zestarzeje się bez
+     ostrzeżenia. Zostają wyłącznie fakty o tym, co się STAŁO: średnia,
+     rozrzut, przedział połowy dawek i zwartość wokół średniej. D53, D55. */
   setTxt("anMean", hm(a.mean));
   setTxt("anMeanSub", a.n ? `z ${a.n} zarejestrowanych otwarć` : "brak danych z pudełka");
   setTxt("anSpread", a.sd == null ? "–" : `± ${Math.round(a.sd)} min`);
   setTxt("anSpreadSub", a.n ? `od ${hm(a.earliest)} do ${hm(a.latest)}` : "—");
-  setTxt("anBefore", a.n ? `${a.beforeReminder} z ${a.n}` : "–");
-  setTxt("anBeforeSub", a.n ? `dawek wziętych przed ${hm(a.plan)}` : "—");
+  setTxt("anNear", a.n ? `${a.withinMean60} z ${a.n}` : "–");
+  setTxt("anNearSub", a.n ? `dawek w ±60 min od ${hm(a.mean)}` : "—");
 
   const pora = document.getElementById("anPora");
   if (pora) pora.innerHTML = !a.n
     ? `<span class="muted">Brak zarejestrowanych godzin — statystyka pojawi się po kilku dniach.</span>`
     : `Średnio bierzesz lek o <b>${hm(a.mean)}</b>.` +
-      (a.n >= 4 ? ` Połowa dawek między ${hm(a.q1)} a ${hm(a.q3)}.` : "") +
-      `<br><span class="muted">Przypomnienie o ${hm(a.plan)} tylko sprawdza, czy tabletka już
-       była — to nie jest godzina, o której trzeba ją wziąć.</span>`;
+      (a.n >= 4 ? ` Połowa dawek między ${hm(a.q1)} a ${hm(a.q3)}.` : "");
 
   const hs = document.getElementById("anHours");
   if (hs){
@@ -4651,9 +4647,11 @@ function renderAnalysis(){
     const lo = used.length ? Math.max(0, Math.min(...used)-1) : 2;
     const hi = used.length ? Math.min(23, Math.max(...used)+1) : 9;
     const slice = vals.slice(lo, hi+1);
+    /* Żaden słupek nie jest wyróżniony. Turkusowa była godzina przypomnienia
+       — czyli jedna wybrana pora udająca wzorzec, choć wzorca nie ma. D55. */
     hs.innerHTML = a.n ? barsSVG(slice,
       slice.map((_,i)=> godz[lo+i]%2===0 ? `${pad(godz[lo+i])}` : ""),
-      (i)=> godz[lo+i]===Math.floor(a.plan/60) ? "#5eead4" : "#7c93b8")
+      ()=> "#7c93b8")
       : `<div class="muted" style="padding:18px 0;text-align:center">
            Statystyka pojawi się po kilku dniach zbierania danych.</div>`;
   }
