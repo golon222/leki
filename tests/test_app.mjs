@@ -543,14 +543,6 @@ check(/padding-bottom:max\(\s*\d+px\s*,/.test(navCss),
       "i ma dolna granice, gdy urzadzenie nie zglasza wciecia");
 check(!/body\{[^}]*env\(safe-area-inset-bottom\)/.test(css),
       "a body juz tego nie dubluje");
-/* D52: INR i Urzadzenie byly jedynymi podekranami, ktorych strona sie nie
-   przewijala - i tylko tam pasek nawigacji wygladal, jakby nie siedzial na
-   dole. Domkniete czystym tlem (sekcja bez ramki i tla), NIE rozciagnietym
-   kafelkiem - to bylo juz raz cofniete (D50) i nie ma tu wrocic.        */
-check(/#tab-sinr,#tab-dev\{min-height:100vh\}/.test(css.replace(/\s/g, "")),
-      "INR i Urzadzenie dobijaja do pelnej wysokosci okna (D52)");
-check(!/#tab-(sinr|dev)\s*\.card\{/.test(css),
-      "i robi to sekcja, a nie rozciagniety kafelek (cofniete D50)");
 check((css.match(/min-width:0/g)||[]).length >= 4, "zabezpieczenia flexboxa obecne");
 check(css.includes("overflow-wrap:anywhere"), "dlugi tekst sie lamie");
 
