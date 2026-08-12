@@ -1197,7 +1197,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-12.30";
+const APP_VERSION = "2026-08-12.31";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -4370,6 +4370,18 @@ function renderOta(){
               <div style="margin-top:4px">Wgrany: <b>${esc(teraz)}</b>`;
   if (dostepna) html += ` · dostępny: <b>${esc(dostepna)}</b>`;
   html += `</div>`;
+
+  /* Pomiar zamiast kolejnego zgadywania (Kuba: "jest najnowsza wersja,
+     a i tak pozwala mi wgrać"). Numer widoczny wyżej może się zgadzać,
+     a mimo to porównanie po SUMIE (nadrzędne, patrz komentarz wyżej)
+     wypaść jako różne — właśnie po to jest suma, żeby łapać różnice,
+     których numer nie widzi. Ta linia pokazuje, na czym stoi decyzja,
+     zamiast każdorazowo odgadywać to z zewnątrz.                       */
+  if (opisFirmware)
+    html += `<div class="dim2" style="margin-top:2px;font-size:11px">
+             porównanie: ${sumaPudelka
+               ? `po sumie pliku — ${sumaPudelka === opisFirmware.md5 ? "zgodne" : "RÓŻNE"}`
+               : "po numerze wersji (pudełko jeszcze nie zna własnej sumy)"}</div>`;
 
   if (opisFirmwareBlad){
     html += `<div class="dim2" style="margin-top:6px">Nie mogę sprawdzić, co jest
