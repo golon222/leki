@@ -526,8 +526,21 @@ check(css.includes("calc(10px + env(safe-area-inset-top))"), "naglowek rezerwuje
    wiec liczy sie wzgledem OKNA: wypelnienie body nie dawalo mu niczego,
    a dokladalo wysokosci pod trescia. Rezerwowac musi ten, kto naprawde
    stoi nad wcieciem - czyli sam pasek.                                  */
-check(/nav\{[^}]*padding-bottom:env\(safe-area-inset-bottom\)/.test(css),
+/* Regula `nav` czytana w calosci i BEZ komentarzy - inaczej dlugie
+   komentarze w tej regule (D48-D51) same wpadaja pod wzorzec i test
+   przechodzi na tekscie objasnienia zamiast na prawdziwym CSS.        */
+const navCss = css.match(/\bnav\{[\s\S]*?\}/)[0].replace(/\/\*[\s\S]*?\*\//g, "");
+/* Wzorzec celowo NIE jest doslownym `padding-bottom:env(...)`. Wartosc
+   wolno przeliczac (D51 odejmuje 22px, zeby ikony siedzialy przy dolnej
+   krawedzi, a nie wysoko nad kreska home indicator) - pilnowana jest
+   ZASADA: rezerwuje ten, kto naprawde stoi nad wcieciem, czyli pasek. */
+check(/padding-bottom:[^;]*env\(safe-area-inset-bottom\)/.test(navCss),
       "pasek nawigacji sam rezerwuje miejsce nad wcieciem ekranu");
+/* Dolna granica jest tu istotna: na urzadzeniu bez kreski home indicator
+   env() daje 0, a samo odejmowanie zeszloby ponizej zera i podpisy
+   przykleilyby sie do krawedzi ekranu.                                */
+check(/padding-bottom:max\(\s*\d+px\s*,/.test(navCss),
+      "i ma dolna granice, gdy urzadzenie nie zglasza wciecia");
 check(!/body\{[^}]*env\(safe-area-inset-bottom\)/.test(css),
       "a body juz tego nie dubluje");
 check((css.match(/min-width:0/g)||[]).length >= 4, "zabezpieczenia flexboxa obecne");
