@@ -63,6 +63,23 @@ section{animation:fade .28s ease}
       border:1px solid var(--line);border-radius:var(--r);padding:16px;margin-bottom:14px;
       box-shadow:0 1px 0 rgba(255,255,255,.03) inset, 0 8px 24px -18px #000;
       overflow-wrap:anywhere}
+/* D52 (Kuba): INR i Urzadzenie to byly JEDYNE dwa podekrany, ktorych strona
+   w ogole sie nie przewijala - i wlasnie tam pasek nawigacji wygladal, jakby
+   nie siedzial na dole. Kuba wskazal te dwa sam, nie znajac tej liczby;
+   pomiar to potem potwierdzil co do ekranu.
+   Miejsce pod trescia domkniete czystym tlem - NIE rozciagnietym kafelkiem
+   (to bylo cofniete, patrz sekcja "Cofniete", D50): sekcja nie ma ani ramki,
+   ani tla, wiec widac wylacznie tlo strony, dokladnie jak Kuba prosil.
+
+   `min-height:100vh`, a nie `padding-bottom:NNvh`: padding proporcjonalny do
+   ekranu NIE gwarantuje przewijalnosci, bo wysokosc tresci od ekranu nie
+   zalezy - na wyzszym telefonie 34vh potrafilo znowu nie wystarczyc
+   (policzone: Urzadzenie na oknie 932px konczylo sie na 917px, ponizej progu).
+   Sekcja wysoka na cale okno + naglowek nad nia przekracza okno ZAWSZE,
+   niezaleznie od przekatnej.
+   Celowo tylko te dwa ekrany: WiFi i Lek sa dosc dlugie same z siebie,
+   Diagnostyka ma szesc kart. Kuba wskazal te dwa i tylko te dwa.        */
+#tab-sinr,#tab-dev{min-height:100vh}
 /* Bez min-width:0 elementy w kontenerach flex nie chcą się kurczyć poniżej
    swojej treści i wypychają zawartość poza kartę.                        */
 .card .row > *{min-width:0}
@@ -343,15 +360,18 @@ button:focus-visible,.day:focus-visible{outline:2px solid var(--acc);outline-off
 /* ---------- nawigacja ---------- */
 nav{position:fixed;bottom:0;left:0;right:0;display:flex;z-index:30;
     background:var(--bg2);border-top:1px solid var(--line);
-    /* ZASADA STALA (D52, decyzja Kuby): pasek nawigacji ma byc ZAWSZE
-       przyklejony do samego dolu ekranu. Zero rezerwy pod podpisami.
-       Nie przywracaj tu env(safe-area-inset-bottom) - probowano tego
-       dwa razy (pelna rezerwa, potem pomniejszona o 22px) i za kazdym
-       razem Kuba zglaszal, ze pasek nadal nie siedzi na dole.
-       Tlo paska i tak siega krawedzi, wiec pod kreska home indicator
-       nie ma dziury; w gestowej strefie iOS lezy tylko dolny skrawek
-       przyciskow, a caly cel dotyku (ikona + podpis) jest nad nia.     */
-    padding-bottom:0;
+    /* D51 (Kuba, ze strzalkami na zrzucie): pelne env(safe-area-inset-bottom)
+       robilo pod podpisami gruby pas pustego tla - pasek przez to byl wysoki,
+       jego GORNA krawedz podjezdzala w gore blizej kafelka, a same ikony
+       wisialy wysoko zamiast siedziec przy dolnej krawedzi ekranu. Porownanie
+       renderu z jego zrzutem: u niego pod podpisami ~109px, u mnie bez
+       symulacji safe-area ~56px - cala roznica to ta rezerwa.
+       Zmniejszona o 22px: ikony schodza na dol ("pasek na samym dole"),
+       a nad paskiem robi sie luzniej, bez ruszania kafelka. max(8px,...)
+       pilnuje, zeby na urzadzeniu BEZ kreski home indicator (starszy iPhone
+       z przyciskiem, Android, przegladarka) zostal normalny odstep zamiast
+       zera - inaczej podpisy kleilyby sie do krawedzi.                    */
+    padding-bottom:max(8px,calc(env(safe-area-inset-bottom) - 22px));
     /* D48: probowalismy translateZ(0) + backface-visibility:hidden (wlasna
        warstwa kompozycji) przy zachowanym backdrop-filter. Kuba zglosil, ze
        pasek nadal sie "rozjezdza" przy scrollowaniu w dol tak samo jak
@@ -912,13 +932,6 @@ nav button.act{color:var(--acc)}
     <div class="dim2" style="margin-top:14px;text-align:center">
       Wersja aplikacji: <span id="appVersion">—</span>
     </div>
-    <!-- TYMCZASOWE (D52): pomiar ukladu z PRAWDZIWEGO telefonu. Zdalne
-         pomiary w przegladarce dwa razy pokazaly "pasek jest na dole",
-         podczas gdy Kuba widzial odstep - bo przegladarka nie odtwarza
-         warunkow iPhone'a. Ta linijka mowi, jak jest naprawde. Do
-         usuniecia, gdy sprawa paska bedzie zamknieta (DECYZJE.md sekcja 1). -->
-    <div class="dim2" id="layoutDiag"
-         style="margin-top:10px;text-align:center;font-size:11px;line-height:1.5"></div>
   </div>
 </section>
 
@@ -1193,7 +1206,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-11.18";
+const APP_VERSION = "2026-08-11.19";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -4854,7 +4867,7 @@ window.showTab = t => {
   if (t === "lek")  renderSettings();
   if (t === "sinr") renderSettings();
   if (t === "wifi") renderSettings();
-  if (t === "dev")  { renderStatus(ostatniStatus); renderLayoutDiag(); }
+  if (t === "dev")  renderStatus(ostatniStatus);
   if (t === "diag") { renderDiag(); renderTesty(); }
   if (t === "ev")   renderEvents();
   if (t === "hist") { renderBoxLog(); renderNvsFailLog(); }
@@ -4898,39 +4911,6 @@ if ("serviceWorker" in navigator){
 }
 
 document.getElementById("appVersion").textContent = APP_VERSION;
-
-/* TYMCZASOWE (D52) — pomiar ukladu na PRAWDZIWYM urzadzeniu.
-   Powod istnienia: dwa razy z rzedu zmierzylem zdalnie "pasek stoi na dole
-   co do piksela", a Kuba widzial pod nim odstep — bo headless Chromium nie
-   odtwarza `env(safe-area-inset-bottom)` ani sposobu, w jaki iOS obchodzi sie
-   z oknem PWA. Pomiar z niewlasciwego srodowiska brzmi wiarygodnie i klamie.
-   Ta linijka podaje liczby stamtad, gdzie problem naprawde wystepuje.
-   `odstep od dolu` rozny od 0 = pasek NIE dotyka krawedzi okna.
-   `wciecie` = ile iOS rezerwuje na kreske home indicator.
-   `okno` vs `widoczne` = czy samo okno strony jest nizsze niz ekran.      */
-function renderLayoutDiag(){
-  const el = document.getElementById("layoutDiag");
-  const nav = document.querySelector("nav");
-  if (!el || !nav) return;
-  const r = nav.getBoundingClientRect();
-  /* env() da sie odczytac tylko przez element, ktory go faktycznie uzywa —
-     nie ma go w getComputedStyle jako wartosci liczbowej.                */
-  const sonda = document.createElement("div");
-  sonda.style.cssText = "position:fixed;left:0;bottom:0;width:0;" +
-                        "height:env(safe-area-inset-bottom);pointer-events:none";
-  document.body.appendChild(sonda);
-  const wciecie = Math.round(sonda.getBoundingClientRect().height);
-  sonda.remove();
-  const widoczne = Math.round(window.visualViewport?.height || 0);
-  const odstep = Math.round(window.innerHeight - r.bottom);
-  el.textContent =
-    `układ: okno ${Math.round(window.innerHeight)} · widoczne ${widoczne} · ` +
-    `ekran ${Math.round(window.screen?.height || 0)} · ` +
-    `pasek ${Math.round(r.top)}–${Math.round(r.bottom)} (wys. ${Math.round(r.height)}) · ` +
-    `wcięcie ${wciecie} · odstęp od dołu ${odstep} · ` +
-    `tryb ${matchMedia("(display-mode: standalone)").matches ? "PWA" : "przeglądarka"}`;
-}
-addEventListener("resize", renderLayoutDiag);
 </script>
 </body>
 </html>

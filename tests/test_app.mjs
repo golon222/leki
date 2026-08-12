@@ -521,25 +521,36 @@ const css = html.match(/<style>([\s\S]*?)<\/style>/)[1];
 check(css.includes("repeat(6,minmax(0,1fr))"), "szesc przyciskow licznika w rownych kolumnach");
 check(!/\.pillpad button\{[^}]*flex:1/.test(css), "przyciski nie rozpychaja sie trescia");
 check(css.includes("calc(10px + env(safe-area-inset-top))"), "naglowek rezerwuje pasek statusu iOS");
-/* ══ ZASADA STALA (D52, decyzja Kuby): pasek nawigacji ZAWSZE przy dolnej
-   krawedzi ekranu. Historia tego miejsca: najpierw pelne
-   `env(safe-area-inset-bottom)`, potem pomniejszone o 22px (D51) - za kazdym
-   razem Kuba zglaszal, ze pasek nadal nie siedzi na dole. Ten test istnieje
-   po to, zeby rezerwa NIE WROCILA tu przy okazji jakiejs przyszlej zmiany.
-   Regula czytana BEZ komentarzy - inaczej dlugie objasnienia w niej same
-   wpadaja pod wzorzec i test przechodzi na tekscie komentarza.          */
+/* Ten test wymagal `padding:0 0 env(safe-area-inset-bottom)` na body -
+   i mial to za "brak dublowania". Ale pasek nawigacji jest position:fixed,
+   wiec liczy sie wzgledem OKNA: wypelnienie body nie dawalo mu niczego,
+   a dokladalo wysokosci pod trescia. Rezerwowac musi ten, kto naprawde
+   stoi nad wcieciem - czyli sam pasek.                                  */
+/* Regula `nav` czytana w calosci i BEZ komentarzy - inaczej dlugie
+   komentarze w tej regule (D48-D51) same wpadaja pod wzorzec i test
+   przechodzi na tekscie objasnienia zamiast na prawdziwym CSS.        */
 const navCss = css.match(/\bnav\{[\s\S]*?\}/)[0].replace(/\/\*[\s\S]*?\*\//g, "");
-/* Negatywne spojrzenie wstecz na `padding-` jest tu KONIECZNE: bez niego
-   wzorzec `bottom:0` lapie sasiednie `padding-bottom:0` i kontrola przechodzi
-   nawet po odkotwiczeniu paska (`bottom:12px`). Zlapane mutacja.        */
-check(/(?<!padding-)bottom:0(?![\w.])/.test(navCss),
-      "pasek nawigacji zakotwiczony w dolnej krawedzi okna");
-check(/padding-bottom:0(?![\w.])/.test(navCss),
-      "i nie podnosi sie zadna rezerwa pod podpisami");
-check(!/padding-bottom:[^;]*env\(safe-area-inset-bottom\)/.test(navCss),
-      "rezerwa na wciecie NIE wrocila do paska (dwa razy cofana - D52)");
+/* Wzorzec celowo NIE jest doslownym `padding-bottom:env(...)`. Wartosc
+   wolno przeliczac (D51 odejmuje 22px, zeby ikony siedzialy przy dolnej
+   krawedzi, a nie wysoko nad kreska home indicator) - pilnowana jest
+   ZASADA: rezerwuje ten, kto naprawde stoi nad wcieciem, czyli pasek. */
+check(/padding-bottom:[^;]*env\(safe-area-inset-bottom\)/.test(navCss),
+      "pasek nawigacji sam rezerwuje miejsce nad wcieciem ekranu");
+/* Dolna granica jest tu istotna: na urzadzeniu bez kreski home indicator
+   env() daje 0, a samo odejmowanie zeszloby ponizej zera i podpisy
+   przykleilyby sie do krawedzi ekranu.                                */
+check(/padding-bottom:max\(\s*\d+px\s*,/.test(navCss),
+      "i ma dolna granice, gdy urzadzenie nie zglasza wciecia");
 check(!/body\{[^}]*env\(safe-area-inset-bottom\)/.test(css),
-      "ani body jej nie dokłada");
+      "a body juz tego nie dubluje");
+/* D52: INR i Urzadzenie byly jedynymi podekranami, ktorych strona sie nie
+   przewijala - i tylko tam pasek nawigacji wygladal, jakby nie siedzial na
+   dole. Domkniete czystym tlem (sekcja bez ramki i tla), NIE rozciagnietym
+   kafelkiem - to bylo juz raz cofniete (D50) i nie ma tu wrocic.        */
+check(/#tab-sinr,#tab-dev\{min-height:100vh\}/.test(css.replace(/\s/g, "")),
+      "INR i Urzadzenie dobijaja do pelnej wysokosci okna (D52)");
+check(!/#tab-(sinr|dev)\s*\.card\{/.test(css),
+      "i robi to sekcja, a nie rozciagniety kafelek (cofniete D50)");
 check((css.match(/min-width:0/g)||[]).length >= 4, "zabezpieczenia flexboxa obecne");
 check(css.includes("overflow-wrap:anywhere"), "dlugi tekst sie lamie");
 
