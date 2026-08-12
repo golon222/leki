@@ -94,6 +94,13 @@ gdy tylko automat zbuduje nowszą wersję.
    albo na ładowarce**.
 3. Zanim zacznie pobierać, **piknie dwa razy**. Potem milczy przez około
    minutę i restartuje się — to nie jest zawieszenie.
+   Po restarcie, gdy nowa wersja wstanie i przejdzie całą swoją drogę,
+   zagra **fanfarę w górę** (sześć rosnących tonów i jeden długi). To jest
+   słyszalny dowód, że aktualizacja się udała — nie da się jej pomylić
+   z przypomnieniem o leku (krótkie, powtarzalne) ani z ostrzeżeniem
+   „już dziś brałeś" (opadające). **Cisza po restarcie też coś znaczy:**
+   wersja, która nie wstała, nigdy do tej fanfary nie dojdzie i po trzech
+   próbach pudełko samo wróci do poprzedniej.
 4. Dawka zapisuje się **przed** aktualizacją, zawsze. Jeśli w kolejce wiszą
    niewysłane dawki, pudełko odłoży aktualizację, dopóki nie dojadą.
 

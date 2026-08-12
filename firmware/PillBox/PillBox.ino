@@ -664,6 +664,29 @@ void beepAlreadyTaken() {
   buzzerOff();
 }
 
+/* Nowa wersja programu wstala i dziala - fanfara w gore (D59).
+
+   PO CO OSOBNY DZWIEK. Aktualizacja przez WiFi jest jedyna rzecza w tym
+   urzadzeniu, ktora dzieje sie CALKOWICIE bez udzialu czlowieka: pudelko
+   samo pobiera, samo sie restartuje i samo decyduje, czy nowa wersja
+   nadaje sie do uzytku. Bez sygnalu jedynym sladem byla liczba w
+   aplikacji - a ta przychodzi z opoznieniem i nie mowi, czy program
+   naprawde WSTAL, czy tylko sie zapisal.
+
+   Ten dzwiek gra dokladnie raz: w chwili, gdy swiezo wgrana wersja
+   przeszla cala swoja droge i zostala uznana za dzialajaca. Jest
+   ROSNACY i dluzszy niz cokolwiek innego w tym pliku, zeby nie dalo sie
+   go pomylic z przypomnieniem o leku (te sa krotkie i powtarzalne) ani
+   z ostrzezeniem "juz dzis brales" (to opada).                        */
+void beepNowaWersja() {
+  buzzerInit();
+  const uint16_t f[6] = {1500, 1800, 2100, 2400, 2700, 3000};
+  for (int i = 0; i < 6; i++) { buzzerTone(f[i]); delay(90); }
+  buzzerTone(0); delay(120);
+  buzzerTone(3000); delay(450);
+  buzzerOff();
+}
+
 /* Niski zapas tabletek - trzy dlugie niskie piknięcia po potwierdzeniu. */
 void beepLowStock() {
   buzzerInit();
@@ -3335,6 +3358,13 @@ void otaPotwierdzDzialanie() {
      powstrzymuje bootloader przed cofnieciem dzialajacej wersji.      */
   esp_ota_mark_app_valid_cancel_rollback();
   LOG("[OTA] wersja %s potwierdzona jako dzialajaca\n", FW_VERSION);
+
+  /* Slyszalny dowod, ze aktualizacja przez WiFi doszla do konca. Gra raz
+     w zyciu kazdej wersji - dokladnie tutaj, bo dopiero w tym miejscu
+     wiadomo, ze nowy program nie tylko sie zapisal, ale i przezyl cala
+     swoja pierwsza droge. Wersja cofnieta przez licznik startow nigdy
+     tu nie dojdzie, wiec cisza tez cos znaczy.                        */
+  beepNowaWersja();
 }
 
 /* Powod odmowy albo niepowodzenia idzie do aplikacji OD RAZU, a nie przy

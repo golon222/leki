@@ -956,6 +956,14 @@ if _sprobuj:
     ok(_zanotuj >= 0 and _wgrajw > _zanotuj,
        "proba zapisuje sie PRZED pobraniem, nie po nim")
 
+# Slyszalne potwierdzenie udanej aktualizacji. Bez niego jedynym sladem
+# jest liczba w aplikacji, ktora przychodzi z opoznieniem i nie mowi, czy
+# program naprawde wstal, czy tylko sie zapisal.
+_potw = cialo("void otaPotwierdzDzialanie()")
+if _potw:
+    ok("beepNowaWersja()" in _potw,
+       "udana aktualizacja odzywa sie dzwiekiem, a nie tylko liczba w aplikacji")
+
 # Podzial pamieci musi zapowiadac OTA - na huge_app nie ma dokad pisac.
 ok("with OTA" in ino[:3000],
    "naglowek szkicu zapowiada podzial pamieci z druga partycja programu")
