@@ -1,4 +1,4 @@
-# Jak wgrać firmware 1.38.0
+# Jak wgrać firmware (1.38.x)
 
 To wgranie jest **jednorazowo inne** niż wszystkie poprzednie. Zmienia się
 jedno ustawienie w menu Arduino IDE. Po nim aktualizacje idą już przez WiFi,
@@ -75,7 +75,8 @@ Zwykłą strzałką, tak jak zawsze.
 
 W aplikacji, ekran **Urządzenie**:
 
-- **Firmware: 1.38.0** — jeśli widnieje stara wersja, wgranie nie doszło.
+- **Firmware** zgadza się z numerem, który stoi w `config.h` przy
+  `FW_VERSION` (dziś 1.38.1). Jeśli widnieje stara wersja, wgranie nie doszło.
 - Nie ma czerwonego ostrzeżenia o braku hasła. Jeśli jest — pudełko nie
   zdążyło jeszcze zapisać hasła w pamięci. Poczekaj na jedno połączenie
   (otwórz i zamknij wieczko) i sprawdź ponownie.

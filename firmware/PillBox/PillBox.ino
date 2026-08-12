@@ -1749,6 +1749,23 @@ void zapomnijToken() {
    "na wiare" byloby dokladnie tym rodzajem cichej straty, ktora wychodzi
    na jaw dopiero przy pierwszej aktualizacji - czyli najpozniej jak sie
    da. Od tego samego odczytu zalezy zgoda na OTA (`otaWolno`).         */
+/* @extract-begin */
+/* Tekst, ktory znaczy "tu nie ma hasla".
+
+   STOI TUTAJ, A NIE W config.h - i to jest naprawa ergonomii, nie
+   kosmetyka. Wczesniej w config.h byly DWIE linie z tym samym napisem
+   "TUTAJ_WPISZ_HASLO": jedna do wypelnienia, druga do zostawienia.
+   Kuba zapytal, czy wpisac haslo takze w tej drugiej - i dobrze, ze
+   zapytal, bo wpisanie zepsuloby wszystko po cichu: oba napisy stalyby
+   sie identyczne, `hasloJestPrawdziwe()` uznaloby prawdziwe haslo za
+   placeholder i pudelko nie zalogowaloby sie w ogole.
+
+   Wzorzec nie jest ustawieniem uzytkownika, tylko sposobem, w jaki
+   firmware rozpoznaje binarke zbudowana przez automat z repo. Miejsce
+   na haslo w config.h jest teraz dokladnie jedno.                     */
+#define PASSWORD_PLACEHOLDER "TUTAJ_WPISZ_HASLO"
+/* @extract-end */
+
 bool hasloJestPrawdziwe(const String& h) {
   return h.length() > 0 && h != String(PASSWORD_PLACEHOLDER);
 }

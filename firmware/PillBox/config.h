@@ -20,7 +20,7 @@
  * 1. IDENTYFIKATOR URZADZENIA
  * ------------------------------------------------------------------ */
 #define DEVICE_ID           "pillbox01"     // klucz w /devices/<DEVICE_ID>
-#define FW_VERSION          "1.38.0"   // widoczna w aplikacji - po wgraniu sprawdz, czy sie zmienila
+#define FW_VERSION          "1.38.1"   // widoczna w aplikacji - po wgraniu sprawdz, czy sie zmienila
 
 /* ---------------------------------------------------------------------
  * 2. FIREBASE  (Realtime Database + Auth email/haslo)
@@ -47,12 +47,7 @@
  *  Wgrywasz kablem dokladnie tak jak dotad: wpisujesz tutaj prawdziwe
  *  haslo. Roznica jest tylko taka, ze robisz to OSTATNI raz.            */
 #define DEVICE_PASSWORD     "TUTAJ_WPISZ_HASLO"
-
-/*  Tekst, ktory znaczy "tu nie ma hasla". Pudelko porownuje z nim wpis
- *  z config.h, zeby nie zapisac placeholdera do pamieci trwalej jako
- *  prawdziwego hasla - i zeby wiedziec, ze binarka jest "pusta", czyli
- *  zbudowana przez automat z repo.                                     */
-#define PASSWORD_PLACEHOLDER "TUTAJ_WPISZ_HASLO"
+/*  ^ TO JEST JEDYNE MIEJSCE, W KTORYM WPISUJESZ HASLO.                 */
 
 /* ---------------------------------------------------------------------
  * 3. PINY  (nazwy D0..D3 sa zdefiniowane przez plytke "XIAO_ESP32C3")
