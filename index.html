@@ -528,6 +528,11 @@ nav button.act{color:var(--acc)}
       </div>
       <div class="pillrow" id="todayPill" style="min-height:0;margin:0"></div>
     </div>
+    <!-- Licznik chodzi co sekundę z prawdziwego zegara (D57). Cyfry tabelaryczne,
+         inaczej napis skacze na szerokość przy każdym tyknięciu. -->
+    <div class="dim2 hide" id="odDawkiRow" style="margin-top:10px;padding-top:10px;
+         border-top:1px solid var(--line);font-size:12.5px">Od poprzedniej dawki:
+      <b id="odDawki" style="font-variant-numeric:tabular-nums">—</b><span id="odDawkiKiedy"></span></div>
     <div class="dim2 hide" id="nightHint" style="margin-top:10px;padding-top:10px;
          border-top:1px solid var(--line);font-size:12.5px"></div>
   </div>
@@ -687,6 +692,11 @@ nav button.act{color:var(--acc)}
         <div class="dim2" id="anSpreadSub"></div></div>
       <div class="stat"><div class="sv" id="anNear">–</div><div class="sl">blisko średniej</div>
         <div class="dim2" id="anNearSub"></div></div>
+      <!-- Pełna szerokość: to jedyna liczba w tej karcie, która mówi o leku,
+           a nie o zegarze — reszta opisuje pory, ta opisuje rytm. -->
+      <div class="stat" style="grid-column:1/-1"><div class="sv" id="anGap">–</div>
+        <div class="sl">średni odstęp między dawkami</div>
+        <div class="dim2" id="anGapSub"></div></div>
     </div>
     <div id="anPora" style="margin-top:14px;font-size:13.5px;line-height:1.6"></div>
   </div>
@@ -1178,7 +1188,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-12.24";
+const APP_VERSION = "2026-08-12.25";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -2428,6 +2438,72 @@ function opisCzasu(min){
   return m ? `za ${g} h ${m} min` : `za ${g} h`;
 }
 
+/* ═══════════ ILE MINĘŁO OD POPRZEDNIEJ DAWKI ═══════════
+   Szukamy po ZNACZNIKU CZASU, nie po kluczu dnia: wpis dosłany z pudełka
+   po kilku dobach offline siedzi pod swoją datą, a nie pod dzisiejszą, więc
+   „ostatni dzień w kalendarzu" i „ostatnia dawka" to dwie różne rzeczy.
+
+   Godzina otwarcia (`openTs`) jest pomiarem. Ręczna korekta go nie ma —
+   bierzemy wtedy `ts` wpisu, ale mówimy wprost, że to godzina wpisania,
+   nie wzięcia. Zmyślona precyzja jest tu gorsza niż jej brak.          */
+function ostatniaDawka(){
+  let naj = null;
+  for (const key of Object.keys(doses)){
+    const rec = (doses[key] || {})[0];
+    if (!rec || !(dayDose(key).sum > 0)) continue;
+    const zmierzony = openTimeOf(rec);
+    const t = zmierzony ?? (rec.ts > 0 ? rec.ts : null);
+    if (t == null) continue;
+    if (!naj || t > naj.ts) naj = { ts: t, key, zmierzona: zmierzony != null };
+  }
+  return naj;
+}
+
+/* „14 h 32 min 07 s”. Sekundy zawsze dwucyfrowe, żeby napis nie skakał
+   na szerokość przy każdym tyknięciu.                                  */
+function trwanieTxt(sek){
+  if (sek == null || !Number.isFinite(sek)) return "—";
+  const s = Math.max(0, Math.floor(sek));
+  const d = Math.floor(s / 86400), g = Math.floor(s % 86400 / 3600),
+        m = Math.floor(s % 3600 / 60), r = s % 60;
+  return (d ? `${d} d ` : "") + (d || g ? `${g} h ` : "") + `${m} min ${pad(r)} s`;
+}
+
+/* Który to dzień z punktu widzenia Kuby — po jego stronie świata, nie po
+   stronie serwera. `devKey()` przelicza znacznik przez strefę z ustawień
+   i granicę doby lekowej, więc dawka o 01:00 pokaże się jako wczorajsza. */
+function kiedyDawkaTxt(d){
+  if (!d) return "";
+  const k = devKey(d.ts);
+  const dzien = k === todayKey() ? "dziś" : k === yesterdayKey() ? "wczoraj"
+              : new Date(k + "T12:00:00").toLocaleDateString("pl-PL", { day:"numeric", month:"long" });
+  return `${dzien} o ${devHM(d.ts)}` + (d.zmierzona ? "" : " (wpis ręczny — godzina orientacyjna)");
+}
+
+function odswiezOdDawki(){
+  const wiersz = document.getElementById("odDawkiRow");
+  if (!wiersz) return;
+  const d = ostatniaDawka();
+  wiersz.classList.toggle("hide", !d);
+  if (!d) return;
+  /* Liczone z prawdziwego zegara przy każdym tyknięciu, a nie z wartości
+     policzonej raz przy rysowaniu — inaczej sekundy stałyby w miejscu. */
+  document.getElementById("odDawki").textContent =
+    trwanieTxt(Math.floor(Date.now()/1000) - d.ts);
+  document.getElementById("odDawkiKiedy").textContent = " · " + kiedyDawkaTxt(d);
+}
+
+let tikTimer = null;
+function startTikOdDawki(){
+  if (tikTimer) return;
+  /* Co sekundę, ale tylko gdy ekran jest widoczny — w tle iOS i tak
+     wstrzymuje timery, a po powrocie wakeUp() przerysowuje wszystko. */
+  tikTimer = setInterval(() => { if (!document.hidden) odswiezOdDawki(); }, 1000);
+  /* W testach (Node) aktywny timer trzymałby proces przy życiu w nieskończoność.
+     W przeglądarce setInterval zwraca liczbę i `?.unref?.()` nic nie robi. */
+  tikTimer?.unref?.();
+}
+
 function renderToday(){
   const key = todayKey(), { sum, any } = dayDose(key);
   const target = dawkaNaDzien(key);
@@ -2472,6 +2548,9 @@ function renderToday(){
         {day:"numeric", month:"long"})}. Nowy dzień zaczyna się o ${pad(DAY_START_HOUR)}:00.`;
     }
   }
+
+  odswiezOdDawki();
+  startTikOdDawki();
 
   document.getElementById("hSub").textContent =
     `${cfg.drugName || "Lek"}${+cfg.drugStrength ? " " + cfg.drugStrength + " mg" : ""} · ${opisDawkowania()}`;
@@ -4283,7 +4362,20 @@ window.tzChanged = () => {
 };
 
 window.cfgTime = (i,v) => { cfg.schedule[i] = v; };
-window.addSlot = () => { cfg.schedule.push("20:00"); renderSettings(); };
+/* Sufit bierze się z FIRMWARE, nie z upodobań: `String slots[12]`, a
+   parseSchedule() po cichu urywa resztę. Bez tej kontroli aplikacja
+   przyjęłaby trzynaste przypomnienie, pokazała je na liście i zapisała
+   do bazy — a pudełko nigdy by o nim nie usłyszało. Cicha rozbieżność
+   między tym, co widać na ekranie, a tym, co robi urządzenie, to ta sama
+   rodzina co B9/B10. Dziesięć mieści się z zapasem.                    */
+const MAX_PRZYPOMNIEN = 12;
+window.addSlot = () => {
+  if (cfg.schedule.length >= MAX_PRZYPOMNIEN){
+    toast(`Więcej niż ${MAX_PRZYPOMNIEN} przypomnień pudełko nie zapamięta.`, "err", 4000);
+    return;
+  }
+  cfg.schedule.push("20:00"); renderSettings();
+};
 window.delSlot = i => { cfg.schedule.splice(i,1); renderSettings(); };
 
 window.saveConfig = async () => {
@@ -4293,7 +4385,8 @@ window.saveConfig = async () => {
      przypomnienia od innego numeru niż pudełko i dawka lądowała
      w złym wierszu. Bez ani jednej poprawnej godziny nie ma czego
      zapisywać: zostawiamy poprzedni harmonogram i mówimy o tym. */
-  const godziny = [...new Set(cfg.schedule)].filter(h => /^([01]\d|2[0-3]):[0-5]\d$/.test(h)).sort();
+  const godziny = [...new Set(cfg.schedule)].filter(h => /^([01]\d|2[0-3]):[0-5]\d$/.test(h))
+                  .sort().slice(0, MAX_PRZYPOMNIEN);
   if (!godziny.length){
     toast("Podaj przynajmniej jedną godzinę przypomnienia (HH:MM).", "err", 4000);
     return;
@@ -4474,6 +4567,10 @@ function openMinutes(rec){
   const d = devDate(t); return d.getUTCHours()*60 + d.getUTCMinutes();
 }
 const hm  = m => m == null ? "—" : `${pad(Math.floor(((m%1440)+1440)%1440/60))}:${pad(Math.round(m)%60)}`;
+/* Odstęp w godzinach i minutach: „24 h 05 min”. Bez zawijania na dobę —
+   przerwa 39-godzinna ma tak właśnie wyglądać, a nie jak „15 h”.      */
+const godzTxt = min => min == null ? "—"
+  : `${Math.floor(Math.round(min)/60)} h ${pad(Math.round(min)%60)} min`;
 const DOW_PL = ["poniedziałek","wtorek","środa","czwartek","piątek","sobota","niedziela"];
 
 /* Statystykę godzin liczymy w ramie DOBY LEKOWEJ (od DAY_START_HOUR), nie od
@@ -4500,9 +4597,34 @@ const kwantyl = (posort, p) => {
   return posort[lo] + (posort[hi]-posort[lo])*(i-lo);
 };
 
+/* Ile dób dzieli dwa klucze dni. Liczone w południe UTC, żeby zmiana czasu
+   nie zrobiła z doby 23 ani 25 godzin i nie wyszło "0" albo "2" dni. */
+const dniMiedzy = (k1, k2) =>
+  Math.round((Date.parse(k2+"T12:00:00Z") - Date.parse(k1+"T12:00:00Z")) / 86400000);
+
+/* ODSTĘP MIĘDZY DAWKAMI — jedyna liczba w tej okolicy, która ma sens
+   biologiczny. Godzina na zegarze jest Kuby i nikt jej nie wyznaczył; to,
+   ile godzin minęło od poprzedniej tabletki, jest już własnością leku.
+   Warfaryna ma długi okres półtrwania, więc pojedynczy skok niczego nie
+   wywraca — ale kalendarz pokazuje 100% i same zielone dni ZARÓWNO przy
+   odstępie 24 h, jak i przy 12 h czy 39 h. Ta liczba to widzi, tamte nie.
+
+   Liczymy WYŁĄCZNIE pary z sąsiednich dób. Po dniu pominiętym albo
+   rozpisanym bez leku przerwa wynosi ~48 h i nie jest nieregularnością,
+   tylko przerwą — wrzucona do średniej przesunęłaby ją o kilkanaście
+   godzin i zamieniła miarę rytmu w miarę pominięć, którą mamy osobno. */
+function odstepyZPunktow(punkty){
+  const out = [];
+  for (let i = 1; i < punkty.length; i++){
+    if (dniMiedzy(punkty[i-1].key, punkty[i].key) !== 1) continue;
+    out.push((punkty[i].t - punkty[i-1].t) / 60);
+  }
+  return out;
+}
+
 function analyze(days){
   const end = medDate(new Date());
-  const times = [], hist = Array(24).fill(0);
+  const times = [], hist = Array(24).fill(0), punkty = [];
   const byDow = Array.from({length:7}, () => ({ taken:0, total:0, times:[] }));
   /* Analiza NIE WIE nic o przypomnieniach — i tak ma zostać. Były tu dwie
      liczby liczone od `cfg.schedule[0]` i obie kłamały podwójnie: godzinę
@@ -4538,6 +4660,10 @@ function analyze(days){
     const m = openMinutes(rec);
     if (m == null) continue;
     times.push(m); hist[Math.floor(m/60)]++; byDow[dow].times.push(m);
+    /* Do odstępów bierzemy ZNACZNIK BEZWZGLĘDNY, nie minutę na zegarze:
+       23:00 i 01:00 dnia następnego dzielą dwie godziny, a nie dwadzieścia
+       dwie. Strefa czasowa nie ma tu nic do rzeczy — różnica jest różnicą. */
+    punkty.push({ key, t: openTimeOf(rec) });
   }
 
   /* Wszystko poniżej liczone na minutach OD POCZĄTKU DOBY LEKOWEJ (rama),
@@ -4555,11 +4681,17 @@ function analyze(days){
      czy pory trzymają się siebie nawzajem. Nie ocenia, o której. D54. */
   const withinMean60 = meanF == null ? 0 : ramy.filter(f => Math.abs(f - meanF) <= 60).length;
 
+  const gaps = odstepyZPunktow(punkty);
+  const gapAvg = gaps.length ? gaps.reduce((a,b)=>a+b,0)/gaps.length : null;
+
   return { days, taken, missed, total: taken+missed, doseSum,
     times: ramy.map(zRamyDoby), n, median, mean, sd, hist, byDow,
     q1: n ? zRamyDoby(kwantyl(ramy, 0.25)) : null,
     q3: n ? zRamyDoby(kwantyl(ramy, 0.75)) : null,
     withinMean60,
+    gapN: gaps.length, gapAvg,
+    gapMin: gaps.length ? Math.min(...gaps) : null,
+    gapMax: gaps.length ? Math.max(...gaps) : null,
     earliest: n ? zRamyDoby(ramy[0]) : null, latest: n ? zRamyDoby(ramy[n-1]) : null };
 }
 const A_dateKey = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
@@ -4569,7 +4701,7 @@ const A_dateKey = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDat
    więc to najbardziej wartościowe zestawienie w całej analizie.        */
 function inrContext(dateStr, window = 7){
   let taken = 0, total = 0, doseSum = 0;
-  const times = [];
+  const times = [], punkty = [];
   /* Liczymy dni POPRZEDZAJĄCE pobranie (i = 1..window), bez dnia badania.
      Krew pobiera się rano, zwykle przed wzięciem tabletki, więc wliczanie
      tego dnia zaniżałoby regularność bez żadnego powodu.               */
@@ -4587,10 +4719,17 @@ function inrContext(dateStr, window = 7){
     if (dawkaNaDzien(key) <= 0 && sum <= 0) continue;
     total++;
     if (any && sum > 0){ taken++; doseSum += sum;
-      const m = openMinutes(rec); if (m != null) times.push(m); }
+      const m = openMinutes(rec);
+      if (m != null){ times.push(m); punkty.push({ key, t: openTimeOf(rec) }); } }
   }
   const avg = sredniaPora(times);
+  /* Pętla szła wstecz, a odstępy trzeba liczyć po kolei — stąd sortowanie.
+     To jest ta kolumna, dla której odstępy w ogóle powstały: jeśli INR
+     skacze, tutaj widać, czy skacze razem z rytmem brania, czy sam z siebie. */
+  const gaps = odstepyZPunktow([...punkty].sort((a,b)=> a.key < b.key ? -1 : 1));
   return { taken, total, doseSum, avgTime: avg,
+           gapN: gaps.length,
+           gapAvg: gaps.length ? gaps.reduce((a,b)=>a+b,0)/gaps.length : null,
            adherence: total ? Math.round(taken/total*100) : null, samples: times.length };
 }
 
@@ -4628,6 +4767,12 @@ function renderAnalysis(){
   setTxt("anSpreadSub", a.n ? `od ${hm(a.earliest)} do ${hm(a.latest)}` : "—");
   setTxt("anNear", a.n ? `${a.withinMean60} z ${a.n}` : "–");
   setTxt("anNearSub", a.n ? `dawek w ±60 min od ${hm(a.mean)}` : "—");
+  /* Odstęp podajemy w godzinach i minutach, nie w „± min od doby" — 24 h
+     to punkt odniesienia, który bierze się z leku, a nie z ustawień. */
+  setTxt("anGap", a.gapN ? godzTxt(a.gapAvg) : "–");
+  setTxt("anGapSub", a.gapN
+    ? `${a.gapN} ${a.gapN === 1 ? "para" : "par"} kolejnych dni · od ${godzTxt(a.gapMin)} do ${godzTxt(a.gapMax)}`
+    : "potrzebne dwa dni z rzędu z godziną z pudełka");
 
   const pora = document.getElementById("anPora");
   if (pora) pora.innerHTML = !a.n
@@ -4762,6 +4907,10 @@ window.makeReport = () => {
         <tr><th>Najwcześniej / najpóźniej</th><td>${hm(an.earliest)} / ${hm(an.latest)}</td></tr>
         <tr><th>Dawki w ±60 min od godziny średniej</th><td>${an.withinMean60} z ${an.n}
             (${Math.round(an.withinMean60/an.n*100)}%)</td></tr>
+        <tr><th>Średni odstęp między dawkami</th><td>${an.gapN
+            ? `${godzTxt(an.gapAvg)} (${an.gapN} par kolejnych dni)` : "—"}</td></tr>
+        <tr><th>Odstęp najkrótszy / najdłuższy</th><td>${an.gapN
+            ? `${godzTxt(an.gapMin)} / ${godzTxt(an.gapMax)}` : "—"}</td></tr>
       </tbody></table>
 
       <table><thead><tr><th>Godzina</th>${an.hist.map((v,i)=>v?`<th>${pad(i)}</th>`:"").join("")}</tr></thead>
@@ -4785,13 +4934,13 @@ window.makeReport = () => {
         (<b>${Math.round(inRange/inrKeys.length*100)}%</b>)</div>
       <table><thead><tr><th>Data</th><th>INR</th><th>Ocena</th>
         <th>Regularność w 7 dni przed</th><th>Typowa godzina w tym tygodniu</th>
-        <th>Suma tabletek</th><th>Uwagi</th></tr></thead><tbody>
+        <th>Średni odstęp</th><th>Suma tabletek</th><th>Uwagi</th></tr></thead><tbody>
       ${inrKeys.map(k=>{
         const v=inr[k].value, ok=v>=cfg.inrMin&&v<=cfg.inrMax, c=inrContext(k,7);
         return `<tr class="${ok?"":"out"}"><td>${k}</td><td>${nf(v)}</td>
         <td>${ok?"w zakresie":(v<cfg.inrMin?"poniżej":"powyżej")}</td>
         <td>${c.adherence==null?"—":c.adherence+"% ("+c.taken+"/"+c.total+")"}</td>
-        <td>${hm(c.avgTime)}</td><td>${nf(c.doseSum)}</td>
+        <td>${hm(c.avgTime)}</td><td>${c.gapN ? godzTxt(c.gapAvg) : "—"}</td><td>${nf(c.doseSum)}</td>
         <td>${esc(inr[k].note||"")}</td></tr>`;}).join("")}
       </tbody></table>
       <div class="sum" style="font-size:9pt;color:#555">

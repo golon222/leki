@@ -543,18 +543,31 @@ ok("ONE_DOSE_WINDOW_S" in code, "okno podejrzenia jest nazwana stala z config.h"
 tim = galaz("case WAKE_TIMER:", "gestPoOtwarciu == GEST_TEST")
 ok(1000 < len(tim) < 20000,
    f"galaz timera wycieta poprawnie ({len(tim)} znakow)")
-ok("void oznaczAlarmObsluzony()" in code,
-   "istnieje znacznik 'alarm na te dobe juz sie odbyl'")
-ok("bool alarmJuzObsluzony()" in code, "i funkcja, ktora go czyta")
-ok("alarmJuzObsluzony()" in tim,
-   "galaz alarmu sprawdza go PRZED zadzwonieniem")
-_po = tim[tim.find('reportEvent("missed"'):]
-ok("oznaczAlarmObsluzony();" in _po[:400],
-   "po wyczerpaniu prob alarm zostawia slad, ze juz dzwonil")
+ok("void oznaczAlarmObsluzony(int slot)" in code,
+   "istnieje znacznik 'to przypomnienie juz sie odbylo'")
+ok("bool alarmJuzObsluzony(int slot)" in code, "i funkcja, ktora go czyta")
+ok("alarmJuzObsluzony(slot)" in tim,
+   "galaz alarmu sprawdza go PRZED zadzwonieniem - dla TEGO slotu")
+# D56: znacznik per przypomnienie, nie per doba. Gdyby wrocil na cala dobe,
+# drugie przypomnienie ("przypomnij jeszcze raz o 23:00") zamilkloby na
+# zawsze - i to dokladnie wtedy, kiedy jest potrzebne.
+ok("rtcAlarmDoneMask" in code, "znacznik jest maska slotow, nie flaga na dobe")
+_ret = tim[tim.find("rtcAlarmRetries >= MAX_ALARM_RETRIES"):]
+ok("oznaczAlarmObsluzony(slot);" in _ret[:700],
+   "po wyczerpaniu prob alarm zostawia slad, ze TO przypomnienie juz dzwonilo")
+ok("ostatniSlotDoby()" in _ret[:1200],
+   "'missed' dopiero po OSTATNIM przypomnieniu doby, nie po pierwszym")
+# Kolejnosc, nie samo wystapienie: warunek MUSI stac przed zapisem, inaczej
+# "missed" leci zawsze, a ostatniSlotDoby() wisi obok jako ozdoba.
+_i_war, _i_miss = _ret.find("slot == ostatniSlotDoby()"), _ret.find('reportEvent("missed"')
+ok(0 <= _i_war < _i_miss, "zapis 'missed' stoi ZA tym warunkiem, nie obok niego")
+ok('nvsPutU16("almMask"' in ino, "maska przezywa reset - zapisywana w pamieci trwalej")
 # Tu szukamy NAPISU, wiec na surowym zrodle - strip() zamienia literaly na "".
 _ldm = ino[ino.find("void loadDayMarkers()"):]
 ok('prefs.getULong("almDay"' in _ldm[:_ldm.find("\n}")],
    "znacznik przezywa reset - odtwarzany z pamieci trwalej")
+ok('prefs.getUShort("almMask"' in _ldm[:_ldm.find("\n}")],
+   "maska slotow odtwarzana RAZEM z dniem, nie osobno")
 
 # ---------- 7. Znaczniki dobowe trwale ----------
 ok("loadDayMarkers();" in setup_body, "znaczniki dobowe odtwarzane przy starcie")

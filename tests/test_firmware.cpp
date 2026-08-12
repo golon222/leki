@@ -69,6 +69,7 @@ uint32_t rtcLastPushTs    = 0;
 uint32_t rtcTokenExp      = 0;
 uint32_t rtcTakenTs       = 0;
 uint32_t rtcAlarmDoneDay  = 0;
+uint16_t rtcAlarmDoneMask = 0;
 uint32_t rtcAlarmDoneTs   = 0;
 uint32_t rtcOpenSinceTs   = 0;
 uint32_t rtcNextWarnTs    = 0;
@@ -1568,50 +1569,116 @@ head("Odzwoniony alarm nie wraca w tym samym oknie dopasowania");
   parseSchedule("20:00");
   rtcTimeValid = true; rtcTzOffsetMin = 120;
   rtcTakenDay = 0; rtcTakenTs = 0;
-  rtcAlarmDoneDay = 0; rtcAlarmDoneTs = 0;
+  rtcAlarmDoneDay = 0; rtcAlarmDoneTs = 0; rtcAlarmDoneMask = 0;
 
   /* 20:00 - pora leku. Alarm dzwoni i po trzech probach sie poddaje. */
   FAKE_NOW = local(2026, 8, 8, 20, 0);
   CHECK(matchSlot(FAKE_NOW) == 0, "o porze leku alarm ma prawo zadzwonic");
-  CHECK(!alarmJuzObsluzony(), "na starcie nic nie jest jeszcze odzwonione");
-  oznaczAlarmObsluzony();                    // to robi galaz "pominieta dawka"
+  CHECK(!alarmJuzObsluzony(0), "na starcie nic nie jest jeszcze odzwonione");
+  oznaczAlarmObsluzony(0);                   // to robi galaz "pominieta dawka"
 
   /* Kolejne wybudzenia w oknie +/-90 min - dokladnie te, ktore Kuba slyszal. */
   for (const auto& p : { std::pair<int,int>{20,15}, {21,0}, {21,29} }) {
     FAKE_NOW = local(2026, 8, 8, p.first, p.second);
     CHECK(matchSlot(FAKE_NOW) == 0,
           "%02d:%02d wciaz miesci sie w oknie dopasowania", p.first, p.second);
-    CHECK(alarmJuzObsluzony(),
+    CHECK(alarmJuzObsluzony(0),
           "...ale o %02d:%02d alarm juz NIE dzwoni drugi raz", p.first, p.second);
   }
 
   /* Nowa doba - alarm musi wrocic, inaczej pudelko zamilkloby na zawsze. */
   FAKE_NOW = local(2026, 8, 9, 20, 0);
-  CHECK(!alarmJuzObsluzony(), "nazajutrz alarm znowu dziala");
+  CHECK(!alarmJuzObsluzony(0), "nazajutrz alarm znowu dziala");
 
   /* To samo bez zegara: pudelko offline po resecie. */
   prefs.wipe();
-  rtcTimeValid = false; rtcAlarmDoneDay = 0; rtcAlarmDoneTs = 0;
+  rtcTimeValid = false; rtcAlarmDoneDay = 0; rtcAlarmDoneTs = 0; rtcAlarmDoneMask = 0;
   FAKE_NOW = 5000;
-  CHECK(!alarmJuzObsluzony(), "bez zegara tez zaczynamy od ciszy");
-  oznaczAlarmObsluzony();
+  CHECK(!alarmJuzObsluzony(0), "bez zegara tez zaczynamy od ciszy");
+  oznaczAlarmObsluzony(0);
   FAKE_NOW = 5000 + 3600;
-  CHECK(alarmJuzObsluzony(), "godzine pozniej alarm nie wraca");
+  CHECK(alarmJuzObsluzony(0), "godzine pozniej alarm nie wraca");
   FAKE_NOW = 5000 + ONE_DOSE_WINDOW_S + 60;
-  CHECK(!alarmJuzObsluzony(), "po uplywie okna wraca - to juz nowa doba");
+  CHECK(!alarmJuzObsluzony(0), "po uplywie okna wraca - to juz nowa doba");
+}
+
+/* ====== 16b3. DRUGIE PRZYPOMNIENIE MUSI ZADZWONIC (D56) ==============
+   Naprawa D23 zalatala dzwonienie w kolko, ale znacznik postawila na CALA
+   DOBE. Skutek: pierwsze przypomnienie, poddajac sie, wyciszalo wszystkie
+   nastepne - czyli druga pozycja w harmonogramie ("przypomnij jeszcze raz
+   o 23:00") milczala dokladnie wtedy, kiedy jest potrzebna.            */
+head("Pierwsze przypomnienie nie wycisza drugiego");
+{
+  prefs.wipe();
+  parseSchedule("20:00|23:00");
+  rtcTimeValid = true; rtcTzOffsetMin = 120;
+  rtcTakenDay = 0; rtcTakenTs = 0;
+  rtcAlarmDoneDay = 0; rtcAlarmDoneTs = 0; rtcAlarmDoneMask = 0;
+  CHECK(slotCount == 2, "dwa przypomnienia w harmonogramie (%d)", slotCount);
+
+  /* 20:00 - dzwoni, brak odzewu, wyczerpane proby. */
+  FAKE_NOW = local(2026, 8, 8, 20, 0);
+  CHECK(matchSlot(FAKE_NOW) == 0, "o 20:00 pasuje slot 0");
+  CHECK(!alarmJuzObsluzony(0), "slot 0 jeszcze nie dzwonil");
+  oznaczAlarmObsluzony(0);
+  CHECK(alarmJuzObsluzony(0), "slot 0 odzwoniony");
+
+  /* Wybudzenia w oknie slotu 0 - cisza, dokladnie jak po D23. */
+  FAKE_NOW = local(2026, 8, 8, 21, 0);
+  CHECK(matchSlot(FAKE_NOW) == 0 && alarmJuzObsluzony(0),
+        "o 21:00 slot 0 nadal milczy (D23 nietkniete)");
+
+  /* 23:00 - TO jest ta zmiana. Drugie przypomnienie MUSI zadzwonic. */
+  FAKE_NOW = local(2026, 8, 8, 23, 0);
+  CHECK(matchSlot(FAKE_NOW) == 1, "o 23:00 pasuje slot 1 (%d)", matchSlot(FAKE_NOW));
+  CHECK(!alarmJuzObsluzony(1), "drugie przypomnienie NIE jest wyciszone przez pierwsze");
+
+  /* Dopiero gdy i ono sie podda - cisza do konca doby. */
+  oznaczAlarmObsluzony(1);
+  CHECK(alarmJuzObsluzony(1), "po odzwonieniu slot 1 tez milczy");
+  CHECK(alarmJuzObsluzony(0), "a slot 0 nadal milczy - maska nie kasuje sasiada");
+
+  /* Nowa doba kasuje CALA maske, nie tylko biezacy bit. */
+  FAKE_NOW = local(2026, 8, 9, 20, 0);
+  CHECK(!alarmJuzObsluzony(0) && !alarmJuzObsluzony(1),
+        "nazajutrz oba przypomnienia wracaja");
+
+  /* Wzieta tabletka wycisza WSZYSTKIE przypomnienia - to osobna ochrona
+     (juzDzisBrane), niezalezna od maski, i ma dzialac dalej.          */
+  zapiszDawke();
+  CHECK(juzDzisBrane(), "dawka zapisana");
+  FAKE_NOW = local(2026, 8, 9, 23, 0);
+  CHECK(juzDzisBrane(), "o 23:00 pudelko wie, ze dzis juz bylo - drugie tez milczy");
+}
+
+head("Ktore przypomnienie jest ostatnia szansa w dobie");
+{
+  parseSchedule("20:00|23:00");
+  CHECK(ostatniSlotDoby() == 1, "z 20:00 i 23:00 ostatnie jest 23:00 (%d)", ostatniSlotDoby());
+  parseSchedule("08:00");
+  CHECK(ostatniSlotDoby() == 0, "przy jednym przypomnieniu ono samo");
+  /* Kolejnosc liczona w ramie doby lekowej: 07:30 nalezy juz do NASTEPNEJ
+     doby wzgledem 23:00, wiec ostatnia szansa dzis to 23:00.          */
+  parseSchedule("23:00|07:30");
+  CHECK(ostatniSlotDoby() == 0,
+        "07:30 to juz kolejna doba - ostatnia szansa dzis to 23:00 (%d)", ostatniSlotDoby());
+  parseSchedule("07:30|23:00");
+  CHECK(ostatniSlotDoby() == 1, "ta sama para w innej kolejnosci daje ten sam wynik");
+  slotCount = 0;
+  CHECK(ostatniSlotDoby() == -1, "bez harmonogramu nie ma ostatniej szansy");
 }
 
 head("Wziecie tabletki tez konczy alarm na te dobe");
 {
   prefs.wipe();
   rtcTimeValid = true; rtcTakenDay = 0; rtcTakenTs = 0;
-  rtcAlarmDoneDay = 0; rtcAlarmDoneTs = 0;
+  rtcAlarmDoneDay = 0; rtcAlarmDoneTs = 0; rtcAlarmDoneMask = 0;
   FAKE_NOW = local(2026, 8, 8, 19, 0);
   zapiszDawke();
-  oznaczAlarmObsluzony();                    // tak robi galaz "otwarto w trakcie"
+  oznaczAlarmObsluzony(0);                   // tak robi galaz "otwarto w trakcie"
   FAKE_NOW = local(2026, 8, 8, 20, 0);
   CHECK(juzDzisBrane(), "dawka zapisana");
-  CHECK(alarmJuzObsluzony(), "i alarm o 20:00 juz nie zadzwoni");
+  CHECK(alarmJuzObsluzony(0), "i alarm o 20:00 juz nie zadzwoni");
 }
 
 /* ====== 16c. OCHRONA PRZED DRUGA DAWKA **BEZ INTERNETU** ============

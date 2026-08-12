@@ -49,6 +49,7 @@ uint32_t rtcLastPushTs    = 0;
 uint32_t rtcTokenExp      = 0;
 uint32_t rtcTakenTs       = 0;
 uint32_t rtcAlarmDoneDay  = 0;
+uint16_t rtcAlarmDoneMask = 0;
 uint32_t rtcAlarmDoneTs   = 0;
 uint32_t rtcOpenSinceTs   = 0;
 uint32_t rtcNextWarnTs    = 0;

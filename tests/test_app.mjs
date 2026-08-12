@@ -347,6 +347,99 @@ check(A.sredniaPora([1435, 5])===0,
 check(A.sredniaPora([])===null, "brak godzin nie daje zmyslonej sredniej");
 check(A.kwantyl([], 0.25)===null, "kwantyl z pustej listy to null");
 
+/* ═══════════ ODSTEP MIEDZY DAWKAMI (D57) ═══════════
+   Godzina na zegarze jest Kuby. Ile godzin minelo od poprzedniej tabletki
+   jest juz wlasnoscia leku - i tego nie mierzyl dotad nikt.           */
+head("Odstep miedzy dawkami");
+D({ cfg:{ schedule:["20:00"], defaultDose:1 }, doses:{
+  [shift(-3)]: dose(3, 20, 0),
+  [shift(-2)]: dose(2, 23, 0),   // 27 h po poprzedniej
+  [shift(-1)]: dose(1, 14, 0),   // 15 h po poprzedniej
+}});
+an = A.analyze(5);
+check(an.gapN===2, "dwie pary kolejnych dni (" + an.gapN + ")");
+check(Math.round(an.gapAvg)===21*60, "sredni odstep 21 h (" + A.godzTxt(an.gapAvg) + ")");
+check(Math.round(an.gapMin)===15*60 && Math.round(an.gapMax)===27*60,
+      "od " + A.godzTxt(an.gapMin) + " do " + A.godzTxt(an.gapMax));
+check(A.godzTxt(1445)==="24 h 05 min", "24 h 05 min zamiast zawinietych 5 min: " + A.godzTxt(1445));
+
+/* Dzien pominiety w srodku: przerwa ~48 h to NIE jest nieregularnosc,
+   tylko pominiecie - i mamy je liczone osobno. Wrzucone do sredniej
+   przesunelaby ja o kilkanascie godzin i zamienila miare rytmu w miare
+   pominiec, czyli w to samo, co pokazuje kafelek regularnosci.        */
+D({ cfg:{ schedule:["20:00"], defaultDose:1 }, doses:{
+  [shift(-3)]: dose(3, 20, 0),
+  [shift(-2)]: { 0:{ status:"missed", dose:0, source:"device", ts:at(2,20,0) } },
+  [shift(-1)]: dose(1, 20, 0),
+}});
+an = A.analyze(5);
+check(an.gapN===0, "para przez dzien pominiety nie wchodzi do odstepow (" + an.gapN + ")");
+check(an.gapAvg===null, "bez par nie ma zmyslonej sredniej");
+check(A.dniMiedzy("2026-08-08","2026-08-09")===1, "sasiednie dni to jeden dzien roznicy");
+check(A.dniMiedzy("2026-10-24","2026-10-26")===2, "przez zmiane czasu nadal dwa dni");
+check(A.odstepyZPunktow([])!== null && A.odstepyZPunktow([]).length===0,
+      "pusta lista punktow nie wywala odstepow");
+
+head("Licznik od poprzedniej dawki");
+check(A.trwanieTxt(0)==="0 min 00 s", "zero: " + A.trwanieTxt(0));
+check(A.trwanieTxt(65)==="1 min 05 s", "sekundy dwucyfrowe: " + A.trwanieTxt(65));
+check(A.trwanieTxt(3600*14 + 60*32 + 7)==="14 h 32 min 07 s",
+      "14 h 32 min 07 s: " + A.trwanieTxt(3600*14+60*32+7));
+check(A.trwanieTxt(86400*2 + 3600)==="2 d 1 h 0 min 00 s", "doby tez: " + A.trwanieTxt(86400*2+3600));
+check(A.trwanieTxt(null)==="—", "brak danych to kreska");
+
+D({ cfg:{ schedule:["20:00"], defaultDose:1 }, doses:{
+  [shift(-2)]: dose(2, 20, 0), [shift(-1)]: dose(1, 22, 50) } });
+let ost = A.ostatniaDawka();
+check(ost.ts===at(1,22,50), "wybrana NAJPOZNIEJSZA dawka, nie ostatni klucz w obiekcie");
+check(ost.zmierzona===true, "godzina pochodzi z pomiaru pudelka");
+/* Reczna korekta nie ma zmierzonej godziny - wolno jej uzyc, ale nie wolno
+   udawac, ze to pomiar. */
+D({ doses:{ [shift(-1)]:{ 0:{ status:"taken", dose:1, source:"manual", ts:at(1,12,0) } } } });
+ost = A.ostatniaDawka();
+check(ost.zmierzona===false, "wpis reczny oznaczony jako nie-pomiar");
+check(A.kiedyDawkaTxt(ost).includes("orientacyjna"), "i powiedziane wprost: " + A.kiedyDawkaTxt(ost));
+D();
+check(A.ostatniaDawka()===null, "bez dawek nie ma od czego liczyc");
+
+/* Sekundy maja chodzic z PRAWDZIWEGO zegara, a nie z wartosci policzonej
+   raz przy rysowaniu. Dwa odczyty w odstepie sekundy musza sie roznic. */
+D({ cfg:{ schedule:["20:00"], defaultDose:1 },
+    doses:{ [shift(-1)]: dose(1, 20, 0) } });
+const prawdziweNow = Date.now;
+Date.now = () => prawdziweNow.call(Date) - 0;
+A.odswiezOdDawki();
+const pierwszy = document.getElementById("odDawki").textContent;
+Date.now = () => prawdziweNow.call(Date) + 1000;
+A.odswiezOdDawki();
+const drugi = document.getElementById("odDawki").textContent;
+Date.now = prawdziweNow;
+check(pierwszy !== drugi, "po sekundzie licznik pokazuje inna wartosc: "
+      + pierwszy + " -> " + drugi);
+check(/\d+ h \d+ min \d\d s$/.test(drugi), "format licznika: " + drugi);
+
+/* Licznik ma sie pokazac na ekranie glownym sam z siebie, a nie dopiero
+   po wejsciu w analize - po to jest na karcie "Dzisiaj".              */
+/* classList, nie className: atrapa DOM trzyma klasy w Secie i `className`
+   nigdy ich nie widzi. Pierwsza wersja tego testu przechodzila zawsze,
+   bo pytala o pusty napis - dokladnie pulapka z D45.                  */
+A.renderToday();
+check(!document.getElementById("odDawkiRow").classList.contains("hide"),
+      "wiersz licznika widoczny po narysowaniu ekranu glownego");
+check(document.getElementById("odDawkiKiedy").textContent.includes("o "),
+      "z godzina poprzedniej dawki: " + document.getElementById("odDawkiKiedy").textContent);
+D();
+A.renderToday();
+check(document.getElementById("odDawkiRow").classList.contains("hide"),
+      "bez ani jednej dawki wiersz jest schowany, a nie pokazuje zera");
+
+head("Ile przypomnien wolno ustawic");
+check(A.MAX_PRZYPOMNIEN===12, "sufit taki sam jak w firmware (" + A.MAX_PRZYPOMNIEN + ")");
+D({ cfg:{ schedule:["08:00"], defaultDose:1 } });
+for (let i = 0; i < 20; i++) window.addSlot();
+check(A.cfg.schedule.length===12, "dziesiec zmiesci sie z zapasem, trzynastego nie ma ("
+      + A.cfg.schedule.length + ")");
+
 head("Przedzial, w ktorym miesci sie polowa dawek");
 D({ cfg:{ schedule:["20:00"], defaultDose:1 }, doses:{
   [shift(-1)]: dose(1, 14, 0), [shift(-2)]: dose(2, 18, 0),

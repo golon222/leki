@@ -73,6 +73,7 @@ RTC_DATA_ATTR uint8_t  rtcChargeFromPct = 255;  // procent sprzed ladowania
 RTC_DATA_ATTR uint32_t rtcTokenExp      = 0;    // do kiedy wazny token Firebase
 RTC_DATA_ATTR uint32_t rtcTakenTs       = 0;    // KIEDY zapisano dawke (takze bez zegara)
 RTC_DATA_ATTR uint32_t rtcAlarmDoneDay  = 0;    // doba, w ktorej alarm juz sie odbyl
+RTC_DATA_ATTR uint16_t rtcAlarmDoneMask = 0;    // ...i KTORE przypomnienia (bit = slot)
 RTC_DATA_ATTR uint32_t rtcAlarmDoneTs   = 0;    // ...i kiedy, gdy zegar nieznany
 RTC_DATA_ATTR uint32_t rtcLastPushTs    = 0;    // kiedy ostatnio poszedl status
 RTC_DATA_ATTR int16_t  rtcLastPushPct   = -1;   // z jakim procentem baterii
@@ -2271,7 +2272,13 @@ void loadDayMarkers() {
   prefs.begin(NVS_NAMESPACE, true);
   if (rtcTakenDay == 0)    rtcTakenDay    = prefs.getULong("takenDay", 0);
   if (rtcRolloverDay == 0) rtcRolloverDay = prefs.getULong("rollDay", 0);
-  if (rtcAlarmDoneDay == 0) rtcAlarmDoneDay = prefs.getULong("almDay", 0);
+  if (rtcAlarmDoneDay == 0) {
+    rtcAlarmDoneDay  = prefs.getULong("almDay", 0);
+    /* Maska idzie ZAWSZE razem z dniem, nigdy osobno: dzien bez maski
+       znaczylby "cos juz odzwoniono, ale nie wiadomo co", a wtedy nie da
+       sie odroznic wyciszonego przypomnienia od czekajacego. */
+    rtcAlarmDoneMask = prefs.getUShort("almMask", 0);
+  }
   prefs.end();
   LOG("[DAY] odtworzono z pamieci: wzieta=%lu, rozliczona=%lu\n",
       (unsigned long)rtcTakenDay, (unsigned long)rtcRolloverDay);
@@ -2282,11 +2289,15 @@ void loadDayMarkers() {
 void clearDayMarkers() {
   rtcTakenDay = 0;
   rtcRolloverDay = 0;
+  rtcAlarmDoneDay = 0;
+  rtcAlarmDoneMask = 0;
   prefs.begin(NVS_NAMESPACE, false);
   prefs.remove("takenDay");
   prefs.remove("rollDay");
+  prefs.remove("almDay");
+  prefs.remove("almMask");
   prefs.end();
-  LOGLN("[DAY] znaczniki doby wyczyszczone");
+  LOGLN("[DAY] znaczniki doby wyczyszczone (dawka, rozliczenie, odzwonione alarmy)");
 }
 
 void setTakenDay(uint32_t day) {
@@ -2361,23 +2372,66 @@ void zapiszDawke() {
    Z SIECIA TEGO NIE WIDAC: kolejka jest pusta, wiec nie ma po co budzic
    pudelka w srodku okna i alarm odzywa sie doklandie raz. Blad ujawnia sie
    wylacznie po dluzszym czasie offline - czyli wtedy, gdy pudelko ma byc
-   najbardziej samodzielne.                                             */
-void oznaczAlarmObsluzony() {
+   najbardziej samodzielne.
+
+   NAPRAWA D23 MIALA SKUTEK UBOCZNY, ktory znalazl sie dopiero teraz (D56):
+   znacznik byl na CALA DOBE, wiec pierwsze przypomnienie, poddajac sie,
+   wyciszalo takze wszystkie nastepne. Druga pozycja w harmonogramie znaczy
+   "przypomnij jeszcze raz o 23:00" (CLAUDE.md 4b) i nie odzywala sie
+   dokladnie wtedy, kiedy jest potrzebna - gdy pierwsze przypomnienie
+   przeszlo bez odzewu. Dlatego znacznik jest teraz MASKA BITOWA slotow:
+   ten sam slot nie wraca (D23 zachowane co do joty), ale kolejny - owszem. */
+void oznaczAlarmObsluzony(int slot) {
   uint32_t teraz = (uint32_t)time(nullptr);
   rtcAlarmDoneTs = teraz ? teraz : 1;
   if (rtcTimeValid) {
-    rtcAlarmDoneDay = localDayNumber((time_t)teraz);
+    uint32_t dzis = localDayNumber((time_t)teraz);
+    /* Nowa doba kasuje maske. Bez tego wczorajsze bity wyciszalyby
+       dzisiejsze przypomnienia o tych samych numerach.                */
+    if (rtcAlarmDoneDay != dzis) { rtcAlarmDoneDay = dzis; rtcAlarmDoneMask = 0; }
+    if (slot >= 0 && slot < 16) rtcAlarmDoneMask |= (uint16_t)(1u << slot);
+    else                        rtcAlarmDoneMask = 0xFFFF;   // slot nieznany: cisza na cala dobe
     prefs.begin(NVS_NAMESPACE, false);
     prefs.putULong("almDay", rtcAlarmDoneDay);   // jak setTakenDay obok
     prefs.end();
+    nvsPutU16("almMask", rtcAlarmDoneMask);
   }
 }
 
-bool alarmJuzObsluzony() {
-  if (rtcTimeValid) return rtcAlarmDoneDay != 0 && rtcAlarmDoneDay == localDayNumber(time(nullptr));
+bool alarmJuzObsluzony(int slot) {
+  if (rtcTimeValid) {
+    if (rtcAlarmDoneDay == 0 || rtcAlarmDoneDay != localDayNumber(time(nullptr))) return false;
+    if (slot < 0 || slot >= 16) return rtcAlarmDoneMask != 0;
+    return (rtcAlarmDoneMask & (uint16_t)(1u << slot)) != 0;
+  }
+  /* Bez zegara nie wiemy nawet, ktora jest godzina - tym bardziej, ktore
+     to przypomnienie. Zostaje stara, czasowa ochrona przed powtorka:
+     ostrozniej znaczy tu ciszej, bo drugie dzwonienie po omacku byloby
+     zgadywaniem, a matchSlot() bez zegara i tak zwraca -1.            */
   if (rtcAlarmDoneTs == 0) return false;
   uint32_t teraz = (uint32_t)time(nullptr);
   return teraz >= rtcAlarmDoneTs && (teraz - rtcAlarmDoneTs) < (uint32_t)ONE_DOSE_WINDOW_S;
+}
+
+/* Ktore przypomnienie jest OSTATNIA szansa w tej dobie lekowej.
+
+   Potrzebne, bo "missed" wolno zglosic dopiero wtedy, gdy dzis nie ma juz
+   nic po nim. Zglaszane po pierwszym przypomnieniu malowaloby dzien na
+   czerwono o 20:00, choc o 23:00 pudelko ma jeszcze raz zapytac - i gdyby
+   tabletka poszla o 22:00, aplikacja musialaby ten wpis odkrecac (rodzina
+   B27/B29: wpisy "missed" scigajace sie z prawdziwa dawka).
+
+   Kolejnosc liczona w RAMIE DOBY LEKOWEJ, nie na zegarze: przy godzinach
+   ["23:00","07:30"] ostatnia szansa to 23:00, bo 07:30 nastepnego dnia
+   nalezy juz do kolejnej doby.                                        */
+int ostatniSlotDoby() {
+  if (slotCount <= 0) return -1;
+  int best = 0, bestRama = -1;
+  for (int i = 0; i < slotCount; i++) {
+    int rama = ((slotMinutes(i) - DAY_START_HOUR * 60) % 1440 + 1440) % 1440;
+    if (rama > bestRama) { bestRama = rama; best = i; }
+  }
+  return best;
 }
 
 bool juzDzisBrane() {
@@ -3823,7 +3877,7 @@ void setup() {
 
 #if ONE_DOSE_PER_DAY
       /* Jesli dawka na dzis juz zostala zapisana - nie dzwon w ogole. */
-      if (slot >= 0 && (juzDzisBrane() || alarmJuzObsluzony())) {
+      if (slot >= 0 && (juzDzisBrane() || alarmJuzObsluzony(slot))) {
         LOGLN("[ALM] dawka na dzis zalatwiona (wzieta albo odzwoniona) - cisza");
         rtcPendingSlot = -1;
         rtcAlarmRetries = 0;
@@ -3845,7 +3899,7 @@ void setup() {
         note("dzien bez leku");
         rtcPendingSlot = -1;
         rtcAlarmRetries = 0;
-        oznaczAlarmObsluzony();
+        oznaczAlarmObsluzony(slot);
         slot = -1;
       }
 
@@ -3863,7 +3917,7 @@ void setup() {
           rtcAlarmRetries = 0;
           rtcLastOpenTs = (uint32_t)time(nullptr);
           zapiszDawke();
-          oznaczAlarmObsluzony();
+          oznaczAlarmObsluzony(slot);
           reportEvent("open", slot);
 #if ONE_DOSE_PER_DAY
           if (rtcTimeValid && rtcTakenDay != localDayNumber(time(nullptr)))
@@ -3873,14 +3927,27 @@ void setup() {
         } else {
           rtcAlarmRetries++;
           if (rtcAlarmRetries >= MAX_ALARM_RETRIES) {
-            LOGLN("[ALM] pominieta dawka");
-            note("dawka pominieta");
-            reportEvent("missed", slot);
             rtcPendingSlot = -1;
             rtcAlarmRetries = 0;
             /* Odzwonione. Bez tego kazde kolejne wybudzenie w oknie
-               +/-90 min zaczynaloby alarm od nowa.                    */
-            oznaczAlarmObsluzony();
+               +/-90 min zaczynaloby alarm od nowa (D23) - ale znacznik
+               dotyczy TEGO przypomnienia, nie calej doby (D56).       */
+            oznaczAlarmObsluzony(slot);
+
+            /* "missed" dopiero, gdy dzis nie ma juz nastepnej szansy.
+               Po pierwszym z dwoch przypomnien dzien nie jest jeszcze
+               pominiety - a taki wpis malowalby go na czerwono o 20:00
+               i aplikacja musialaby go odkrecac, gdyby tabletka poszla
+               o 22:00. Doby, ktore skoncza sie bez dawki, i tak domyka
+               checkDayRollover().                                     */
+            if (slot == ostatniSlotDoby()) {
+              LOGLN("[ALM] pominieta dawka");
+              note("dawka pominieta");
+              reportEvent("missed", slot);
+            } else {
+              LOGLN("[ALM] brak odzewu - czekamy na kolejne przypomnienie");
+              note("bez odzewu, bedzie kolejne");
+            }
           }
         }
       } else {

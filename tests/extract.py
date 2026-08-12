@@ -35,6 +35,7 @@ WANTED = [
     "makeRecordAt", "makeRecord",
     "loadDayMarkers", "setTakenDay", "setRolloverDay",
     "zapiszDawke", "oznaczAlarmObsluzony", "alarmJuzObsluzony", "juzDzisBrane",
+    "ostatniSlotDoby",
     "checkDayRollover",
     "wartoZapisac", "logbookAdd", "logbookJson",
     "alarmPotwierdzony",

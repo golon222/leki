@@ -63,7 +63,21 @@ fi
 # ctags z pakietu "builtin" Arduino. My kompilujemy .cpp, wiec zadnych
 # prototypow nie potrzeba - ale sciezka do ctags musi byc rozwiazywalna,
 # inaczej builder przerywa jeszcze przed kompilacja.
-CTAGS_DIR="$(dirname "$(command -v ctags || echo /usr/bin/ctags)")"
+#
+# ATRAPA, gdy ctags nie ma w systemie (swiezy kontener, czysta maszyna).
+# Wolno ja podstawic, bo OBIE sciezki kompilacji ponizej podaja arduino-cli
+# gotowy plik .cpp i pusty .ino obok - generator prototypow dostaje wiec
+# pusty plik i nie ma z czego niczego wyciagac. Prototypy dla sciezki
+# "tak jak wgrywa Arduino IDE" robi nasz proto_arduino.py, nie ctags.
+# Bez tego builder przerywa PRZED kompilacja z "fork/exec ctags", czyli
+# skrypt nie zdazy sprawdzic tego, po co istnieje.
+if ! command -v ctags >/dev/null 2>&1; then
+  echo "── brak ctags w systemie, podstawiam atrape (prototypow i tak nie generujemy)"
+  mkdir -p "$ACLI_DIR/ctagsbin"
+  printf '#!/bin/sh\nexit 0\n' > "$ACLI_DIR/ctagsbin/ctags"
+  chmod +x "$ACLI_DIR/ctagsbin/ctags"
+fi
+CTAGS_DIR="$(dirname "$(command -v ctags || echo "$ACLI_DIR/ctagsbin/ctags")")"
 
 # ── 3. rdzen ESP32 ────────────────────────────────────────────────────
 # Rdzen 3.x ma jedna zaleznosc spoza pakietu esp32: dfu-util z pakietu

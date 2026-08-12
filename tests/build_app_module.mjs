@@ -44,6 +44,8 @@ export { brakujePokrycia, doReconcile, reconcileDecyzja, opisLadowan, minutyDoPe
          tzName, trackingSince, beforeTracking, analyze, inrContext, openTimeOf,
          openMinutes, hm, renderStatus,
          doRamyDoby, zRamyDoby, sredniaPora, kwantyl,
+         dniMiedzy, odstepyZPunktow, godzTxt, trwanieTxt, MAX_PRZYPOMNIEN,
+         ostatniaDawka, kiedyDawkaTxt, odswiezOdDawki, startTikOdDawki,
          zapiszPewnie, zapiszCfg, oczekWczytaj, oczekZapisz, oczekIle, oczekWyslij,
          magazyn, OCZEK_KEY, oczekOdmowy, bazaOdmowila,
          INR_ZAKRES_MIN, INR_ZAKRES_MAX, INR_ODSTEPY, inrKrokiZakresu, renderSettings,
