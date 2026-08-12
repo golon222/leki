@@ -2688,6 +2688,17 @@ A.renderStatus({ fw: "1.38.0", otaHaslo: true });
 check(otaHtml().includes("Zaktualizuj pudełko do 1.39.0"),
       "nowsza wersja na serwerze -> jest przycisk");
 
+/* Firmware do 1.37.0 nie zna polecenia otaCmd i nie ma drugiej partycji.
+   Zlecenie takiemu pudelku wisialoby w bazie w nieskonczonosc, a ekran
+   pokazalby "laczylo sie i nie zrobilo" BEZ POWODU - bo stara wersja nie
+   umie go podac. Wygladaloby to jak awaria, a jest tylko "za wczesnie". */
+A.renderStatus({ fw: "1.37.0" });          // brak otaHaslo = nie slyszalo o OTA
+check(!otaHtml().includes("Zaktualizuj pudełko"),
+      "stary firmware bez OTA -> przycisku NIE ma");
+check(otaHtml().includes("kablem"),
+      "...i ekran mowi, ze potrzebne jest jedno wgranie kablem");
+check(otaHtml().includes("WGRYWANIE.md"), "...ze wskazaniem instrukcji");
+
 /* Bez hasla w pamieci pudelka aktualizacja odcielaby je od bazy. Ekran ma
    to powiedziec ZAMIAST przycisku, a nie obok niego.                   */
 A.renderStatus({ fw: "1.38.0", otaHaslo: false });

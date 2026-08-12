@@ -1197,7 +1197,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-12.26";
+const APP_VERSION = "2026-08-12.27";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -4317,6 +4317,22 @@ function renderOta(){
      przycisk, i przycisku wtedy nie ma. */
   const hasloBrak = st.otaHaslo === false;
 
+  /* CZY PUDEŁKO W OGÓLE UMIE SIĘ AKTUALIZOWAĆ.
+
+     Firmware do 1.37.0 nie zna polecenia `otaCmd` i nie ma drugiej
+     partycji, więc nie ma dokąd zapisać nowego programu. Zlecenie
+     wysłane takiemu pudełku wisiałoby w bazie w nieskończoność, a ekran
+     pokazałby „łączyło się i nie zrobiło" BEZ POWODU — bo stara wersja
+     nie umie go podać. Wyglądałoby to jak awaria, a jest tylko „za
+     wcześnie".
+
+     Rozpoznajemy po tym, czy pudełko samo mówi cokolwiek o aktualizacji
+     (`otaHaslo` to bool od 1.38.0), a nie po numerze wersji: numer jest
+     tekstem pisanym ręcznie i porównywanie go wymagałoby zgadywania
+     formatu. Brak pola = ta wersja o OTA nie słyszała.                 */
+  const znamyPudelko = !!st.fw;
+  const umieOta = typeof st.otaHaslo === "boolean";
+
   let html = `<div class="dim2" style="font-size:12px;text-transform:uppercase;letter-spacing:.06em">
                 Program pudełka</div>
               <div style="margin-top:4px">Wgrany: <b>${esc(teraz)}</b>`;
@@ -4326,6 +4342,15 @@ function renderOta(){
   if (opisFirmwareBlad){
     html += `<div class="dim2" style="margin-top:6px">Nie mogę sprawdzić, co jest
              dostępne (${esc(opisFirmwareBlad)}).</div>`;
+  } else if (znamyPudelko && !umieOta){
+    /* Za wcześnie na przycisk — i to nie jest usterka, tylko jedno
+       wgranie kablem, którego nie da się ominąć. */
+    html += `<div style="margin-top:8px;color:var(--warn)">Ta wersja programu nie
+             umie jeszcze aktualizować się przez WiFi.</div>
+             <div class="dim2" style="margin-top:4px">Potrzebne jest jedno wgranie
+             kablem${dostepna ? ` (${esc(dostepna)})` : ""} ze zmienionym podziałem
+             pamięci — instrukcja jest w pliku <b>WGRYWANIE.md</b> w repozytorium.
+             Od następnego razu wystarczy już ten przycisk.</div>`;
   } else if (hasloBrak){
     html += `<div style="margin-top:8px;color:var(--bad)">⚠️ Pudełko nie ma zapisanego
              hasła do bazy, więc aktualizacja odcięłaby je od aplikacji.
