@@ -956,6 +956,25 @@ if _sprobuj:
     ok(_zanotuj >= 0 and _wgrajw > _zanotuj,
        "proba zapisuje sie PRZED pobraniem, nie po nim")
 
+    # Kazde wyjscie MUSI zostawic powod. "Nie podalo powodu" jest najgorsza
+    # odpowiedzia dla kogos, kto stoi nad pudelkiem i czeka - a wlasnie to
+    # zobaczyl Kuba, gdy brak sieci przy zasypianiu konczyl sie cichym
+    # `return`. Jedyne dozwolone ciche wyjscie to brak zlecenia: wtedy
+    # aplikacja o nic nie prosila i nie ma o czym meldowac.
+    _ciche = []
+    for _m in re.finditer(r"^\s*(?:if\s*\([^)]*\)\s*)?return\s*;", _sprobuj, re.M):
+        _przed = _sprobuj[:_m.start()]
+        _linia = _sprobuj[_m.start():_m.end()]
+        if "rtcOtaProsba" in _linia: continue          # brak zlecenia - wolno
+        _blok = _przed[_przed.rfind("\n\n"):]
+        # Powod moze byc ustawiony wprost (rtcOtaMsg) albo wyslany przez
+        # otaZglos(), ktory melduje stan ustawiony kilka linii wyzej.
+        if "rtcOtaMsg" not in _blok and "otaZglos()" not in _blok:
+            _ciche.append(_linia.strip())
+    ok(not _ciche,
+       "kazde wyjscie z otaSprobuj() zostawia powod dla aplikacji"
+       + (f" — CICHE: {_ciche}" if _ciche else ""))
+
 # Slyszalne potwierdzenie udanej aktualizacji. Bez niego jedynym sladem
 # jest liczba w aplikacji, ktora przychodzi z opoznieniem i nie mowi, czy
 # program naprawde wstal, czy tylko sie zapisal.

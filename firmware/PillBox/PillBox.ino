@@ -2080,6 +2080,13 @@ bool pushStatus() {
   doc["otaMsg"]    = rtcOtaMsg;
   doc["otaWersja"] = rtcOtaWersja;       // co lezy na serwerze
   doc["otaHaslo"]  = hasloWPamieci();
+  /* Czy pudelko W OGOLE widzi zlecenie z aplikacji.
+
+     Bez tego pola "nic sie nie dzieje" mialo dwie zupelnie rozne
+     przyczyny nie do odroznienia z zewnatrz: polecenie nie doszlo do
+     pudelka, albo doszlo i cos je zatrzymalo. Pierwszy raz kosztowalo
+     to dedukcje z licznika prob; drugi raz ma wystarczyc spojrzenie. */
+  doc["otaProsba"] = rtcOtaProsba;
   {
     prefs.begin(NVS_NAMESPACE, true);
     doc["otaFail"] = prefs.getUShort("otaFail", 0);
@@ -3388,7 +3395,38 @@ void otaZglos() {
    Nie wraca, jesli aktualizacja sie powiodla - konczy restartem.      */
 void otaSprobuj() {
   if (!rtcOtaProsba) return;                    // aplikacja o nic nie prosila
-  if (WiFi.status() != WL_CONNECTED) return;    // radio i tak juz spi
+
+  /* TU BYL BLAD - i objaw byl dokladnie taki, jak opisal Kuba: "otworzylem
+     dwa razy i nie wiem dlaczego aktualizacja sie nie zrobila", a ekran
+     mowil "nie podalo powodu".
+
+     Stalo tu `if (WiFi.status() != WL_CONNECTED) return;` - CICHE wyjscie.
+     Do tego miejsca dochodzimy z `goToSleep()`, czyli po calej reszcie
+     wybudzenia: po zapisie dawki, wyslaniu statusu i czekaniu na zamkniecie
+     wieczka. Przy slabym sygnale (u Kuby -90 dBm, granica zasiegu) router
+     zdazy w tym czasie rozlaczyc stacje, ktora nic nie nadaje. Radio bylo
+     wiec sprawne, siec w zasiegu, a aktualizacja rezygnowala bez slowa
+     i bez sladu - licznik prob tez nie rosl, bo do niego nie dochodzilo.
+
+     Dwie naprawy naraz. Po pierwsze: nie rezygnujemy, tylko ODBUDOWUJEMY
+     lacze - pudelko i tak nie spi, a zlecenie czeka. Po drugie: kazde
+     wyjscie zostawia powod, bo "nie podalo powodu" jest najgorsza z
+     mozliwych odpowiedzi dla kogos, kto stoi nad pudelkiem.           */
+  if (WiFi.status() != WL_CONNECTED && !wifiConnect()) {
+    snprintf(rtcOtaMsg, sizeof(rtcOtaMsg), "nie zlapalem sieci przed snem");
+    rtcStatusDirty = true;                      // radia nie ma, powod dosle pozniej
+    LOGLN("[OTA] brak sieci przy zasypianiu - sprobuje przy nastepnym wybudzeniu");
+    return;
+  }
+  /* Token zyje godzine, a od ostatniego logowania mogla minac cala doba
+     czuwania na ladowarce. Bez waznego tokenu nie da sie ani skasowac
+     polecenia, ani zameldowac powodu.                                 */
+  if (!firebaseSignIn()) {
+    snprintf(rtcOtaMsg, sizeof(rtcOtaMsg), "nie moge sie zalogowac do bazy");
+    rtcStatusDirty = true;
+    LOGLN("[OTA] brak logowania - aktualizacja czeka");
+    return;
+  }
 
   const uint32_t teraz = rtcTimeValid ? (uint32_t)time(nullptr) : 0;
 

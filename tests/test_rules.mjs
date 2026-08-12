@@ -217,7 +217,7 @@ const PRZYKLAD_STATUSU = {
      nie uruchomila - 32 znaki albo pusto, nigdy nic pomiedzy.         */
   otaMsg: "za malo baterii - postaw na ladowarke", otaWersja: "1.38.0",
   otaHaslo: true, otaFail: 0, otaBad: "",
-  otaMd5: "0123456789abcdef0123456789abcdef"
+  otaMd5: "0123456789abcdef0123456789abcdef", otaProsba: true
 };
 check(POLA_STATUSU.every(p => p in PRZYKLAD_STATUSU),
       `pola statusu nieopisane w tescie: ${POLA_STATUSU.filter(p => !(p in PRZYKLAD_STATUSU))}`);
