@@ -1197,7 +1197,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-12.28";
+const APP_VERSION = "2026-08-12.29";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -4259,6 +4259,17 @@ window.wyslijSiec = async () => {
    przeciwzakrzepowego, więc ta przeszkoda musi tam być.                */
 let opisFirmware = null;      // null = jeszcze nie czytaliśmy
 let opisFirmwareBlad = "";
+let opisSprawdzam = false;    // trwa pytanie do serwera
+let opisSprawdzono = 0;       // kiedy ostatnio przyszła odpowiedź (sekundy)
+
+/* Ręczne sprawdzenie — to samo pobranie, tylko z widocznym stanem.
+   Użytkownik ma zobaczyć, że aplikacja NAPRAWDĘ poszła zapytać, a nie
+   tylko powtórzyła to, co wiedziała przy starcie. */
+window.sprawdzAktualizacje = async () => {
+  opisSprawdzam = true;
+  renderOta();
+  await pobierzOpisFirmware();
+};
 
 async function pobierzOpisFirmware(){
   try {
@@ -4276,6 +4287,8 @@ async function pobierzOpisFirmware(){
     opisFirmware = null;
     opisFirmwareBlad = e.message || "nie udało się pobrać";
   }
+  opisSprawdzam = false;
+  opisSprawdzono = Math.floor(Date.now()/1000);
   renderOta();
 }
 
@@ -4333,6 +4346,23 @@ function renderOta(){
   const znamyPudelko = !!st.fw;
   const umieOta = typeof st.otaHaslo === "boolean";
 
+  /* KIEDY pudełko to zrobi — wypisane wprost, bo „przy najbliższej okazji"
+     nie odpowiada na pytanie „to mam teraz coś zrobić, czy czekać".
+
+     Lista jest dokładnym odbiciem `otaDecyzja()` w firmware. Gdyby któryś
+     warunek tam się zmienił, ten tekst musi pójść za nim — inaczej ekran
+     zacznie obiecywać coś, czego pudełko nie robi.                      */
+  const warunki = `
+    <div class="dim2" style="margin-top:8px;font-size:12px;line-height:1.55">
+      Pudełko zrobi to samo, gdy spełni wszystko naraz:<br>
+      • <b>otworzysz wieczko</b> albo <b>postawisz je na ładowarce</b> —
+        to są jedyne dwie okazje, bo poza nimi pudełko śpi;<br>
+      • ma zasięg swojej sieci WiFi;<br>
+      • ma <b>co najmniej 25% baterii</b> (na ładowarce próg nie obowiązuje);<br>
+      • nie ma zaległych dawek czekających na wysłanie — one idą pierwsze.<br>
+      Dawka zapisuje się zawsze przed aktualizacją, nigdy odwrotnie.
+    </div>`;
+
   let html = `<div class="dim2" style="font-size:12px;text-transform:uppercase;letter-spacing:.06em">
                 Program pudełka</div>
               <div style="margin-top:4px">Wgrany: <b>${esc(teraz)}</b>`;
@@ -4384,14 +4414,19 @@ function renderOta(){
                najbliższej okazji: gdy otworzysz wieczko albo postawisz je na
                ładowarce.</div>`;
       html += `<div class="dim2" style="margin-top:4px">Jeszcze się od tego czasu
-               nie łączyło, więc nie ma czym się przejmować.</div>`;
+               nie łączyło, więc nie ma czym się przejmować.</div>` + warunki;
     }
   } else if (dostepna && rozne){
-    html += `<button class="primary" style="width:100%;margin-top:10px"
-               onclick="wyslijAktualizacje()">Zaktualizuj pudełko do ${esc(dostepna)}</button>
+    /* Przycisk pobierania pojawia się DOPIERO, gdy naprawdę jest co pobrać.
+       Wyszarzony przycisk „na zapas" tylko myli: wygląda jak zepsuty, a nie
+       jak informacja, że nic nie trzeba robić. */
+    html += `<div style="margin-top:8px;color:var(--ok)">Jest nowa wersja:
+             <b>${esc(dostepna)}</b></div>
+             <button class="primary" style="width:100%;margin-top:8px"
+               onclick="wyslijAktualizacje()">Pobierz aktualizację pudełka</button>
              <div class="dim2" style="margin-top:6px;font-size:12px">
-               Pobranie trwa około minuty i kończy się restartem. Dawka zapisuje
-               się pierwsza — aktualizacja nigdy jej nie wyprzedzi.</div>`;
+               Pobranie trwa około minuty i kończy się restartem — usłyszysz
+               wtedy fanfarę w górę.</div>` + warunki;
   } else if (dostepna){
     html += `<div class="dim2" style="margin-top:6px">Pudełko ma najnowszą wersję.</div>`;
   }
@@ -4417,6 +4452,20 @@ function renderOta(){
     html += `<div style="margin-top:6px;color:var(--warn)">⚠️ Któraś wersja nie
              uruchomiła się i pudełko samo wróciło do poprzedniej. Tamtej już
              nie pobierze — potrzebna jest nowsza.</div>`;
+
+  /* Przycisk sprawdzania stoi TU, na dole i zawsze — niezależnie od tego,
+     co ekran pokazał wyżej.
+
+     Bez niego jedyną odpowiedzią na „czy jest coś nowego" było czekanie,
+     aż aplikacja sama zapyta. Gdy automat wypuszcza wersję w trakcie tego,
+     jak patrzysz na ekran, chcesz móc po prostu nacisnąć i sprawdzić —
+     a nie zgadywać, czy aplikacja już wie.                              */
+  html += `<button class="ghost" style="width:100%;margin-top:12px"
+             onclick="sprawdzAktualizacje()"${opisSprawdzam ? " disabled" : ""}>${
+             opisSprawdzam ? "Sprawdzam..." : "Sprawdź, czy jest nowa wersja"}</button>`;
+  if (opisSprawdzono && !opisSprawdzam)
+    html += `<div class="dim2" style="margin-top:4px;text-align:center;font-size:12px">
+             sprawdzono ${esc(relTime(Math.floor(Date.now()/1000) - opisSprawdzono))}</div>`;
 
   box.innerHTML = html;
 }

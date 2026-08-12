@@ -2685,15 +2685,15 @@ const otaHtml = () => document.getElementById("otaBox").innerHTML;
 A.__setOpisFirmware(OPIS);
 A.__setState({ cfg: {} });
 A.renderStatus({ fw: "1.38.0", otaHaslo: true });
-check(otaHtml().includes("Zaktualizuj pudełko do 1.39.0"),
-      "nowsza wersja na serwerze -> jest przycisk");
+check(otaHtml().includes("Pobierz aktualizację pudełka"),
+      "nowsza wersja na serwerze -> jest przycisk pobierania");
 
 /* Firmware do 1.37.0 nie zna polecenia otaCmd i nie ma drugiej partycji.
    Zlecenie takiemu pudelku wisialoby w bazie w nieskonczonosc, a ekran
    pokazalby "laczylo sie i nie zrobilo" BEZ POWODU - bo stara wersja nie
    umie go podac. Wygladaloby to jak awaria, a jest tylko "za wczesnie". */
 A.renderStatus({ fw: "1.37.0" });          // brak otaHaslo = nie slyszalo o OTA
-check(!otaHtml().includes("Zaktualizuj pudełko"),
+check(!otaHtml().includes("Pobierz aktualizację"),
       "stary firmware bez OTA -> przycisku NIE ma");
 check(otaHtml().includes("kablem"),
       "...i ekran mowi, ze potrzebne jest jedno wgranie kablem");
@@ -2702,18 +2702,63 @@ check(otaHtml().includes("WGRYWANIE.md"), "...ze wskazaniem instrukcji");
 /* Bez hasla w pamieci pudelka aktualizacja odcielaby je od bazy. Ekran ma
    to powiedziec ZAMIAST przycisku, a nie obok niego.                   */
 A.renderStatus({ fw: "1.38.0", otaHaslo: false });
-check(!otaHtml().includes("Zaktualizuj pudełko"),
+check(!otaHtml().includes("Pobierz aktualizację"),
       "bez hasla w pudelku NIE ma przycisku aktualizacji");
 check(otaHtml().includes("hasła do bazy"), "...i jest napisane dlaczego");
 
 /* Suma bije numer wersji. Numer pisze czlowiek w config.h i da sie go
    zapomniec podbic — wtedy porownanie numerow klamie.                  */
 A.renderStatus({ fw: "1.39.0", otaHaslo: true, otaMd5: "b".repeat(32) });
-check(otaHtml().includes("Zaktualizuj pudełko"),
+check(otaHtml().includes("Pobierz aktualizację pudełka"),
       "ten sam numer, ale inna suma -> nadal jest co wgrywac");
 A.renderStatus({ fw: "1.39.0", otaHaslo: true, otaMd5: "a".repeat(32) });
-check(!otaHtml().includes("Zaktualizuj pudełko") && otaHtml().includes("najnowszą"),
+check(!otaHtml().includes("Pobierz aktualizację") && otaHtml().includes("najnowszą"),
       "zgodna suma -> nie proponujemy tego samego drugi raz");
+
+head("Aktualizacja pudelka: sprawdzanie na zadanie");
+
+/* Przycisk sprawdzania jest ZAWSZE - takze wtedy, gdy nic nowego nie ma.
+   Bez niego jedyna odpowiedzia na "czy jest cos nowego" bylo czekanie, az
+   aplikacja sama zapyta, i nie dalo sie odroznic "sprawdzilem, nie ma" od
+   "jeszcze nie patrzylem".                                              */
+A.__setOpisFirmware(OPIS);
+A.__setState({ cfg: {} });
+A.renderStatus({ fw: "1.39.0", otaHaslo: true, otaMd5: OPIS.md5 });
+check(otaHtml().includes("Sprawdź, czy jest nowa wersja"),
+      "przycisk sprawdzania jest, gdy pudelko ma najnowsza wersje");
+check(!otaHtml().includes("Pobierz aktualizację"),
+      "...ale przycisku pobierania wtedy NIE ma - nie ma czego pobierac");
+
+A.renderStatus({ fw: "1.38.1", otaHaslo: true });
+check(otaHtml().includes("Jest nowa wersja") && otaHtml().includes("Pobierz aktualizację"),
+      "gdy jest nowsza wersja: komunikat i przycisk pobierania");
+check(otaHtml().includes("Sprawdź, czy jest nowa wersja"),
+      "...a przycisk sprawdzania nie znika");
+
+/* Stary firmware bez OTA tez musi miec czym sprawdzic - inaczej ekran
+   wyglada na martwy.                                                    */
+A.renderStatus({ fw: "1.37.0" });
+check(otaHtml().includes("Sprawdź, czy jest nowa wersja"),
+      "przycisk sprawdzania jest nawet na firmware bez OTA");
+
+/* Warunki wypisane wprost. "Przy najblizszej okazji" nie odpowiada na
+   pytanie "to mam teraz cos zrobic, czy czekac" - a to jedyne pytanie,
+   ktore uzytkownik ma na tym ekranie po nacisnieciu przycisku.         */
+A.renderStatus({ fw: "1.38.1", otaHaslo: true });
+for (const [czego, wzor] of [["otwarcia wieczka", /otworzysz wieczko/],
+                             ["ladowarki",        /ładowarce/],
+                             ["progu baterii",    /25% baterii/],
+                             ["pustej kolejki",   /zaległych dawek/]])
+  check(wzor.test(otaHtml()), `ekran wymienia warunek: ${czego}`);
+
+/* Te same warunki musza byc widoczne PO zleceniu - wtedy pytanie "na co
+   to czeka" jest najostrzejsze.                                        */
+const TS_ZLEC = 1_760_000_000;
+A.__setState({ cfg: { otaCmd: { md5: OPIS.md5, wersja: "1.39.0", ts: TS_ZLEC } } });
+A.renderStatus({ fw: "1.38.1", otaHaslo: true, lastSeen: TS_ZLEC - 100 });
+check(/otworzysz wieczko/.test(otaHtml()),
+      "po zleceniu ekran nadal mowi, co musi sie zdarzyc");
+A.__setState({ cfg: {} });
 
 head("Aktualizacja pudelka: zlecenie i zapis");
 
