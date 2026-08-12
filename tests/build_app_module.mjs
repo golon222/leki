@@ -42,7 +42,7 @@ export { brakujePokrycia, doReconcile, reconcileDecyzja, opisLadowan, minutyDoPe
          inNightWindow, renderOpenWarn, renderDiag, devDayMon, renderBoxLog, renderTesty, TEST_PL, WAKE_PL,
          renderAnalysis, TZ_LIST, TZ_DEFAULT, tzOffsetFor, tzOffsetTxt, tzLabel,
          tzName, trackingSince, beforeTracking, analyze, inrContext, openTimeOf,
-         openMinutes, hm, dev2, renderStatus,
+         openMinutes, hm, renderStatus,
          doRamyDoby, zRamyDoby, sredniaPora, kwantyl,
          zapiszPewnie, zapiszCfg, oczekWczytaj, oczekZapisz, oczekIle, oczekWyslij,
          magazyn, OCZEK_KEY, oczekOdmowy, bazaOdmowila,

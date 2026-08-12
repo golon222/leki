@@ -289,8 +289,7 @@ head("Formatowanie godzin i odchylen");
 check(A.hm(480)==="08:00", "480 min -> " + A.hm(480));
 check(A.hm(495)==="08:15", "495 min -> " + A.hm(495));
 check(A.hm(null)==="—", "brak danych -> kreska");
-check(A.dev2(25)==="+25 min", "+25 min -> " + A.dev2(25));
-check(A.dev2(-90)==="−1 h 30 min", "-90 min -> " + A.dev2(-90));
+check(A.hm(0)==="00:00", "polnoc -> " + A.hm(0));
 
 /* ═══════════ 10. ANALIZA ═══════════ */
 head("Statystyki por przyjmowania");
@@ -313,10 +312,12 @@ check(an.taken===4 && an.missed===1, "4 wziete, 1 pominieta (" + an.taken + "/" 
 check(an.median===485, "mediana 08:05 = " + A.hm(an.median));
 check(an.earliest===470 && an.latest===630, "zakres " + A.hm(an.earliest) + "–" + A.hm(an.latest));
 check(an.plan===480, "godzina planowana 08:00");
-check(an.within30===3, "trzy dawki w ±30 min od planu (" + an.within30 + ")");
-check(an.late60===1, "jedna dawka ponad godzine pozniej (" + an.late60 + ")");
-check(an.early60===0, "zadna nie byla ponad godzine wczesniej");
-check(Math.round(an.meanDev)===38, "srednie odchylenie +38 min (" + Math.round(an.meanDev) + ")");
+/* Zwartosc mierzona wzgledem WLASNEJ sredniej (517 min), nie wzgledem
+   godziny przypomnienia - nikt Kubie pory nie zapisal. D54.          */
+check(an.withinMean60===3, "trzy dawki w ±60 min od wlasnej sredniej (" + an.withinMean60 + ")");
+check(an.beforeReminder===2, "dwie dawki przed godzina przypomnienia (" + an.beforeReminder + ")");
+check(an.meanDev===undefined && an.within30===undefined,
+      "odchylenie od planu i punktualnosc znikly z analizy");
 check(an.hist[8]===2 && an.hist[7]===1 && an.hist[10]===1,
       "histogram: 7h=" + an.hist[7] + " 8h=" + an.hist[8] + " 10h=" + an.hist[10]);
 check(an.sd > 0, "rozrzut policzony: ±" + Math.round(an.sd) + " min");
@@ -337,6 +338,9 @@ check(Math.round(an.sd)===37, "rozrzut ±37 min zamiast ±683 (±" + Math.round(
 check(an.earliest===22*60+50 && an.latest===4,
       "najwczesniej 22:50, najpozniej 00:04: " + A.hm(an.earliest) + " – " + A.hm(an.latest));
 check(an.beforeReminder===0, "obie dawki PO godzinie przypomnienia (" + an.beforeReminder + ")");
+/* Obie mieszcza sie w ±60 min od WLASNEJ sredniej (23:27), choc od godziny
+   przypomnienia (20:00) dzieli je 3-4 godziny. Zwartosc to nie zgodnosc. */
+check(an.withinMean60===2, "obie dawki w ±60 min od wlasnej sredniej (" + an.withinMean60 + ")");
 check(A.sredniaPora([1435, 5])===0,
       "srednia z 23:55 i 00:05 to polnoc (" + A.hm(A.sredniaPora([1435,5])) + ")");
 check(A.sredniaPora([])===null, "brak godzin nie daje zmyslonej sredniej");
@@ -526,6 +530,21 @@ check(rr.time==="08:10", "godzina w raporcie: " + rr.time);
 D({ doses:{ [shift(-1)]:{0:{status:"taken",dose:1,source:"manual",ts:at(1,12,0)}} } });
 check(A.collectRows(3).find(r=>r.key===shift(-1)).time==="",
       "wpis reczny bez zmierzonej godziny zostawia kolumne pusta");
+
+/* Lekarz nie zapisal zadnej pory - raport nie moze sugerowac, ze zapisal.
+   Zostaja fakty o rozkladzie godzin, znika ocena wzgledem 20:00. D54. */
+head("Raport nie ocenia wzgledem godziny przypomnienia");
+D({ cfg:{ schedule:["08:00"], defaultDose:1 }, doses:{
+  [shift(-1)]: dose(1, 8, 10), [shift(-2)]: dose(2, 22, 40) } });
+document.getElementById("repRange").value = "30";
+window.makeReport();
+const rep = document.getElementById("report").innerHTML;
+check(rep.includes("Godzina średnia"), "raport podaje godzine srednia");
+check(rep.includes("Dawki w ±60 min od godziny średniej"), "zwartosc liczona wzgledem wlasnej sredniej");
+check(rep.includes("Pory nie były zalecone"), "raport mowi wprost, ze pory nikt nie wyznaczyl");
+check(!rep.includes("Zaplanowana godzina") && !rep.includes("od planu")
+      && !rep.includes("Godzina przypomnienia") && !rep.includes("Ponad godzinę później"),
+      "zadnego wiersza mierzacego zgodnosc z wyznaczona godzina");
 
 /* ═══════════ 11. TRWALE LOGOWANIE ═══════════ */
 head("Sesja i ekran powitalny");

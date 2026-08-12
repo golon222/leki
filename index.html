@@ -1179,7 +1179,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-12.22";
+const APP_VERSION = "2026-08-12.23";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -4475,8 +4475,6 @@ function openMinutes(rec){
   const d = devDate(t); return d.getUTCHours()*60 + d.getUTCMinutes();
 }
 const hm  = m => m == null ? "—" : `${pad(Math.floor(((m%1440)+1440)%1440/60))}:${pad(Math.round(m)%60)}`;
-const dev2 = d => d == null ? "—" : (d > 0 ? "+" : d < 0 ? "−" : "") +
-  `${Math.floor(Math.abs(d)/60) ? Math.floor(Math.abs(d)/60)+" h " : ""}${Math.round(Math.abs(d))%60} min`;
 const DOW_PL = ["poniedziałek","wtorek","środa","czwartek","piątek","sobota","niedziela"];
 
 /* Statystykę godzin liczymy w ramie DOBY LEKOWEJ (od DAY_START_HOUR), nie od
@@ -4505,7 +4503,7 @@ const kwantyl = (posort, p) => {
 
 function analyze(days){
   const end = medDate(new Date());
-  const times = [], deviations = [], hist = Array(24).fill(0);
+  const times = [], hist = Array(24).fill(0);
   const byDow = Array.from({length:7}, () => ({ taken:0, total:0, times:[] }));
   const plan = slotMin(cfg.schedule[0] || "08:00");
   let taken = 0, missed = 0, doseSum = 0;
@@ -4537,8 +4535,6 @@ function analyze(days){
     const m = openMinutes(rec);
     if (m == null) continue;
     times.push(m); hist[Math.floor(m/60)]++; byDow[dow].times.push(m);
-    let dv = m - plan; if (dv > 720) dv -= 1440; if (dv < -720) dv += 1440;
-    deviations.push(dv);
   }
 
   /* Wszystko poniżej liczone na minutach OD POCZĄTKU DOBY LEKOWEJ (rama),
@@ -4550,7 +4546,11 @@ function analyze(days){
   const meanF  = n ? ramy.reduce((a,b)=>a+b,0)/n : null;
   const mean   = zRamyDoby(meanF);
   const sd     = n > 1 ? Math.sqrt(ramy.reduce((a,b)=>a+(b-meanF)**2,0)/n) : null;
-  const meanDev = deviations.length ? deviations.reduce((a,b)=>a+b,0)/deviations.length : null;
+  /* Zgodność liczona względem WŁASNEJ średniej Kuby, nie względem 20:00.
+     Nikt mu nie zapisał pory — ma brać raz dziennie, godzina jest jego.
+     Ta liczba mówi jedyną rzecz, która przy warfarynie naprawdę znaczy:
+     czy pory trzymają się siebie nawzajem. Nie ocenia, o której. D54. */
+  const withinMean60 = meanF == null ? 0 : ramy.filter(f => Math.abs(f - meanF) <= 60).length;
   /* Ile dawek poszło, ZANIM wypadła godzina przypomnienia. Nie jest to ocena
      punktualności — przypomnienie ma tylko sprawdzić, czy tabletka już była
      (CLAUDE.md 4b). Porównanie w ramie doby, żeby 00:04 wyszło PO 20:00. */
@@ -4558,15 +4558,11 @@ function analyze(days){
   const beforeReminder = ramy.filter(f => f <= planF).length;
 
   return { days, taken, missed, total: taken+missed, doseSum, plan,
-    times: ramy.map(zRamyDoby), n, median, mean, sd, meanDev, hist, byDow,
+    times: ramy.map(zRamyDoby), n, median, mean, sd, hist, byDow,
     q1: n ? zRamyDoby(kwantyl(ramy, 0.25)) : null,
     q3: n ? zRamyDoby(kwantyl(ramy, 0.75)) : null,
-    beforeReminder,
-    earliest: n ? zRamyDoby(ramy[0]) : null, latest: n ? zRamyDoby(ramy[n-1]) : null,
-    within30: deviations.filter(d=>Math.abs(d)<=30).length,
-    within60: deviations.filter(d=>Math.abs(d)<=60).length,
-    late60:   deviations.filter(d=>d > 60).length,
-    early60:  deviations.filter(d=>d < -60).length };
+    beforeReminder, withinMean60,
+    earliest: n ? zRamyDoby(ramy[0]) : null, latest: n ? zRamyDoby(ramy[n-1]) : null };
 }
 const A_dateKey = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
 
@@ -4755,20 +4751,19 @@ window.makeReport = () => {
     </div>
 
     <h3>Analiza pór przyjmowania</h3>
+    <div class="meta">Pory nie były zalecone — pacjent przyjmuje dawkę o dowolnej godzinie,
+      raz na dobę. Poniższe liczby opisują rzeczywisty rozkład godzin i jego zwartość,
+      nie zgodność z jakimkolwiek wyznaczonym terminem. Doba liczona od
+      ${pad(DAY_START_HOUR)}:00.</div>
     ${an.n ? `<table><tbody>
-        <tr><th style="width:46%">Godzina przypomnienia</th><td>${hm(an.plan)}</td></tr>
-        <tr><th>Dni z zarejestrowaną godziną</th><td>${an.n}</td></tr>
+        <tr><th style="width:46%">Dni z zarejestrowaną godziną</th><td>${an.n}</td></tr>
         <tr><th>Godzina średnia</th><td>${hm(an.mean)}</td></tr>
         <tr><th>Godzina typowa (mediana)</th><td>${hm(an.median)}</td></tr>
         <tr><th>Połowa dawek w przedziale</th><td>${hm(an.q1)} – ${hm(an.q3)}</td></tr>
         <tr><th>Rozrzut (odchylenie std.)</th><td>${an.sd==null?"—":"± "+Math.round(an.sd)+" min"}</td></tr>
         <tr><th>Najwcześniej / najpóźniej</th><td>${hm(an.earliest)} / ${hm(an.latest)}</td></tr>
-        <tr><th>Średnie odchylenie od tej godziny</th><td>${dev2(an.meanDev)} ${an.meanDev>=0?"później":"wcześniej"}</td></tr>
-        <tr><th>Dawki w ±30 min od tej godziny</th><td>${an.within30} z ${an.n}
-            (${Math.round(an.within30/an.n*100)}%)</td></tr>
-        <tr><th>Dawki w ±60 min od tej godziny</th><td>${an.within60} z ${an.n}
-            (${Math.round(an.within60/an.n*100)}%)</td></tr>
-        <tr><th>Ponad godzinę później / wcześniej</th><td>${an.late60} / ${an.early60}</td></tr>
+        <tr><th>Dawki w ±60 min od godziny średniej</th><td>${an.withinMean60} z ${an.n}
+            (${Math.round(an.withinMean60/an.n*100)}%)</td></tr>
       </tbody></table>
 
       <table><thead><tr><th>Godzina</th>${an.hist.map((v,i)=>v?`<th>${pad(i)}</th>`:"").join("")}</tr></thead>
