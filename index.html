@@ -63,6 +63,15 @@ section{animation:fade .28s ease}
       border:1px solid var(--line);border-radius:var(--r);padding:16px;margin-bottom:14px;
       box-shadow:0 1px 0 rgba(255,255,255,.03) inset, 0 8px 24px -18px #000;
       overflow-wrap:anywhere}
+/* D50 (Kuba): krótkie podekrany Ustawień (Urządzenie, INR, WiFi, Lek,
+   Diagnostyka) zostawiały pod kartą pustą przestrzeń aż do paska nawigacji
+   - pasek fizycznie stał na dole (zmierzone), ale wyglądało to, jakby był
+   oderwany. Kuba: niech karta po prostu sięga niżej, tłem, zamiast zostawiać
+   pustkę - "i tak pewnie coś się tam kiedyś doda". min-height zamiast
+   wymuszonego centrowania: gdy treści przybędzie i przerośnie tę wysokość,
+   karta rośnie normalnie, nic się nie ucina.                             */
+#tab-lek .card,#tab-sinr .card,#tab-wifi .card,#tab-dev .card,#tab-diag .card{
+  min-height:70vh}
 /* Bez min-width:0 elementy w kontenerach flex nie chcą się kurczyć poniżej
    swojej treści i wypychają zawartość poza kartę.                        */
 .card .row > *{min-width:0}
@@ -1178,7 +1187,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-11.14";
+const APP_VERSION = "2026-08-11.15";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
