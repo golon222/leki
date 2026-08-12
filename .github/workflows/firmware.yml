@@ -100,13 +100,25 @@ jobs:
       - name: Publikacja
         run: |
           set -e
-          if git diff --quiet -- firmware/PillBox.bin; then
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # `git add` MUSI byc przed sprawdzeniem "czy sie zmienilo".
+          #
+          # TU BYL BLAD, i to cichy - dokladnie ten rodzaj, ktory ten projekt
+          # juz raz zlapal przy atrapie NVS: `git diff` NIE WIDZI plikow
+          # nieśledzonych. Przy pierwszym uruchomieniu PillBox.bin jeszcze
+          # w repo nie bylo, wiec `git diff --quiet` zwracalo "bez roznic",
+          # krok konczyl sie sukcesem i nie publikowal NICZEGO. Zielona
+          # Akcja, pusty katalog, pudelko bez czego sie aktualizowac.
+          #
+          # Po `git add` porownujemy INDEKS z HEAD - a tam nowy plik jest
+          # widoczny jako zmiana.
+          git add firmware/PillBox.bin firmware/PillBox.json
+          if git diff --cached --quiet; then
             echo "binarka bez zmian - nie ma czego publikowac"
             exit 0
           fi
-          git config user.name  "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add firmware/PillBox.bin firmware/PillBox.json
           # [skip ci] zamyka petle: ten commit dotyka firmware/, wiec bez
           # tego wyzwolilby ten sam workflow jeszcze raz, i tak w kolko.
           git commit -m "Firmware $(grep -oP '#define\s+FW_VERSION\s+"\K[^"]+' firmware/PillBox/config.h) do aktualizacji przez WiFi [skip ci]"
