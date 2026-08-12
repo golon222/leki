@@ -23,7 +23,7 @@ bash tests/run_all.sh
 ```
 
 Musi przejść przed zmianą i po zmianie. Stan wyjściowy:
-**438 + 51 firmware, 775 (×6 pór doby) + 92 + 49 aplikacja, 48 zgodności,
+**438 + 51 firmware, 776 (×6 pór doby) + 92 + 49 aplikacja, 48 zgodności,
 91 reguł bazy, 229 kontroli audytu — 0 błędów.**
 
 Testy pracują na **prawdziwym kodzie**, nie na kopii: `tests/extract.py` wycina
@@ -97,6 +97,17 @@ Test to złapie, ale komunikat zrozumiesz szybciej, znając powód (D6, D13, D15
    (D38). `wifiSiecDodaj()` zwraca wynik i ten wynik trzeba sprawdzić.
    Odwrotna kolejność traci sieć, której nikt już nie zna — a z nią jedyną
    drogę do pudełka poza portalem. Portal fizyczny zostaje na zawsze.
+
+10. **Dolny pasek nawigacji jest ZAWSZE przyklejony do samego dołu ekranu**
+   (D52, decyzja Kuby). `bottom:0`, `padding-bottom:0` — **żadnej rezerwy
+   pod podpisami**. Nie przywracaj tam `env(safe-area-inset-bottom)`:
+   próbowano dwa razy (pełna rezerwa, potem pomniejszona o 22px) i za każdym
+   razem pasek nadal nie siedział na dole. Trzy testy tego pilnują.
+   **Nie ufaj tu pomiarowi z headless Chromium** — nie odtwarza on ani
+   `env(safe-area-inset-bottom)`, ani zachowania okna PWA na iOS, więc
+   pokazuje „pasek stoi na dole" tam, gdzie na telefonie widać odstęp.
+   Ekran Ustawienia → Urządzenie ma na to tymczasowy pomiar z prawdziwego
+   telefonu (`renderLayoutDiag()`, `DECYZJE.md` sekcja 1).
 
 Blok pomiaru napięcia **wolno** zmieniać (zakaz zniesiony). Audyt nie blokuje —
 zgłasza tylko uwagę, żeby zmiana przypadkowa nie wyglądała jak świadoma.
