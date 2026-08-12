@@ -2742,6 +2742,15 @@ check(cialoWyslij.includes("zapiszCfg("),
       "zlecenie idzie przez zapiszCfg()/zapiszPewnie(), nie golym set()");
 check(!/\bset\(/.test(cialoWyslij), "i nigdzie nie siega po gole set()");
 
+/* Jedno nieudane pobranie przy starcie (aplikacja otwarta zanim automat
+   wrzucil binarke, chwila bez zasiegu) zamrazalo "nie moge sprawdzic" na
+   cale zycie zakladki - aplikacja twierdzila, ze nie ma czego wgrywac,
+   choc plik lezal na serwerze. Ekran Urzadzenia otwiera sie wlasnie po to,
+   zeby sprawdzic wersje, wiec pyta ponownie przy kazdym wejsciu.        */
+check(/if \(t === "dev"\)\s*\{[^}]*pobierzOpisFirmware\(\)/.test(zrodlo),
+      "wejscie na ekran Urzadzenie odswieza opis wersji, nie ufa pobraniu ze startu");
+
+
 /* ═══════ GDY AKTUALIZACJA NIE PRZECHODZI ═══════
    Zgloszenie Kuby: „aplikacja musi jakos pokazac, ze nie przechodzi
    aktualizacja". Stawka jest ta sama co przy sieci WiFi (D25, D32):

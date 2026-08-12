@@ -1197,7 +1197,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-12.27";
+const APP_VERSION = "2026-08-12.28";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -5218,7 +5218,19 @@ window.showTab = t => {
   if (t === "lek")  renderSettings();
   if (t === "sinr") renderSettings();
   if (t === "wifi") renderSettings();
-  if (t === "dev")  renderStatus(ostatniStatus);
+  /* Opis wersji firmware pytamy PRZY KAŻDYM wejściu na ten ekran, a nie
+     tylko raz przy starcie aplikacji.
+
+     TU BYŁ BŁĄD, i to dokładnie taki, jakiego się nie zauważa: jedno
+     nieudane pobranie przy starcie (aplikacja otwarta zanim automat wrzucił
+     binarkę, chwila bez zasięgu, telefon wybudzony w metrze) zamrażało
+     komunikat „nie mogę sprawdzić, HTTP 404" na cały czas życia zakładki.
+     Aplikacja twierdziła, że nie ma czego wgrywać, choć plik leżał na
+     serwerze od godziny. Kuba zobaczył to jako pierwszy.
+
+     Ten ekran otwiera się właśnie po to, żeby sprawdzić wersję - więc to
+     jest naturalny moment na ponowne pytanie. Kosztuje kilkaset bajtów. */
+  if (t === "dev")  { renderStatus(ostatniStatus); pobierzOpisFirmware(); }
   if (t === "diag") { renderDiag(); renderTesty(); }
   if (t === "ev")   renderEvents();
   if (t === "hist") { renderBoxLog(); renderNvsFailLog(); }
