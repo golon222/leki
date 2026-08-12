@@ -321,6 +321,37 @@ check(an.hist[8]===2 && an.hist[7]===1 && an.hist[10]===1,
       "histogram: 7h=" + an.hist[7] + " 8h=" + an.hist[8] + " 10h=" + an.hist[10]);
 check(an.sd > 0, "rozrzut policzony: ±" + Math.round(an.sd) + " min");
 
+/* ── D53: godziny liczone w ramie DOBY LEKOWEJ, nie od polnocy ──
+   Dwie dawki oddalone o 74 minuty (22:50 i 00:04). Liczone od polnocy daja
+   srednia 11:27 i rozrzut ±683 min - liczby z sufitu, dokladnie te, ktore
+   Kuba zobaczyl na ekranie ("± 387 min, od 00:04 do 22:50").          */
+head("Godziny w ramie doby lekowej");
+D({ cfg:{ schedule:["20:00"], defaultDose:1 }, doses:{
+  [shift(-1)]: dose(1, 22, 50),
+  [shift(-2)]: dose(2,  0,  4),
+}});
+an = A.analyze(4);
+check(an.n===2, "dwie zarejestrowane godziny (" + an.n + ")");
+check(A.hm(an.mean)==="23:27", "srednia 23:27, a nie poludnie: " + A.hm(an.mean));
+check(Math.round(an.sd)===37, "rozrzut ±37 min zamiast ±683 (±" + Math.round(an.sd) + ")");
+check(an.earliest===22*60+50 && an.latest===4,
+      "najwczesniej 22:50, najpozniej 00:04: " + A.hm(an.earliest) + " – " + A.hm(an.latest));
+check(an.beforeReminder===0, "obie dawki PO godzinie przypomnienia (" + an.beforeReminder + ")");
+check(A.sredniaPora([1435, 5])===0,
+      "srednia z 23:55 i 00:05 to polnoc (" + A.hm(A.sredniaPora([1435,5])) + ")");
+check(A.sredniaPora([])===null, "brak godzin nie daje zmyslonej sredniej");
+check(A.kwantyl([], 0.25)===null, "kwantyl z pustej listy to null");
+
+head("Ile dawek przed godzina przypomnienia");
+D({ cfg:{ schedule:["20:00"], defaultDose:1 }, doses:{
+  [shift(-1)]: dose(1, 14, 0), [shift(-2)]: dose(2, 18, 0),
+  [shift(-3)]: dose(3, 20, 0), [shift(-4)]: dose(4, 23, 0),
+}});
+an = A.analyze(5);
+check(an.beforeReminder===3, "trzy dawki do 20:00 wlacznie (" + an.beforeReminder + ")");
+check(A.hm(an.q1)==="17:00" && A.hm(an.q3)==="20:45",
+      "polowa dawek miedzy " + A.hm(an.q1) + " a " + A.hm(an.q3));
+
 head("Reczne korekty nie zaklamuja godzin");
 D({ cfg:{ schedule:["08:00"] }, doses:{
   [shift(-1)]: { 0:{ status:"taken", dose:1, source:"manual",
@@ -457,13 +488,29 @@ document.getElementById("anRange").value = "90";
 threw = null;
 try { A.renderAnalysis(); } catch(e){ threw = e; }
 check(!threw, "renderAnalysis bez wyjatku: " + (threw?.message||"ok"));
-check(document.getElementById("anMedian").textContent.includes(":"), "typowa godzina wyswietlona: "
-      + document.getElementById("anMedian").textContent);
+check(document.getElementById("anMean").textContent.includes(":"), "srednia godzina wyswietlona: "
+      + document.getElementById("anMean").textContent);
 check(document.getElementById("anHours").innerHTML.includes("<rect"), "histogram godzin narysowany");
 check(document.getElementById("anDow").innerHTML.includes("<rect"), "wykres dni tygodnia narysowany");
 check(document.getElementById("anInr").innerHTML.includes("regularności"), "zestawienie INR obecne");
-check(document.getElementById("anPunct").textContent.endsWith("%"), "punktualnosc: "
-      + document.getElementById("anPunct").textContent);
+check(/^\d+ z \d+$/.test(document.getElementById("anBefore").textContent),
+      "dawki przed przypomnieniem: " + document.getElementById("anBefore").textContent);
+/* Kafelek ma mowic, O KTOREJ Kuba bierze lek - a nie o ile "spoznil sie"
+   wzgledem 20:00. Przypomnienie to nie termin (CLAUDE.md 4b, D53).      */
+const poraTxt = document.getElementById("anPora").innerHTML;
+check(poraTxt.includes("Średnio bierzesz lek o"), "kafelek podaje srednia godzine: " + poraTxt);
+check(!poraTxt.includes("zaplanowaną godziną") && !poraTxt.includes("przed zaplanowaną"),
+      "kafelek nie ocenia juz odchylenia od planu");
+
+/* Os wykresu idzie w kolejnosci doby lekowej: 22:00 stoi PRZED 00:00,
+   bo to sasiadujace ze soba pory tego samego wieczora. D53.          */
+D({ cfg:{ schedule:["20:00"], defaultDose:1 }, doses:{
+  [shift(-1)]: dose(1, 22, 50), [shift(-2)]: dose(2, 0, 4) } });
+A.renderAnalysis();
+const osHtml = document.getElementById("anHours").innerHTML;
+check(osHtml.indexOf(">22<") >= 0 && osHtml.indexOf(">22<") < osHtml.indexOf(">00<"),
+      "godzina 22 na osi przed polnoca (22 na " + osHtml.indexOf(">22<")
+      + ", 00 na " + osHtml.indexOf(">00<") + ")");
 
 D();
 threw = null;

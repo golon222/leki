@@ -681,19 +681,20 @@ nav button.act{color:var(--acc)}
     <div class="stats">
       <div class="stat"><div class="sv" id="anAdh">–</div><div class="sl">regularność</div>
         <div class="dim2" id="anAdhSub"></div></div>
-      <div class="stat"><div class="sv" id="anMedian">–</div><div class="sl">typowa godzina</div>
-        <div class="dim2" id="anMedianSub"></div></div>
+      <div class="stat"><div class="sv" id="anMean">–</div><div class="sl">średnia godzina</div>
+        <div class="dim2" id="anMeanSub"></div></div>
       <div class="stat"><div class="sv" id="anSpread">–</div><div class="sl">rozrzut</div>
         <div class="dim2" id="anSpreadSub"></div></div>
-      <div class="stat"><div class="sv" id="anPunct">–</div><div class="sl">punktualność</div>
-        <div class="dim2" id="anPunctSub"></div></div>
+      <div class="stat"><div class="sv" id="anBefore">–</div><div class="sl">przed przypomnieniem</div>
+        <div class="dim2" id="anBeforeSub"></div></div>
     </div>
-    <div id="anDrift" style="margin-top:14px;font-size:13.5px;line-height:1.6"></div>
+    <div id="anPora" style="margin-top:14px;font-size:13.5px;line-height:1.6"></div>
   </div>
 
   <div class="card">
     <h3>O której bierzesz lek</h3>
-    <div class="muted" style="margin-bottom:6px">Liczba dni w każdej godzinie. Turkusowy słupek to godzina zaplanowana.</div>
+    <div class="muted" style="margin-bottom:6px">Liczba dni w każdej godzinie, od początku doby lekowej.
+      Turkusowy słupek to godzina przypomnienia.</div>
     <div id="anHours"></div>
   </div>
 
@@ -1178,7 +1179,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-11.21";
+const APP_VERSION = "2026-08-12.22";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -4478,6 +4479,30 @@ const dev2 = d => d == null ? "—" : (d > 0 ? "+" : d < 0 ? "−" : "") +
   `${Math.floor(Math.abs(d)/60) ? Math.floor(Math.abs(d)/60)+" h " : ""}${Math.round(Math.abs(d))%60} min`;
 const DOW_PL = ["poniedziałek","wtorek","środa","czwartek","piątek","sobota","niedziela"];
 
+/* Statystykę godzin liczymy w ramie DOBY LEKOWEJ (od DAY_START_HOUR), nie od
+   północy. Dawka wzięta o 00:04 należy do wieczoru poprzedniej doby — liczona
+   jako „4. minuta dnia" ciągnęła średnią i rozrzut w kosmos (± 387 min przy
+   dawkach skupionych koło wieczora) i dawała podpis „od 00:04 do 22:50",
+   czyli pozorny rozstrzał na całą dobę zamiast trzech godzin. D53.        */
+const RAMA_MIN   = DAY_START_HOUR*60;
+const doRamyDoby = m => m == null ? null : (((m - RAMA_MIN) % 1440) + 1440) % 1440;
+const zRamyDoby  = f => f == null ? null : (((f + RAMA_MIN) % 1440) + 1440) % 1440;
+/* Średnia pora dnia z listy minut od północy — przez ramę doby, żeby wieczór
+   i noc nie uśredniały się do południa, którego nigdy nie było.           */
+function sredniaPora(lista){
+  if (!lista.length) return null;
+  const f = lista.map(doRamyDoby);
+  return zRamyDoby(f.reduce((a,b)=>a+b,0)/f.length);
+}
+/* Kwantyl z listy JUŻ POSORTOWANEJ (interpolowany) — do przedziału, w którym
+   mieści się połowa dawek. Mediana bywa myląca przy czterech pomiarach,
+   ale „połowa dawek między X a Y" mówi wprost, jak szeroko to chodzi.    */
+const kwantyl = (posort, p) => {
+  if (!posort.length) return null;
+  const i = (posort.length-1)*p, lo = Math.floor(i), hi = Math.ceil(i);
+  return posort[lo] + (posort[hi]-posort[lo])*(i-lo);
+};
+
 function analyze(days){
   const end = medDate(new Date());
   const times = [], deviations = [], hist = Array(24).fill(0);
@@ -4516,16 +4541,28 @@ function analyze(days){
     deviations.push(dv);
   }
 
-  const sorted = [...times].sort((a,b)=>a-b);
-  const n = sorted.length;
-  const median = n ? (n%2 ? sorted[(n-1)/2] : (sorted[n/2-1]+sorted[n/2])/2) : null;
-  const mean   = n ? times.reduce((a,b)=>a+b,0)/n : null;
-  const sd     = n > 1 ? Math.sqrt(times.reduce((a,b)=>a+(b-mean)**2,0)/n) : null;
+  /* Wszystko poniżej liczone na minutach OD POCZĄTKU DOBY LEKOWEJ (rama),
+     wynik wracany na zegar dopiero na końcu. Sortowanie też — inaczej
+     „najwcześniej" wychodzi północ, choć to najpóźniejsza dawka dnia. */
+  const ramy   = times.map(doRamyDoby).sort((a,b)=>a-b);
+  const n      = ramy.length;
+  const median = n ? zRamyDoby(n%2 ? ramy[(n-1)/2] : (ramy[n/2-1]+ramy[n/2])/2) : null;
+  const meanF  = n ? ramy.reduce((a,b)=>a+b,0)/n : null;
+  const mean   = zRamyDoby(meanF);
+  const sd     = n > 1 ? Math.sqrt(ramy.reduce((a,b)=>a+(b-meanF)**2,0)/n) : null;
   const meanDev = deviations.length ? deviations.reduce((a,b)=>a+b,0)/deviations.length : null;
+  /* Ile dawek poszło, ZANIM wypadła godzina przypomnienia. Nie jest to ocena
+     punktualności — przypomnienie ma tylko sprawdzić, czy tabletka już była
+     (CLAUDE.md 4b). Porównanie w ramie doby, żeby 00:04 wyszło PO 20:00. */
+  const planF = doRamyDoby(plan);
+  const beforeReminder = ramy.filter(f => f <= planF).length;
 
   return { days, taken, missed, total: taken+missed, doseSum, plan,
-    times: sorted, n, median, mean, sd, meanDev, hist, byDow,
-    earliest: n ? sorted[0] : null, latest: n ? sorted[n-1] : null,
+    times: ramy.map(zRamyDoby), n, median, mean, sd, meanDev, hist, byDow,
+    q1: n ? zRamyDoby(kwantyl(ramy, 0.25)) : null,
+    q3: n ? zRamyDoby(kwantyl(ramy, 0.75)) : null,
+    beforeReminder,
+    earliest: n ? zRamyDoby(ramy[0]) : null, latest: n ? zRamyDoby(ramy[n-1]) : null,
     within30: deviations.filter(d=>Math.abs(d)<=30).length,
     within60: deviations.filter(d=>Math.abs(d)<=60).length,
     late60:   deviations.filter(d=>d > 60).length,
@@ -4558,7 +4595,7 @@ function inrContext(dateStr, window = 7){
     if (any && sum > 0){ taken++; doseSum += sum;
       const m = openMinutes(rec); if (m != null) times.push(m); }
   }
-  const avg = times.length ? times.reduce((a,b)=>a+b,0)/times.length : null;
+  const avg = sredniaPora(times);
   return { taken, total, doseSum, avgTime: avg,
            adherence: total ? Math.round(taken/total*100) : null, samples: times.length };
 }
@@ -4586,29 +4623,41 @@ function renderAnalysis(){
 
   setTxt("anAdh", a.total ? Math.round(a.taken/a.total*100)+"%" : "–");
   setTxt("anAdhSub", `${a.taken} z ${a.total} dawek`);
-  setTxt("anMedian", hm(a.median));
-  setTxt("anMedianSub", a.n ? `z ${a.n} zarejestrowanych otwarć` : "brak danych z pudełka");
+  /* Kafelek mówi, O KTÓREJ Kuba bierze lek — nie, o ile „spóźnił się" wobec
+     20:00. Godzina z harmonogramu to pora PRZYPOMNIENIA, a nie termin, do
+     którego trzeba zdążyć (CLAUDE.md 4b) — więc nie ma tu ani odchylenia od
+     planu, ani „punktualności", bo obie liczby oceniały coś, czego pudełko
+     wcale nie wymaga. Zostają fakty: średnia, rozrzut, przedział. D53.  */
+  setTxt("anMean", hm(a.mean));
+  setTxt("anMeanSub", a.n ? `z ${a.n} zarejestrowanych otwarć` : "brak danych z pudełka");
   setTxt("anSpread", a.sd == null ? "–" : `± ${Math.round(a.sd)} min`);
   setTxt("anSpreadSub", a.n ? `od ${hm(a.earliest)} do ${hm(a.latest)}` : "—");
-  setTxt("anPunct", a.n ? Math.round(a.within30/a.n*100)+"%" : "–");
-  setTxt("anPunctSub", a.n ? `${a.within30} z ${a.n} w ±30 min od ${hm(a.plan)}` : "—");
+  setTxt("anBefore", a.n ? `${a.beforeReminder} z ${a.n}` : "–");
+  setTxt("anBeforeSub", a.n ? `dawek wziętych przed ${hm(a.plan)}` : "—");
 
-  const drift = document.getElementById("anDrift");
-  if (drift) drift.innerHTML = a.meanDev == null ? `<span class="muted">Brak danych.</span>`
-    : `Średnio bierzesz lek <b>${dev2(a.meanDev)}</b> ${a.meanDev >= 0 ? "po" : "przed"}
-       zaplanowaną godziną ${hm(a.plan)}.
-       ${a.late60 ? `<br><span style="color:var(--warn)">${a.late60} raz(y) ponad godzinę później.</span>` : ""}
-       ${a.early60 ? `<br><span style="color:var(--warn)">${a.early60} raz(y) ponad godzinę wcześniej.</span>` : ""}`;
+  const pora = document.getElementById("anPora");
+  if (pora) pora.innerHTML = !a.n
+    ? `<span class="muted">Brak zarejestrowanych godzin — statystyka pojawi się po kilku dniach.</span>`
+    : `Średnio bierzesz lek o <b>${hm(a.mean)}</b>.` +
+      (a.n >= 4 ? ` Połowa dawek między ${hm(a.q1)} a ${hm(a.q3)}.` : "") +
+      `<br><span class="muted">Przypomnienie o ${hm(a.plan)} tylko sprawdza, czy tabletka już
+       była — to nie jest godzina, o której trzeba ją wziąć.</span>`;
 
   const hs = document.getElementById("anHours");
   if (hs){
-    const used = a.hist.map((v,i)=>v?i:-1).filter(i=>i>=0);
-    const lo = used.length ? Math.max(0, Math.min(...used)-1) : 5;
-    const hi = used.length ? Math.min(23, Math.max(...used)+1) : 12;
-    const slice = a.hist.slice(lo, hi+1);
+    /* Oś godzin w kolejności DOBY LEKOWEJ (od DAY_START_HOUR), nie od północy —
+       inaczej dawka o 00:04 ląduje na lewym skraju wykresu, kilometr od
+       sąsiadującej z nią naprawdę dawki o 22:50, i wykres kłamie o rozrzucie
+       tak samo, jak kłamił kafelek. D53.                                */
+    const godz = Array.from({length:24}, (_,i)=>(DAY_START_HOUR+i)%24);
+    const vals = godz.map(h => a.hist[h]);
+    const used = vals.map((v,i)=>v?i:-1).filter(i=>i>=0);
+    const lo = used.length ? Math.max(0, Math.min(...used)-1) : 2;
+    const hi = used.length ? Math.min(23, Math.max(...used)+1) : 9;
+    const slice = vals.slice(lo, hi+1);
     hs.innerHTML = a.n ? barsSVG(slice,
-      slice.map((_,i)=> (lo+i)%2===0 ? `${pad(lo+i)}` : ""),
-      (i)=> (lo+i)===Math.floor(a.plan/60) ? "#5eead4" : "#7c93b8")
+      slice.map((_,i)=> godz[lo+i]%2===0 ? `${pad(godz[lo+i])}` : ""),
+      (i)=> godz[lo+i]===Math.floor(a.plan/60) ? "#5eead4" : "#7c93b8")
       : `<div class="muted" style="padding:18px 0;text-align:center">
            Statystyka pojawi się po kilku dniach zbierania danych.</div>`;
   }
@@ -4707,16 +4756,17 @@ window.makeReport = () => {
 
     <h3>Analiza pór przyjmowania</h3>
     ${an.n ? `<table><tbody>
-        <tr><th style="width:46%">Zaplanowana godzina</th><td>${hm(an.plan)}</td></tr>
+        <tr><th style="width:46%">Godzina przypomnienia</th><td>${hm(an.plan)}</td></tr>
         <tr><th>Dni z zarejestrowaną godziną</th><td>${an.n}</td></tr>
-        <tr><th>Godzina typowa (mediana)</th><td>${hm(an.median)}</td></tr>
         <tr><th>Godzina średnia</th><td>${hm(an.mean)}</td></tr>
+        <tr><th>Godzina typowa (mediana)</th><td>${hm(an.median)}</td></tr>
+        <tr><th>Połowa dawek w przedziale</th><td>${hm(an.q1)} – ${hm(an.q3)}</td></tr>
         <tr><th>Rozrzut (odchylenie std.)</th><td>${an.sd==null?"—":"± "+Math.round(an.sd)+" min"}</td></tr>
         <tr><th>Najwcześniej / najpóźniej</th><td>${hm(an.earliest)} / ${hm(an.latest)}</td></tr>
-        <tr><th>Średnie odchylenie od planu</th><td>${dev2(an.meanDev)} ${an.meanDev>=0?"później":"wcześniej"}</td></tr>
-        <tr><th>Dawki w ±30 min od planu</th><td>${an.within30} z ${an.n}
+        <tr><th>Średnie odchylenie od tej godziny</th><td>${dev2(an.meanDev)} ${an.meanDev>=0?"później":"wcześniej"}</td></tr>
+        <tr><th>Dawki w ±30 min od tej godziny</th><td>${an.within30} z ${an.n}
             (${Math.round(an.within30/an.n*100)}%)</td></tr>
-        <tr><th>Dawki w ±60 min od planu</th><td>${an.within60} z ${an.n}
+        <tr><th>Dawki w ±60 min od tej godziny</th><td>${an.within60} z ${an.n}
             (${Math.round(an.within60/an.n*100)}%)</td></tr>
         <tr><th>Ponad godzinę później / wcześniej</th><td>${an.late60} / ${an.early60}</td></tr>
       </tbody></table>
@@ -4729,7 +4779,7 @@ window.makeReport = () => {
     <table><thead><tr><th>Dzień</th><th>Wzięte</th><th>Wszystkich</th><th>Regularność</th>
       <th>Typowa godzina</th></tr></thead><tbody>
       ${an.byDow.map((d,i)=>{
-        const avg = d.times.length ? d.times.reduce((a,b)=>a+b,0)/d.times.length : null;
+        const avg = sredniaPora(d.times);
         const p = d.total ? Math.round(d.taken/d.total*100) : null;
         return `<tr class="${p!=null&&p<80?"out":""}"><td>${DOW_PL[i]}</td><td>${d.taken}</td>
           <td>${d.total}</td><td>${p==null?"—":p+"%"}</td><td>${hm(avg)}</td></tr>`;

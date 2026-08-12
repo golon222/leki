@@ -43,6 +43,7 @@ export { brakujePokrycia, doReconcile, reconcileDecyzja, opisLadowan, minutyDoPe
          renderAnalysis, TZ_LIST, TZ_DEFAULT, tzOffsetFor, tzOffsetTxt, tzLabel,
          tzName, trackingSince, beforeTracking, analyze, inrContext, openTimeOf,
          openMinutes, hm, dev2, renderStatus,
+         doRamyDoby, zRamyDoby, sredniaPora, kwantyl,
          zapiszPewnie, zapiszCfg, oczekWczytaj, oczekZapisz, oczekIle, oczekWyslij,
          magazyn, OCZEK_KEY, oczekOdmowy, bazaOdmowila,
          INR_ZAKRES_MIN, INR_ZAKRES_MAX, INR_ODSTEPY, inrKrokiZakresu, renderSettings,
