@@ -982,6 +982,18 @@ _potw = cialo("void otaPotwierdzDzialanie()")
 if _potw:
     ok("beepNowaWersja()" in _potw,
        "udana aktualizacja odzywa sie dzwiekiem, a nie tylko liczba w aplikacji")
+    # Suma zapisana bez wersji, dla ktorej obowiazuje, przezyje wgranie
+    # kablem i zacznie klamac: aplikacja porowna ja z nowym plikiem
+    # i w kolko bedzie proponowac wersje, ktora juz jest wgrana.
+# Tresc napisow czytamy z surowego zrodla - strip() zamienia je na puste.
+_potw_raw = cialo_surowe("void otaPotwierdzDzialanie()")
+ok('nvsPutStr("otaFw"' in _potw_raw,
+   "suma zapisuje sie razem z wersja, dla ktorej obowiazuje")
+
+# ...i nie wolno jej wyslac, gdy dotyczy innego programu.
+_st_raw = cialo_surowe("bool pushStatus()")
+ok('prefs.getString("otaFw"' in _st_raw and "sumaDlaFw == FW_VERSION" in _st_raw,
+   "status wysyla sume tylko wtedy, gdy powstala dla biezacej wersji")
 
 # Podzial pamieci musi zapowiadac OTA - na huge_app nie ma dokad pisac.
 ok("with OTA" in ino[:3000],

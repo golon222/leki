@@ -2097,8 +2097,18 @@ bool pushStatus() {
        ja z opisem na serwerze i dzieki temu wie NA PEWNO, czy jest co
        wgrywac. Po numerze wersji tego nie widac: numer pisze czlowiek
        w config.h i da sie go zapomniec podbic. Puste do pierwszej
-       aktualizacji przez WiFi - wtedy aplikacja wraca do numeru.     */
-    doc["otaMd5"]  = prefs.getString("otaMd5", "");
+       aktualizacji przez WiFi - wtedy aplikacja wraca do numeru.
+
+       Wysylamy ja WYLACZNIE wtedy, gdy powstala dla TEGO programu.
+       Po wgraniu kablem w pamieci zostaje suma poprzedniej wersji, a
+       podanie jej dalej znaczyloby "w pudelku siedzi binarka o tej
+       sumie" - czyli klamstwo, na ktorym aplikacja opiera decyzje
+       "jest nowa wersja". Niezgodnosc traktujemy jak brak sumy:
+       porownanie spada wtedy na numer wersji, ktory po kablu jest
+       prawdziwy.                                                     */
+    const String sumaDlaFw = prefs.getString("otaFw", "");
+    doc["otaMd5"]  = (sumaDlaFw == FW_VERSION) ? prefs.getString("otaMd5", "")
+                                               : String("");
     prefs.end();
   }
 #endif
@@ -3355,6 +3365,20 @@ void otaPotwierdzDzialanie() {
 
   prefs.begin(NVS_NAMESPACE, false);
   nvsPutStr("otaMd5", pend);
+  /* DLA KTOREJ WERSJI ta suma obowiazuje.
+
+     TU BYL BLAD, zglosil go Kuba: "jest najnowsza wersja, a i tak pozwala
+     mi wgrac". Suma zapisuje sie wylacznie po udanej aktualizacji przez
+     WiFi - ale program da sie zmienic TAKZE KABLEM, a wgranie kablem tedy
+     nie przechodzi. W pamieci zostawala wiec suma POPRZEDNIEGO programu,
+     podczas gdy w pudelku siedzial juz inny. Aplikacja porownywala ja
+     z plikiem na serwerze, widziala roznice i w kolko proponowala
+     aktualizacje do wersji, ktora juz byla wgrana.
+
+     Numer wersji wystarczy, zeby to rozstrzygnac: jesli zapisana wersja
+     nie zgadza sie z biezaca, suma dotyczy czegos innego i nie wolno jej
+     uzywac. Czytamy ja w pushStatus() dopiero po tym sprawdzeniu.     */
+  nvsPutStr("otaFw", FW_VERSION);
   prefs.remove("otaPend");
   nvsPutU16("otaBoot", 0);
   nvsPutU16("otaFail", 0);
