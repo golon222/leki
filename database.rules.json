@@ -79,7 +79,9 @@
             "ts": {
               ".validate": "newData.isNumber() && newData.val() > 0"
             },
-            "$other": false
+            "$other": {
+              ".validate": false
+            }
           },
           "drugName": {
             ".validate": "newData.isString() && newData.val().length <= 40"

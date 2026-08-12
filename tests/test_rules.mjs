@@ -31,6 +31,48 @@ const ok = (nazwa, sciezka, val) =>
 const odrzuc = (nazwa, sciezka, val) =>
   check(!przejdzie(sciezka, val), `${nazwa} POWINNO zostac odrzucone, a przeszlo`);
 
+/* ═══════════ 0. SKLADNIA, KTORA PRZYJMIE FIREBASE ═══════════
+
+   TO SIE NAPRAWDE STALO, 2026-08-12. W regulach dla `otaCmd` stanelo
+   `"$other": false` zamiast `"$other": { ".validate": false }`. Plik byl
+   poprawnym JSON-em, silnik testowy przepuscil to bez slowa, wszystkie
+   testy swiecily na zielono - a Firebase Console odmowil zapisu regul:
+   "Line 82: Expected '{'". Kuba zobaczyl to jako pierwszy, przy wgrywaniu.
+
+   Ta sama lekcja co przy atrapie NVS (D30): narzedzie lagodniejsze od
+   oryginalu mierzy co innego, niz sie mysli. Silnik regul sprawdza, CO
+   przechodzi przez reguly - nie sprawdzal, czy same reguly sa w ogole
+   regulami.
+
+   Zasada skladni Firebase jest prosta: kazdy wezel drzewa to OBIEKT.
+   Wartosc skalarna wolno miec wylacznie kluczom z kropka na poczatku
+   (.validate, .read, .write, .indexOn) - to sa dyrektywy, nie wezly.  */
+head("Reguly sa skladniowo tym, co Firebase przyjmie");
+{
+  const surowe = JSON.parse(
+    readFileSync(new URL("../database.rules.json", import.meta.url), "utf8")
+      .replace(/^\s*\/\/.*$/gm, ""));
+  const zle = [];
+  (function chodz(wezel, sciezka){
+    if (wezel === null || typeof wezel !== "object" || Array.isArray(wezel)) return;
+    for (const [k, v] of Object.entries(wezel)) {
+      const gdzie = sciezka ? `${sciezka}/${k}` : k;
+      if (k.startsWith(".")) continue;            // dyrektywa - skalar jest w porzadku
+      if (v === null || typeof v !== "object" || Array.isArray(v))
+        zle.push(`${gdzie} = ${JSON.stringify(v)}`);
+      else chodz(v, gdzie);
+    }
+  })(surowe, "");
+  check(zle.length === 0,
+        `wezly regul musza byc obiektami, a nie skalarami — Firebase odrzuci: ${zle.join(", ")}`);
+
+  /* Osobno wildcardy, bo to na nich sie przewrocilismy i komunikat ma
+     wskazywac winowajce po imieniu.                                   */
+  const zleWild = zle.filter(s => s.includes("$"));
+  check(zleWild.length === 0,
+        `wildcard ($cos) musi dostac obiekt z regulami: ${zleWild.join(", ")}`);
+}
+
 /* ═══════════ 1. SILNIK MA ZEBY ═══════════
    Walidator, ktory przepuszcza wszystko, jest gorszy niz jego brak:
    daje falszywe poczucie pokrycia. Zanim uwierzymy w wyniki ponizej,
