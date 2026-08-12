@@ -3320,6 +3320,19 @@ void otaPotwierdzDzialanie() {
   LOG("[OTA] wersja %s potwierdzona jako dzialajaca\n", FW_VERSION);
 }
 
+/* Powod odmowy albo niepowodzenia idzie do aplikacji OD RAZU, a nie przy
+   najblizszym wybudzeniu.
+
+   Roznica jest cala tresc tego ekranu. `otaSprobuj()` chodzi w
+   `goToSleep()`, czyli JUZ PO wyslaniu zwyklego statusu - samo ustawienie
+   `rtcStatusDirty` znaczyloby, ze aplikacja pozna powod dopiero za
+   kilka godzin. Przez ten czas pokazywalaby pogodne "zlecone, czekaj",
+   podczas gdy pudelko wlasnie odmowilo i nie zamierza nic robic.
+   Radio w tym momencie jeszcze zyje, wiec meldunek nic nie kosztuje.  */
+void otaZglos() {
+  if (!pushStatus()) rtcStatusDirty = true;   // nie doszlo - dosle pozniej
+}
+
 /* --- CALOSC: sprawdz, zdecyduj, ewentualnie wgraj --------------------
    Wolane z jednego miejsca - z `goToSleep()`, czyli po tym, jak pudelko
    zrobilo juz wszystko, po co wstalo. Dawka jest wtedy zapisana
@@ -3337,7 +3350,7 @@ void otaSprobuj() {
   if (!otaPobierzOpis(wersja, md5, rozmiar)) {
     snprintf(rtcOtaMsg, sizeof(rtcOtaMsg), "nie moge pobrac opisu wersji");
     otaZanotujProbe(teraz);
-    rtcStatusDirty = true;
+    otaZglos();
     return;
   }
 
@@ -3364,10 +3377,10 @@ void otaSprobuj() {
     rtdbSend("DELETE", "/devices/" DEVICE_ID "/config/otaCmd.json", "");
     rtcOtaProsba = false;
     if (d == OTA_NIC_NOWEGO) otaWyzerujLicznik();
-    rtcStatusDirty = true;
+    otaZglos();
     return;
   }
-  if (d != OTA_ROB) { rtcStatusDirty = true; return; }   // powod minie sam
+  if (d != OTA_ROB) { otaZglos(); return; }   // powod minie sam
 
   /* Od tego miejsca leci ~1,2 MB przez radio. Limit czuwania trzeba
      podniesc, inaczej `awakeTooLong()` przerwie pobieranie w polowie. */
@@ -3383,7 +3396,7 @@ void otaSprobuj() {
     snprintf(rtcOtaMsg, sizeof(rtcOtaMsg), "pobieranie nie doszlo do konca");
     LOGLN("[OTA] nieudane - stary program zostaje bez zmian");
     beepErr();
-    rtcStatusDirty = true;
+    otaZglos();
     return;
   }
 

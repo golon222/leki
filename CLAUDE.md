@@ -128,6 +128,8 @@ index.html                   cała PWA w jednym pliku
 sw.js, tabletka.gif      service worker + tabletka na ekranie głównym
 tests/                           testy + audyt
 database.rules.json              reguły Firebase
+WGRYWANIE.md                     instrukcja wgrywania kablem dla Kuby
+.github/workflows/firmware.yml   automat budujący binarkę do OTA
 ```
 
 Po zmianie w plikach aplikacji **podbij `APP_VERSION` i `CACHE` w `sw.js`** — inaczej

@@ -4331,14 +4331,36 @@ function renderOta(){
              hasła do bazy, więc aktualizacja odcięłaby je od aplikacji.
              Wgraj firmware kablem albo podaj hasło w portalu WiFi.</div>`;
   } else if (czeka){
-    /* Najważniejsze zdanie na tym ekranie. Bez niego przycisk wygląda na
-       zepsuty: naciskasz i przez wiele godzin nic się nie dzieje, bo
-       pudełko po prostu śpi. */
-    html += `<div style="margin-top:8px;color:var(--warn)">⏳ Zlecone — pudełko
-             zaktualizuje się przy najbliższej okazji: gdy otworzysz wieczko
-             albo postawisz je na ładowarce.</div>`;
-    if (st.otaMsg)
-      html += `<div class="dim2" style="margin-top:4px">Pudełko mówi: <b>${esc(st.otaMsg)}</b></div>`;
+    /* DWA STANY, KTÓRE WYGLĄDAŁY TAK SAMO — a znaczą co innego dla tego,
+       co masz zrobić dalej. Ta sama lekcja co przy sieci WiFi (D25, D32).
+
+       „Czeka" znaczy: pudełko śpi i jeszcze nie miało okazji. Nic nie rób.
+       „Stoi" znaczy: pudełko łączyło się PO zleceniu i aktualizacji NIE
+       zrobiło. Wtedy jest powód, ten powód jest w `otaMsg` i zwykle trzeba
+       coś zrobić — postawić na ładowarkę, poczekać na zaległe dawki.
+
+       Bez tego rozróżnienia ekran pokazywałby pogodne „zlecone, czekaj"
+       także wtedy, gdy pudełko odmówiło trzy razy z rzędu.             */
+    const zlecono  = Number(cfg.otaCmd?.ts) || 0;
+    const widziano = Number(st.lastSeen) || 0;
+    const bylPoZleceniu = zlecono > 0 && widziano > zlecono;
+    const odKiedy = zlecono ? relTime(Math.floor(Date.now()/1000) - zlecono) : "";
+
+    if (bylPoZleceniu){
+      html += `<div style="margin-top:8px;color:var(--bad)">⚠️ Pudełko łączyło się
+               po zleceniu i aktualizacji <b>nie zrobiło</b>.</div>`;
+      html += st.otaMsg
+        ? `<div style="margin-top:4px">Powód: <b>${esc(st.otaMsg)}</b></div>`
+        : `<div class="dim2" style="margin-top:4px">Nie podało powodu — przy
+           następnym połączeniu powinno go dopisać.</div>`;
+    } else {
+      html += `<div style="margin-top:8px;color:var(--warn)">⏳ Zlecone${
+               odKiedy ? " " + esc(odKiedy) : ""} — pudełko zaktualizuje się przy
+               najbliższej okazji: gdy otworzysz wieczko albo postawisz je na
+               ładowarce.</div>`;
+      html += `<div class="dim2" style="margin-top:4px">Jeszcze się od tego czasu
+               nie łączyło, więc nie ma czym się przejmować.</div>`;
+    }
   } else if (dostepna && rozne){
     html += `<button class="primary" style="width:100%;margin-top:10px"
                onclick="wyslijAktualizacje()">Zaktualizuj pudełko do ${esc(dostepna)}</button>
@@ -4349,14 +4371,27 @@ function renderOta(){
     html += `<div class="dim2" style="margin-top:6px">Pudełko ma najnowszą wersję.</div>`;
   }
 
-  /* Licznik nieudanych prób i cofnięta wersja — pokazujemy tylko wtedy, gdy
-     naprawdę coś się stało. Puste liczniki na co dzień to szum.        */
-  if (st.otaFail > 0)
-    html += `<div class="dim2" style="margin-top:6px">Nieudane próby: <b>${st.otaFail}</b>${
-             st.otaFail >= 3 ? " — pudełko przestało próbować" : ""}</div>`;
+  /* Nieudane próby i cofnięta wersja — pokazujemy tylko wtedy, gdy naprawdę
+     coś się stało. Puste liczniki na co dzień to szum.
+
+     Poddanie się po trzech próbach NIE jest drobiazgiem i nie może wyglądać
+     jak licznik: od tej chwili pudełko samo z siebie nie spróbuje już nigdy,
+     więc ekran musi powiedzieć wprost, co odblokowuje sprawę.           */
+  const OTA_LIMIT_PROB = 3;                 // = OTA_MAX_FAILS w config.h
+  if (st.otaFail >= OTA_LIMIT_PROB){
+    html += `<div style="margin-top:8px;color:var(--bad)">⛔ Pudełko przestało
+             próbować po ${st.otaFail} nieudanych podejściach i samo już nie
+             wróci do tematu.${st.otaMsg ? ` Ostatnio: <b>${esc(st.otaMsg)}</b>.` : ""}
+             Naciśnij przycisk jeszcze raz, żeby zlecić od nowa.</div>`;
+  } else if (st.otaFail > 0){
+    html += `<div style="margin-top:6px;color:var(--warn)">Nieudane próby:
+             <b>${st.otaFail}</b> z ${OTA_LIMIT_PROB}. Pudełko spróbuje ponownie
+             najwcześniej po dobie.</div>`;
+  }
   if (st.otaBad)
     html += `<div style="margin-top:6px;color:var(--warn)">⚠️ Któraś wersja nie
-             uruchomiła się i pudełko samo wróciło do poprzedniej.</div>`;
+             uruchomiła się i pudełko samo wróciło do poprzedniej. Tamtej już
+             nie pobierze — potrzebna jest nowsza.</div>`;
 
   box.innerHTML = html;
 }

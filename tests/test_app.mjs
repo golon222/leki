@@ -2731,6 +2731,57 @@ check(cialoWyslij.includes("zapiszCfg("),
       "zlecenie idzie przez zapiszCfg()/zapiszPewnie(), nie golym set()");
 check(!/\bset\(/.test(cialoWyslij), "i nigdzie nie siega po gole set()");
 
+/* ═══════ GDY AKTUALIZACJA NIE PRZECHODZI ═══════
+   Zgloszenie Kuby: „aplikacja musi jakos pokazac, ze nie przechodzi
+   aktualizacja". Stawka jest ta sama co przy sieci WiFi (D25, D32):
+   „czekam" i „stoje" wygladaja tak samo, a tylko drugie wymaga reakcji.  */
+head("Aktualizacja pudelka: kiedy NIE przechodzi");
+
+const ZLECONO = 1_760_000_000;
+A.__setOpisFirmware(OPIS);
+A.__setState({ cfg: { otaCmd: { md5: OPIS.md5, wersja: "1.39.0", ts: ZLECONO } } });
+
+/* Pudelko od zlecenia jeszcze sie nie odezwalo - to normalne czekanie. */
+A.renderStatus({ fw: "1.38.0", otaHaslo: true, lastSeen: ZLECONO - 100 });
+check(otaHtml().includes("Zlecone"), "przed pierwszym polaczeniem: zwykle czekanie");
+check(!otaHtml().includes("nie zrobiło"), "...bez straszenia, bo nic zlego sie nie stalo");
+
+/* Pudelko BYLO online po zleceniu i nadal nie zaktualizowalo - to juz
+   nie jest czekanie. Tu ekran musi zmienic ton i podac powod.          */
+A.renderStatus({ fw: "1.38.0", otaHaslo: true, lastSeen: ZLECONO + 600,
+                 otaMsg: "za malo baterii - postaw na ladowarke" });
+check(otaHtml().includes("nie zrobiło"),
+      "po polaczeniu bez skutku: ekran mowi wprost, ze NIE przeszlo");
+check(otaHtml().includes("za malo baterii"),
+      "...i podaje powod prosto z pudelka, zamiast kazac zgadywac");
+check(!otaHtml().includes("nie ma czym się przejmować"),
+      "...i nie uspokaja, gdy jest czym");
+
+/* Pudelko sie polaczylo, nie zrobilo i NIE podalo powodu - brak
+   informacji nie moze wygladac jak informacja o braku problemu.       */
+A.renderStatus({ fw: "1.38.0", otaHaslo: true, lastSeen: ZLECONO + 600 });
+check(otaHtml().includes("nie zrobiło") && otaHtml().includes("Nie podało powodu"),
+      "bez powodu z pudelka ekran nadal ostrzega, zamiast milczec");
+
+head("Aktualizacja pudelka: proby i poddanie sie");
+
+A.renderStatus({ fw: "1.38.0", otaHaslo: true, lastSeen: ZLECONO + 600, otaFail: 1 });
+check(otaHtml().includes("1</b> z 3"), "licznik prob widac, zanim pudelko sie podda");
+
+/* Po trzech probach pudelko samo juz nie wroci do tematu. To musi byc
+   napisane, inaczej uzytkownik czeka na cos, co nigdy nie nastapi.    */
+A.renderStatus({ fw: "1.38.0", otaHaslo: true, lastSeen: ZLECONO + 600, otaFail: 3,
+                 otaMsg: "pobieranie nie doszlo do konca" });
+check(otaHtml().includes("przestało"), "po trzech probach: pudelko sie poddalo");
+check(otaHtml().includes("samo już nie") || otaHtml().includes("jeszcze raz"),
+      "...i ekran mowi, co odblokowuje sprawe");
+
+/* Cofnieta wersja - pudelko dziala, ale nie na tym, co mu wgraliśmy. */
+A.renderStatus({ fw: "1.38.0", otaHaslo: true, lastSeen: ZLECONO + 600,
+                 otaBad: "c".repeat(32) });
+check(otaHtml().includes("wróciło do poprzedniej"),
+      "cofnieta wersja jest widoczna, a nie cicha");
+
 head("Zgodnosc wersji aplikacji");
 check(/const APP_VERSION = "([\d.\-]+)"/.test(html), "index.html deklaruje wersje");
 const av = html.match(/const APP_VERSION = "([\d.\-]+)"/)?.[1];
