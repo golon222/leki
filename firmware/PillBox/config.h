@@ -20,7 +20,7 @@
  * 1. IDENTYFIKATOR URZADZENIA
  * ------------------------------------------------------------------ */
 #define DEVICE_ID           "pillbox01"     // klucz w /devices/<DEVICE_ID>
-#define FW_VERSION          "1.37.0"   // widoczna w aplikacji - po wgraniu sprawdz, czy sie zmienila
+#define FW_VERSION          "1.38.0"   // widoczna w aplikacji - po wgraniu sprawdz, czy sie zmienila
 
 /* ---------------------------------------------------------------------
  * 2. FIREBASE  (Realtime Database + Auth email/haslo)
@@ -35,8 +35,24 @@
 /*  Haslo konta pillbox01@device.local z Firebase Authentication.
  *
  *  UWAGA: ten plik JEST w repo, ale wylacznie z placeholderem powyzej.
- *  Wersji z wpisanym haslem NIGDY nie wrzucaj z powrotem na GitHuba.       */
+ *  Wersji z wpisanym haslem NIGDY nie wrzucaj z powrotem na GitHuba.
+ *
+ *  OD 1.38.0 TO JEST TYLKO ZIARNO, NIE JEDYNE ZRODLO (D59).
+ *  Przy pierwszym udanym logowaniu haslo przepisuje sie do pamieci
+ *  trwalej (NVS, klucz "fbpass") i od tej pory pudelko czyta je STAMTAD.
+ *  Dzieki temu binarke aktualizacji moze zbudowac automat z tego repo -
+ *  z placeholderem, bez znajomosci hasla - a pudelko i tak sie zaloguje.
+ *  Bez tego kazda aktualizacja przez WiFi odcinalaby je od bazy.
+ *
+ *  Wgrywasz kablem dokladnie tak jak dotad: wpisujesz tutaj prawdziwe
+ *  haslo. Roznica jest tylko taka, ze robisz to OSTATNI raz.            */
 #define DEVICE_PASSWORD     "TUTAJ_WPISZ_HASLO"
+
+/*  Tekst, ktory znaczy "tu nie ma hasla". Pudelko porownuje z nim wpis
+ *  z config.h, zeby nie zapisac placeholdera do pamieci trwalej jako
+ *  prawdziwego hasla - i zeby wiedziec, ze binarka jest "pusta", czyli
+ *  zbudowana przez automat z repo.                                     */
+#define PASSWORD_PLACEHOLDER "TUTAJ_WPISZ_HASLO"
 
 /* ---------------------------------------------------------------------
  * 3. PINY  (nazwy D0..D3 sa zdefiniowane przez plytke "XIAO_ESP32C3")
@@ -416,6 +432,58 @@
  *     bez tego wpisu nadal sie skompiluje.
  * ------------------------------------------------------------------ */
 #define LIDLOG_SLOTS        64              // ile zmian stanu miesci sie w NVS
+
+/* ---------------------------------------------------------------------
+ * 7j. AKTUALIZACJA PRZEZ WIFI  (OTA)  -  od 1.38.0, D59
+ *
+ *     Binarke buduje automat na GitHubie przy kazdej zmianie w firmware
+ *     i kladzie ja obok aplikacji na GitHub Pages. Pudelko pobiera
+ *     najpierw MALY plik z opisem (wersja, suma, rozmiar), a dopiero
+ *     gdy suma rozni sie od tej, ktora juz ma - caly program.
+ *
+ *     ADRES JEST ZASZYTY TUTAJ, A NIE BRANY Z BAZY. To jest obrona, nie
+ *     niewygoda: pudelko nie sprawdza certyfikatu serwera (setInsecure,
+ *     dlug opisany w PROJEKT-PillBox-kontekst.md), wiec im mniej rzeczy
+ *     da sie podmienic zdalnie, tym lepiej. Suma kontrolna przychodzi
+ *     natomiast Z BAZY - czyli innym kanalem niz sam plik. Zeby wgrac
+ *     pudelku obcy program, trzeba by podmienic OBA naraz.
+ *
+ *     Gdyby adres kiedys sie zmienil, trzeba wgrac firmware kablem. To
+ *     swiadomy koszt jednego pola, ktorego nikt zdalnie nie ruszy.
+ * ------------------------------------------------------------------ */
+#define OTA_ENABLED         1
+#define OTA_BASE_URL        "https://golon222.github.io/leki/firmware/"
+#define OTA_JSON_FILE       "PillBox.json" // opis wersji: kilkaset bajtow
+#define OTA_BIN_FILE        "PillBox.bin"  // sam program: ~1,2 MB
+
+/*     Kiedy WOLNO sie aktualizowac.
+ *
+ *     OTA_MIN_BATT_PCT - ponizej tego progu tylko na ladowarce. Samo
+ *     pobranie to okolo 1-2 mAh, czyli grosze, ale na wyczerpanym ogniwie
+ *     kazdy grosz jest juz pozyczka.
+ *     OTA_MAX_FAILS - po tylu nieudanych probach z rzedu pudelko
+ *     przestaje probowac i mowi o tym w aplikacji. Bez tego licznika
+ *     niedostepny plik oznaczalby wlaczone radio przy KAZDYM otwarciu
+ *     wieczka, codziennie, w nieskonczonosc.
+ *     OTA_RETRY_S - odstep miedzy probami. Doba, bo tyle wynosi naturalny
+ *     rytm tego urzadzenia: jedna dawka, jedno otwarcie.                */
+#define OTA_MIN_BATT_PCT    25
+#define OTA_MAX_FAILS       3
+#define OTA_RETRY_S         86400
+
+/*     Zdrowy rozsadek co do rozmiaru. Plik mniejszy niz OTA_MIN_BIN_SIZE
+ *     nie jest firmwarem tego urzadzenia (najpewniej strona bledu 404
+ *     zapisana jako plik), a wiekszy niz OTA_MAX_BIN_SIZE nie zmiesci sie
+ *     w partycji - lepiej wiedziec to PRZED pobraniem 1,9 MB przez radio. */
+#define OTA_MIN_BIN_SIZE    300000
+#define OTA_MAX_BIN_SIZE    1900000
+
+/*     OTA_HTTP_TIMEOUT_MS - pobranie przez slabe WiFi trwa dluzej niz
+ *     zwykly zapis do bazy, wiec ma wlasny, hojniejszy limit.
+ *     OTA_BOOT_TRIES - ile razy nowy program moze wystartowac i NIE
+ *     dojsc do konca, zanim uznamy go za zepsuty i wrocimy do starego.  */
+#define OTA_HTTP_TIMEOUT_MS 90000
+#define OTA_BOOT_TRIES      3
 
 /* ---------------------------------------------------------------------
  * 8. KOLEJKA OFFLINE

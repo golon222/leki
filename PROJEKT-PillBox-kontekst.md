@@ -302,53 +302,63 @@ Uczciwie, bo to ma znaczenie przy ocenie ryzyka:
 5. **Log z autotestu** — użytkownik zgłaszał przerywanie testu; w 1.21.1 dodano
    `etapTestu()` logujące każdy etap z czasem. Czeka na log z monitora portu.
 
-6. **Aktualizacja firmware przez WiFi (OTA)** — *poproszone wprost, świadomie
-   odłożone.* Kuba, 2026-08-07: **wracamy do tego, gdy B1 i B2 będą zrobione.**
+6. **Aktualizacja firmware przez WiFi (OTA)** — *zrobione w 1.38.0, D59.*
+   Ten punkt był przez tydzień listą warunków; teraz jest opisem tego, co
+   działa. Warunek z D18 („po B1 i B2") spełnił się sam: B1 Kuba zamknął
+   jako nie-problem, B2 zameldował jako działający.
 
-   **Blokada techniczna jest jedna i konkretna.** Podział pamięci to dziś
-   `Huge APP (3MB No OTA/1MB SPIFFS)` — jedna partycja programu:
+   **Jak to działa, w jednym akapicie.** Automat na GitHubie buduje binarkę
+   przy każdej zmianie w `firmware/**` i kładzie ją obok aplikacji na
+   GitHub Pages razem z opisem (`PillBox.json`: wersja, suma MD5, rozmiar).
+   Przycisk w aplikacji **kolejkuje** aktualizację — zapisuje sumę do
+   `config/otaCmd`. Pudełko widzi to przy najbliższym połączeniu i wykonuje
+   przed zaśnięciem: przy otwarciu wieczka albo na ładowarce.
 
    ```
-   huge_app  (dziś):  app0 = 3 MB               ← OTA niemożliwe
-   min_spiffs      :  app0 = 1,875 MB
-                      app1 = 1,875 MB           ← OTA możliwe
+   huge_app  (do 1.37.0):  app0 = 3 MB               ← OTA niemożliwe
+   min_spiffs (od 1.38.0):  app0 = 1,875 MB
+                            app1 = 1,875 MB          ← OTA możliwe
    ```
 
-   ESP32 przy OTA zapisuje nowy program do **drugiej** partycji i dopiero
-   potem się na nią przełącza. Drugiej nie ma, więc nie ma dokąd pisać.
-   Firmware waży 1,21 MB, czyli **61%** slotu w `min_spiffs` — mieści się
-   z zapasem ~760 kB.
+   Firmware zajmuje **62%** (1 237 479 B), zapas ~730 kB.
 
-   **Czego NIE trzeba się bać:** OTA na ESP32 ma rollback
-   (`esp_ota_mark_app_valid_cancel_rollback`) — jeśli nowy program nie
-   potwierdzi, że żyje, bootloader **sam** wraca do poprzedniego. Pod tym
-   względem jest to **bezpieczniejsze niż dzisiejsze wgrywanie kablem**,
-   które nie ma żadnego odwrotu.
+   **Czego pilnuje kod, i dlaczego akurat tego:**
 
-   **Czego trzeba:**
-   - **Jedno wgranie kablem i tak jest konieczne**, żeby zmienić podział.
-     `nvs` leży pod tym samym adresem w obu podziałach, więc kolejka dawek
-     i token to przeżyją — o ile nie zaznaczy się „Erase All Flash Before
-     Sketch Upload".
-   - **Tylko na ładowarce.** Pudełko budzi się na sekundy, a pobranie 1,2 MB
-     to kilkadziesiąt sekund z włączonym radiem. Na kablu i tak czuwa
-     godzinami (`petlaLadowania`, D8) i prąd jest za darmo. Flaga „jest nowa
-     wersja" może siedzieć w `config`, które `fetchConfig()` już czyta.
-   - Plik `.bin` może serwować **to samo GitHub Pages**, na którym stoi
-     aplikacja. `rtdbSend()` już mówi po HTTPS.
+   - **Dawka przed aktualizacją.** OTA rusza wyłącznie z `goToSleep()`, czyli
+     po zapisie dawki, wysłaniu statusu i opróżnieniu kolejki. Przy niepustej
+     kolejce `otaDecyzja()` odmawia. Audyt sprawdza, że wywołanie jest jedno
+     i że nie wsunęło się wcześniej.
+   - **Suma, nie numer wersji.** Numer pisze człowiek w `config.h` i da się go
+     zapomnieć podbić. Pudełko pobiera najpierw opis (kilkaset bajtów) i całe
+     1,2 MB dopiero gdy suma się różni od tej, którą ma zapisaną.
+   - **Dwa kanały.** Suma przychodzi z Firebase, plik z GitHub Pages. Firmware
+     ma `setInsecure()`, więc sam nie odróżni podstawionego serwera; aplikacja
+     czyta opis przeglądarką, która certyfikat sprawdza. Brak sumy z bazy to
+     odmowa, nie zgoda. **`setCACert()` pozostaje niespłaconym długiem.**
+   - **Hasło w NVS.** Binarka z automatu ma placeholder, więc pudełko loguje
+     się hasłem z własnej pamięci trwałej. Bez niego OTA jest zablokowane —
+     inaczej aktualizacja odcięłaby pudełko od bazy. Droga powrotna bez kabla:
+     pole hasła w portalu WiFi, widoczne tylko gdy NVS go nie ma.
+   - **Własny rollback.** Arduino buduje ESP32 bez bootloaderowego, więc
+     liczymy starty sami: wersja, która nie dochodzi do `goToSleep()`, po
+     trzech próbach trafia na czarną listę i wracamy na starą partycję.
+   - **Jedna próba, nie „aż się uda".** Doba przerwy, poddanie się po trzech.
+     Licznik rośnie **przed** pobraniem — inaczej aktualizacja wieszająca
+     pudełko nie podniosłaby go nigdy.
 
-   **Dlaczego dopiero po B1 i B2** — nie ze strachu przed OTA, tylko przez
-   kolejność. **B1** oznacza, że kalendarz potrafi kłamać o wziętej dawce;
-   to problem z prawdą o leku, a OTA to wygoda. **B2** to niezbadane
-   przerywanie autotestu — czyli nie wiemy jeszcze, dlaczego pudełko czasem
-   nie dochodzi do końca operacji z siecią, a OTA jest właśnie długą
-   operacją z siecią. Do tego firmware z tego repo **nigdy nie chodził na
-   płytce**: kompiluje się, ale runtime jest niezweryfikowany.
+   **Czego nadal nie zweryfikowano:** ani jednej linijki tego mechanizmu nie
+   uruchomiono na płytce. Kompiluje się i ma testy, ale pierwsze prawdziwe
+   OTA będzie pierwszym prawdziwym OTA — z tą różnicą, że rollback jest po
+   naszej stronie, a kabel zostaje jako droga ostateczna.
 
-   **Tańszy środek, gdyby chodziło tylko o wygodę:** ESP Web Tools — strona
-   wgrywająca gotowy `.bin` przez USB z przeglądarki, bez Arduino IDE.
-   Zero zmian w firmware, ryzyko takie jak dziś. Haczyk: Chrome na
-   MacBooku tak, **iPhone nie** — Safari nie ma WebSerial.
+   **Jednorazowy koszt przy przejściu:** wgranie kablem z podziałem
+   `min_spiffs` i prawdziwym hasłem w `config.h`. NVS leży pod tym samym
+   adresem w obu podziałach, więc kolejka, sieci i znaczniki doby to
+   przeżyją — **o ile nie zaznaczyć „Erase All Flash Before Sketch Upload"**.
+
+   **Tańszy środek, gdyby OTA kiedyś zawiodło:** ESP Web Tools — strona
+   wgrywająca `.bin` przez USB z przeglądarki. Chrome na MacBooku tak,
+   **iPhone nie** (Safari nie ma WebSerial).
 
 ---
 

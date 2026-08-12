@@ -19,6 +19,12 @@ set -e
 cd "$(dirname "$0")/.."
 ROOT="$(pwd)"
 
+# Gdy ustawione, gotowa binarka PillBox.ino lezy po kompilacji w tym
+# katalogu. Uzywa tego automat na GitHubie (.github/workflows/firmware.yml),
+# zeby plik do aktualizacji przez WiFi powstal z DOKLADNIE tymi ustawieniami
+# plytki co reszta skryptu - jedno zrodlo prawdy zamiast drugiej kopii.
+OTA_OUT="${OTA_OUT:-}"
+
 ACLI_DIR="${ACLI_DIR:-$HOME/.pillbox-arduino}"
 ACLI="$ACLI_DIR/arduino-cli"
 CORE_VER="${CORE_VER:-3.3.11}"        # ta wersja siedzi w pudelku
@@ -36,8 +42,13 @@ CORE_VER="${CORE_VER:-3.3.11}"        # ta wersja siedzi w pudelku
 #     CDCOnBoot=cdc      ->  USB CDC WYLACZONE
 #   Zrodlo prawdy to naglowek PillBox.ino, ktory te ustawienia wypisuje.
 #   Ponizej sprawdzamy, czy nadal sie zgadzaja.
-PART="${PART:-huge_app}"
-PART_OPIS="Huge APP (3MB No OTA/1MB SPIFFS)"
+#   Od 1.38.0 podzial to min_spiffs, a nie huge_app (D59): aktualizacja
+#   przez WiFi potrzebuje DWOCH partycji programu, a huge_app ma jedna.
+#   Program ma teraz do dyspozycji 1,875 MB zamiast 3 MB, wiec ten skrypt
+#   jest jedynym miejscem, ktore zauwazy, gdy firmware zacznie sie w tym
+#   nie miescic.
+PART="${PART:-min_spiffs}"
+PART_OPIS="Minimal SPIFFS (1.9MB APP with OTA/190KB SPIFFS)"
 FQBN="esp32:esp32:XIAO_ESP32C3:PartitionScheme=$PART,CDCOnBoot=default"
 
 if ! grep -qF "$PART_OPIS" "$ROOT/firmware/PillBox/PillBox.ino"; then
@@ -173,8 +184,13 @@ zbuduj pillboxtest "$ROOT/firmware/PillBoxTest/PillBoxTest.ino" "$ROOT/firmware/
 # TO SIE NAPRAWDE STALO. Wersje 1.23.0-1.28.0 nie daly sie wgrac z
 # Arduino IDE przez ponad miesiac, a ten skrypt przez caly ten czas
 # meldowal sukces. Dlatego ten etap juz tu zostaje.
+#
+# EKSPORT BINARKI (piaty argument, opcjonalny) - to wlasnie ta sciezka
+# produkuje plik do aktualizacji przez WiFi (D59). Swiadomie ta, a nie
+# kompilacja jako .cpp: pudelko ma dostac dokladnie ten program, ktory
+# wgralby Arduino IDE, a nie jego bliskiego kuzyna.
 zbudujIno() {
-  local nazwa="$1" zrodlo="$2" katalog="$3" opis="$4"
+  local nazwa="$1" zrodlo="$2" katalog="$3" opis="$4" wynik="$5"
   local tmp; tmp="$(mktemp -d)/$nazwa"
   mkdir -p "$tmp"
   python3 "$ROOT/tests/proto_arduino.py" "$zrodlo" "$tmp/$nazwa.cpp" "$(basename "$zrodlo")"
@@ -187,12 +203,20 @@ zbudujIno() {
       --build-property "runtime.tools.ctags.path=$CTAGS_DIR" "$tmp" 2>&1 \
     | grep -E "error:|Sketch uses|Error during" || true
 
-  "$ACLI" compile --fqbn "$FQBN" --library "$LIB" \
-      --build-property "runtime.tools.ctags.path=$CTAGS_DIR" "$tmp" >/dev/null 2>&1
+  if [ -n "$wynik" ]; then
+    mkdir -p "$wynik"
+    "$ACLI" compile --fqbn "$FQBN" --library "$LIB" \
+        --build-property "runtime.tools.ctags.path=$CTAGS_DIR" \
+        --output-dir "$wynik" "$tmp" >/dev/null 2>&1
+    echo "   binarka: $wynik/$nazwa.ino.bin"
+  else
+    "$ACLI" compile --fqbn "$FQBN" --library "$LIB" \
+        --build-property "runtime.tools.ctags.path=$CTAGS_DIR" "$tmp" >/dev/null 2>&1
+  fi
 }
 
 zbudujIno pbino "$ROOT/firmware/PillBox/PillBox.ino" "$ROOT/firmware/PillBox" \
-       "PillBox.ino  Z PROTOTYPAMI, tak jak wgrywa Arduino IDE"
+       "PillBox.ino  Z PROTOTYPAMI, tak jak wgrywa Arduino IDE" "$OTA_OUT"
 zbudujIno pbtino "$ROOT/firmware/PillBoxTest/PillBoxTest.ino" "$ROOT/firmware/PillBoxTest" \
        "PillBoxTest.ino  Z PROTOTYPAMI"
 

@@ -2673,6 +2673,64 @@ check(html.includes('toast("Zapisano · pudełko pobierze przy najbliższym poł
 check(/alert\("Nie udało się zapisać do bazy/.test(html),
       "ale prawdziwy blad nadal zatrzymuje");
 
+/* ═══════ AKTUALIZACJA PUDELKA — EKRAN I ZAPIS (D59) ═══════
+   Ekran ma odpowiadac na jedno pytanie: „nacisnalem, i co dalej". Pudelko
+   spi, wiec miedzy nacisnieciem a skutkiem mija czesto pol dnia — bez
+   zdania o tym przycisk wyglada na zepsuty.                            */
+head("Aktualizacja pudelka: co pokazuje ekran");
+
+const OPIS = { wersja: "1.39.0", md5: "a".repeat(32), rozmiar: 1200000 };
+const otaHtml = () => document.getElementById("otaBox").innerHTML;
+
+A.__setOpisFirmware(OPIS);
+A.__setState({ cfg: {} });
+A.renderStatus({ fw: "1.38.0", otaHaslo: true });
+check(otaHtml().includes("Zaktualizuj pudełko do 1.39.0"),
+      "nowsza wersja na serwerze -> jest przycisk");
+
+/* Bez hasla w pamieci pudelka aktualizacja odcielaby je od bazy. Ekran ma
+   to powiedziec ZAMIAST przycisku, a nie obok niego.                   */
+A.renderStatus({ fw: "1.38.0", otaHaslo: false });
+check(!otaHtml().includes("Zaktualizuj pudełko"),
+      "bez hasla w pudelku NIE ma przycisku aktualizacji");
+check(otaHtml().includes("hasła do bazy"), "...i jest napisane dlaczego");
+
+/* Suma bije numer wersji. Numer pisze czlowiek w config.h i da sie go
+   zapomniec podbic — wtedy porownanie numerow klamie.                  */
+A.renderStatus({ fw: "1.39.0", otaHaslo: true, otaMd5: "b".repeat(32) });
+check(otaHtml().includes("Zaktualizuj pudełko"),
+      "ten sam numer, ale inna suma -> nadal jest co wgrywac");
+A.renderStatus({ fw: "1.39.0", otaHaslo: true, otaMd5: "a".repeat(32) });
+check(!otaHtml().includes("Zaktualizuj pudełko") && otaHtml().includes("najnowszą"),
+      "zgodna suma -> nie proponujemy tego samego drugi raz");
+
+head("Aktualizacja pudelka: zlecenie i zapis");
+
+A.__resetDb();
+A.__setState({ cfg: {} });
+A.renderStatus({ fw: "1.38.0", otaHaslo: true });
+await window.wyslijAktualizacje();
+
+const zlec = A.__db.data?.devices?.pillbox01?.config?.otaCmd;
+check(!!zlec, "zlecenie trafia do bazy");
+check(zlec?.md5 === OPIS.md5, "razem z suma kontrolna (to ona chroni przed podmiana pliku)");
+check(typeof zlec?.ts === "number" && zlec.ts > 0,
+      "i ze znacznikiem czasu — bez niego nie odroznisz 'czeka' od 'nie doszlo'");
+check(otaHtml().includes("Zlecone"),
+      "ekran mowi wprost, ze pudelko zrobi to przy najblizszej okazji");
+check(otaHtml().includes("wieczk") || otaHtml().includes("ładowar"),
+      "...i KIEDY to bedzie, zamiast zostawiac uzytkownika z cisza");
+
+/* Zasada 5: kazdy zapis uzytkownika idzie przez zapiszPewnie(). Firebase
+   offline nie odrzuca obietnicy, tylko wisi — goly set() pokazalby sukces,
+   a dane nie doszlyby nigdy.                                           */
+const zrodlo = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+const cialoWyslij = zrodlo.slice(zrodlo.indexOf("window.wyslijAktualizacje"),
+                                zrodlo.indexOf("function renderOta"));
+check(cialoWyslij.includes("zapiszCfg("),
+      "zlecenie idzie przez zapiszCfg()/zapiszPewnie(), nie golym set()");
+check(!/\bset\(/.test(cialoWyslij), "i nigdzie nie siega po gole set()");
+
 head("Zgodnosc wersji aplikacji");
 check(/const APP_VERSION = "([\d.\-]+)"/.test(html), "index.html deklaruje wersje");
 const av = html.match(/const APP_VERSION = "([\d.\-]+)"/)?.[1];

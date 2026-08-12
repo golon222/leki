@@ -904,6 +904,15 @@ nav button.act{color:var(--acc)}
   <div class="card">
 
     <div class="muted" id="devInfo" style="margin-top:6px"></div>
+
+    <!-- Aktualizacja programu pudełka (D59).
+
+         Przycisk tylko KOLEJKUJE aktualizację — pudełko śpi i zobaczy ją
+         przy najbliższym połączeniu, a wykona przed zaśnięciem. W praktyce
+         znaczy to: przy następnym otwarciu wieczka albo na ładowarce.
+         Ekran musi to mówić wprost, inaczej wygląda na zepsuty.        -->
+    <div id="otaBox" style="margin-top:16px"></div>
+
     <button class="ghost" style="margin-top:14px;width:100%" onclick="reconcile()">Przelicz kalendarz ze zdarzeń</button>
     <button class="ghost" style="margin-top:8px;width:100%" onclick="fbSignOut()">Wyloguj</button>
     <button class="ghost" style="margin-top:8px;width:100%" onclick="wyczyscCache()">
@@ -1188,7 +1197,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-12.25";
+const APP_VERSION = "2026-08-12.26";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -3832,6 +3841,7 @@ function renderStatus(st){
   const chip = document.getElementById("batChip");
   renderOpenWarn(st);
   renderNetStan();              // lista znanych sieci przychodzi w statusie
+  renderOta();                  // wersja programu i stan aktualizacji też
   renderKafelki();              // podpis kafelka WiFi też z niej korzysta
   renderOstrzezenia();          // liczniki strat przychodzą właśnie w statusie
 
@@ -4094,6 +4104,7 @@ function renderSettings(){
   renderWeekEditor();
   renderExceptions();
   renderNetStan();
+  renderOta();                  // `otaCmd` z konfiguracji mówi, że czeka
   document.getElementById("drugName").value = cfg.drugName || "Warfin";
   document.getElementById("drugStrength").value = String(cfg.drugStrength ?? 3);
   wypelnijListyZakresu();
@@ -4233,6 +4244,122 @@ window.wyslijSiec = async () => {
   msg.style.color = "var(--ok)";
   renderNetStan();
 };
+
+/* ═══════════════ AKTUALIZACJA PROGRAMU PUDEŁKA (D59) ═══════════════
+
+   Opis wersji leży obok aplikacji na GitHub Pages — kładzie go tam automat
+   przy każdej zmianie w firmware. Aplikacja czyta go PRZEGLĄDARKĄ, która
+   certyfikat serwera sprawdza, i dopiero ona podaje pudełku sumę kontrolną
+   przez Firebase.
+
+   To nie jest ozdoba. Pudełko łączy się z `setInsecure()`, czyli samo nie
+   odróżniłoby prawdziwego serwera od podstawionego. Suma z drugiego,
+   sprawdzanego kanału jest jedyną realną przeszkodą dla kogoś, kto siedzi
+   w tej samej sieci WiFi — a mówimy o programie pilnującym leku
+   przeciwzakrzepowego, więc ta przeszkoda musi tam być.                */
+let opisFirmware = null;      // null = jeszcze nie czytaliśmy
+let opisFirmwareBlad = "";
+
+async function pobierzOpisFirmware(){
+  try {
+    /* `no-store`, bo service worker cache'uje powłokę aplikacji i bez tego
+       podałby stary opis jeszcze długo po wypuszczeniu nowej wersji —
+       czyli dokładnie wtedy, gdy przycisk ma coś zrobić.               */
+    const r = await fetch("./firmware/PillBox.json", { cache: "no-store" });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const j = await r.json();
+    if (typeof j.md5 !== "string" || j.md5.length !== 32)
+      throw new Error("opis bez poprawnej sumy");
+    opisFirmware = j;
+    opisFirmwareBlad = "";
+  } catch (e) {
+    opisFirmware = null;
+    opisFirmwareBlad = e.message || "nie udało się pobrać";
+  }
+  renderOta();
+}
+
+window.wyslijAktualizacje = async () => {
+  if (!opisFirmware) return;
+  /* Sumę i wersję wysyłamy razem: pudełko sprawdza sumę, a człowiek czyta
+     wersję. Bez `ts` nie dałoby się odróżnić „jeszcze się nie łączyło" od
+     „łączyło się i nie zrobiło" — ta sama lekcja co przy `wifiNowa`.   */
+  cfg.otaCmd = {
+    md5: opisFirmware.md5,
+    wersja: String(opisFirmware.wersja || "").slice(0, 15),
+    ts: Math.floor(Date.now()/1000)
+  };
+  await zapiszCfg({ otaCmd: cfg.otaCmd }, "Aktualizacja pudełka");
+  renderOta();
+};
+
+function renderOta(){
+  const box = document.getElementById("otaBox");
+  if (!box) return;
+  const st = ostatniStatus || {};
+  const teraz = st.fw || "?";
+  const dostepna = opisFirmware?.wersja || "";
+  const czeka = !!cfg.otaCmd?.md5;
+
+  /* Czy jest co wgrywać. SUMA ma pierwszeństwo przed numerem wersji:
+     numer pisze człowiek w config.h i da się go zapomnieć podbić, a wtedy
+     porównanie numerów powiedziałoby „masz najnowszą" o programie, który
+     najnowszy nie jest. Pudełko wysyła sumę dopiero po pierwszej
+     aktualizacji przez WiFi — wcześniej zostaje numer i tyle. */
+  const sumaPudelka = typeof st.otaMd5 === "string" && st.otaMd5.length === 32
+                      ? st.otaMd5 : "";
+  const rozne = !opisFirmware ? false
+              : sumaPudelka ? opisFirmware.md5 !== sumaPudelka
+                            : dostepna !== teraz;
+
+  /* Bez hasła w pamięci pudełka aktualizacja odcięłaby je od bazy —
+     binarka z automatu hasła nie zna. Mówimy to ZANIM ktoś naciśnie
+     przycisk, i przycisku wtedy nie ma. */
+  const hasloBrak = st.otaHaslo === false;
+
+  let html = `<div class="dim2" style="font-size:12px;text-transform:uppercase;letter-spacing:.06em">
+                Program pudełka</div>
+              <div style="margin-top:4px">Wgrany: <b>${esc(teraz)}</b>`;
+  if (dostepna) html += ` · dostępny: <b>${esc(dostepna)}</b>`;
+  html += `</div>`;
+
+  if (opisFirmwareBlad){
+    html += `<div class="dim2" style="margin-top:6px">Nie mogę sprawdzić, co jest
+             dostępne (${esc(opisFirmwareBlad)}).</div>`;
+  } else if (hasloBrak){
+    html += `<div style="margin-top:8px;color:var(--bad)">⚠️ Pudełko nie ma zapisanego
+             hasła do bazy, więc aktualizacja odcięłaby je od aplikacji.
+             Wgraj firmware kablem albo podaj hasło w portalu WiFi.</div>`;
+  } else if (czeka){
+    /* Najważniejsze zdanie na tym ekranie. Bez niego przycisk wygląda na
+       zepsuty: naciskasz i przez wiele godzin nic się nie dzieje, bo
+       pudełko po prostu śpi. */
+    html += `<div style="margin-top:8px;color:var(--warn)">⏳ Zlecone — pudełko
+             zaktualizuje się przy najbliższej okazji: gdy otworzysz wieczko
+             albo postawisz je na ładowarce.</div>`;
+    if (st.otaMsg)
+      html += `<div class="dim2" style="margin-top:4px">Pudełko mówi: <b>${esc(st.otaMsg)}</b></div>`;
+  } else if (dostepna && rozne){
+    html += `<button class="primary" style="width:100%;margin-top:10px"
+               onclick="wyslijAktualizacje()">Zaktualizuj pudełko do ${esc(dostepna)}</button>
+             <div class="dim2" style="margin-top:6px;font-size:12px">
+               Pobranie trwa około minuty i kończy się restartem. Dawka zapisuje
+               się pierwsza — aktualizacja nigdy jej nie wyprzedzi.</div>`;
+  } else if (dostepna){
+    html += `<div class="dim2" style="margin-top:6px">Pudełko ma najnowszą wersję.</div>`;
+  }
+
+  /* Licznik nieudanych prób i cofnięta wersja — pokazujemy tylko wtedy, gdy
+     naprawdę coś się stało. Puste liczniki na co dzień to szum.        */
+  if (st.otaFail > 0)
+    html += `<div class="dim2" style="margin-top:6px">Nieudane próby: <b>${st.otaFail}</b>${
+             st.otaFail >= 3 ? " — pudełko przestało próbować" : ""}</div>`;
+  if (st.otaBad)
+    html += `<div style="margin-top:6px;color:var(--warn)">⚠️ Któraś wersja nie
+             uruchomiła się i pudełko samo wróciło do poprzedniej.</div>`;
+
+  box.innerHTML = html;
+}
 
 /* Trzy stany, każdy znaczy co innego dla tego, co masz zrobić dalej. */
 function renderNetStan(){
@@ -5075,6 +5202,12 @@ if ("serviceWorker" in navigator){
 }
 
 document.getElementById("appVersion").textContent = APP_VERSION;
+
+/* Jaki program leży na serwerze dla pudełka (D59). Bez `await` i bez
+   blokowania startu: to informacja poboczna, a `pobierzOpisFirmware()`
+   sam wywoła `renderOta()`, gdy odpowiedź przyjdzie. Nieudane pobranie
+   (offline) nie psuje niczego — ekran napisze wprost, że nie wie.    */
+pobierzOpisFirmware();
 </script>
 </body>
 </html>

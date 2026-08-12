@@ -2049,6 +2049,144 @@ head("Kolejka pod nieustajacym 401");
   prefs.wipe();
 }
 
+/* ================= 20. HASLO URZADZENIA I AKTUALIZACJA (D59) =========
+   Stawka jest tu wieksza niz wygoda. Binarka budowana przez automat NIE
+   ZNA hasla do bazy - pudelko loguje sie tym z wlasnej pamieci trwalej.
+   Gdyby ktos kiedys odwrocil te kolejnosc albo przepuscil aktualizacje
+   przy pustej pamieci, pudelko po restarcie nie odezwaloby sie juz do
+   aplikacji i nie byloby zdalnej drogi, zeby to naprawic.             */
+{
+  prefs.wipe();
+
+  head("Haslo urzadzenia: pamiec trwala przed config.h");
+
+  CHECK(!hasloJestPrawdziwe(String("")), "puste haslo nie jest haslem");
+  CHECK(!hasloJestPrawdziwe(String(PASSWORD_PLACEHOLDER)),
+        "placeholder z repo nie jest haslem");
+  CHECK(hasloJestPrawdziwe(String("prawdziwe123")), "zwykly tekst jest haslem");
+
+  CHECK(!hasloWPamieci(), "swieza pamiec nie ma hasla");
+  CHECK(hasloDoLogowania() == String(DEVICE_PASSWORD),
+        "bez pamieci logujemy sie tym z config.h");
+
+  CHECK(hasloUtrwal(String("tajne-haslo")), "zapis hasla sie udaje");
+  CHECK(hasloWPamieci(), "i pamiec od razu o nim wie");
+  CHECK(hasloDoLogowania() == String("tajne-haslo"),
+        "pamiec trwala ma pierwszenstwo przed config.h");
+
+  /* Placeholder nie moze trafic do pamieci jako prawdziwe haslo -
+     inaczej binarka z automatu "utrwalilaby" wlasna pustke i pudelko
+     uznaloby sie za samodzielne, nie bedac nim.                      */
+  prefs.wipe();
+  CHECK(!hasloUtrwal(String(PASSWORD_PLACEHOLDER)),
+        "placeholder NIE zapisuje sie jako haslo");
+  CHECK(!hasloWPamieci(), "i pamiec nadal jest pusta");
+
+  /* Nieudany zapis do NVS nie moze udawac sukcesu - od tej wartosci
+     zalezy zgoda na aktualizacje (D46, D47).                        */
+  prefs.wipe();
+  prefs.failKeys.insert("fbpass");
+  CHECK(!hasloUtrwal(String("tajne-haslo")),
+        "nieudany zapis NVS zwraca falsz, a nie ciche 'ok'");
+  CHECK(!hasloWPamieci(), "i pudelko NIE uwaza sie za samodzielne");
+  prefs.wipe();
+
+  head("Decyzja o aktualizacji: czego pilnuje");
+
+  const String DOBRA  = "0123456789abcdef0123456789abcdef";
+  const String INNA   = "ffffffffffffffffffffffffffffffff";
+  const String PUSTA  = "";
+  const uint32_t ROZM = 1200000;
+
+  /* Wzorzec: wszystko w porzadku. Kazdy kolejny test psuje DOKLADNIE
+     jedna rzecz, zeby bylo widac, ktora z nich odpowiada za odmowe.  */
+  CHECK(otaDecyzja(true, 0, 90, false, 0, 1000000, 0, ROZM,
+                   DOBRA, INNA, PUSTA, DOBRA) == OTA_ROB,
+        "komplet warunkow -> pobieramy");
+
+  CHECK(otaDecyzja(true, 0, 90, false, 0, 1000000, 0, ROZM,
+                   DOBRA, DOBRA, PUSTA, DOBRA) == OTA_NIC_NOWEGO,
+        "ta sama suma co wgrana -> NIE pobieramy drugi raz");
+
+  /* To jest odpowiedz na "zeby nie pobierala sie ta sama wersja":
+     rozstrzyga SUMA, nie numer. Numer moze byc nawet ten sam.       */
+  CHECK(otaDecyzja(true, 0, 90, false, 0, 1000000, 0, ROZM,
+                   INNA, DOBRA, PUSTA, INNA) == OTA_ROB,
+        "inna suma -> pobieramy, choc numer wersji moze byc ten sam");
+
+  CHECK(otaDecyzja(false, 0, 90, false, 0, 1000000, 0, ROZM,
+                   DOBRA, INNA, PUSTA, DOBRA) == OTA_BEZ_HASLA,
+        "bez hasla w pamieci NIE aktualizujemy (odcielibysmy pudelko od bazy)");
+
+  CHECK(otaDecyzja(true, 3, 90, false, 0, 1000000, 0, ROZM,
+                   DOBRA, INNA, PUSTA, DOBRA) == OTA_KOLEJKA,
+        "niewyslane dawki maja pierwszenstwo przed aktualizacja");
+
+  CHECK(otaDecyzja(true, 0, OTA_MIN_BATT_PCT - 1, false, 0, 1000000, 0, ROZM,
+                   DOBRA, INNA, PUSTA, DOBRA) == OTA_BATERIA,
+        "za malo baterii poza ladowarka -> czekamy");
+  CHECK(otaDecyzja(true, 0, OTA_MIN_BATT_PCT - 1, true, 0, 1000000, 0, ROZM,
+                   DOBRA, INNA, PUSTA, DOBRA) == OTA_ROB,
+        "...ale na ladowarce prog baterii nie obowiazuje");
+
+  CHECK(otaDecyzja(true, 0, 90, false, OTA_MAX_FAILS, 1000000, 0, ROZM,
+                   DOBRA, INNA, PUSTA, DOBRA) == OTA_PODDANO,
+        "po trzech nieudanych probach przestajemy probowac");
+
+  CHECK(otaDecyzja(true, 0, 90, false, 0, 1000000, 1000000 - 10, ROZM,
+                   DOBRA, INNA, PUSTA, DOBRA) == OTA_ZA_WCZESNIE,
+        "druga proba tego samego dnia -> nie teraz");
+  CHECK(otaDecyzja(true, 0, 90, false, 0, 1000000, 1000000 - OTA_RETRY_S - 1, ROZM,
+                   DOBRA, INNA, PUSTA, DOBRA) == OTA_ROB,
+        "...a po dobie znowu wolno");
+  /* Bez zegara `teraz` jest zerem. Gdyby odstep liczyl sie mimo to,
+     pudelko z niezsynchronizowanym czasem nie zaktualizowaloby sie
+     NIGDY - a to stan, w ktorym bywa po kazdym resecie.            */
+  CHECK(otaDecyzja(true, 0, 90, false, 0, 0, 1000000, ROZM,
+                   DOBRA, INNA, PUSTA, DOBRA) == OTA_ROB,
+        "bez wiarygodnego zegara odstep nie blokuje proby");
+
+  CHECK(otaDecyzja(true, 0, 90, false, 0, 1000000, 0, ROZM,
+                   DOBRA, INNA, DOBRA, DOBRA) == OTA_ZEPSUTA,
+        "wersja z czarnej listy nie jest pobierana drugi raz");
+
+  head("Decyzja o aktualizacji: obrona przed podmiana pliku");
+
+  /* Suma z serwera i suma zadana przez aplikacje to DWA ROZNE KANALY.
+     Rozjazd znaczy, ze ktorys z nich klamie - i wtedy nie wgrywamy. */
+  CHECK(otaDecyzja(true, 0, 90, false, 0, 1000000, 0, ROZM,
+                   INNA, PUSTA, PUSTA, DOBRA) == OTA_NIEZGODNA,
+        "plik na serwerze inny niz zadany przez aplikacje -> odmowa");
+  CHECK(otaDecyzja(true, 0, 90, false, 0, 1000000, 0, ROZM,
+                   DOBRA, INNA, PUSTA, PUSTA) == OTA_NIEZGODNA,
+        "brak sumy z bazy to NIE jest zgoda - nie wiemy, wiec nie wgrywamy");
+
+  head("Decyzja o aktualizacji: opis ze smieci");
+
+  CHECK(otaDecyzja(true, 0, 90, false, 0, 1000000, 0, ROZM,
+                   String("krotka"), INNA, PUSTA, DOBRA) == OTA_ZLY_OPIS,
+        "suma inna niz 32 znaki -> to nie jest opis wersji");
+  CHECK(otaDecyzja(true, 0, 90, false, 0, 1000000, 0, OTA_MIN_BIN_SIZE - 1,
+                   DOBRA, INNA, PUSTA, DOBRA) == OTA_ZLY_OPIS,
+        "plik za maly na firmware (np. strona bledu 404)");
+  CHECK(otaDecyzja(true, 0, 90, false, 0, 1000000, 0, OTA_MAX_BIN_SIZE + 1,
+                   DOBRA, INNA, PUSTA, DOBRA) == OTA_ZLY_OPIS,
+        "plik wiekszy niz partycja - wiemy to PRZED pobraniem");
+
+  /* Kazdy powod musi miec swoj tekst. Bez tego aplikacja pokazywalaby
+     "nieznany stan" akurat wtedy, gdy uzytkownik pyta "dlaczego nie". */
+  const OtaDecyzja WSZYSTKIE[] = {
+    OTA_ROB, OTA_NIC_NOWEGO, OTA_BEZ_HASLA, OTA_KOLEJKA, OTA_BATERIA,
+    OTA_PODDANO, OTA_ZA_WCZESNIE, OTA_ZEPSUTA, OTA_ZLY_OPIS, OTA_NIEZGODNA
+  };
+  int bezOpisu = 0;
+  for (OtaDecyzja d : WSZYSTKIE)
+    if (String(otaOpisDecyzji(d)) == String("nieznany stan")) bezOpisu++;
+  CHECK(bezOpisu == 0, "kazdy powod odmowy ma swoj opis dla aplikacji (%d bez)", bezOpisu);
+
+  prefs.wipe();
+}
+
 printf("\n──────────────────────────────────────\n");
 printf("  ZALICZONE: %d    BLEDY: %d\n", PASS, FAIL);
 printf("──────────────────────────────────────\n");

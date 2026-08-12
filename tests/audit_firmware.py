@@ -857,6 +857,109 @@ if _wc:
 else:
     ok(False, "nie znaleziono wifiConnect() do sprawdzenia")
 
+# ---------- 9b. Aktualizacja przez WiFi i haslo urzadzenia (D59) ----------
+# Tego nie sprawdzi zadna czysta funkcja: chodzi o KOLEJNOSC i o to, skad
+# co jest wolane. Kazda z ponizszych kontroli pilnuje zdania, ktorego
+# zlamanie konczy sie pudelkiem odcietym od bazy albo dawka Warfinu
+# przegrywajaca z wygoda.
+
+# Haslo do logowania NIE moze isc wprost z config.h. Binarka budowana przez
+# automat ma tam placeholder, wiec pominiecie pamieci trwalej znaczy
+# "po pierwszej aktualizacji pudelko sie nie zaloguje".
+# Ciala szukamy w SUROWYM zrodle, nie w `code`. strip() zamienia napisy na
+# puste, a przy okazji rozjezdza sie na "https://" (dwa ukosniki wygladaja
+# jak komentarz) - wiec kontrola dotykajaca tresci napisow musi omijac go
+# bokiem. Komentarze usuwamy sami, zeby wzmianka w opisie nie liczyla sie
+# jako kod.
+def cialo_surowe(naglowek):
+    i = ino.find(naglowek + " {")
+    if i < 0: return ""
+    reszta = ino[i:]
+    k = reszta.find("\n}")
+    tresc = reszta[:k] if k > 0 else reszta
+    tresc = re.sub(r"/\*.*?\*/", "", tresc, flags=re.S)
+    return re.sub(r"//[^\n]*", "", tresc)
+
+_sign = cialo_surowe("bool firebaseSignIn()")
+if _sign:
+    ok('req["password"] = haslo' in _sign,
+       "firebaseSignIn() loguje sie haslem z hasloDoLogowania(), nie wprost z config.h")
+    ok("DEVICE_PASSWORD" not in _sign,
+       "i nie siega po DEVICE_PASSWORD z pominieciem pamieci trwalej")
+    # Utrwalenie PO udanym logowaniu, nie przed - inaczej bledne haslo
+    # zapisaloby sie na stale i przykrylo to poprawne z config.h.
+    _idx_tok = _sign.find("idToken = res")
+    _idx_utrwal = _sign.find("hasloUtrwal(")
+    ok(_idx_tok >= 0 and _idx_utrwal > _idx_tok,
+       "haslo utrwala sie dopiero PO udanym logowaniu, nie przed proba")
+else:
+    ok(False, "nie znaleziono firebaseSignIn() do sprawdzenia")
+
+# Zapis hasla musi byc potwierdzony odczytem. Od tej jednej wartosci zalezy
+# zgoda na wgranie binarki, ktora hasla nie zna (D46, D47 - NVS potrafi
+# zawiesc po cichu).
+_utrwal = cialo("bool hasloUtrwal(const String& h)")
+if _utrwal:
+    ok("prefs.getString" in _utrwal and "kontrola" in _utrwal,
+       "hasloUtrwal() sprawdza zapis odczytem zwrotnym, nie ufa samemu putString")
+else:
+    ok(False, "nie znaleziono hasloUtrwal() do sprawdzenia")
+
+# Aktualizacja rusza WYLACZNIE z goToSleep(), czyli po tym, jak pudelko
+# zrobilo wszystko, po co wstalo. Wywolanie z fetchConfig() albo z obslugi
+# kontaktronu wcisnelo by ~minute radia miedzy otwarcie wieczka a zapis
+# dawki - dokladnie tam, gdzie nie wolno.
+# Definicja tez pasuje do wzorca, wiec odejmujemy ja po prefiksie "void ",
+# a nie po samej pozycji - te roznia sie o dlugosc typu zwracanego i takie
+# porownanie cicho przepuszczalo dodatkowe wywolania.
+_wolania = [m.start() for m in re.finditer(r"\botaSprobuj\s*\(", code)
+            if not code[:m.start()].rstrip().endswith("void")]
+_sleep = cialo("void goToSleep(uint32_t seconds)")
+ok(len(_wolania) == 1,
+   "otaSprobuj() wolane z dokladnie jednego miejsca (nie rozsypane po sciezkach)")
+if _sleep:
+    ok("otaSprobuj();" in _sleep,
+       "i tym miejscem jest goToSleep() - po zapisie dawki i wyslaniu statusu")
+    # Potwierdzenie dzialajacej wersji musi poprzedzac probe nowej: dojscie
+    # tutaj jest wlasnie dowodem, ze biezacy program nie wysypuje sie.
+    _p, _s = _sleep.find("otaPotwierdzDzialanie()"), _sleep.find("otaSprobuj()")
+    ok(_p >= 0 and _s > _p,
+       "otaPotwierdzDzialanie() idzie PRZED otaSprobuj() (inaczej dobra wersja by sie cofala)")
+    # Radio musi jeszcze zyc - wifiOff() przed OTA zabraloby polaczenie.
+    ok(_sleep.find("wifiOff()") > _s,
+       "aktualizacja dostaje jeszcze wlaczone radio (wifiOff() dopiero po niej)")
+else:
+    ok(False, "nie znaleziono goToSleep() do sprawdzenia")
+
+# fetchConfig() ma tylko PODNIESC flage, nigdy pobierac.
+_fc = cialo("void fetchConfig()")
+if _fc:
+    ok("otaSprobuj(" not in _fc,
+       "fetchConfig() nie pobiera programu - tylko zapamietuje prosbe")
+
+# Suma kontrolna musi trafic do Update: bez niej uszkodzony albo podmieniony
+# plik zostalby przyjety i przelaczony jako nowy program.
+_wgraj = cialo("bool otaWgraj(const String& md5, uint32_t rozmiar)")
+if _wgraj:
+    ok("Update.setMD5(" in _wgraj,
+       "otaWgraj() podaje ESP32 sume kontrolna do sprawdzenia przy zapisie")
+    ok("Update.abort()" in _wgraj,
+       "i porzuca niedokonczony zapis, zamiast zostawiac polowe programu")
+else:
+    ok(False, "nie znaleziono otaWgraj() do sprawdzenia")
+
+# Proba liczy sie PRZED pobraniem. Gdyby licznik rosl dopiero po
+# niepowodzeniu, aktualizacja wieszajaca pudelko nie podniosla by go nigdy.
+_sprobuj = cialo("void otaSprobuj()")
+if _sprobuj:
+    _zanotuj, _wgrajw = _sprobuj.find("otaZanotujProbe(teraz)"), _sprobuj.find("otaWgraj(")
+    ok(_zanotuj >= 0 and _wgrajw > _zanotuj,
+       "proba zapisuje sie PRZED pobraniem, nie po nim")
+
+# Podzial pamieci musi zapowiadac OTA - na huge_app nie ma dokad pisac.
+ok("with OTA" in ino[:3000],
+   "naglowek szkicu zapowiada podzial pamieci z druga partycja programu")
+
 # ---------- 10. Rzeczy do uzupelnienia przez uzytkownika ----------
 todo = "TUTAJ_WPISZ_HASLO_C" in cfg
 warn(todo, "DEVICE_PASSWORD nie jest jeszcze uzupelnione w config.h")

@@ -170,7 +170,12 @@ const PRZYKLAD_STATUSU = {
   boots: 12, queued: 0, dropped: 0, nvsFail: 0, nvsFailKey: "",
   nvsFree: 512,
   charging: false, chargeSince: 0, chargeFromPct: -1, lastCharge: 0,
-  prevCharge: 0, boxOpen: false, openSince: 0
+  prevCharge: 0, boxOpen: false, openSince: 0,
+  /* Aktualizacja przez WiFi (D59). otaBad to suma MD5 wersji, ktora sie
+     nie uruchomila - 32 znaki albo pusto, nigdy nic pomiedzy.         */
+  otaMsg: "za malo baterii - postaw na ladowarke", otaWersja: "1.38.0",
+  otaHaslo: true, otaFail: 0, otaBad: "",
+  otaMd5: "0123456789abcdef0123456789abcdef"
 };
 check(POLA_STATUSU.every(p => p in PRZYKLAD_STATUSU),
       `pola statusu nieopisane w tescie: ${POLA_STATUSU.filter(p => !(p in PRZYKLAD_STATUSU))}`);

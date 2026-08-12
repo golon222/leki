@@ -50,7 +50,12 @@ export { brakujePokrycia, doReconcile, reconcileDecyzja, opisLadowan, minutyDoPe
          magazyn, OCZEK_KEY, oczekOdmowy, bazaOdmowila,
          INR_ZAKRES_MIN, INR_ZAKRES_MAX, INR_ODSTEPY, inrKrokiZakresu, renderSettings,
          ostrzMilczy, MILCZY_PROG_H,
-         ostrzZatkana, ZATKANA_SWIEZOSC_H, nvsMalo, NVS_MALO, lastRec };
+         ostrzZatkana, ZATKANA_SWIEZOSC_H, nvsMalo, NVS_MALO, lastRec,
+         renderOta, pobierzOpisFirmware };
+/* Opis wersji firmware czytany jest przez fetch(), ktorego w testach nie
+   ma. Podstawiamy go wprost, zeby dalo sie sprawdzic KAZDY stan ekranu
+   aktualizacji - takze ten, w ktorym pudelko nie ma hasla.            */
+export function __setOpisFirmware(o){ opisFirmware = o; opisFirmwareBlad = o ? "" : "brak"; }
 export function __setState(o){
   if (o.cfg)    Object.assign(cfg, o.cfg);
   if (o.doses)  { for (const k of Object.keys(doses)) delete doses[k]; Object.assign(doses, o.doses); }

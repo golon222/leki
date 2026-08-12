@@ -30,6 +30,10 @@ WANTED = [
     "wifiListeZapisz", "wifiListeCzytaj",
     "wifiSiecDodaj", "wifiSiecUsun", "wifiSiecPriorytet",
     "tokenZPamieci", "zapomnijToken",
+    # Haslo urzadzenia w pamieci trwalej i decyzja o aktualizacji (D59).
+    # hasloJestPrawdziwe musi byc pierwsze - reszta go wola.
+    "hasloJestPrawdziwe", "hasloZPamieci", "hasloWPamieci", "hasloUtrwal",
+    "hasloDoLogowania", "otaDecyzja", "otaOpisDecyzji",
     "przesunZnaczniki", "queuePush", "queueCount", "queuePeek", "queuePop", "queueDrop",
     "queueShiftTimestamps", "rekordKompletny", "trwaleOdrzucony", "flushQueue",
     "makeRecordAt", "makeRecord",

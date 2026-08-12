@@ -23,8 +23,8 @@ bash tests/run_all.sh
 ```
 
 Musi przejść przed zmianą i po zmianie. Stan wyjściowy:
-**455 + 51 firmware, 812 (×6 pór doby) + 92 + 49 aplikacja, 48 zgodności,
-91 reguł bazy, 234 kontroli audytu — 0 błędów.**
+**485 + 51 firmware, 828 (×6 pór doby) + 92 + 49 aplikacja, 48 zgodności,
+91 reguł bazy, 259 kontroli audytu — 0 błędów.**
 
 Testy pracują na **prawdziwym kodzie**, nie na kopii: `tests/extract.py` wycina
 funkcje z `PillBox.ino`, `tests/build_app_module.mjs` buduje moduł z `index.html`.
@@ -98,6 +98,21 @@ Test to złapie, ale komunikat zrozumiesz szybciej, znając powód (D6, D13, D15
    Odwrotna kolejność traci sieć, której nikt już nie zna — a z nią jedyną
    drogę do pudełka poza portalem. Portal fizyczny zostaje na zawsze.
 
+10. **Hasło do Firebase czytamy z NVS, nigdy wprost z `config.h`** (D59).
+   `hasloDoLogowania()` daje pierwszeństwo pamięci trwałej; `config.h` jest
+   już tylko **ziarnem** przy pierwszym wgraniu kablem. Powód jest twardy:
+   binarkę aktualizacji buduje automat z tego repo, a w repo stoi placeholder.
+   Wgranie jej pudełku, które hasła nie ma w NVS, odcięłoby je od bazy —
+   czyli od jedynej drogi naprawy bez kabla. Dlatego `otaDecyzja()` odmawia
+   aktualizacji bez hasła w pamięci, a `hasloUtrwal()` potwierdza zapis
+   **odczytem zwrotnym**. Nie upraszczaj żadnego z tych trzech kroków.
+
+11. **Aktualizacja rusza wyłącznie z `goToSleep()`.** To jedyne miejsce, przez
+   które przechodzi każda ścieżka wybudzenia, i jedyne, w którym dawka jest
+   już zapisana i potwierdzona. Wywołanie z `fetchConfig()` albo z obsługi
+   kontaktronu wcisnęłoby minutę radia między otwarcie wieczka a zapis dawki
+   Warfinu. Audyt to sprawdza i złapie taką zmianę.
+
 Blok pomiaru napięcia **wolno** zmieniać (zakaz zniesiony). Audyt nie blokuje —
 zgłasza tylko uwagę, żeby zmiana przypadkowa nie wyglądała jak świadoma.
 
@@ -135,14 +150,22 @@ naprawdę wgrywa. Nie jest częścią `run_all.sh`: wymaga sieci i ~500 MB
 toolchainu (pierwsze uruchomienie kilka minut, kolejne szybkie).
 **Uruchom to po każdej zmianie w firmware.**
 
-Stan: `PillBox.ino` **38% flasha** (1,21 MB z 3 MB), `PillBoxTest.ino` 12%.
-Zapas ~1,9 MB — dużo.
+Stan: `PillBox.ino` **62% flasha** (1,24 MB z 1,875 MB), `PillBoxTest.ino` 20%.
+Zapas ~730 kB.
 
-**Podział pamięci musi być `Huge APP (3MB No OTA/1MB SPIFFS)`**, bo tak jest
-w nagłówku szkicu. Na domyślnym podziale (1,2 MB) ten sam program pokazuje
-**92%** i wygląda jak alarm, którego nie ma. Skrypt sam sprawdza, czy nagłówek
-nadal zapowiada ten podział, i przerywa, gdy się rozjadą. Uwaga na mylące
-nazwy opcji: `CDCOnBoot=default` znaczy **włączone**, `CDCOnBoot=cdc` wyłączone.
+**Podział pamięci musi być `Minimal SPIFFS (1.9MB APP with OTA/190KB SPIFFS)`**,
+bo tak jest w nagłówku szkicu. Zmieniony w 1.38.0 z `Huge APP` (D59):
+aktualizacja przez WiFi zapisuje program do **drugiej** partycji, a `Huge APP`
+ma tylko jedną. Program ma teraz 1,875 MB zamiast 3 MB — nadal dużo, ale to
+już nie jest nieskończoność. Skrypt sam sprawdza, czy nagłówek nadal zapowiada
+ten podział, i przerywa, gdy się rozjadą. Uwaga na mylące nazwy opcji:
+`CDCOnBoot=default` znaczy **włączone**, `CDCOnBoot=cdc` wyłączone.
+
+**Binarkę do aktualizacji buduje automat** (`.github/workflows/firmware.yml`)
+przy każdej zmianie w `firmware/**` i kładzie ją jako `firmware/PillBox.bin`
++ `PillBox.json` na GitHub Pages. Nigdy nie buduj jej ręcznie do repo —
+`OTA_OUT=<katalog> bash tests/kompiluj_firmware.sh` służy do sprawdzenia,
+nie do publikacji.
 
 Szczegóły obejść (ctags, `.cpp` zamiast `.ino`, atrapa `dfu-util`) — D17.
 
@@ -155,6 +178,10 @@ Szczegóły obejść (ctags, `.cpp` zamiast `.ino`, atrapa `dfu-util`) — D17.
   400 — bo tylko wtedy `trwaleOdrzucony()` zdejmie wpis z kolejki. Nikt tego
   nie zmierzył. `pushEventRecord()` loguje teraz odpowiedź bazy przy każdym
   niepowodzeniu, więc pierwszy log z pudełka to rozstrzygnie.
+- **Cała aktualizacja przez WiFi (D59).** Kompiluje się i ma 67 testów, ale
+  **żadne prawdziwe OTA jeszcze się nie odbyło** — ani pobranie, ani rollback,
+  ani przeniesienie hasła do NVS na fizycznej płytce. Pierwsze wgranie kablem
+  z podziałem `min_spiffs` jest też pierwszym testem tego mechanizmu.
 
 ---
 

@@ -68,6 +68,19 @@
               ".validate": "newData.isNumber() && newData.val() > 0"
             }
           },
+          "otaCmd": {
+            ".validate": "newData.hasChildren(['md5'])",
+            "md5": {
+              ".validate": "newData.isString() && newData.val().length === 32"
+            },
+            "wersja": {
+              ".validate": "newData.isString() && newData.val().length <= 15"
+            },
+            "ts": {
+              ".validate": "newData.isNumber() && newData.val() > 0"
+            },
+            "$other": false
+          },
           "drugName": {
             ".validate": "newData.isString() && newData.val().length <= 40"
           },

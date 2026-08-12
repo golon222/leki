@@ -1,0 +1,113 @@
+# =====================================================================
+#  Buduje binarke firmware i kladzie ja obok aplikacji na GitHub Pages,
+#  zeby pudelko moglo sie zaktualizowac przez WiFi (D59).
+#
+#  Efektem sa DWA pliki w firmware/:
+#    PillBox.bin   - sam program (~1,2 MB)
+#    PillBox.json  - opis: wersja, suma MD5, rozmiar, data, commit
+#
+#  Pudelko pobiera najpierw opis (kilkaset bajtow) i caly program sciaga
+#  dopiero wtedy, gdy suma rozni sie od tej, ktora juz ma. Aplikacja czyta
+#  ten sam opis i to ona podaje pudelku sume kontrolna - innym kanalem
+#  (Firebase) niz sam plik. Przy `setInsecure()` w firmware to jedyna
+#  realna przeszkoda dla kogos, kto siedzi w tej samej sieci.
+#
+#  HASLA TU NIE MA I BYC NIE MOZE. config.h w repo trzyma placeholder,
+#  wiec binarka jest "pusta" - pudelko loguje sie haslem z wlasnej pamieci
+#  trwalej (D59). To jest cala przyczyna, dla ktorej ten automat w ogole
+#  moze istniec: gdyby haslo musialo byc wkompilowane, budowanie binarki
+#  w publicznym repozytorium bylo by wyciekiem.
+# =====================================================================
+name: Firmware
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'firmware/**'
+      - '.github/workflows/firmware.yml'
+  workflow_dispatch:
+
+# Bez tego krok commitujacy nie ma prawa zapisu.
+permissions:
+  contents: write
+
+concurrency:
+  group: firmware-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Toolchain wazy ~500 MB, wiec trzymamy go miedzy uruchomieniami.
+      # Klucz zawiera wersje rdzenia - jej podbicie ma unieważnić cache.
+      - name: Cache toolchainu Arduino
+        uses: actions/cache@v4
+        with:
+          path: ~/.pillbox-arduino
+          key: arduino-esp32-3.3.11-${{ runner.os }}
+
+      # Ten sam skrypt, ktorego uzywa czlowiek. Ustawienia plytki
+      # (podzial pamieci, CDC) siedza w nim, a nie tutaj - inaczej
+      # binarka z automatu roznilaby sie od tej wgrywanej kablem.
+      - name: Kompilacja
+        env:
+          OTA_OUT: ${{ runner.temp }}/ota
+        run: bash tests/kompiluj_firmware.sh
+
+      - name: Opis wersji
+        run: |
+          set -e
+          BIN="${{ runner.temp }}/ota/pbino.ino.bin"
+          test -f "$BIN" || { echo "BLAD: kompilacja nie zostawila binarki"; exit 1; }
+
+          WERSJA=$(grep -oP '#define\s+FW_VERSION\s+"\K[^"]+' firmware/PillBox/config.h)
+          MD5=$(md5sum "$BIN" | cut -d' ' -f1)
+          ROZMIAR=$(stat -c%s "$BIN")
+
+          # Zdrowy rozsadek: te same granice, ktorych pilnuje firmware
+          # (OTA_MIN_BIN_SIZE / OTA_MAX_BIN_SIZE). Lepiej zatrzymac sie
+          # tutaj niz wypuscic plik, ktorego pudelko i tak odrzuci.
+          if [ "$ROZMIAR" -lt 300000 ] || [ "$ROZMIAR" -gt 1900000 ]; then
+            echo "BLAD: rozmiar $ROZMIAR poza zakresem, ktory przyjmuje pudelko"
+            exit 1
+          fi
+
+          # Placeholder MUSI zostac. Gdyby ktos kiedys wrzucil config.h
+          # z prawdziwym haslem, ten krok zatrzyma automat, zanim haslo
+          # trafi do binarki lezacej publicznie na GitHub Pages.
+          if ! grep -q 'TUTAJ_WPISZ_HASLO' firmware/PillBox/config.h; then
+            echo "BLAD: config.h nie ma placeholdera - czy ktos wrzucil prawdziwe haslo?"
+            exit 1
+          fi
+
+          mkdir -p firmware
+          cp "$BIN" firmware/PillBox.bin
+          cat > firmware/PillBox.json <<EOF
+          {
+            "wersja": "$WERSJA",
+            "md5": "$MD5",
+            "rozmiar": $ROZMIAR,
+            "zbudowano": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "commit": "${GITHUB_SHA}"
+          }
+          EOF
+          echo "wersja $WERSJA, $ROZMIAR B, md5 $MD5"
+
+      - name: Publikacja
+        run: |
+          set -e
+          if git diff --quiet -- firmware/PillBox.bin; then
+            echo "binarka bez zmian - nie ma czego publikowac"
+            exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add firmware/PillBox.bin firmware/PillBox.json
+          # [skip ci] zamyka petle: ten commit dotyka firmware/, wiec bez
+          # tego wyzwolilby ten sam workflow jeszcze raz, i tak w kolko.
+          git commit -m "Firmware $(grep -oP '#define\s+FW_VERSION\s+"\K[^"]+' firmware/PillBox/config.h) do aktualizacji przez WiFi [skip ci]"
+          git push
