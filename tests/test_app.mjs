@@ -406,14 +406,21 @@ check(A.ostatniaDawka()===null, "bez dawek nie ma od czego liczyc");
    raz przy rysowaniu. Dwa odczyty w odstepie sekundy musza sie roznic. */
 D({ cfg:{ schedule:["20:00"], defaultDose:1 },
     doses:{ [shift(-1)]: dose(1, 20, 0) } });
+/* Zegar PRZYPINAMY do znacznika dawki, a nie do "teraz". run_all.sh puszcza
+   testy o szesciu porach doby w losowych strefach - przy porze wczesniejszej
+   niz dawka roznica wychodzila ujemna, licznik pokazywal 0 i test raz
+   przechodzil, raz nie. To ta sama pulapka co N3: kontrola zalezna od
+   godziny uruchomienia nie mierzy kodu, tylko zegar maszyny.          */
 const prawdziweNow = Date.now;
-Date.now = () => prawdziweNow.call(Date) - 0;
+const bazaTs = at(1, 20, 0) + 3600*14 + 60*32 + 7;   // 14 h 32 min 07 s po dawce
+Date.now = () => bazaTs * 1000;
 A.odswiezOdDawki();
 const pierwszy = document.getElementById("odDawki").textContent;
-Date.now = () => prawdziweNow.call(Date) + 1000;
+Date.now = () => bazaTs * 1000 + 1000;
 A.odswiezOdDawki();
 const drugi = document.getElementById("odDawki").textContent;
 Date.now = prawdziweNow;
+check(pierwszy==="14 h 32 min 07 s", "licznik liczy od znacznika dawki: " + pierwszy);
 check(pierwszy !== drugi, "po sekundzie licznik pokazuje inna wartosc: "
       + pierwszy + " -> " + drugi);
 check(/\d+ h \d+ min \d\d s$/.test(drugi), "format licznika: " + drugi);
