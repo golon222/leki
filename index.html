@@ -1197,7 +1197,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-12.29";
+const APP_VERSION = "2026-08-12.30";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -4355,8 +4355,10 @@ function renderOta(){
   const warunki = `
     <div class="dim2" style="margin-top:8px;font-size:12px;line-height:1.55">
       Pudełko zrobi to samo, gdy spełni wszystko naraz:<br>
-      • <b>otworzysz wieczko</b> albo <b>postawisz je na ładowarce</b> —
-        to są jedyne dwie okazje, bo poza nimi pudełko śpi;<br>
+      • <b>otworzysz i ZAMKNIESZ wieczko</b> albo <b>postawisz je na
+        ładowarce</b> — to są jedyne dwie okazje, bo poza nimi pudełko śpi.
+        Samo otwarcie nie wystarczy: przy otwartym wieczku pudełko czeka
+        na zamknięcie i dopiero potem bierze się za aktualizację;<br>
       • ma zasięg swojej sieci WiFi;<br>
       • ma <b>co najmniej 25% baterii</b> (na ładowarce próg nie obowiązuje);<br>
       • nie ma zaległych dawek czekających na wysłanie — one idą pierwsze.<br>
@@ -4425,8 +4427,9 @@ function renderOta(){
              <button class="primary" style="width:100%;margin-top:8px"
                onclick="wyslijAktualizacje()">Pobierz aktualizację pudełka</button>
              <div class="dim2" style="margin-top:6px;font-size:12px">
-               Pobranie trwa około minuty i kończy się restartem — usłyszysz
-               wtedy fanfarę w górę.</div>` + warunki;
+               Zamknij wieczko i zostaw pudełko w spokoju: pobranie trwa
+               około minuty i kończy się restartem — usłyszysz wtedy fanfarę
+               w górę.</div>` + warunki;
   } else if (dostepna){
     html += `<div class="dim2" style="margin-top:6px">Pudełko ma najnowszą wersję.</div>`;
   }

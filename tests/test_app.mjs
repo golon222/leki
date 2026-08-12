@@ -2745,7 +2745,7 @@ check(otaHtml().includes("Sprawdź, czy jest nowa wersja"),
    pytanie "to mam teraz cos zrobic, czy czekac" - a to jedyne pytanie,
    ktore uzytkownik ma na tym ekranie po nacisnieciu przycisku.         */
 A.renderStatus({ fw: "1.38.1", otaHaslo: true });
-for (const [czego, wzor] of [["otwarcia wieczka", /otworzysz wieczko/],
+for (const [czego, wzor] of [["ZAMKNIECIA wieczka", /ZAMKNIESZ wieczko/],
                              ["ladowarki",        /ładowarce/],
                              ["progu baterii",    /25% baterii/],
                              ["pustej kolejki",   /zaległych dawek/]])
@@ -2756,8 +2756,14 @@ for (const [czego, wzor] of [["otwarcia wieczka", /otworzysz wieczko/],
 const TS_ZLEC = 1_760_000_000;
 A.__setState({ cfg: { otaCmd: { md5: OPIS.md5, wersja: "1.39.0", ts: TS_ZLEC } } });
 A.renderStatus({ fw: "1.38.1", otaHaslo: true, lastSeen: TS_ZLEC - 100 });
-check(/otworzysz wieczko/.test(otaHtml()),
+check(/ZAMKNIESZ wieczko/.test(otaHtml()),
       "po zleceniu ekran nadal mowi, co musi sie zdarzyc");
+
+/* Samo otwarcie nie wystarczy - pudelko czeka w petli na zamkniecie i
+   dopiero potem dochodzi do goToSleep(), gdzie siedzi cala aktualizacja.
+   Kuba zapytal wprost, czy moze zamknac; ekran ma odpowiadac sam.      */
+check(/Samo otwarcie nie wystarczy/.test(otaHtml()),
+      "ekran uprzedza, ze samo otwarcie wieczka nie uruchomi aktualizacji");
 A.__setState({ cfg: {} });
 
 head("Aktualizacja pudelka: zlecenie i zapis");

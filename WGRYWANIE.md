@@ -90,8 +90,13 @@ gdy tylko automat zbuduje nowszą wersję.
 
 1. Naciskasz przycisk w aplikacji — to **zleca** aktualizację, nic więcej.
 2. Pudełko śpi, więc nic nie dzieje się od razu. Zobaczy zlecenie przy
-   najbliższym połączeniu i wykona przed zaśnięciem: **przy otwarciu wieczka
+   najbliższym połączeniu i wykona przed zaśnięciem: **po zamknięciu wieczka
    albo na ładowarce**.
+
+   **Samo otwarcie nie wystarczy.** Przy otwartym wieczku pudełko czeka na
+   zamknięcie (do 15 minut) i dopiero potem bierze się za aktualizację —
+   dokładnie tak samo, jak przy zwykłym zapisie dawki. Otwórz, weź tabletkę,
+   zamknij i zostaw je w spokoju na minutę.
 3. Zanim zacznie pobierać, **piknie dwa razy**. Potem milczy przez około
    minutę i restartuje się — to nie jest zawieszenie.
    Po restarcie, gdy nowa wersja wstanie i przejdzie całą swoją drogę,
