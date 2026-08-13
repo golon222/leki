@@ -1197,7 +1197,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-12.33";
+const APP_VERSION = "2026-08-12.34";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -4306,6 +4306,16 @@ window.wyslijAktualizacje = async () => {
   renderOta();
 };
 
+/* Odwolanie zlecenia. Do tej pory jedyna droga do skasowania go było
+   pudełko — a ono kasuje dopiero, gdy uzna sprawę za zamkniętą. Zlecenie,
+   które z jakiegoś powodu utknęło, wisiało więc z czerwonym ostrzeżeniem
+   i nie dawało się ruszyć z tej strony. */
+window.anulujAktualizacje = async () => {
+  cfg.otaCmd = null;
+  await zapiszCfg({ otaCmd: null }, "Odwołanie aktualizacji");
+  renderOta();
+};
+
 function renderOta(){
   const box = document.getElementById("otaBox");
   if (!box) return;
@@ -4454,6 +4464,11 @@ function renderOta(){
       html += `<div class="dim2" style="margin-top:4px">Jeszcze się od tego czasu
                nie łączyło, więc nie ma czym się przejmować.</div>` + warunki;
     }
+    /* Wyjście awaryjne. Zlecenie potrafi utknąć — na przykład gdy pudełko
+       odmawia z powodu, który samo mija dopiero po dobie. Bez tego przycisku
+       jedynym wyjściem było czekanie. */
+    html += `<button class="ghost" style="width:100%;margin-top:10px"
+               onclick="anulujAktualizacje()">Odwołaj zlecenie</button>`;
   } else if (dostepna && rozne){
     /* Przycisk pobierania pojawia się DOPIERO, gdy naprawdę jest co pobrać.
        Wyszarzony przycisk „na zapas" tylko myli: wygląda jak zepsuty, a nie

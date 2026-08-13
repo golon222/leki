@@ -997,9 +997,21 @@ ok('prefs.remove("otaTs")' in _potw_raw,
    "udana aktualizacja kasuje znacznik ostatniej proby, nie blokuje nastepnej")
 
 # ...i nie wolno jej wyslac, gdy dotyczy innego programu.
+# Jedno zrodlo prawdy dla obu stron. Wczesniej `pushStatus()` mialo wlasna
+# kopie warunku, a `otaDecyzja()` czytala sume wprost z pamieci - i wychodzily
+# z tego dwie rozne prawdy naraz: aplikacji pudelko meldowalo "nie znam
+# wlasnej sumy", a samo sobie liczylo po sumie programu, ktorego juz nie ma.
+_suma_raw = cialo_surowe("String otaSumaWgranej()")
+ok('otaSumaZPamieci("otaFw")' in _suma_raw and "FW_VERSION" in _suma_raw,
+   "otaSumaWgranej() oddaje sume tylko wtedy, gdy powstala dla biezacej wersji")
+
 _st_raw = cialo_surowe("bool pushStatus()")
-ok('prefs.getString("otaFw"' in _st_raw and "sumaDlaFw == FW_VERSION" in _st_raw,
-   "status wysyla sume tylko wtedy, gdy powstala dla biezacej wersji")
+ok("otaSumaWgranej()" in _st_raw,
+   "status bierze sume z otaSumaWgranej(), nie z wlasnej kopii warunku")
+
+_spr_raw = cialo_surowe("void otaSprobuj()")
+ok("otaSumaWgranej()" in _spr_raw and 'otaSumaZPamieci("otaMd5")' not in _spr_raw,
+   "decyzja o OTA opiera sie na tym samym zrodle co status")
 
 # Podzial pamieci musi zapowiadac OTA - na huge_app nie ma dokad pisac.
 ok("with OTA" in ino[:3000],

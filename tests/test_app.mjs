@@ -2852,6 +2852,20 @@ check(!otaHtml().includes("nie zrobiło"),
       "...i bez czerwonego alarmu, bo pudelko zachowalo sie poprawnie");
 A.__setOpisFirmware(OPIS);
 
+/* Zlecenie potrafi utknac - np. gdy pudelko odmawia z powodu, ktory sam
+   mija dopiero po dobie. Bez wyjscia awaryjnego jedyna droga bylo czekanie. */
+head("Aktualizacja pudelka: odwolanie zlecenia");
+
+A.__resetDb();
+A.__setState({ cfg: { otaCmd: { md5: OPIS.md5, wersja:"1.39.4", ts: ZLECONO } } });
+A.renderStatus({ fw:"1.39.4", otaHaslo:true, lastSeen: ZLECONO + 600 });
+check(otaHtml().includes("Odwołaj zlecenie"),
+      "przy czekajacym zleceniu jest przycisk odwolania");
+await window.anulujAktualizacje();
+check(!A.cfg.otaCmd, "odwolanie kasuje zlecenie z konfiguracji");
+check(!otaHtml().includes("Odwołaj zlecenie"),
+      "...i przycisk znika, bo nie ma juz czego odwolywac");
+
 head("Aktualizacja pudelka: proby i poddanie sie");
 
 A.renderStatus({ fw: "1.38.0", otaHaslo: true, lastSeen: ZLECONO + 600, otaFail: 1 });

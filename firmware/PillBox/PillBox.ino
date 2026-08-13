@@ -2043,6 +2043,39 @@ bool pushLidState() {
   return ok;
 }
 
+/* --- Suma wgranego programu (uzywa jej i status, i decyzja o OTA) ---
+   Stoi TUTAJ, a nie przy reszcie kodu aktualizacji, bo `pushStatus()`
+   jest zdefiniowane wyzej i musi ja widziec. Kolejnosci definicji
+   pilnuje audyt - w .ino ma ona znaczenie takze dla generatora
+   prototypow (B21/D26).                                            */
+String otaSumaZPamieci(const char* klucz) {
+  prefs.begin(NVS_NAMESPACE, true);
+  String s = prefs.getString(klucz, "");
+  prefs.end();
+  return s;
+}
+
+/* Suma programu, ktory NAPRAWDE siedzi w pudelku - albo pusty napis.
+
+   TU BYL BLAD, i to taki, ktory naprawilem tylko w polowie. Po wgraniu
+   kablem `otaMd5` zostaje z poprzedniej wersji, wiec `pushStatus()`
+   dostal juz warunek "wysylaj tylko, gdy `otaFw` zgadza sie z biezaca
+   wersja". Ale `otaDecyzja()` czytala sume WPROST z pamieci, z pominieciem
+   tego warunku - i wychodzila z tego dwie rozne prawdy naraz: aplikacji
+   pudelko meldowalo "nie znam wlasnej sumy", a samo sobie liczylo po
+   sumie programu, ktorego juz w nim nie ma.
+
+   Skutek widzialny u Kuby: swiezo wgrane 1.39.4 nie uznalo sie za
+   aktualne, wiec zlecenie z bazy nie zostalo skasowane i wisialo dalej
+   z czerwonym ostrzezeniem.
+
+   Jedno zrodlo prawdy dla obu stron - stad ta funkcja.               */
+String otaSumaWgranej() {
+  const String dlaWersji = otaSumaZPamieci("otaFw");
+  if (dlaWersji != String(FW_VERSION)) return String("");
+  return otaSumaZPamieci("otaMd5");
+}
+
 bool pushStatus() {
   JsonDocument doc;
   doc["battery"]  = batteryPercentage;
@@ -2105,12 +2138,17 @@ bool pushStatus() {
        sumie" - czyli klamstwo, na ktorym aplikacja opiera decyzje
        "jest nowa wersja". Niezgodnosc traktujemy jak brak sumy:
        porownanie spada wtedy na numer wersji, ktory po kablu jest
-       prawdziwy.                                                     */
-    const String sumaDlaFw = prefs.getString("otaFw", "");
-    doc["otaMd5"]  = (sumaDlaFw == FW_VERSION) ? prefs.getString("otaMd5", "")
-                                               : String("");
+       prawdziwy.
+
+       Liczymy ja PO `prefs.end()`, nie w srodku bloku: `otaSumaWgranej()`
+       sama otwiera pamiec, a Preferences w rdzeniu ESP32 to jeden globalny
+       uchwyt - zagniezdzone `begin()` nic nie robi, za to `end()` tej
+       wewnetrznej funkcji zamyka uchwyt tej zewnetrznej i wszystko, co
+       nastapiloby dalej, przepada. Tak zamilkla kiedys czarna skrzynka
+       (B22). Audyt tego pilnuje.                                      */
     prefs.end();
   }
+  doc["otaMd5"] = otaSumaWgranej();
 #endif
   doc["boots"]    = rtcBootCount;
   doc["queued"]   = queueCount();
@@ -3187,13 +3225,6 @@ const char* otaOpisDecyzji(OtaDecyzja d) {
    ktora sie nie uruchomila. "otaFail" - ile prob z rzedu spalilo. "otaTs"
    - kiedy byla ostatnia. "otaPend" - suma wersji wgranej, ale jeszcze
    niepotwierdzonej. "otaBoot" - ile razy taka wersja startowala.       */
-String otaSumaZPamieci(const char* klucz) {
-  prefs.begin(NVS_NAMESPACE, true);
-  String s = prefs.getString(klucz, "");
-  prefs.end();
-  return s;
-}
-
 /* Zapis proby PRZED pobraniem, nie po nim.
 
    To jest ta sama ostroznosc co przy kolejce (zasada 6), tylko odwrocona:
@@ -3484,7 +3515,7 @@ void otaSprobuj() {
   const OtaDecyzja d = otaDecyzja(
       hasloWPamieci(), queueCount(), batteryPercentage, rtcCharging,
       (uint8_t)(nieudane > 255 ? 255 : nieudane), teraz, ostatnia, rozmiar,
-      md5, otaSumaZPamieci("otaMd5"), otaSumaZPamieci("otaBad"), String(rtcOtaMd5));
+      md5, otaSumaWgranej(), otaSumaZPamieci("otaBad"), String(rtcOtaMd5));
 
   snprintf(rtcOtaWersja, sizeof(rtcOtaWersja), "%s", wersja.c_str());
   snprintf(rtcOtaMsg, sizeof(rtcOtaMsg), "%s", otaOpisDecyzji(d));
