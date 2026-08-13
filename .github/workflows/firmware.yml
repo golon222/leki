@@ -7,10 +7,14 @@
 #    PillBox.json  - opis: wersja, suma MD5, rozmiar, data, commit
 #
 #  Pudelko pobiera najpierw opis (kilkaset bajtow) i caly program sciaga
-#  dopiero wtedy, gdy suma rozni sie od tej, ktora juz ma. Aplikacja czyta
-#  ten sam opis i to ona podaje pudelku sume kontrolna - innym kanalem
-#  (Firebase) niz sam plik. Przy `setInsecure()` w firmware to jedyna
-#  realna przeszkoda dla kogos, kto siedzi w tej samej sieci.
+#  dopiero wtedy, gdy suma rozni sie od tej, ktora juz ma. Suma z opisu idzie
+#  do `Update.setMD5()`, wiec zerwany transfer zostaje odrzucony.
+#
+#  Nie jest to natomiast obrona przed PODMIANA pliku: pudelko laczy sie bez
+#  weryfikacji certyfikatu (setInsecure) i z Pages, i z Firebase. Probowalismy
+#  porownywac sume z dwoch zrodel - przy dwoch nieweryfikowanych kanalach nie
+#  dawalo to nic poza kosztem i zostalo cofniete w 1.40.0 (D59). Jedyna
+#  uczciwa obrona to setCACert() i jest zapisana jako dlug.
 #
 #  HASLA TU NIE MA I BYC NIE MOZE. config.h w repo trzyma placeholder,
 #  wiec binarka jest "pusta" - pudelko loguje sie haslem z wlasnej pamieci
@@ -84,9 +88,13 @@ jobs:
             exit 1
           fi
 
-          mkdir -p firmware
-          cp "$BIN" firmware/PillBox.bin
-          cat > firmware/PillBox.json <<EOF
+          # Skladamy artefakty POZA repo. Krok publikacji przestawia galaz
+          # na najswiezszy main i dopiero wtedy je tam kopiuje - inaczej
+          # `reset --hard` skasowalby wlasnie to, co zbudowalismy.
+          OUT="${{ runner.temp }}/ota"
+          cp "$BIN" "$OUT/PillBox.bin"
+          echo "WERSJA=$WERSJA" >> "$GITHUB_ENV"
+          cat > "$OUT/PillBox.json" <<EOF
           {
             "wersja": "$WERSJA",
             "md5": "$MD5",
@@ -103,17 +111,24 @@ jobs:
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          # `git add` MUSI byc przed sprawdzeniem "czy sie zmienilo".
+          # Bierzemy NAJNOWSZY main i dopiero na niego kladziemy artefakty.
           #
-          # TU BYL BLAD, i to cichy - dokladnie ten rodzaj, ktory ten projekt
-          # juz raz zlapal przy atrapie NVS: `git diff` NIE WIDZI plikow
-          # nieśledzonych. Przy pierwszym uruchomieniu PillBox.bin jeszcze
-          # w repo nie bylo, wiec `git diff --quiet` zwracalo "bez roznic",
-          # krok konczyl sie sukcesem i nie publikowal NICZEGO. Zielona
-          # Akcja, pusty katalog, pudelko bez czego sie aktualizowac.
+          # TU BYL BLAD: automat commitowal na stanie sprzed kompilacji i robil
+          # `git push`. Gdy w tym czasie ktos wypchnal cokolwiek innego, push
+          # konczyl sie "! [rejected] main -> main (fetch first)" i cala budowa
+          # szla do kosza - binarka nie trafiala na serwer, choc skompilowala
+          # sie poprawnie. Zdarzylo sie to przy pierwszej probie wypuszczenia
+          # 1.40.0, bo rownolegle wchodzil commit z dokumentacja.
           #
-          # Po `git add` porownujemy INDEKS z HEAD - a tam nowy plik jest
-          # widoczny jako zmiana.
+          # `reset --hard` jest tu bezpieczny, bo .bin i .json sa WYNIKIEM
+          # kompilacji, nie edycji: lezą poza repo (w runner.temp) i kopiujemy
+          # je z powrotem po przestawieniu galezi. Nic recznego nie ginie.
+          git fetch origin main
+          git reset --hard origin/main
+
+          cp "${{ runner.temp }}/ota/PillBox.bin"  firmware/PillBox.bin
+          cp "${{ runner.temp }}/ota/PillBox.json" firmware/PillBox.json
+
           git add firmware/PillBox.bin firmware/PillBox.json
           if git diff --cached --quiet; then
             echo "binarka bez zmian - nie ma czego publikowac"
@@ -121,5 +136,16 @@ jobs:
           fi
           # [skip ci] zamyka petle: ten commit dotyka firmware/, wiec bez
           # tego wyzwolilby ten sam workflow jeszcze raz, i tak w kolko.
-          git commit -m "Firmware $(grep -oP '#define\s+FW_VERSION\s+"\K[^"]+' firmware/PillBox/config.h) do aktualizacji przez WiFi [skip ci]"
-          git push
+          git commit -m "Firmware $WERSJA do aktualizacji przez WiFi [skip ci]"
+
+          # Nawet z odswiezona galezia ktos moze zdazyc wejsc miedzy fetch
+          # a push. Trzy podejscia zamiast jednego i przegranej calej budowy.
+          for i in 1 2 3; do
+            git push && exit 0
+            echo "push odrzucony - odswiezam i probuje ponownie ($i/3)"
+            git fetch origin main
+            git rebase origin/main || git rebase --abort
+            sleep 5
+          done
+          echo "BLAD: nie udalo sie wypchnac binarki po trzech probach"
+          exit 1
