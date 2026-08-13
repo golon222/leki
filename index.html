@@ -1197,7 +1197,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-12.31";
+const APP_VERSION = "2026-08-12.32";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -4380,7 +4380,9 @@ function renderOta(){
   if (opisFirmware)
     html += `<div class="dim2" style="margin-top:2px;font-size:11px">
              porównanie: ${sumaPudelka
-               ? `po sumie pliku — ${sumaPudelka === opisFirmware.md5 ? "zgodne" : "RÓŻNE"}`
+               ? `po sumie pliku — ${sumaPudelka === opisFirmware.md5 ? "zgodne" : "RÓŻNE"}
+                  <br>pudełko: ${esc(sumaPudelka.slice(0,8))}… ·
+                  serwer: ${esc(String(opisFirmware.md5).slice(0,8))}…`
                : "po numerze wersji (pudełko jeszcze nie zna własnej sumy)"}</div>`;
 
   if (opisFirmwareBlad){
