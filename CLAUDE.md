@@ -23,8 +23,8 @@ bash tests/run_all.sh
 ```
 
 Musi przejść przed zmianą i po zmianie. Stan wyjściowy:
-**485 + 51 firmware, 828 (×6 pór doby) + 92 + 49 aplikacja, 48 zgodności,
-91 reguł bazy, 259 kontroli audytu — 0 błędów.**
+**485 + 51 firmware, 853 (×6 pór doby) + 92 + 49 aplikacja, 48 zgodności,
+93 reguł bazy, 263 kontroli audytu — 0 błędów.**
 
 Testy pracują na **prawdziwym kodzie**, nie na kopii: `tests/extract.py` wycina
 funkcje z `PillBox.ino`, `tests/build_app_module.mjs` buduje moduł z `index.html`.
@@ -180,10 +180,14 @@ Szczegóły obejść (ctags, `.cpp` zamiast `.ino`, atrapa `dfu-util`) — D17.
   400 — bo tylko wtedy `trwaleOdrzucony()` zdejmie wpis z kolejki. Nikt tego
   nie zmierzył. `pushEventRecord()` loguje teraz odpowiedź bazy przy każdym
   niepowodzeniu, więc pierwszy log z pudełka to rozstrzygnie.
-- **Cała aktualizacja przez WiFi (D59).** Kompiluje się i ma 67 testów, ale
-  **żadne prawdziwe OTA jeszcze się nie odbyło** — ani pobranie, ani rollback,
-  ani przeniesienie hasła do NVS na fizycznej płytce. Pierwsze wgranie kablem
-  z podziałem `min_spiffs` jest też pierwszym testem tego mechanizmu.
+- **Aktualizacja przez WiFi (D59) — częściowo sprawdzona na płytce.**
+  **Pobranie i uruchomienie nowej wersji DZIAŁA**: 2026-08-12 pudełko samo
+  ściągnęło 1.39.0 i potwierdziło ją jako działającą (dowód: suma `86a4c83b`
+  w jego pamięci, której kabel zapisać nie może). Hasło z NVS też działa —
+  binarka z placeholderem loguje się do bazy.
+  **Nadal niesprawdzone:** rollback po nieudanym starcie (żadna wersja się
+  jeszcze nie wysypała), czarna lista zepsutych sum i zachowanie przy
+  przerwanym pobieraniu.
 
 ---
 
