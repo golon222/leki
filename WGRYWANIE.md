@@ -1,4 +1,4 @@
-# Jak wgrać firmware (1.38.x)
+# Jak wgrać firmware kablem
 
 To wgranie jest **jednorazowo inne** niż wszystkie poprzednie. Zmienia się
 jedno ustawienie w menu Arduino IDE. Po nim aktualizacje idą już przez WiFi,
@@ -28,8 +28,13 @@ i wstaw prawdziwe hasło konta `pillbox01@device.local`.
 przepisze hasło do własnej pamięci i od tej pory będzie go stamtąd używać.
 Dlatego binarki budowane automatem — bez hasła — będą działać.
 
-Linii poniżej (`PASSWORD_PLACEHOLDER`) **nie ruszaj**. To wzorzec, po którym
-pudełko poznaje, że hasła nie ma.
+To **jedyne** miejsce w `config.h`, w którym wpisuje się hasło — pilnuje tego
+adnotacja tuż pod nim.
+
+**Jeśli pudełko już raz połączyło się z bazą, możesz zostawić placeholder.**
+Hasło siedzi wtedy w jego pamięci i to ona ma pierwszeństwo. Wpisać trzeba
+tylko wtedy, gdy pamięć jest pusta — po pierwszym wgraniu albo po
+„Erase All Flash".
 
 ## 3. Ustawienia płytki w Arduino IDE
 
@@ -76,13 +81,18 @@ Zwykłą strzałką, tak jak zawsze.
 W aplikacji, ekran **Urządzenie**:
 
 - **Firmware** zgadza się z numerem, który stoi w `config.h` przy
-  `FW_VERSION` (dziś 1.38.1). Jeśli widnieje stara wersja, wgranie nie doszło.
+  `FW_VERSION`. Jeśli widnieje stara wersja, wgranie nie doszło.
 - Nie ma czerwonego ostrzeżenia o braku hasła. Jeśli jest — pudełko nie
   zdążyło jeszcze zapisać hasła w pamięci. Poczekaj na jedno połączenie
   (otwórz i zamknij wieczko) i sprawdź ponownie.
 
-Od tej chwili na tym ekranie pojawia się przycisk **„Zaktualizuj pudełko"**,
-gdy tylko automat zbuduje nowszą wersję.
+Od tej chwili na tym ekranie działa **„Sprawdź, czy jest nowa wersja"**, a gdy
+automat zbuduje nowszą — pojawia się **„Pobierz aktualizację pudełka"**.
+
+Pod numerami wersji stoi linijka **„porównanie: …"**. Mówi, na czym opiera się
+decyzja: na sumie pliku (pewniejsze) czy na numerze wersji. Po wgraniu kablem
+pudełko wraca do porównywania po numerze, bo suma dotyczy programu, który
+właśnie zastąpiłeś.
 
 ---
 
