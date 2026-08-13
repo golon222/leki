@@ -1197,7 +1197,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-12.35";
+const APP_VERSION = "2026-08-12.36";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -4297,6 +4297,15 @@ window.wyslijAktualizacje = async () => {
   /* Sumę i wersję wysyłamy razem: pudełko sprawdza sumę, a człowiek czyta
      wersję. Bez `ts` nie dałoby się odróżnić „jeszcze się nie łączyło" od
      „łączyło się i nie zrobiło" — ta sama lekcja co przy `wifiNowa`.   */
+  /* `md5` wysyłamy WYŁĄCZNIE dla zgodności z firmware do 1.39.5, które
+     go jeszcze wymagało i odrzucało zlecenie bez niego. Od 1.40.0 pudełko
+     go ignoruje — porównanie sum między bazą a plikiem okazało się obroną
+     iluzoryczną (oba kanały idą przez `setInsecure()`), a kosztowało
+     unieważnianie zlecenia przy każdej nowej wersji.
+
+     `ts` jest teraz tym, co naprawdę się liczy: zlecenie świeższe niż
+     ostatnia nieudana próba znaczy „człowiek prosi teraz" i pozwala
+     pudełku pominąć dobowy odstęp. */
   cfg.otaCmd = {
     md5: opisFirmware.md5,
     wersja: String(opisFirmware.wersja || "").slice(0, 15),
@@ -4427,29 +4436,7 @@ function renderOta(){
     const bylPoZleceniu = zlecono > 0 && widziano > zlecono;
     const odKiedy = zlecono ? relTime(Math.floor(Date.now()/1000) - zlecono) : "";
 
-    /* ZLECENIE ZDĄŻYŁO SIĘ ZESTARZEĆ.
-
-       Zlecenie niesie sumę KONKRETNEJ wersji — to ona jest obroną przed
-       podmianą pliku (pudełko nie sprawdza certyfikatu, więc porównuje
-       dwa niezależne kanały). Ale gdy między naciśnięciem przycisku
-       a próbą pojawi się nowsza wersja, te dwie sumy przestają pasować
-       i pudełko odmawia. Ma rację — tylko że przyczyną jest nasza własna
-       publikacja, a nie żaden atak.
-
-       Bez tego rozróżnienia ekran krzyczał czerwonym „nie zrobiło"
-       i kazał odświeżać aplikację, choć aplikacja była aktualna. Trzeba
-       było odświeżyć ZLECENIE, a tego nie dało się zrobić inaczej niż
-       przypadkiem.                                                     */
-    const zlecenieStare = opisFirmware && cfg.otaCmd?.md5 &&
-                          cfg.otaCmd.md5 !== opisFirmware.md5;
-    if (zlecenieStare){
-      html += `<div style="margin-top:8px;color:var(--warn)">Zlecenie dotyczy
-               wersji <b>${esc(cfg.otaCmd.wersja || "?")}</b>, a na serwerze jest
-               już <b>${esc(dostepna)}</b>. Pudełko odmawia, bo suma ze zlecenia
-               nie zgadza się z plikiem — to celowa obrona, nie usterka.</div>
-               <button class="primary" style="width:100%;margin-top:8px"
-                 onclick="wyslijAktualizacje()">Ponów zlecenie dla ${esc(dostepna)}</button>`;
-    } else if (bylPoZleceniu){
+    if (bylPoZleceniu){
       html += `<div style="margin-top:8px;color:var(--bad)">⚠️ Pudełko łączyło się
                po zleceniu i aktualizacji <b>nie zrobiło</b>.</div>`;
       html += st.otaMsg

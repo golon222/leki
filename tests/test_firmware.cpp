@@ -2097,87 +2097,96 @@ head("Kolejka pod nieustajacym 401");
   const String INNA   = "ffffffffffffffffffffffffffffffff";
   const String PUSTA  = "";
   const uint32_t ROZM = 1200000;
+  /* Zlecenie starsze niz ostatnia proba - czyli NIE swieze. Dzieki temu
+     domyslny wzorzec sprawdza zwykla sciezke, a nie wyjatek dla
+     swiadomego zadania (ten ma wlasne testy nizej).                   */
+  const uint32_t TS_SWIEZE = 0;
 
   /* Wzorzec: wszystko w porzadku. Kazdy kolejny test psuje DOKLADNIE
      jedna rzecz, zeby bylo widac, ktora z nich odpowiada za odmowe.  */
   CHECK(otaDecyzja(true, 0, 90, false, 0, 1000000, 0, ROZM,
-                   DOBRA, INNA, PUSTA, DOBRA) == OTA_ROB,
+                   TS_SWIEZE, DOBRA, INNA, PUSTA) == OTA_ROB,
         "komplet warunkow -> pobieramy");
 
   CHECK(otaDecyzja(true, 0, 90, false, 0, 1000000, 0, ROZM,
-                   DOBRA, DOBRA, PUSTA, DOBRA) == OTA_NIC_NOWEGO,
+                   TS_SWIEZE, DOBRA, DOBRA, PUSTA) == OTA_NIC_NOWEGO,
         "ta sama suma co wgrana -> NIE pobieramy drugi raz");
 
   /* To jest odpowiedz na "zeby nie pobierala sie ta sama wersja":
      rozstrzyga SUMA, nie numer. Numer moze byc nawet ten sam.       */
   CHECK(otaDecyzja(true, 0, 90, false, 0, 1000000, 0, ROZM,
-                   INNA, DOBRA, PUSTA, INNA) == OTA_ROB,
+                   TS_SWIEZE, INNA, DOBRA, PUSTA) == OTA_ROB,
         "inna suma -> pobieramy, choc numer wersji moze byc ten sam");
 
   CHECK(otaDecyzja(false, 0, 90, false, 0, 1000000, 0, ROZM,
-                   DOBRA, INNA, PUSTA, DOBRA) == OTA_BEZ_HASLA,
+                   TS_SWIEZE, DOBRA, INNA, PUSTA) == OTA_BEZ_HASLA,
         "bez hasla w pamieci NIE aktualizujemy (odcielibysmy pudelko od bazy)");
 
   CHECK(otaDecyzja(true, 3, 90, false, 0, 1000000, 0, ROZM,
-                   DOBRA, INNA, PUSTA, DOBRA) == OTA_KOLEJKA,
+                   TS_SWIEZE, DOBRA, INNA, PUSTA) == OTA_KOLEJKA,
         "niewyslane dawki maja pierwszenstwo przed aktualizacja");
 
   CHECK(otaDecyzja(true, 0, OTA_MIN_BATT_PCT - 1, false, 0, 1000000, 0, ROZM,
-                   DOBRA, INNA, PUSTA, DOBRA) == OTA_BATERIA,
+                   TS_SWIEZE, DOBRA, INNA, PUSTA) == OTA_BATERIA,
         "za malo baterii poza ladowarka -> czekamy");
   CHECK(otaDecyzja(true, 0, OTA_MIN_BATT_PCT - 1, true, 0, 1000000, 0, ROZM,
-                   DOBRA, INNA, PUSTA, DOBRA) == OTA_ROB,
+                   TS_SWIEZE, DOBRA, INNA, PUSTA) == OTA_ROB,
         "...ale na ladowarce prog baterii nie obowiazuje");
 
   CHECK(otaDecyzja(true, 0, 90, false, OTA_MAX_FAILS, 1000000, 0, ROZM,
-                   DOBRA, INNA, PUSTA, DOBRA) == OTA_PODDANO,
+                   TS_SWIEZE, DOBRA, INNA, PUSTA) == OTA_PODDANO,
         "po trzech nieudanych probach przestajemy probowac");
 
   CHECK(otaDecyzja(true, 0, 90, false, 0, 1000000, 1000000 - 10, ROZM,
-                   DOBRA, INNA, PUSTA, DOBRA) == OTA_ZA_WCZESNIE,
+                   TS_SWIEZE, DOBRA, INNA, PUSTA) == OTA_ZA_WCZESNIE,
         "druga proba tego samego dnia -> nie teraz");
   CHECK(otaDecyzja(true, 0, 90, false, 0, 1000000, 1000000 - OTA_RETRY_S - 1, ROZM,
-                   DOBRA, INNA, PUSTA, DOBRA) == OTA_ROB,
+                   TS_SWIEZE, DOBRA, INNA, PUSTA) == OTA_ROB,
         "...a po dobie znowu wolno");
   /* Bez zegara `teraz` jest zerem. Gdyby odstep liczyl sie mimo to,
      pudelko z niezsynchronizowanym czasem nie zaktualizowaloby sie
      NIGDY - a to stan, w ktorym bywa po kazdym resecie.            */
   CHECK(otaDecyzja(true, 0, 90, false, 0, 0, 1000000, ROZM,
-                   DOBRA, INNA, PUSTA, DOBRA) == OTA_ROB,
+                   TS_SWIEZE, DOBRA, INNA, PUSTA) == OTA_ROB,
         "bez wiarygodnego zegara odstep nie blokuje proby");
 
   CHECK(otaDecyzja(true, 0, 90, false, 0, 1000000, 0, ROZM,
-                   DOBRA, INNA, DOBRA, DOBRA) == OTA_ZEPSUTA,
+                   TS_SWIEZE, DOBRA, INNA, DOBRA) == OTA_ZEPSUTA,
         "wersja z czarnej listy nie jest pobierana drugi raz");
 
-  head("Decyzja o aktualizacji: obrona przed podmiana pliku");
+  head("Decyzja o aktualizacji: swiadome zadanie omija odstep");
 
-  /* Suma z serwera i suma zadana przez aplikacje to DWA ROZNE KANALY.
-     Rozjazd znaczy, ze ktorys z nich klamie - i wtedy nie wgrywamy. */
-  CHECK(otaDecyzja(true, 0, 90, false, 0, 1000000, 0, ROZM,
-                   INNA, PUSTA, PUSTA, DOBRA) == OTA_NIEZGODNA,
-        "plik na serwerze inny niz zadany przez aplikacje -> odmowa");
-  CHECK(otaDecyzja(true, 0, 90, false, 0, 1000000, 0, ROZM,
-                   DOBRA, INNA, PUSTA, PUSTA) == OTA_NIEZGODNA,
-        "brak sumy z bazy to NIE jest zgoda - nie wiemy, wiec nie wgrywamy");
+  /* Odstep doby chroni przed PETLA automatycznych ponowien. Gdy zlecenie
+     jest swiezsze niz ostatnia proba, ktos wlasnie nacisnal przycisk juz
+     PO tamtym niepowodzeniu - i kazanie mu czekac doby bylo jednym
+     z powodow, dla ktorych aktualizacja "nie chciala sie zrobic".     */
+  CHECK(otaDecyzja(true, 0, 90, false, 0, 1000000, 999000, ROZM, 0,
+                   DOBRA, INNA, PUSTA) == OTA_ZA_WCZESNIE,
+        "bez nowego zlecenia odstep obowiazuje");
+  CHECK(otaDecyzja(true, 0, 90, false, 0, 1000000, 999000, ROZM, 999500,
+                   DOBRA, INNA, PUSTA) == OTA_ROB,
+        "zlecenie zlozone PO nieudanej probie -> probujemy od razu");
+  CHECK(otaDecyzja(true, 0, 90, false, 0, 1000000, 999000, ROZM, 998000,
+                   DOBRA, INNA, PUSTA) == OTA_ZA_WCZESNIE,
+        "...ale zlecenie STARSZE niz proba to juz nie jest nowa prosba");
 
   head("Decyzja o aktualizacji: opis ze smieci");
 
   CHECK(otaDecyzja(true, 0, 90, false, 0, 1000000, 0, ROZM,
-                   String("krotka"), INNA, PUSTA, DOBRA) == OTA_ZLY_OPIS,
+                   TS_SWIEZE, String("krotka"), INNA, PUSTA) == OTA_ZLY_OPIS,
         "suma inna niz 32 znaki -> to nie jest opis wersji");
   CHECK(otaDecyzja(true, 0, 90, false, 0, 1000000, 0, OTA_MIN_BIN_SIZE - 1,
-                   DOBRA, INNA, PUSTA, DOBRA) == OTA_ZLY_OPIS,
+                   TS_SWIEZE, DOBRA, INNA, PUSTA) == OTA_ZLY_OPIS,
         "plik za maly na firmware (np. strona bledu 404)");
   CHECK(otaDecyzja(true, 0, 90, false, 0, 1000000, 0, OTA_MAX_BIN_SIZE + 1,
-                   DOBRA, INNA, PUSTA, DOBRA) == OTA_ZLY_OPIS,
+                   TS_SWIEZE, DOBRA, INNA, PUSTA) == OTA_ZLY_OPIS,
         "plik wiekszy niz partycja - wiemy to PRZED pobraniem");
 
   /* Kazdy powod musi miec swoj tekst. Bez tego aplikacja pokazywalaby
      "nieznany stan" akurat wtedy, gdy uzytkownik pyta "dlaczego nie". */
   const OtaDecyzja WSZYSTKIE[] = {
     OTA_ROB, OTA_NIC_NOWEGO, OTA_BEZ_HASLA, OTA_KOLEJKA, OTA_BATERIA,
-    OTA_PODDANO, OTA_ZA_WCZESNIE, OTA_ZEPSUTA, OTA_ZLY_OPIS, OTA_NIEZGODNA
+    OTA_PODDANO, OTA_ZA_WCZESNIE, OTA_ZEPSUTA, OTA_ZLY_OPIS
   };
   int bezOpisu = 0;
   for (OtaDecyzja d : WSZYSTKIE)

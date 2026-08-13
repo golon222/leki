@@ -2835,26 +2835,22 @@ A.renderStatus({ fw: "1.38.0", otaHaslo: true, lastSeen: ZLECONO + 600 });
 check(otaHtml().includes("nie zrobiło") && otaHtml().includes("Nie podało powodu"),
       "bez powodu z pudelka ekran nadal ostrzega, zamiast milczec");
 
-/* Zlecenie niesie sume KONKRETNEJ wersji. Gdy miedzy nacisnieciem
-   przycisku a proba wyjdzie nowsza, sumy przestaja pasowac i pudelko
-   odmawia - slusznie, ale przyczyna jest nasza wlasna publikacja, nie
-   atak. Ekran ma dac przycisk ponowienia, a nie czerwony alarm.      */
-head("Aktualizacja pudelka: zlecenie zdazylo sie zestarzec");
+/* Rozjazd sum przestal istniec (D59, 1.40.0): pudelko ignoruje sume
+   ze zlecenia, bo porownywanie jej z plikiem bylo obrona iluzoryczna -
+   oba kanaly ida przez setInsecure(). Zostaje sam znacznik czasu, ktory
+   mowi "czlowiek prosi teraz".                                        */
+head("Aktualizacja pudelka: zlecenie niesie znacznik czasu");
 
-A.__setOpisFirmware({ wersja:"1.39.3", md5:"d".repeat(32), rozmiar:1239104 });
-A.__setState({ cfg: { otaCmd: { md5: OPIS.md5, wersja:"1.39.2", ts: ZLECONO } } });
-A.renderStatus({ fw:"1.39.1", otaHaslo:true, lastSeen: ZLECONO + 600,
-                 otaMsg:"suma z serwera inna niz zadana - odswiez aplikacje" });
-check(otaHtml().includes("Ponów zlecenie dla 1.39.3"),
-      "stare zlecenie -> przycisk ponowienia dla wersji, ktora naprawde lezy na serwerze");
-check(otaHtml().includes("celowa obrona"),
-      "...z wyjasnieniem, ze to obrona, a nie usterka");
-check(!otaHtml().includes("nie zrobiło"),
-      "...i bez czerwonego alarmu, bo pudelko zachowalo sie poprawnie");
-A.__setOpisFirmware(OPIS);
+A.__resetDb();
+A.__setState({ cfg: {} });
+A.renderStatus({ fw: "1.39.5", otaHaslo: true });
+await window.wyslijAktualizacje();
+const zl2 = A.__db.data?.devices?.pillbox01?.config?.otaCmd;
+check(typeof zl2?.ts === "number" && zl2.ts > 0,
+      "zlecenie niesie ts - po nim pudelko pozna swiadome zadanie");
+check(zl2?.md5 === OPIS.md5,
+      "md5 nadal wysylamy, ale wylacznie dla zgodnosci ze starszym firmware");
 
-/* Zlecenie potrafi utknac - np. gdy pudelko odmawia z powodu, ktory sam
-   mija dopiero po dobie. Bez wyjscia awaryjnego jedyna droga bylo czekanie. */
 head("Aktualizacja pudelka: odwolanie zlecenia");
 
 A.__resetDb();

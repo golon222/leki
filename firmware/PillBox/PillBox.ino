@@ -124,12 +124,12 @@ RTC_DATA_ATTR char     rtcNetMsg[48]    = "";
 RTC_DATA_ATTR bool     rtcOtaProsba     = false;
 RTC_DATA_ATTR char     rtcOtaMsg[56]    = "";
 RTC_DATA_ATTR char     rtcOtaWersja[16] = "";
-/* Suma kontrolna ZADANEJ wersji - przyslana przez aplikacje w poleceniu,
-   czyli innym kanalem niz sam plik. To jest cala obrona przy setInsecure():
-   plik lezy na GitHub Pages, suma przychodzi z Firebase, wiec podmiana
-   samego pliku nie wystarczy - trzeba trafic w oba naraz. Aplikacja
-   czyta opis wersji przez przegladarke, ktora certyfikat SPRAWDZA.    */
-RTC_DATA_ATTR char     rtcOtaMd5[33]    = "";
+/* KIEDY zlozono zlecenie. Sluzy do jednego: odroznienia "ktos wlasnie
+   nacisnal przycisk" od "to samo zlecenie probuje sie wykonac kolejny
+   raz". Swiadome zadanie omija dobowy odstep miedzy probami - odstep
+   istnieje przeciwko petli automatycznych ponowien, nie przeciwko
+   czlowiekowi stojacemu nad pudelkiem.                                */
+RTC_DATA_ATTR uint32_t rtcOtaTs        = 0;
 
 /* --- Pudelko zostawione otwarte --------------------------------------- */
 RTC_DATA_ATTR uint32_t rtcOpenSinceTs   = 0;    // kiedy zauwazylismy otwarcie
@@ -224,8 +224,7 @@ enum OtaDecyzja {
   OTA_PODDANO,          // OTA_MAX_FAILS prob z rzedu bez skutku
   OTA_ZA_WCZESNIE,      // nie minela jeszcze doba od ostatniej proby
   OTA_ZEPSUTA,          // ta wersja juz raz nie wstala
-  OTA_ZLY_OPIS,         // plik z opisem nie ma sensu (rozmiar, suma)
-  OTA_NIEZGODNA         // suma z serwera inna niz ta, o ktora prosi aplikacja
+  OTA_ZLY_OPIS          // plik z opisem nie ma sensu (rozmiar, suma)
 };
 /* @extract-end */
 
@@ -2378,11 +2377,12 @@ void fetchConfig() {
   JsonObject ota = doc["otaCmd"].as<JsonObject>();
   if (!ota.isNull()) {
     rtcOtaProsba = true;
-    String suma = ota["md5"] | "";
-    suma.toLowerCase();
-    snprintf(rtcOtaMd5, sizeof(rtcOtaMd5), "%s", suma.c_str());
-    LOG("[OTA] aplikacja prosi o aktualizacje do sumy %s - zrobie to przed snem\n",
-        rtcOtaMd5[0] ? rtcOtaMd5 : "(nie podano)");
+    /* `md5` w zleceniu ignorujemy - patrz komentarz w otaDecyzja(). Liczy
+       sie moment zlozenia: swiezsze niz ostatnia proba znaczy "czlowiek
+       prosi teraz" i pozwala pominac dobowy odstep.                    */
+    rtcOtaTs = ota["ts"] | 0UL;
+    LOG("[OTA] aplikacja prosi o aktualizacje (zlecenie z %lu) - zrobie to przed snem\n",
+        (unsigned long)rtcOtaTs);
   }
 #endif
 
@@ -3156,27 +3156,35 @@ void startWifiPortal() {
    co siedzi w pudelku teraz, `sumaZla` - wersja z czarnej listy.       */
 OtaDecyzja otaDecyzja(bool hasloJest, int wKolejce, int battPct, bool naLadowarce,
                       uint8_t nieudane, uint32_t teraz, uint32_t ostatniaProba,
-                      uint32_t rozmiar,
+                      uint32_t rozmiar, uint32_t tsZlecenia,
                       const String& sumaZdalna, const String& sumaLokalna,
-                      const String& sumaZla, const String& sumaZadana) {
+                      const String& sumaZla) {
   /* Opis pobrany ze smieci albo ze strony bledu 404 zapisanej jako plik.
      Suma MD5 ma dokladnie 32 znaki - krotsza nie jest suma.            */
   if (sumaZdalna.length() != 32) return OTA_ZLY_OPIS;
   if (rozmiar < OTA_MIN_BIN_SIZE || rozmiar > OTA_MAX_BIN_SIZE) return OTA_ZLY_OPIS;
 
-  /* DWA KANALY MUSZA POWIEDZIEC TO SAMO.
+  /* SUMY Z BAZY TU JUZ NIE MA - i to jest swiadome cofniecie (D59).
 
-     `sumaZdalna` przyszla razem z plikiem, z GitHub Pages. `sumaZadana`
-     przyszla z Firebase, wpisana przez aplikacje, ktora czytala opis
-     przez przegladarke - a ta certyfikat sprawdza. Pudelko nie sprawdza
-     (setInsecure), wiec samodzielnie nie odroznilo by prawdziwego serwera
-     od podstawionego. Porownanie obu zrodel to nadrabia: zeby wgrac
-     pudelku obcy program, trzeba podmienic plik I trafic w baze.
+     Stalo tu porownanie sumy z opisu z suma przyslana przez aplikacje,
+     opisane jako "dwa kanaly musza powiedziec to samo". Mialo bronic przed
+     podmiana pliku przy `setInsecure()`.
 
-     Brak sumy z bazy traktujemy jak niezgodnosc, nie jak zgode. Nie
-     wiemy = nie wgrywamy - to program, ktory pilnuje leku
-     przeciwzakrzepowego, a nie zabawka.                               */
-  if (sumaZadana.length() != 32 || sumaZadana != sumaZdalna) return OTA_NIEZGODNA;
+     TA OBRONA BYLA ILUZORYCZNA. Pudelko laczy sie BEZ weryfikacji
+     certyfikatu takze z Firebase (`rtdbClient.setInsecure()`), wiec kto
+     potrafi podmienic plik z GitHuba, potrafi rownie dobrze podmienic
+     odpowiedz bazy. Dwa kanaly, ta sama dziura - zero bezpieczenstwa
+     w zamian za realny koszt.
+
+     A koszt byl codzienny: suma w zleceniu dotyczy KONKRETNEJ wersji,
+     wiec kazda nowa publikacja uniewazniala zlecenie zlozone chwile
+     wczesniej. Kuba spedzil na tym caly wieczor.
+
+     Przed uszkodzonym pobraniem nadal chroni `Update.setMD5()` z sumy
+     podanej w opisie - to lapie zerwany transfer, czyli ryzyko, ktore
+     naprawde wystepuje. Prawdziwa obrona przed podmiana to `setCACert()`
+     i to jest jedyny uczciwy sposob; zostaje jako znany dlug, wpisany
+     w "Czego nie zweryfikowano".                                      */
 
   /* Najpierw to, co konczy sprawe bez zadnego kosztu. "Nic nowego" jest
      pierwsze, bo to najczestsza odpowiedz w codziennej pracy - pudelko
@@ -3197,7 +3205,19 @@ OtaDecyzja otaDecyzja(bool hasloJest, int wKolejce, int battPct, bool naLadowarc
   /* Odstep liczymy tylko z wiarygodnym zegarem. Bez niego `teraz` jest
      zerem i wtedy WOLNO probowac - inaczej pudelko bez zsynchronizowanego
      czasu nie zaktualizowaloby sie nigdy.                              */
-  if (teraz && ostatniaProba && teraz > ostatniaProba &&
+  /* Odstep doby chroni przed PETLA nieudanych prob, nie przed czlowiekiem.
+
+     Gdy zlecenie jest SWIEZSZE niz ostatnia proba, znaczy to, ze ktos
+     wlasnie nacisnal przycisk juz PO tamtym niepowodzeniu - czyli prosi
+     swiadomie i teraz. Kazanie mu czekac doby bylo trzecim powodem, dla
+     ktorego aktualizacja "nie chciala sie zrobic": ekran mowil
+     "nastepna proba za dobe", a czlowiek stal nad pudelkiem i nie mial
+     zadnego sposobu, zeby to przyspieszyc.
+
+     Automatyczne ponowienia (bez nowego zlecenia) odstep nadal
+     obowiazuje, bo to wlasnie one potrafia sie zapetlic.             */
+  const bool swiezeZlecenie = tsZlecenia && tsZlecenia > ostatniaProba;
+  if (!swiezeZlecenie && teraz && ostatniaProba && teraz > ostatniaProba &&
       teraz - ostatniaProba < OTA_RETRY_S) return OTA_ZA_WCZESNIE;
 
   return OTA_ROB;
@@ -3215,7 +3235,6 @@ const char* otaOpisDecyzji(OtaDecyzja d) {
     case OTA_ZA_WCZESNIE: return "nastepna proba za dobe";
     case OTA_ZEPSUTA:     return "ta wersja juz raz nie wstala";
     case OTA_ZLY_OPIS:    return "opis wersji na serwerze jest niepoprawny";
-    case OTA_NIEZGODNA:   return "suma z serwera inna niz zadana - odswiez aplikacje";
   }
   return "nieznany stan";
 }
@@ -3515,7 +3534,7 @@ void otaSprobuj() {
   const OtaDecyzja d = otaDecyzja(
       hasloWPamieci(), queueCount(), batteryPercentage, rtcCharging,
       (uint8_t)(nieudane > 255 ? 255 : nieudane), teraz, ostatnia, rozmiar,
-      md5, otaSumaWgranej(), otaSumaZPamieci("otaBad"), String(rtcOtaMd5));
+      rtcOtaTs, md5, otaSumaWgranej(), otaSumaZPamieci("otaBad"));
 
   snprintf(rtcOtaWersja, sizeof(rtcOtaWersja), "%s", wersja.c_str());
   snprintf(rtcOtaMsg, sizeof(rtcOtaMsg), "%s", otaOpisDecyzji(d));
@@ -3526,18 +3545,10 @@ void otaSprobuj() {
      przy wersji z czarnej listy i przy poddaniu sie: dalsze proby nic
      nie dadza, a niekasowalne polecenie probowaloby w kolko (ta sama
      lekcja co `wifiCmd`).                                            */
-  if (d == OTA_NIC_NOWEGO || d == OTA_ZEPSUTA || d == OTA_PODDANO ||
-      d == OTA_NIEZGODNA) {
+  if (d == OTA_NIC_NOWEGO || d == OTA_ZEPSUTA || d == OTA_PODDANO) {
     rtdbSend("DELETE", "/devices/" DEVICE_ID "/config/otaCmd.json", "");
     rtcOtaProsba = false;
-    /* Niezgodnosc sum NIE jest awaria pudelka, tylko zleceniem, ktore
-       sie zestarzalo: miedzy nacisnieciem przycisku a ta proba wyszla
-       nowsza wersja. Kasujemy je razem z licznikiem prob, bo inaczej
-       kazda nasza publikacja zblizalaby pudelko do poddania sie
-       (3 z 3) za cos, czego nie zrobilo zle. Aplikacja zobaczy brak
-       zlecenia i zaproponuje ponowienie dla wersji, ktora naprawde
-       lezy na serwerze.                                             */
-    if (d == OTA_NIC_NOWEGO || d == OTA_NIEZGODNA) otaWyzerujLicznik();
+    if (d == OTA_NIC_NOWEGO) otaWyzerujLicznik();
     otaZglos();
     return;
   }
