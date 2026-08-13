@@ -23,8 +23,8 @@ bash tests/run_all.sh
 ```
 
 Musi przejść przed zmianą i po zmianie. Stan wyjściowy:
-**485 + 51 firmware, 853 (×6 pór doby) + 92 + 49 aplikacja, 48 zgodności,
-93 reguł bazy, 263 kontroli audytu — 0 błędów.**
+**486 + 51 firmware, 860 (×6 pór doby) + 92 + 49 aplikacja, 48 zgodności,
+93 reguł bazy, 266 kontroli audytu — 0 błędów.**
 
 Testy pracują na **prawdziwym kodzie**, nie na kopii: `tests/extract.py` wycina
 funkcje z `PillBox.ino`, `tests/build_app_module.mjs` buduje moduł z `index.html`.
@@ -180,6 +180,13 @@ Szczegóły obejść (ctags, `.cpp` zamiast `.ino`, atrapa `dfu-util`) — D17.
   400 — bo tylko wtedy `trwaleOdrzucony()` zdejmie wpis z kolejki. Nikt tego
   nie zmierzył. `pushEventRecord()` loguje teraz odpowiedź bazy przy każdym
   niepowodzeniu, więc pierwszy log z pudełka to rozstrzygnie.
+- **`setCACert()` — niespłacony dług, i to jedyna prawdziwa obrona.**
+  Pudełko łączy się bez weryfikacji certyfikatu **ze wszystkim**: z Firebase
+  (`rtdbClient.setInsecure()`) i z GitHub Pages przy pobieraniu programu.
+  W 1.40.0 **usunięto** porównywanie sumy z bazy z sumą z pliku, bo przy dwóch
+  nieweryfikowanych kanałach nie dawało ono nic poza kosztem (D59). Przed
+  uszkodzonym pobraniem chroni `Update.setMD5()`; przed **podmianą** nie chroni
+  dziś nic. Nie udawaj, że jest inaczej.
 - **Aktualizacja przez WiFi (D59) — częściowo sprawdzona na płytce.**
   **Pobranie i uruchomienie nowej wersji DZIAŁA**: 2026-08-12 pudełko samo
   ściągnęło 1.39.0 i potwierdziło ją jako działającą (dowód: suma `86a4c83b`
