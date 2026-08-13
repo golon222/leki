@@ -3382,6 +3382,19 @@ void otaPotwierdzDzialanie() {
   prefs.remove("otaPend");
   nvsPutU16("otaBoot", 0);
   nvsPutU16("otaFail", 0);
+  /* Znacznik ostatniej proby tez idzie do kosza.
+
+     TU BYL BLAD, zglosil go Kuba: "Powod: nastepna proba za dobe" - tuz po
+     tym, jak poprzednia aktualizacja SIE UDALA. Doba przerwy istnieje po to,
+     zeby niedostepny plik nie znaczyl wlaczonego radia przy kazdym otwarciu
+     wieczka. Ale `otaZanotujProbe()` zapisuje czas przed KAZDA proba, takze
+     przed ta, ktora sie powiedzie - wiec sukces blokowal nastepna
+     aktualizacje na 24 godziny. Kara za wygrana.
+
+     Tutaj docieramy wylacznie wtedy, gdy nowa wersja wstala i przeszla cala
+     swoja droge. Zadnej pętli nie ma czego przerywac, wiec licznik prob
+     i zegar startuja od zera.                                          */
+  prefs.remove("otaTs");
   prefs.end();
 
   /* Nieszkodliwe, gdy rdzen zbudowano bez rollbacku - wtedy po prostu

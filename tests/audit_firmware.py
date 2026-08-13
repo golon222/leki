@@ -990,6 +990,12 @@ _potw_raw = cialo_surowe("void otaPotwierdzDzialanie()")
 ok('nvsPutStr("otaFw"' in _potw_raw,
    "suma zapisuje sie razem z wersja, dla ktorej obowiazuje")
 
+# Udana aktualizacja nie moze blokowac nastepnej. Doba przerwy istnieje
+# przeciwko petli NIEUDANYCH prob; zostawiony po sukcesie znacznik czasu
+# byl kara za wygrana - i tak to wygladalo na ekranie u Kuby.
+ok('prefs.remove("otaTs")' in _potw_raw,
+   "udana aktualizacja kasuje znacznik ostatniej proby, nie blokuje nastepnej")
+
 # ...i nie wolno jej wyslac, gdy dotyczy innego programu.
 _st_raw = cialo_surowe("bool pushStatus()")
 ok('prefs.getString("otaFw"' in _st_raw and "sumaDlaFw == FW_VERSION" in _st_raw,
