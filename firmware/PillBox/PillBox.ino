@@ -3495,10 +3495,18 @@ void otaSprobuj() {
      przy wersji z czarnej listy i przy poddaniu sie: dalsze proby nic
      nie dadza, a niekasowalne polecenie probowaloby w kolko (ta sama
      lekcja co `wifiCmd`).                                            */
-  if (d == OTA_NIC_NOWEGO || d == OTA_ZEPSUTA || d == OTA_PODDANO) {
+  if (d == OTA_NIC_NOWEGO || d == OTA_ZEPSUTA || d == OTA_PODDANO ||
+      d == OTA_NIEZGODNA) {
     rtdbSend("DELETE", "/devices/" DEVICE_ID "/config/otaCmd.json", "");
     rtcOtaProsba = false;
-    if (d == OTA_NIC_NOWEGO) otaWyzerujLicznik();
+    /* Niezgodnosc sum NIE jest awaria pudelka, tylko zleceniem, ktore
+       sie zestarzalo: miedzy nacisnieciem przycisku a ta proba wyszla
+       nowsza wersja. Kasujemy je razem z licznikiem prob, bo inaczej
+       kazda nasza publikacja zblizalaby pudelko do poddania sie
+       (3 z 3) za cos, czego nie zrobilo zle. Aplikacja zobaczy brak
+       zlecenia i zaproponuje ponowienie dla wersji, ktora naprawde
+       lezy na serwerze.                                             */
+    if (d == OTA_NIC_NOWEGO || d == OTA_NIEZGODNA) otaWyzerujLicznik();
     otaZglos();
     return;
   }

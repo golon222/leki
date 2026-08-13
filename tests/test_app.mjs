@@ -2834,6 +2834,24 @@ A.renderStatus({ fw: "1.38.0", otaHaslo: true, lastSeen: ZLECONO + 600 });
 check(otaHtml().includes("nie zrobiło") && otaHtml().includes("Nie podało powodu"),
       "bez powodu z pudelka ekran nadal ostrzega, zamiast milczec");
 
+/* Zlecenie niesie sume KONKRETNEJ wersji. Gdy miedzy nacisnieciem
+   przycisku a proba wyjdzie nowsza, sumy przestaja pasowac i pudelko
+   odmawia - slusznie, ale przyczyna jest nasza wlasna publikacja, nie
+   atak. Ekran ma dac przycisk ponowienia, a nie czerwony alarm.      */
+head("Aktualizacja pudelka: zlecenie zdazylo sie zestarzec");
+
+A.__setOpisFirmware({ wersja:"1.39.3", md5:"d".repeat(32), rozmiar:1239104 });
+A.__setState({ cfg: { otaCmd: { md5: OPIS.md5, wersja:"1.39.2", ts: ZLECONO } } });
+A.renderStatus({ fw:"1.39.1", otaHaslo:true, lastSeen: ZLECONO + 600,
+                 otaMsg:"suma z serwera inna niz zadana - odswiez aplikacje" });
+check(otaHtml().includes("Ponów zlecenie dla 1.39.3"),
+      "stare zlecenie -> przycisk ponowienia dla wersji, ktora naprawde lezy na serwerze");
+check(otaHtml().includes("celowa obrona"),
+      "...z wyjasnieniem, ze to obrona, a nie usterka");
+check(!otaHtml().includes("nie zrobiło"),
+      "...i bez czerwonego alarmu, bo pudelko zachowalo sie poprawnie");
+A.__setOpisFirmware(OPIS);
+
 head("Aktualizacja pudelka: proby i poddanie sie");
 
 A.renderStatus({ fw: "1.38.0", otaHaslo: true, lastSeen: ZLECONO + 600, otaFail: 1 });
