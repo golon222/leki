@@ -2247,7 +2247,8 @@ check(/if \(recznie && zajete > 0\) return;/.test(html),
 }
 
 check(html.includes("Nowe zdarzenia z pudełka"), "mowi konkretnie, co przyszlo");
-check(html.includes("Wszystko aktualne"), "i gdy nic sie nie zmienilo");
+check(html.includes("Dane aktualne"),
+      "i gdy nic sie nie zmienilo - o DANYCH, nie o wersji aplikacji");
 check(html.includes("Odświeżono częściowo"), "oraz gdy czesc odczytow padla");
 
 head("Gest pociagniecia w dol");
@@ -2870,6 +2871,16 @@ head("Aktualizacja pudelka: proby i poddanie sie");
 
 A.renderStatus({ fw: "1.38.0", otaHaslo: true, lastSeen: ZLECONO + 600, otaFail: 1 });
 check(otaHtml().includes("1</b> z 3"), "licznik prob widac, zanim pudelko sie podda");
+
+/* ...ale gdy nie ma zlecenia I nie ma czego wgrywac, licznik jest juz tylko
+   sladem po przeszlosci. Pudelko zeruje go dopiero przy nastepnym zleceniu
+   zakonczonym dobrze, wiec potrafi wisiec dlugo po tym, jak wszystko sie
+   zgadza - i straszyc na czystym ekranie (zgloszenie Kuby).            */
+A.__setState({ cfg: {} });
+A.renderStatus({ fw: OPIS.wersja, otaHaslo: true, otaFail: 1 });
+check(otaHtml().includes("najnowszą"), "pudelko aktualne i bez zlecenia");
+check(!otaHtml().includes("Nieudane próby"),
+      "...wiec stary licznik prob nie straszy na czystym ekranie");
 
 /* Po trzech probach pudelko samo juz nie wroci do tematu. To musi byc
    napisane, inaczej uzytkownik czeka na cos, co nigdy nie nastapi.    */

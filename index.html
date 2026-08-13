@@ -1197,7 +1197,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-12.34";
+const APP_VERSION = "2026-08-12.35";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -1883,7 +1883,7 @@ async function boot(){
           else if (zmianaDawek)
             toast("Kalendarz zaktualizowany", "ok");
           else
-            toast(`Wszystko aktualne · ${godz}`, "ok", 1900);
+            toast(`Dane aktualne · ${godz}`, "ok", 1900);
         }
       }
     } catch (e) {
@@ -4492,7 +4492,17 @@ function renderOta(){
      jak licznik: od tej chwili pudełko samo z siebie nie spróbuje już nigdy,
      więc ekran musi powiedzieć wprost, co odblokowuje sprawę.           */
   const OTA_LIMIT_PROB = 3;                 // = OTA_MAX_FAILS w config.h
-  if (st.otaFail >= OTA_LIMIT_PROB){
+
+  /* Licznik ma sens WYŁĄCZNIE wtedy, gdy coś jest w toku albo jest co
+     wgrywać. Pudełko zeruje go dopiero przy zleceniu zakończonym dobrze,
+     więc po skasowaniu zlecenia zostaje ślad po próbie sprzed wgrania
+     kablem — i straszy na ekranie, na którym wszystko już się zgadza.
+     Zgłosił to Kuba: „czemu nadal jest że nieudane próby", przy pudełku
+     mającym najnowszą wersję i bez żadnego zlecenia w toku.          */
+  const licznikIstotny = czeka || rozne;
+  if (!licznikIstotny){
+    /* nic nie pokazujemy — to historia, nie stan */
+  } else if (st.otaFail >= OTA_LIMIT_PROB){
     html += `<div style="margin-top:8px;color:var(--bad)">⛔ Pudełko przestało
              próbować po ${st.otaFail} nieudanych podejściach i samo już nie
              wróci do tematu.${st.otaMsg ? ` Ostatnio: <b>${esc(st.otaMsg)}</b>.` : ""}
