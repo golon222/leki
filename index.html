@@ -1197,7 +1197,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-12.38";
+const APP_VERSION = "2026-08-12.39";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -4321,8 +4321,9 @@ window.wyslijAktualizacje = async () => {
      unieważnianie zlecenia przy każdej nowej wersji.
 
      `ts` jest teraz tym, co naprawdę się liczy: zlecenie świeższe niż
-     ostatnia nieudana próba znaczy „człowiek prosi teraz" i pozwala
-     pudełku pominąć dobowy odstęp. */
+     ostatnia nieudana próba znaczy „człowiek prosi teraz" i znosi blokadę
+     po trzech nieudanych próbach. Bez tego napis „naciśnij jeszcze raz"
+     był nieprawdziwy — naciśnięcie nie zmieniało nic. */
   cfg.otaCmd = {
     md5: opisFirmware.md5,
     wersja: String(opisFirmware.wersja || "").slice(0, 15),
@@ -4509,8 +4510,19 @@ function renderOta(){
   } else if (st.otaFail >= OTA_LIMIT_PROB){
     html += `<div style="margin-top:8px;color:var(--bad)">⛔ Pudełko przestało
              próbować po ${st.otaFail} nieudanych podejściach i samo już nie
-             wróci do tematu.${st.otaMsg ? ` Ostatnio: <b>${esc(st.otaMsg)}</b>.` : ""}
-             Naciśnij przycisk jeszcze raz, żeby zlecić od nowa.</div>`;
+             wróci do tematu.${st.otaMsg ? ` Ostatnio: <b>${esc(st.otaMsg)}</b>.` : ""}</div>`;
+    /* TU BYŁ BŁĄD, i to podwójny — zgłoszony przez Kubę wprost.
+       Stało tu „Naciśnij przycisk jeszcze raz, żeby zlecić od nowa", a przy
+       zleceniu w toku ŻADNEGO takiego przycisku na ekranie nie było: jedyny
+       widoczny to „Odwołaj zlecenie". Nawet gdyby był — do 1.42.2 ponowne
+       zlecenie i tak nie ruszało pudełka, bo licznik nieudanych prób
+       zostawał na trzech. Ekran obiecywał więc rzecz, której nie dało się
+       zrobić, i która i tak by nie zadziałała. */
+    html += czeka
+      ? `<button class="primary" style="width:100%;margin-top:8px"
+           onclick="wyslijAktualizacje()">Zleć jeszcze raz</button>`
+      : `<div class="dim2" style="margin-top:4px">Naciśnij „Pobierz aktualizację
+         pudełka" wyżej, żeby zlecić od nowa.</div>`;
   } else if (st.otaFail > 0){
     /* Bez wzmianki o dobie — odstęp zniesiony w 1.41.0. Zostawiony tekst
        obiecywałby czekanie, którego już nie ma, i kazałby siedzieć

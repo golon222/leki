@@ -23,8 +23,8 @@ bash tests/run_all.sh
 ```
 
 Musi przejść przed zmianą i po zmianie. Stan wyjściowy:
-**486 + 51 firmware, 860 (×6 pór doby) + 92 + 49 aplikacja, 48 zgodności,
-93 reguł bazy, 266 kontroli audytu — 0 błędów.**
+**484 + 51 firmware, 863 (×6 pór doby) + 92 + 49 aplikacja, 48 zgodności,
+93 reguł bazy, 268 kontroli audytu — 0 błędów.**
 
 Testy pracują na **prawdziwym kodzie**, nie na kopii: `tests/extract.py` wycina
 funkcje z `PillBox.ino`, `tests/build_app_module.mjs` buduje moduł z `index.html`.
@@ -152,8 +152,8 @@ naprawdę wgrywa. Nie jest częścią `run_all.sh`: wymaga sieci i ~500 MB
 toolchainu (pierwsze uruchomienie kilka minut, kolejne szybkie).
 **Uruchom to po każdej zmianie w firmware.**
 
-Stan: `PillBox.ino` **62% flasha** (1,24 MB z 1,875 MB), `PillBoxTest.ino` 20%.
-Zapas ~730 kB.
+Stan: `PillBox.ino` **63% flasha** (1,24 MB z 1,875 MB), `PillBoxTest.ino` 20%.
+Zapas ~727 kB.
 
 **Podział pamięci musi być `Minimal SPIFFS (1.9MB APP with OTA/190KB SPIFFS)`**,
 bo tak jest w nagłówku szkicu. Zmieniony w 1.38.0 z `Huge APP` (D59):
@@ -195,6 +195,11 @@ Szczegóły obejść (ctags, `.cpp` zamiast `.ino`, atrapa `dfu-util`) — D17.
   **Nadal niesprawdzone:** rollback po nieudanym starcie (żadna wersja się
   jeszcze nie wysypała), czarna lista zepsutych sum i zachowanie przy
   przerwanym pobieraniu.
+  **Od 1.41.0 nie udało się już ani razu** — Kuba wgrywał kablem 1.41.0.
+  Naprawa z 1.42.1 (`useHTTP10(true)`, D60) celuje w kodowanie porcjowe
+  i **nie była jeszcze uruchomiona na płytce**: pudełko stało na 1.41.0,
+  czyli na kodzie sprzed tej poprawki. Dopóki nie wgra się 1.42.2 i nie
+  zobaczy pobrania, jest to **hipoteza z naprawą**, nie potwierdzenie.
 
 ---
 

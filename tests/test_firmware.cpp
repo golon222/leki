@@ -2155,6 +2155,18 @@ head("Kolejka pod nieustajacym 401");
                    DOBRA, INNA, PUSTA) == OTA_PODDANO,
         "...a przed petla chroni licznik niepowodzen");
 
+  /* ...ale licznik chroni przed pudelkiem probujacym W KOLKO SAMO z siebie.
+     Gdy czlowiek prosi PONOWNIE - juz po tych nieudanych probach - to nie
+     jest petla, tylko swiadoma decyzja. Aplikacja pisze wprost "Nacisnij
+     przycisk jeszcze raz, zeby zlecic od nowa", wiec nacisniecie MUSI cos
+     zmieniac; wczesniej nie zmienialo nic (zgloszenie Kuby).          */
+  CHECK(otaDecyzja(true, 0, 90, false, OTA_MAX_FAILS, 1000000, 999999, ROZM, 999999 + 1,
+                   DOBRA, INNA, PUSTA) == OTA_ROB,
+        "nowe zlecenie PO serii niepowodzen znosi 'poddalem sie'");
+  CHECK(otaDecyzja(true, 0, 90, false, OTA_MAX_FAILS, 1000000, 999999, ROZM, 999000,
+                   DOBRA, INNA, PUSTA) == OTA_PODDANO,
+        "...ale stare zlecenie nadal nie wznawia niczego");
+
   head("Decyzja o aktualizacji: opis ze smieci");
 
   CHECK(otaDecyzja(true, 0, 90, false, 0, 1000000, 0, ROZM,

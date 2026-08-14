@@ -2898,6 +2898,26 @@ check(otaHtml().includes("przestało"), "po trzech probach: pudelko sie poddalo"
 check(otaHtml().includes("samo już nie") || otaHtml().includes("jeszcze raz"),
       "...i ekran mowi, co odblokowuje sprawe");
 
+/* TU BYL BLAD, i to podwojny - zglosil go Kuba: "byla jedna proba, a tu od
+   razu trzy sie naliczyly", pudelko nie pikalo i nic sie nie dzialo.
+
+   Przy ZLECENIU W TOKU ekran pisal "Nacisnij przycisk jeszcze raz, zeby
+   zlecic od nowa", a jedynym przyciskiem na ekranie bylo "Odwolaj
+   zlecenie". Przycisku do ponowienia nie bylo w ogole. Rada byla wiec
+   niewykonalna - i nawet gdyby ktos ja wykonal, firmware do 1.42.1 i tak
+   trzymal licznik na trzech, wiec nowe zlecenie niczego nie ruszalo.    */
+A.__setState({ cfg: { otaCmd: { md5: OPIS.md5, wersja: OPIS.wersja, ts: ZLECONO } } });
+A.renderStatus({ fw: "1.38.0", otaHaslo: true, lastSeen: ZLECONO + 600, otaFail: 3,
+                 otaMsg: "pobieranie nie doszlo do konca" });
+check(otaHtml().includes("Zleć jeszcze raz"),
+      "przy zleceniu w toku po poddaniu sie JEST przycisk ponowienia");
+
+A.__resetDb();
+await window.wyslijAktualizacje();
+const zl3 = A.__db.data?.devices?.pillbox01?.config?.otaCmd;
+check(typeof zl3?.ts === "number" && zl3.ts > ZLECONO,
+      "...a nacisniecie zapisuje SWIEZY znacznik - po nim pudelko znosi blokade");
+
 /* Cofnieta wersja - pudelko dziala, ale nie na tym, co mu wgraliśmy. */
 A.renderStatus({ fw: "1.38.0", otaHaslo: true, lastSeen: ZLECONO + 600,
                  otaBad: "c".repeat(32) });

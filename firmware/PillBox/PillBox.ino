@@ -2378,7 +2378,7 @@ void fetchConfig() {
     rtcOtaProsba = true;
     /* `md5` w zleceniu ignorujemy - patrz komentarz w otaDecyzja(). Liczy
        sie moment zlozenia: swiezsze niz ostatnia proba znaczy "czlowiek
-       prosi teraz" i pozwala pominac dobowy odstep.                    */
+       prosi teraz" i znosi blokade po serii nieudanych prob.           */
     rtcOtaTs = ota["ts"] | 0UL;
     LOG("[OTA] aplikacja prosi o aktualizacje (zlecenie z %lu) - zrobie to przed snem\n",
         (unsigned long)rtcOtaTs);
@@ -3199,7 +3199,20 @@ OtaDecyzja otaDecyzja(bool hasloJest, int wKolejce, int battPct, bool naLadowarc
      - grosze, ale na wyczerpanym ogniwie kazdy grosz jest pozyczka.    */
   if (!naLadowarce && battPct >= 0 && battPct < OTA_MIN_BATT_PCT) return OTA_BATERIA;
 
-  if (nieudane >= OTA_MAX_FAILS) return OTA_PODDANO;
+  /* SWIEZE ZLECENIE ZNOSI "PODDALEM SIE".
+
+     TU BYLA LUKA, ktora Kuba zobaczyl wprost: aplikacja pisala "Nacisnij
+     przycisk jeszcze raz, zeby zlecic od nowa", on naciskal - i pudelko
+     dalej odmawialo, bo licznik nieudanych prob zostawal na trzech.
+     Rada na ekranie byla wiec nieprawdziwa: nacisniecie NIC nie zmienialo.
+
+     Licznik chroni przed pudelkiem probujacym w kolko SAMO z siebie.
+     Kiedy czlowiek prosi PONOWNIE - juz po tych nieudanych probach -
+     to nie jest petla, tylko swiadoma decyzja, i ma prawo dostac swoja
+     szanse. `tsZlecenia > ostatniaProba` odroznia te dwie sytuacje
+     dokladnie: zlecenie zlozone PO ostatniej probie jest nowe.        */
+  const bool swiezeZlecenie = tsZlecenia && tsZlecenia > ostatniaProba;
+  if (!swiezeZlecenie && nieudane >= OTA_MAX_FAILS) return OTA_PODDANO;
 
   /* Odstep liczymy tylko z wiarygodnym zegarem. Bez niego `teraz` jest
      zerem i wtedy WOLNO probowac - inaczej pudelko bez zsynchronizowanego
@@ -3218,10 +3231,11 @@ OtaDecyzja otaDecyzja(bool hasloJest, int wKolejce, int battPct, bool naLadowarc
      i to on jest wlasciwym narzedziem, bo liczy NIEPOWODZENIA, a nie
      czas.
 
-     Zostawiona sygnatura z `ostatniaProba` i `tsZlecenia`: obie wartosci
-     sa nadal wysylane do aplikacji i pokazywane, tylko przestaly cokolwiek
-     blokowac.                                                          */
-  (void)ostatniaProba; (void)tsZlecenia; (void)teraz;
+     `ostatniaProba` i `tsZlecenia` zostaly w sygnaturze i nadal cos znacza,
+     ale juz tylko WPUSZCZAJA - porownanie tych dwoch wartosci wyzej znosi
+     "poddalem sie" po swiezym zleceniu. Zadna z nich niczego nie blokuje.
+     `teraz` nie sluzy juz do niczego procz zapisu chwili proby.        */
+  (void)teraz;
 
   return OTA_ROB;
 }
@@ -4058,6 +4072,14 @@ void otaSprobuj() {
     return;
   }
   if (d != OTA_ROB) { otaZglos(); return; }   // powod minie sam
+
+  /* Nowe zlecenie po serii niepowodzen zaczyna liczenie od zera - inaczej
+     pierwsza kolejna porazka od razu wracalaby do "poddalem sie", a ekran
+     nadal pokazywalby stary licznik.                                   */
+  if (nieudane >= OTA_MAX_FAILS) {
+    otaWyzerujLicznik();
+    LOGLN("[OTA] nowe zlecenie po serii niepowodzen - licznik od zera");
+  }
 
   /* Od tego miejsca leci ~1,2 MB przez radio. Limit czuwania trzeba
      podniesc, inaczej `awakeTooLong()` przerwie pobieranie w polowie. */
