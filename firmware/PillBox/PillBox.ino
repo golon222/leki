@@ -3354,12 +3354,33 @@ bool otaWgraj(const String& md5, uint32_t rozmiar) {
   http.end();
 
   if (zapisane != (size_t)len) {
+    /* Najczestszy realny blad przy tym rodzaju OTA - potwierdzaja to
+       zgloszenia do biblioteki ESP32 (arduino-esp32 #10213, #6254):
+       przy wiekszych plikach transfer potrafi sie urwac w polowie.
+       U nas dochodzi do tego slaby sygnal (-76..-87 dBm u Kuby).
+
+       Podajemy ILE udalo sie pobrac, bo to rozroznia dwie zupelnie rozne
+       sytuacje: "0 z 1,2 MB" znaczy, ze polaczenie w ogole nie ruszylo,
+       a "900 kB z 1,2 MB" - ze urwalo sie w trakcie i warto sprobowac
+       blizej routera. Bez tej liczby obie wygladaly tak samo.        */
+    snprintf(rtcOtaMsg, sizeof(rtcOtaMsg),
+             "pobrano %u kB z %d kB - podejdz blizej routera",
+             (unsigned)(zapisane / 1024), len / 1024);
     LOG("[OTA] przerwane po %u B z %d\n", (unsigned)zapisane, len);
     Update.abort();
     return false;
   }
   if (!Update.end(true)) {
-    LOG("[OTA] suma kontrolna albo zapis odrzucone (blad %u)\n", Update.getError());
+    /* Plik doszedl w calosci, ale ESP32 go odrzucil. Dwa powody warte
+       rozroznienia: niezgodna suma (plik dojechal uszkodzony) albo cos
+       innego z zapisem. Pierwszy znaczy "sprobuj jeszcze raz", drugi -
+       "cos jest nie tak z partycja" i wymaga kabla.                  */
+    const uint8_t blad = Update.getError();
+    if (blad == UPDATE_ERROR_MD5)
+      snprintf(rtcOtaMsg, sizeof(rtcOtaMsg), "plik dojechal uszkodzony - sprobuj ponownie");
+    else
+      snprintf(rtcOtaMsg, sizeof(rtcOtaMsg), "ESP32 odrzucil zapis (blad %u)", blad);
+    LOG("[OTA] suma kontrolna albo zapis odrzucone (blad %u)\n", blad);
     return false;
   }
   return Update.isFinished();
@@ -3567,7 +3588,12 @@ void otaSprobuj() {
   beepAck(); delay(150); beepAck();
 
   if (!otaWgraj(md5, rozmiar)) {
-    snprintf(rtcOtaMsg, sizeof(rtcOtaMsg), "pobieranie nie doszlo do konca");
+    /* `otaWgraj()` ustawilo juz konkretny powod - nadpisanie go ogolnym
+       "nie doszlo do konca" zabieraloby jedyna informacje, ktora naprawde
+       cos mowi. Ogolny tekst zostaje wylacznie wtedy, gdy nie zdazyl
+       powstac zaden inny (np. samo polaczenie nie ruszylo).          */
+    if (!rtcOtaMsg[0] || strstr(rtcOtaMsg, "pobieram"))
+      snprintf(rtcOtaMsg, sizeof(rtcOtaMsg), "pobieranie nie doszlo do konca");
     LOGLN("[OTA] nieudane - stary program zostaje bez zmian");
     beepErr();
     otaZglos();
