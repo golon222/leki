@@ -3315,6 +3315,30 @@ bool otaPobierzOpis(String& wersja, String& md5, uint32_t& rozmiar) {
    samej sieci: podmiana samego pliku nie wystarczy, trzeba trafic i w
    baze. Pelna obrona to `setCACert()` i to jest znany dlug.           */
 bool otaWgraj(const String& md5, uint32_t rozmiar) {
+  /* ZWALNIAMY POLACZENIE Z BAZA, ZANIM OTWORZYMY DRUGIE.
+
+     TU BYLA NAJPRAWDOPODOBNIEJSZA PRZYCZYNA restartu w trakcie pobierania,
+     ktory zglosil Kuba ("zapikalo, ale nie bylo fanfar", wybudzen: 1,
+     wersja bez zmian, zero wpisow w czarnej skrzynce).
+
+     `rtdbClient` jest GLOBALNY i trzyma otwarty kanal TLS do Firebase przez
+     cale wybudzenie - to swiadoma optymalizacja, bo jedno polaczenie na
+     wybudzenie zamiast jednego na zapytanie bylo kiedys glowna przyczyna
+     powolnej synchronizacji. Ale przy aktualizacji otwieramy DRUGI kanal
+     TLS, na plik z GitHuba. Dwa naraz to okolo 100 kB samych buforow
+     mbedTLS na ukladzie, ktory ma 400 kB - a rownolegle leci jeszcze zapis
+     do flasha i stos WiFi. Brakuje pamieci i plytka sie restartuje, zanim
+     zdazy cokolwiek zapisac.
+
+     Zamkniecie jest bezpieczne: `rtdbSend()` odbudowuje polaczenie samo,
+     gdy bedzie potrzebne (kasowanie polecenia i meldunek ida juz po
+     pobraniu). Kosztuje jedno zestawienie TLS, a daje pamiec, bez ktorej
+     pobranie nie ma szans.                                             */
+  const uint32_t wolnePrzed = ESP.getFreeHeap();
+  rtdbClient.stop();
+  LOG("[OTA] pamiec przed pobieraniem: %u B (po zamknieciu bazy: %u B)\n",
+      (unsigned)wolnePrzed, (unsigned)ESP.getFreeHeap());
+
   WiFiClientSecure client;
   client.setInsecure();
   client.setTimeout(20);
@@ -4015,7 +4039,15 @@ void otaSprobuj() {
      Zapisujemy wiec od razu, wlasnym wywolaniem. Jesli pobieranie
      wywali plytke, po restarcie ta linijka bedzie jedynym dowodem, ze
      w ogole ruszylo.                                                 */
-  logbookAdd("ota:pobieram");
+  {
+    /* Wolna pamiec w slad - jesli plytka znowu padnie, ta liczba powie,
+       czy zabraklo RAM-u, czy przyczyna byla inna. Bez niej zostaje
+       zgadywanie, a to juz raz kosztowalo caly wieczor.               */
+    char m[40];
+    snprintf(m, sizeof(m), "ota:pobieram, wolne %u kB",
+             (unsigned)(ESP.getFreeHeap() / 1024));
+    logbookAdd(m);
+  }
 
   /* Dwa pikniecia: "zaczynam, zaraz zamilkne na minute". Bez tego
      pudelko wyglada na zawieszone - a brzeczyk jest jedynym kanalem,
