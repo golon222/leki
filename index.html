@@ -1197,7 +1197,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-12.36";
+const APP_VERSION = "2026-08-12.37";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -4293,7 +4293,24 @@ async function pobierzOpisFirmware(){
 }
 
 window.wyslijAktualizacje = async () => {
-  if (!opisFirmware) return;
+  /* ZAWSZE pytamy serwer TERAZ, tuż przed zapisem zlecenia.
+
+     TU BYŁ BŁĄD, przez który aktualizacja „nie chciała się zrobić".
+     Zlecenie niosło sumę z opisu pobranego **kiedyś wcześniej** — przy
+     wejściu na ekran albo przy starcie aplikacji. Jeśli w międzyczasie
+     pojawiła się nowsza wersja, pudełko dostawało sumę, która nie pasuje
+     do pliku na serwerze, i odmawiało: „suma z serwera inna niż zadana".
+     Użytkownik widział błąd, choć zrobił wszystko dobrze.
+
+     Firmware od 1.40.0 tej sumy w ogóle nie sprawdza, ale pudełka ze
+     starszym programem — jak to, które właśnie ma ją pobrać — sprawdzają.
+     Świeży odczyt kosztuje kilkaset bajtów i usuwa całą tę klasę
+     niepowodzeń. */
+  await pobierzOpisFirmware();
+  if (!opisFirmware){
+    toast("Nie mogę sprawdzić, co jest na serwerze — spróbuj ponownie", "err", 4000);
+    return;
+  }
   /* Sumę i wersję wysyłamy razem: pudełko sprawdza sumę, a człowiek czyta
      wersję. Bez `ts` nie dałoby się odróżnić „jeszcze się nie łączyło" od
      „łączyło się i nie zrobiło" — ta sama lekcja co przy `wifiNowa`.   */

@@ -222,7 +222,6 @@ enum OtaDecyzja {
   OTA_KOLEJKA,          // sa niewyslane dawki - one maja pierwszenstwo
   OTA_BATERIA,          // za malo pradu i nie stoi na ladowarce
   OTA_PODDANO,          // OTA_MAX_FAILS prob z rzedu bez skutku
-  OTA_ZA_WCZESNIE,      // nie minela jeszcze doba od ostatniej proby
   OTA_ZEPSUTA,          // ta wersja juz raz nie wstala
   OTA_ZLY_OPIS          // plik z opisem nie ma sensu (rozmiar, suma)
 };
@@ -3205,20 +3204,24 @@ OtaDecyzja otaDecyzja(bool hasloJest, int wKolejce, int battPct, bool naLadowarc
   /* Odstep liczymy tylko z wiarygodnym zegarem. Bez niego `teraz` jest
      zerem i wtedy WOLNO probowac - inaczej pudelko bez zsynchronizowanego
      czasu nie zaktualizowaloby sie nigdy.                              */
-  /* Odstep doby chroni przed PETLA nieudanych prob, nie przed czlowiekiem.
+  /* DOBOWEGO ODSTEPU JUZ NIE MA - zniesiony na zadanie Kuby (D59):
+     "znies to ze trzeba dobe czekac, czy widziales gdzies zeby jakies
+     urzadzenie tak mialo".
 
-     Gdy zlecenie jest SWIEZSZE niz ostatnia proba, znaczy to, ze ktos
-     wlasnie nacisnal przycisk juz PO tamtym niepowodzeniu - czyli prosi
-     swiadomie i teraz. Kazanie mu czekac doby bylo trzecim powodem, dla
-     ktorego aktualizacja "nie chciala sie zrobic": ekran mowil
-     "nastepna proba za dobe", a czlowiek stal nad pudelkiem i nie mial
-     zadnego sposobu, zeby to przyspieszyc.
+     Mial racje, i to z dwoch powodow. Po pierwsze zaden sprzet tak sie nie
+     zachowuje: gdy czlowiek prosi o aktualizacje, dostaje ja albo dostaje
+     blad - nie "wroc jutro". Po drugie odstep miał chronic przed petla
+     ponowien, ale ta petla i tak nie moze powstac: aktualizacja rusza
+     WYLACZNIE na jawne zlecenie z aplikacji, zlecenie kasuje sie po
+     wykonaniu, a czlowiek moze je odwolac przyciskiem w kazdej chwili.
+     Przed pudelkiem probujacym w kolko chroni licznik OTA_MAX_FAILS -
+     i to on jest wlasciwym narzedziem, bo liczy NIEPOWODZENIA, a nie
+     czas.
 
-     Automatyczne ponowienia (bez nowego zlecenia) odstep nadal
-     obowiazuje, bo to wlasnie one potrafia sie zapetlic.             */
-  const bool swiezeZlecenie = tsZlecenia && tsZlecenia > ostatniaProba;
-  if (!swiezeZlecenie && teraz && ostatniaProba && teraz > ostatniaProba &&
-      teraz - ostatniaProba < OTA_RETRY_S) return OTA_ZA_WCZESNIE;
+     Zostawiona sygnatura z `ostatniaProba` i `tsZlecenia`: obie wartosci
+     sa nadal wysylane do aplikacji i pokazywane, tylko przestaly cokolwiek
+     blokowac.                                                          */
+  (void)ostatniaProba; (void)tsZlecenia; (void)teraz;
 
   return OTA_ROB;
 }
@@ -3232,7 +3235,6 @@ const char* otaOpisDecyzji(OtaDecyzja d) {
     case OTA_KOLEJKA:     return "czekam na wyslanie zaleglych dawek";
     case OTA_BATERIA:     return "za malo baterii - postaw na ladowarke";
     case OTA_PODDANO:     return "trzy proby bez skutku - poddalem sie";
-    case OTA_ZA_WCZESNIE: return "nastepna proba za dobe";
     case OTA_ZEPSUTA:     return "ta wersja juz raz nie wstala";
     case OTA_ZLY_OPIS:    return "opis wersji na serwerze jest niepoprawny";
   }

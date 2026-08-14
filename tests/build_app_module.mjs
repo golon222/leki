@@ -55,7 +55,16 @@ export { brakujePokrycia, doReconcile, reconcileDecyzja, opisLadowan, minutyDoPe
 /* Opis wersji firmware czytany jest przez fetch(), ktorego w testach nie
    ma. Podstawiamy go wprost, zeby dalo sie sprawdzic KAZDY stan ekranu
    aktualizacji - takze ten, w ktorym pudelko nie ma hasla.            */
-export function __setOpisFirmware(o){ opisFirmware = o; opisFirmwareBlad = o ? "" : "brak"; }
+export function __setOpisFirmware(o){
+  opisFirmware = o; opisFirmwareBlad = o ? "" : "brak";
+  /* Zaslepka sieci. Zlecenie pobiera opis PONOWNIE tuz przed zapisem
+     (inaczej wysylaloby sume sprzed godziny), wiec testy musza miec czym
+     odpowiedziec - inaczej sprawdzalyby sciezke bledu zamiast tej,
+     o ktora chodzi. */
+  globalThis.fetch = async (url) => String(url).includes("PillBox.json")
+    ? { ok: !!o, status: o ? 200 : 404, json: async () => o }
+    : { ok: false, status: 404, json: async () => ({}) };
+}
 export function __setState(o){
   if (o.cfg)    Object.assign(cfg, o.cfg);
   if (o.doses)  { for (const k of Object.keys(doses)) delete doses[k]; Object.assign(doses, o.doses); }

@@ -2851,6 +2851,18 @@ check(typeof zl2?.ts === "number" && zl2.ts > 0,
 check(zl2?.md5 === OPIS.md5,
       "md5 nadal wysylamy, ale wylacznie dla zgodnosci ze starszym firmware");
 
+/* NAJWAZNIEJSZY test tej sekcji. Zlecenie nioslo sume z opisu pobranego
+   KIEDYS - przy wejsciu na ekran albo przy starcie aplikacji. Gdy w
+   miedzyczasie wyszla nowsza wersja, pudelko dostawalo sume niepasujaca
+   do pliku i odmawialo: "suma z serwera inna niz zadana". Uzytkownik
+   widzial blad, choc zrobil wszystko dobrze - i nie mial jak tego
+   naprawic. Teraz suma pochodzi z chwili nacisniecia.                 */
+const zrodloApp = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+const cialoWys = zrodloApp.slice(zrodloApp.indexOf("window.wyslijAktualizacje"),
+                                 zrodloApp.indexOf("function renderOta"));
+check(/await pobierzOpisFirmware\(\)[\s\S]*cfg\.otaCmd\s*=/.test(cialoWys),
+      "zlecenie pobiera SWIEZY opis, zanim zapisze sume");
+
 head("Aktualizacja pudelka: odwolanie zlecenia");
 
 A.__resetDb();

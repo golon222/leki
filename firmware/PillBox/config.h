@@ -20,7 +20,7 @@
  * 1. IDENTYFIKATOR URZADZENIA
  * ------------------------------------------------------------------ */
 #define DEVICE_ID           "pillbox01"     // klucz w /devices/<DEVICE_ID>
-#define FW_VERSION          "1.40.0"   // widoczna w aplikacji - po wgraniu sprawdz, czy sie zmienila
+#define FW_VERSION          "1.41.0"   // widoczna w aplikacji - po wgraniu sprawdz, czy sie zmienila
 
 /* ---------------------------------------------------------------------
  * 2. FIREBASE  (Realtime Database + Auth email/haslo)
@@ -460,11 +460,13 @@
  *     przestaje probowac i mowi o tym w aplikacji. Bez tego licznika
  *     niedostepny plik oznaczalby wlaczone radio przy KAZDYM otwarciu
  *     wieczka, codziennie, w nieskonczonosc.
- *     OTA_RETRY_S - odstep miedzy probami. Doba, bo tyle wynosi naturalny
- *     rytm tego urzadzenia: jedna dawka, jedno otwarcie.                */
+ *     Dobowego odstepu miedzy probami NIE MA (zniesiony w 1.41.0 na zadanie
+ *     Kuby). Aktualizacja rusza wylacznie na jawne zlecenie z aplikacji,
+ *     ktore da sie odwolac przyciskiem - wiec petla ponowien nie ma jak
+ *     powstac, a przed pudelkiem probujacym w kolko chroni licznik
+ *     OTA_MAX_FAILS. Zaden sprzet nie kaze czlowiekowi "wrocic jutro". */
 #define OTA_MIN_BATT_PCT    25
 #define OTA_MAX_FAILS       3
-#define OTA_RETRY_S         86400
 
 /*     Zdrowy rozsadek co do rozmiaru. Plik mniejszy niz OTA_MIN_BIN_SIZE
  *     nie jest firmwarem tego urzadzenia (najpewniej strona bledu 404

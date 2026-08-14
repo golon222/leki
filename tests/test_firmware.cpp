@@ -2137,38 +2137,23 @@ head("Kolejka pod nieustajacym 401");
                    TS_SWIEZE, DOBRA, INNA, PUSTA) == OTA_PODDANO,
         "po trzech nieudanych probach przestajemy probowac");
 
-  CHECK(otaDecyzja(true, 0, 90, false, 0, 1000000, 1000000 - 10, ROZM,
-                   TS_SWIEZE, DOBRA, INNA, PUSTA) == OTA_ZA_WCZESNIE,
-        "druga proba tego samego dnia -> nie teraz");
-  CHECK(otaDecyzja(true, 0, 90, false, 0, 1000000, 1000000 - OTA_RETRY_S - 1, ROZM,
-                   TS_SWIEZE, DOBRA, INNA, PUSTA) == OTA_ROB,
-        "...a po dobie znowu wolno");
-  /* Bez zegara `teraz` jest zerem. Gdyby odstep liczyl sie mimo to,
-     pudelko z niezsynchronizowanym czasem nie zaktualizowaloby sie
-     NIGDY - a to stan, w ktorym bywa po kazdym resecie.            */
-  CHECK(otaDecyzja(true, 0, 90, false, 0, 0, 1000000, ROZM,
-                   TS_SWIEZE, DOBRA, INNA, PUSTA) == OTA_ROB,
-        "bez wiarygodnego zegara odstep nie blokuje proby");
 
   CHECK(otaDecyzja(true, 0, 90, false, 0, 1000000, 0, ROZM,
                    TS_SWIEZE, DOBRA, INNA, DOBRA) == OTA_ZEPSUTA,
         "wersja z czarnej listy nie jest pobierana drugi raz");
 
-  head("Decyzja o aktualizacji: swiadome zadanie omija odstep");
+  head("Decyzja o aktualizacji: brak dobowego odstepu");
 
-  /* Odstep doby chroni przed PETLA automatycznych ponowien. Gdy zlecenie
-     jest swiezsze niz ostatnia proba, ktos wlasnie nacisnal przycisk juz
-     PO tamtym niepowodzeniu - i kazanie mu czekac doby bylo jednym
-     z powodow, dla ktorych aktualizacja "nie chciala sie zrobic".     */
-  CHECK(otaDecyzja(true, 0, 90, false, 0, 1000000, 999000, ROZM, 0,
-                   DOBRA, INNA, PUSTA) == OTA_ZA_WCZESNIE,
-        "bez nowego zlecenia odstep obowiazuje");
-  CHECK(otaDecyzja(true, 0, 90, false, 0, 1000000, 999000, ROZM, 999500,
+  /* Dobowego odstepu nie ma (zniesiony w 1.41.0). Zadne urzadzenie nie kaze
+     czlowiekowi "wrocic jutro", a petla ponowien nie moze powstac: OTA rusza
+     wylacznie na jawne zlecenie, ktore da sie odwolac przyciskiem. Przed
+     probowaniem w kolko chroni licznik niepowodzen, nie zegar.          */
+  CHECK(otaDecyzja(true, 0, 90, false, 0, 1000000, 999999, ROZM, 0,
                    DOBRA, INNA, PUSTA) == OTA_ROB,
-        "zlecenie zlozone PO nieudanej probie -> probujemy od razu");
-  CHECK(otaDecyzja(true, 0, 90, false, 0, 1000000, 999000, ROZM, 998000,
-                   DOBRA, INNA, PUSTA) == OTA_ZA_WCZESNIE,
-        "...ale zlecenie STARSZE niz proba to juz nie jest nowa prosba");
+        "proba sprzed sekundy NIE blokuje kolejnej");
+  CHECK(otaDecyzja(true, 0, 90, false, OTA_MAX_FAILS, 1000000, 999999, ROZM, 0,
+                   DOBRA, INNA, PUSTA) == OTA_PODDANO,
+        "...a przed petla chroni licznik niepowodzen");
 
   head("Decyzja o aktualizacji: opis ze smieci");
 
@@ -2186,7 +2171,7 @@ head("Kolejka pod nieustajacym 401");
      "nieznany stan" akurat wtedy, gdy uzytkownik pyta "dlaczego nie". */
   const OtaDecyzja WSZYSTKIE[] = {
     OTA_ROB, OTA_NIC_NOWEGO, OTA_BEZ_HASLA, OTA_KOLEJKA, OTA_BATERIA,
-    OTA_PODDANO, OTA_ZA_WCZESNIE, OTA_ZEPSUTA, OTA_ZLY_OPIS
+    OTA_PODDANO, OTA_ZEPSUTA, OTA_ZLY_OPIS
   };
   int bezOpisu = 0;
   for (OtaDecyzja d : WSZYSTKIE)
