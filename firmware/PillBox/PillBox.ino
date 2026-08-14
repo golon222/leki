@@ -3484,140 +3484,6 @@ void otaPotwierdzDzialanie() {
   beepNowaWersja();
 }
 
-/* Powod odmowy albo niepowodzenia idzie do aplikacji OD RAZU, a nie przy
-   najblizszym wybudzeniu.
-
-   Roznica jest cala tresc tego ekranu. `otaSprobuj()` chodzi w
-   `goToSleep()`, czyli JUZ PO wyslaniu zwyklego statusu - samo ustawienie
-   `rtcStatusDirty` znaczyloby, ze aplikacja pozna powod dopiero za
-   kilka godzin. Przez ten czas pokazywalaby pogodne "zlecone, czekaj",
-   podczas gdy pudelko wlasnie odmowilo i nie zamierza nic robic.
-   Radio w tym momencie jeszcze zyje, wiec meldunek nic nie kosztuje.  */
-void otaZglos() {
-  if (!pushStatus()) rtcStatusDirty = true;   // nie doszlo - dosle pozniej
-}
-
-/* --- CALOSC: sprawdz, zdecyduj, ewentualnie wgraj --------------------
-   Wolane z jednego miejsca - z `goToSleep()`, czyli po tym, jak pudelko
-   zrobilo juz wszystko, po co wstalo. Dawka jest wtedy zapisana
-   i potwierdzona, status wyslany, kolejka opróżniona.
-
-   Nie wraca, jesli aktualizacja sie powiodla - konczy restartem.      */
-void otaSprobuj() {
-  if (!rtcOtaProsba) return;                    // aplikacja o nic nie prosila
-
-  /* TU BYL BLAD - i objaw byl dokladnie taki, jak opisal Kuba: "otworzylem
-     dwa razy i nie wiem dlaczego aktualizacja sie nie zrobila", a ekran
-     mowil "nie podalo powodu".
-
-     Stalo tu `if (WiFi.status() != WL_CONNECTED) return;` - CICHE wyjscie.
-     Do tego miejsca dochodzimy z `goToSleep()`, czyli po calej reszcie
-     wybudzenia: po zapisie dawki, wyslaniu statusu i czekaniu na zamkniecie
-     wieczka. Przy slabym sygnale (u Kuby -90 dBm, granica zasiegu) router
-     zdazy w tym czasie rozlaczyc stacje, ktora nic nie nadaje. Radio bylo
-     wiec sprawne, siec w zasiegu, a aktualizacja rezygnowala bez slowa
-     i bez sladu - licznik prob tez nie rosl, bo do niego nie dochodzilo.
-
-     Dwie naprawy naraz. Po pierwsze: nie rezygnujemy, tylko ODBUDOWUJEMY
-     lacze - pudelko i tak nie spi, a zlecenie czeka. Po drugie: kazde
-     wyjscie zostawia powod, bo "nie podalo powodu" jest najgorsza z
-     mozliwych odpowiedzi dla kogos, kto stoi nad pudelkiem.           */
-  if (WiFi.status() != WL_CONNECTED && !wifiConnect()) {
-    snprintf(rtcOtaMsg, sizeof(rtcOtaMsg), "nie zlapalem sieci przed snem");
-    rtcStatusDirty = true;                      // radia nie ma, powod dosle pozniej
-    LOGLN("[OTA] brak sieci przy zasypianiu - sprobuje przy nastepnym wybudzeniu");
-    return;
-  }
-  /* Token zyje godzine, a od ostatniego logowania mogla minac cala doba
-     czuwania na ladowarce. Bez waznego tokenu nie da sie ani skasowac
-     polecenia, ani zameldowac powodu.                                 */
-  if (!firebaseSignIn()) {
-    snprintf(rtcOtaMsg, sizeof(rtcOtaMsg), "nie moge sie zalogowac do bazy");
-    rtcStatusDirty = true;
-    LOGLN("[OTA] brak logowania - aktualizacja czeka");
-    return;
-  }
-
-  const uint32_t teraz = rtcTimeValid ? (uint32_t)time(nullptr) : 0;
-
-  String wersja, md5;
-  uint32_t rozmiar = 0;
-  if (!otaPobierzOpis(wersja, md5, rozmiar)) {
-    snprintf(rtcOtaMsg, sizeof(rtcOtaMsg), "nie moge pobrac opisu wersji");
-    otaZanotujProbe(teraz);
-    otaZglos();
-    return;
-  }
-
-  prefs.begin(NVS_NAMESPACE, true);
-  const uint16_t nieudane = prefs.getUShort("otaFail", 0);
-  const uint32_t ostatnia = prefs.getUInt("otaTs", 0);
-  prefs.end();
-
-  const OtaDecyzja d = otaDecyzja(
-      hasloWPamieci(), queueCount(), batteryPercentage, rtcCharging,
-      (uint8_t)(nieudane > 255 ? 255 : nieudane), teraz, ostatnia, rozmiar,
-      rtcOtaTs, md5, otaSumaWgranej(), otaSumaZPamieci("otaBad"));
-
-  snprintf(rtcOtaWersja, sizeof(rtcOtaWersja), "%s", wersja.c_str());
-  snprintf(rtcOtaMsg, sizeof(rtcOtaMsg), "%s", otaOpisDecyzji(d));
-  LOG("[OTA] decyzja: %s\n", otaOpisDecyzji(d));
-
-  /* "Nic nowego" znaczy, ze prosba zostala spelniona - kasujemy ja,
-     zeby przycisk w aplikacji nie zostal wcisniety na zawsze. To samo
-     przy wersji z czarnej listy i przy poddaniu sie: dalsze proby nic
-     nie dadza, a niekasowalne polecenie probowaloby w kolko (ta sama
-     lekcja co `wifiCmd`).                                            */
-  if (d == OTA_NIC_NOWEGO || d == OTA_ZEPSUTA || d == OTA_PODDANO) {
-    rtdbSend("DELETE", "/devices/" DEVICE_ID "/config/otaCmd.json", "");
-    rtcOtaProsba = false;
-    if (d == OTA_NIC_NOWEGO) otaWyzerujLicznik();
-    otaZglos();
-    return;
-  }
-  if (d != OTA_ROB) { otaZglos(); return; }   // powod minie sam
-
-  /* Od tego miejsca leci ~1,2 MB przez radio. Limit czuwania trzeba
-     podniesc, inaczej `awakeTooLong()` przerwie pobieranie w polowie. */
-  extendAwake(OTA_HTTP_TIMEOUT_MS + 30000);
-  otaZanotujProbe(teraz);
-
-  /* Dwa pikniecia: "zaczynam, zaraz zamilkne na minute". Bez tego
-     pudelko wyglada na zawieszone - a brzeczyk jest jedynym kanalem,
-     ktorym mowi cokolwiek bez telefonu (D29).                        */
-  beepAck(); delay(150); beepAck();
-
-  if (!otaWgraj(md5, rozmiar)) {
-    /* `otaWgraj()` ustawilo juz konkretny powod - nadpisanie go ogolnym
-       "nie doszlo do konca" zabieraloby jedyna informacje, ktora naprawde
-       cos mowi. Ogolny tekst zostaje wylacznie wtedy, gdy nie zdazyl
-       powstac zaden inny (np. samo polaczenie nie ruszylo).          */
-    if (!rtcOtaMsg[0] || strstr(rtcOtaMsg, "pobieram"))
-      snprintf(rtcOtaMsg, sizeof(rtcOtaMsg), "pobieranie nie doszlo do konca");
-    LOGLN("[OTA] nieudane - stary program zostaje bez zmian");
-    beepErr();
-    otaZglos();
-    return;
-  }
-
-  /* Wgrane. Zapisujemy sume jako NIEPOTWIERDZONA - potwierdzi ja dopiero
-     nowy program, gdy dojdzie do konca swojej pierwszej drogi.        */
-  prefs.begin(NVS_NAMESPACE, false);
-  nvsPutStr("otaPend", md5);
-  nvsPutU16("otaBoot", 0);
-  prefs.end();
-
-  /* Polecenie kasujemy PRZED restartem - po nim nie wrocimy juz tutaj.
-     Gdyby kasowanie nie doszlo, nowy program zobaczy te sama prosbe,
-     policzy sume jako "aktualne" i skasuje ja wtedy. Samo sie naprawia. */
-  rtdbSend("DELETE", "/devices/" DEVICE_ID "/config/otaCmd.json", "");
-
-  LOGLN("[OTA] wgrane - restart na nowa wersje");
-  beepAck();
-  delay(200);
-  esp_restart();
-}
-
 #endif  /* OTA_ENABLED */
 
 /* =====================================================================
@@ -4033,6 +3899,165 @@ void autoTest() {
 /* =====================================================================
  * 11.  DEEP SLEEP
  * ===================================================================== */
+/* --- Aktualizacja: wykonanie ---------------------------------------
+   Stoi TUTAJ, a nie przy reszcie kodu OTA, bo zapisuje slad w czarnej
+   skrzynce (`logbookAdd`), a ta jest zdefiniowana nizej. Kolejnosci
+   definicji pilnuje audyt - w .ino ma ona znaczenie takze dla
+   generatora prototypow (B21/D26).                                 */
+#if OTA_ENABLED
+/* Powod odmowy albo niepowodzenia idzie do aplikacji OD RAZU, a nie przy
+   najblizszym wybudzeniu.
+
+   Roznica jest cala tresc tego ekranu. `otaSprobuj()` chodzi w
+   `goToSleep()`, czyli JUZ PO wyslaniu zwyklego statusu - samo ustawienie
+   `rtcStatusDirty` znaczyloby, ze aplikacja pozna powod dopiero za
+   kilka godzin. Przez ten czas pokazywalaby pogodne "zlecone, czekaj",
+   podczas gdy pudelko wlasnie odmowilo i nie zamierza nic robic.
+   Radio w tym momencie jeszcze zyje, wiec meldunek nic nie kosztuje.  */
+void otaZglos() {
+  if (!pushStatus()) rtcStatusDirty = true;   // nie doszlo - dosle pozniej
+}
+
+/* --- CALOSC: sprawdz, zdecyduj, ewentualnie wgraj --------------------
+   Wolane z jednego miejsca - z `goToSleep()`, czyli po tym, jak pudelko
+   zrobilo juz wszystko, po co wstalo. Dawka jest wtedy zapisana
+   i potwierdzona, status wyslany, kolejka opróżniona.
+
+   Nie wraca, jesli aktualizacja sie powiodla - konczy restartem.      */
+void otaSprobuj() {
+  if (!rtcOtaProsba) return;                    // aplikacja o nic nie prosila
+
+  /* TU BYL BLAD - i objaw byl dokladnie taki, jak opisal Kuba: "otworzylem
+     dwa razy i nie wiem dlaczego aktualizacja sie nie zrobila", a ekran
+     mowil "nie podalo powodu".
+
+     Stalo tu `if (WiFi.status() != WL_CONNECTED) return;` - CICHE wyjscie.
+     Do tego miejsca dochodzimy z `goToSleep()`, czyli po calej reszcie
+     wybudzenia: po zapisie dawki, wyslaniu statusu i czekaniu na zamkniecie
+     wieczka. Przy slabym sygnale (u Kuby -90 dBm, granica zasiegu) router
+     zdazy w tym czasie rozlaczyc stacje, ktora nic nie nadaje. Radio bylo
+     wiec sprawne, siec w zasiegu, a aktualizacja rezygnowala bez slowa
+     i bez sladu - licznik prob tez nie rosl, bo do niego nie dochodzilo.
+
+     Dwie naprawy naraz. Po pierwsze: nie rezygnujemy, tylko ODBUDOWUJEMY
+     lacze - pudelko i tak nie spi, a zlecenie czeka. Po drugie: kazde
+     wyjscie zostawia powod, bo "nie podalo powodu" jest najgorsza z
+     mozliwych odpowiedzi dla kogos, kto stoi nad pudelkiem.           */
+  if (WiFi.status() != WL_CONNECTED && !wifiConnect()) {
+    snprintf(rtcOtaMsg, sizeof(rtcOtaMsg), "nie zlapalem sieci przed snem");
+    rtcStatusDirty = true;                      // radia nie ma, powod dosle pozniej
+    LOGLN("[OTA] brak sieci przy zasypianiu - sprobuje przy nastepnym wybudzeniu");
+    return;
+  }
+  /* Token zyje godzine, a od ostatniego logowania mogla minac cala doba
+     czuwania na ladowarce. Bez waznego tokenu nie da sie ani skasowac
+     polecenia, ani zameldowac powodu.                                 */
+  if (!firebaseSignIn()) {
+    snprintf(rtcOtaMsg, sizeof(rtcOtaMsg), "nie moge sie zalogowac do bazy");
+    rtcStatusDirty = true;
+    LOGLN("[OTA] brak logowania - aktualizacja czeka");
+    return;
+  }
+
+  const uint32_t teraz = rtcTimeValid ? (uint32_t)time(nullptr) : 0;
+
+  String wersja, md5;
+  uint32_t rozmiar = 0;
+  if (!otaPobierzOpis(wersja, md5, rozmiar)) {
+    snprintf(rtcOtaMsg, sizeof(rtcOtaMsg), "nie moge pobrac opisu wersji");
+    otaZanotujProbe(teraz);
+    otaZglos();
+    return;
+  }
+
+  prefs.begin(NVS_NAMESPACE, true);
+  const uint16_t nieudane = prefs.getUShort("otaFail", 0);
+  const uint32_t ostatnia = prefs.getUInt("otaTs", 0);
+  prefs.end();
+
+  const OtaDecyzja d = otaDecyzja(
+      hasloWPamieci(), queueCount(), batteryPercentage, rtcCharging,
+      (uint8_t)(nieudane > 255 ? 255 : nieudane), teraz, ostatnia, rozmiar,
+      rtcOtaTs, md5, otaSumaWgranej(), otaSumaZPamieci("otaBad"));
+
+  snprintf(rtcOtaWersja, sizeof(rtcOtaWersja), "%s", wersja.c_str());
+  snprintf(rtcOtaMsg, sizeof(rtcOtaMsg), "%s", otaOpisDecyzji(d));
+  LOG("[OTA] decyzja: %s\n", otaOpisDecyzji(d));
+
+  /* "Nic nowego" znaczy, ze prosba zostala spelniona - kasujemy ja,
+     zeby przycisk w aplikacji nie zostal wcisniety na zawsze. To samo
+     przy wersji z czarnej listy i przy poddaniu sie: dalsze proby nic
+     nie dadza, a niekasowalne polecenie probowaloby w kolko (ta sama
+     lekcja co `wifiCmd`).                                            */
+  if (d == OTA_NIC_NOWEGO || d == OTA_ZEPSUTA || d == OTA_PODDANO) {
+    rtdbSend("DELETE", "/devices/" DEVICE_ID "/config/otaCmd.json", "");
+    rtcOtaProsba = false;
+    if (d == OTA_NIC_NOWEGO) otaWyzerujLicznik();
+    otaZglos();
+    return;
+  }
+  if (d != OTA_ROB) { otaZglos(); return; }   // powod minie sam
+
+  /* Od tego miejsca leci ~1,2 MB przez radio. Limit czuwania trzeba
+     podniesc, inaczej `awakeTooLong()` przerwie pobieranie w polowie. */
+  extendAwake(OTA_HTTP_TIMEOUT_MS + 30000);
+  otaZanotujProbe(teraz);
+
+  /* SLAD W CZARNEJ SKRZYNCE, ZANIM COKOLWIEK ZACZNIEMY.
+
+     TU BYLA LUKA: `logbookAdd()` stoi na koncu `goToSleep()`, czyli ZA
+     aktualizacja. Gdy pobieranie konczylo sie restartem - udanym albo
+     awaryjnym - wpis nie powstawal NIGDY. Akurat ta operacja, ktora
+     trwa najdluzej i jako jedyna moze wywalic pudelko, nie zostawiala
+     po sobie ani slowa. Kuba zglosil "zapikalo, ale nie bylo fanfar"
+     i nie bylo czego przeczytac.
+
+     Zapisujemy wiec od razu, wlasnym wywolaniem. Jesli pobieranie
+     wywali plytke, po restarcie ta linijka bedzie jedynym dowodem, ze
+     w ogole ruszylo.                                                 */
+  logbookAdd("ota:pobieram");
+
+  /* Dwa pikniecia: "zaczynam, zaraz zamilkne na minute". Bez tego
+     pudelko wyglada na zawieszone - a brzeczyk jest jedynym kanalem,
+     ktorym mowi cokolwiek bez telefonu (D29).                        */
+  beepAck(); delay(150); beepAck();
+
+  if (!otaWgraj(md5, rozmiar)) {
+    /* `otaWgraj()` ustawilo juz konkretny powod - nadpisanie go ogolnym
+       "nie doszlo do konca" zabieraloby jedyna informacje, ktora naprawde
+       cos mowi. Ogolny tekst zostaje wylacznie wtedy, gdy nie zdazyl
+       powstac zaden inny (np. samo polaczenie nie ruszylo).          */
+    if (!rtcOtaMsg[0] || strstr(rtcOtaMsg, "pobieram"))
+      snprintf(rtcOtaMsg, sizeof(rtcOtaMsg), "pobieranie nie doszlo do konca");
+    logbookAdd(rtcOtaMsg[0] ? rtcOtaMsg : "ota:nieudane");
+    LOGLN("[OTA] nieudane - stary program zostaje bez zmian");
+    beepErr();
+    otaZglos();
+    return;
+  }
+
+  /* Wgrane. Zapisujemy sume jako NIEPOTWIERDZONA - potwierdzi ja dopiero
+     nowy program, gdy dojdzie do konca swojej pierwszej drogi.        */
+  prefs.begin(NVS_NAMESPACE, false);
+  nvsPutStr("otaPend", md5);
+  nvsPutU16("otaBoot", 0);
+  prefs.end();
+
+  /* Polecenie kasujemy PRZED restartem - po nim nie wrocimy juz tutaj.
+     Gdyby kasowanie nie doszlo, nowy program zobaczy te sama prosbe,
+     policzy sume jako "aktualne" i skasuje ja wtedy. Samo sie naprawia. */
+  rtdbSend("DELETE", "/devices/" DEVICE_ID "/config/otaCmd.json", "");
+
+  /* Ostatnia chwila na zapis: za `esp_restart()` nie ma juz nic.     */
+  logbookAdd("ota:wgrane, restart");
+  LOGLN("[OTA] wgrane - restart na nowa wersje");
+  beepAck();
+  delay(200);
+  esp_restart();
+}
+
+#endif  /* OTA_ENABLED */
+
 void goToSleep(uint32_t seconds) {
   buzzerOff();
 

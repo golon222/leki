@@ -1197,7 +1197,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-12.37";
+const APP_VERSION = "2026-08-12.38";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -4512,9 +4512,12 @@ function renderOta(){
              wróci do tematu.${st.otaMsg ? ` Ostatnio: <b>${esc(st.otaMsg)}</b>.` : ""}
              Naciśnij przycisk jeszcze raz, żeby zlecić od nowa.</div>`;
   } else if (st.otaFail > 0){
+    /* Bez wzmianki o dobie — odstęp zniesiony w 1.41.0. Zostawiony tekst
+       obiecywałby czekanie, którego już nie ma, i kazałby siedzieć
+       bezczynnie zamiast po prostu spróbować jeszcze raz. */
     html += `<div style="margin-top:6px;color:var(--warn)">Nieudane próby:
-             <b>${st.otaFail}</b> z ${OTA_LIMIT_PROB}. Pudełko spróbuje ponownie
-             najwcześniej po dobie.</div>`;
+             <b>${st.otaFail}</b> z ${OTA_LIMIT_PROB}. Możesz spróbować od razu —
+             pudełko nie każe czekać.</div>`;
   }
   if (st.otaBad)
     html += `<div style="margin-top:6px;color:var(--warn)">⚠️ Któraś wersja nie
