@@ -939,6 +939,18 @@ if _fc:
 
 # Suma kontrolna musi trafic do Update: bez niej uszkodzony albo podmieniony
 # plik zostalby przyjety i przelaczony jako nowy program.
+_wgraj_raw = cialo_surowe("bool otaWgraj(const String& md5, uint32_t rozmiar)")
+# HTTP/1.0 przy pobieraniu programu. W HTTP/1.1 serwer moze odpowiedziec
+# "chunked", ktorego zapis firmware nie obsluguje - getSize() zwraca wtedy
+# -1 i pobranie konczy sie, zanim ruszy. Tak samo robi oficjalny mechanizm
+# aktualizacji w bibliotece ESP32.
+ok("useHTTP10(true)" in _wgraj_raw,
+   "pobieranie programu idzie po HTTP/1.0 (chunked psuje zapis firmware)")
+# Dlugosc bierzemy z OPISU, nie z naglowka - brak Content-Length nie moze
+# byc powodem odmowy.
+ok("len > 0 &&" in _wgraj_raw,
+   "brak Content-Length nie przerywa pobierania (dlugosc znamy z opisu)")
+
 _wgraj = cialo("bool otaWgraj(const String& md5, uint32_t rozmiar)")
 if _wgraj:
     ok("Update.setMD5(" in _wgraj,

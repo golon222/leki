@@ -3348,6 +3348,21 @@ bool otaWgraj(const String& md5, uint32_t rozmiar) {
   http.setTimeout(OTA_HTTP_TIMEOUT_MS);
   http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
 
+  /* HTTP/1.0 - i to jest wlasciwa naprawa, nie obejscie.
+
+     Tryb "chunked" (serwer wysyla plik kawalkami, bez podania dlugosci
+     z gory) istnieje dopiero w HTTP/1.1. Zapis firmware go NIE OBSLUGUJE -
+     z tego samego powodu oficjalny mechanizm aktualizacji w bibliotece
+     ESP32 tez schodzi tutaj do HTTP/1.0. W tej wersji protokolu serwer
+     nie ma jak wybrac chunked, wiec zawsze poda `Content-Length`
+     i strumien dochodzi do `Update` w postaci, ktora ten rozumie.
+
+     Bez tej linii GitHub Pages potrafi odpowiedziec chunkiem, `getSize()`
+     zwraca wtedy -1, a pobranie konczy sie, zanim ruszy. Dokladnie to
+     widzial Kuba: dwa pikniecia i "pobieranie nie doszlo do konca", trzy
+     razy pod rzad.                                                     */
+  http.useHTTP10(true);
+
   String url = String(OTA_BASE_URL) + OTA_BIN_FILE;
   if (!http.begin(client, url)) return false;
 
@@ -3358,16 +3373,37 @@ bool otaWgraj(const String& md5, uint32_t rozmiar) {
     return false;
   }
 
-  int len = http.getSize();
-  if (len <= 0 || (uint32_t)len != rozmiar) {
-    LOG("[OTA] rozmiar sie nie zgadza: opis %lu, plik %d\n",
+  /* BRAK DLUGOSCI W NAGLOWKU TO NIE JEST BLAD.
+
+     TU BYLA PRZYCZYNA, przez ktora aktualizacja "nie chciala sie zrobic"
+     przy KAZDEJ probie - Kuba slyszal dwa pikniecia i po chwili dostawal
+     "pobieranie nie doszlo do konca", trzy razy pod rzad, bez restartu.
+
+     Stalo tu `if (len <= 0 || ...) return false;`. Gdy serwer wysyla plik
+     w trybie chunked - bez `Content-Length` z gory, a tak potrafi
+     odpowiadac GitHub Pages - `getSize()` zwraca -1. Kod odrzucal wiec
+     pobranie w pierwszej sekundzie, ZANIM sciagnal choc bajt. Objaw
+     wygladal jak zerwany transfer, a transfer w ogole nie ruszal.
+
+     Dlugosci z naglowka NIE POTRZEBUJEMY: znamy ja z opisu wersji, ktory
+     pobralismy chwile wczesniej, i to on jest zrodlem prawdy. Gdy serwer
+     dlugosc poda, sprawdzamy zgodnosc; gdy nie poda - po prostu ufamy
+     opisowi. Suma kontrolna i tak zweryfikuje calosc przy zapisie.     */
+  const int len = http.getSize();
+  if (len > 0 && (uint32_t)len != rozmiar) {
+    LOG("[OTA] rozmiar sie nie zgadza: opis %lu, naglowek %d\n",
         (unsigned long)rozmiar, len);
+    snprintf(rtcOtaMsg, sizeof(rtcOtaMsg), "plik na serwerze ma inny rozmiar");
     http.end();
     return false;
   }
+  LOG("[OTA] naglowek podaje %d B, opis %lu B - pobieram\n",
+      len, (unsigned long)rozmiar);
 
-  if (!Update.begin((size_t)len)) {
-    LOG("[OTA] partycja nie przyjmuje %d B - czy podzial to na pewno min_spiffs?\n", len);
+  if (!Update.begin((size_t)rozmiar)) {
+    LOG("[OTA] partycja nie przyjmuje %lu B - czy podzial to na pewno min_spiffs?\n",
+        (unsigned long)rozmiar);
+    snprintf(rtcOtaMsg, sizeof(rtcOtaMsg), "program nie miesci sie w partycji");
     http.end();
     return false;
   }
@@ -3377,7 +3413,7 @@ bool otaWgraj(const String& md5, uint32_t rozmiar) {
   size_t zapisane = Update.writeStream(http.getStream());
   http.end();
 
-  if (zapisane != (size_t)len) {
+  if (zapisane != (size_t)rozmiar) {
     /* Najczestszy realny blad przy tym rodzaju OTA - potwierdzaja to
        zgloszenia do biblioteki ESP32 (arduino-esp32 #10213, #6254):
        przy wiekszych plikach transfer potrafi sie urwac w polowie.
@@ -3388,9 +3424,10 @@ bool otaWgraj(const String& md5, uint32_t rozmiar) {
        a "900 kB z 1,2 MB" - ze urwalo sie w trakcie i warto sprobowac
        blizej routera. Bez tej liczby obie wygladaly tak samo.        */
     snprintf(rtcOtaMsg, sizeof(rtcOtaMsg),
-             "pobrano %u kB z %d kB - podejdz blizej routera",
-             (unsigned)(zapisane / 1024), len / 1024);
-    LOG("[OTA] przerwane po %u B z %d\n", (unsigned)zapisane, len);
+             "pobrano %u kB z %lu kB - podejdz blizej routera",
+             (unsigned)(zapisane / 1024), (unsigned long)(rozmiar / 1024));
+    LOG("[OTA] przerwane po %u B z %lu\n",
+        (unsigned)zapisane, (unsigned long)rozmiar);
     Update.abort();
     return false;
   }
