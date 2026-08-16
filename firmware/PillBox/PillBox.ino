@@ -3681,7 +3681,11 @@ void logbookAdd(const char* co) {
 
   /* Format: czas|powod|co sie stalo|bateria|kolejka
      Krotko, bo NVS to nie miejsce na powiesci.                        */
-  char linia[72];
+  /* 96, nie 72: od 1.43.2 wpisy o aktualizacji nosza NUMER WERSJI, bo
+     "wgrane" bez wersji nie odpowiada na jedyne pytanie, ktore sie
+     wtedy zadaje - CO sie wgralo. Przy dlugiej nazwie wybudzenia
+     ("zamkniecie wieczka") stary bufor obcinal koncowke wpisu.       */
+  char linia[96];
   snprintf(linia, sizeof(linia), "%lu|%s|%s|%d|%u",
            (unsigned long)(rtcTimeValid ? time(nullptr) : 0),
            wakeName(wakeReason), co, batteryPercentage, wKolejce);
@@ -4179,8 +4183,9 @@ void otaSprobuj() {
     /* Wolna pamiec w slad - jesli plytka znowu padnie, ta liczba powie,
        czy zabraklo RAM-u, czy przyczyna byla inna. Bez niej zostaje
        zgadywanie, a to juz raz kosztowalo caly wieczor.               */
-    char m[40];
-    snprintf(m, sizeof(m), "ota:pobieram, wolne %u kB",
+    char m[56];
+    snprintf(m, sizeof(m), "ota:pobieram %s, wolne %u kB",
+             rtcOtaWersja[0] ? rtcOtaWersja : "?",
              (unsigned)(ESP.getFreeHeap() / 1024));
     logbookAdd(m);
   }
@@ -4228,7 +4233,15 @@ void otaSprobuj() {
   rtdbSend("DELETE", "/devices/" DEVICE_ID "/config/otaCmd.json", "");
 
   /* Ostatnia chwila na zapis: za `esp_restart()` nie ma juz nic.     */
-  logbookAdd("ota:wgrane, restart");
+  {
+    /* Z NUMEREM WERSJI. "ota:wgrane, restart" mowilo, ze cos sie wgralo -
+       a pytanie, ktore sie wtedy zadaje, brzmi: CO sie wgralo. Historia
+       ma na to odpowiadac sama, bez zestawiania jej z niczym innym.   */
+    char m[48];
+    snprintf(m, sizeof(m), "ota:wgrane %s, restart",
+             rtcOtaWersja[0] ? rtcOtaWersja : "?");
+    logbookAdd(m);
+  }
   LOGLN("[OTA] wgrane - restart na nowa wersje");
   beepAck();
   delay(200);
