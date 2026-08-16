@@ -5079,7 +5079,33 @@ void setup() {
           boxIsOpen() ? "OTWARTE" : "zamkniete");
       /* Zamkniecie wieczka: najpierw krotki PATCH, zeby aplikacja
          zareagowala natychmiast, a dopiero potem pelny status.      */
-      if (wifiConnect() && firebaseSignIn() && pushLidState() && pushStatus()) {
+      /* USTAWIENIA CZYTAMY TAKZE TUTAJ - i to jest naprawa prawdziwej
+         przyczyny tego, ze "kliknij i pudelko przyjmie" nie dzialalo.
+
+         `fetchConfig()` wisialo WYLACZNIE na `reportEvent()`, czyli na
+         sciezce zapisu dawki. A drugie otwarcie wieczka w ciagu doby
+         (`juz dzis brane`) oraz odfiltrowane drgniecie styku wychodza
+         z obslugi kontaktronu WCZESNIEJ - `reportEvent()` sie tam nie
+         wykonuje. Pudelko wlaczalo wiec radio, meldowalo stan wieczka
+         i status - czyli aktualizowalo `lastSeen` - a ustawien NIE
+         czytalo. Zlecenia aktualizacji nie mialo prawa zobaczyc.
+
+         Objaw byl dokladnie taki, jak opisal Kuba: otwiera wieczko raz
+         za razem, pudelko nie pika, w historii ani jednego `ota:pobieram`,
+         a aplikacja pisze "laczylo sie po zleceniu i nie zrobilo". Bo
+         laczylo sie naprawde - tylko nie po to.
+
+         Wieczorem, po wzieciu tabletki, KAZDE otwarcie idzie ta wlasnie
+         sciezka. Czyli w praktyce: aktualizacja nie mogla ruszyc z
+         otwarcia wieczka przez wiekszosc doby.
+
+         Radio i tak tu stoi, wiec odczyt ustawien kosztuje jedno male
+         zapytanie. Przy okazji naprawia to takze zwykla nieswiezosc:
+         zmiana harmonogramu albo rozpisania z aplikacji dojezdzala do
+         pudelka dopiero nastepnego dnia.                              */
+      const bool bazaGotowa = wifiConnect() && firebaseSignIn();
+      if (bazaGotowa) fetchConfig();
+      if (bazaGotowa && pushLidState() && pushStatus()) {
         /* Ile naprawde uplynelo od zamkniecia wieczka do potwierdzenia
            z bazy. Bez tej liczby "za wolno" jest nie do zdiagnozowania:
            nie wiadomo, czy zwleka pudelko, czy telefon.               */

@@ -1053,6 +1053,19 @@ ok("otaSumaWgranej()" in _spr_raw and 'otaSumaZPamieci("otaMd5")' not in _spr_ra
 ok("otaZlecenieWBazie(" in _spr_raw,
    "otaSprobuj() dopytuje baze o zlecenie, zamiast ufac pamieci sprzed wybudzenia")
 
+# Koncowy meldunek wybudzenia MUSI czytac takze ustawienia. Powtorne otwarcie
+# wieczka w ciagu doby i odfiltrowane drgniecie styku omijaja reportEvent(),
+# czyli jedyne inne miejsce z fetchConfig() na tej sciezce - pudelko
+# aktualizowalo wtedy lastSeen, a zlecenia nie widzialo nigdy.
+# Komentarze wycinamy, bo nazwa `fetchConfig()` pada kilka razy we WLASNYM
+# opisie tej naprawy - bez tego kontrola zaliczylaby sie na samym komentarzu.
+# `code` tu nie posluzy: strip() zjada literaly, a kotwica jest tekstem w logu.
+_i = ino.find("wysylam stan koncowy")
+_blok_konc = ("\n".join(_bez_komentarzy(ino[_i:ino.find("planNextSleep", _i)].split("\n")))
+              if _i >= 0 else "")
+ok(_blok_konc and "fetchConfig()" in _blok_konc and "pushStatus()" in _blok_konc,
+   "koncowy meldunek czyta ustawienia, a nie tylko melduje stan wieczka")
+
 ok("ota:naglowek" in _spr_raw and "getFreeHeap" in _spr_raw,
    "nieudana aktualizacja zostawia POMIAR (naglowek + wolny RAM), nie sam powod")
 ok("rtcOtaNagl" in cialo_surowe("bool otaWgraj(const String& md5, uint32_t rozmiar)"),
