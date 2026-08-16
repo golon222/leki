@@ -1197,7 +1197,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-12.41";
+const APP_VERSION = "2026-08-12.42";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -2290,13 +2290,39 @@ function opisDawkowania(){
 
 function dayDose(key){
   const rec = doses[key] || {};
-  let sum = 0, any = false;
+  let sum = 0, any = false, reczne = false;
   /* Po wszystkim, co tego dnia zapisano - nie po liczbie przypomnień. */
   for (const r of Object.values(rec)){
-    if (r){ any = true; if (r.status === "taken") sum += (r.dose ?? 1); }
+    if (r){
+      any = true;
+      if (r.status === "taken") sum += (r.dose ?? 1);
+      /* Kto to zapisał: pudełko czy człowiek. Robi różnicę wyłącznie
+         DZIŚ - patrz `dzienZamkniety()` niżej. */
+      if (r.source !== "device") reczne = true;
+    }
   }
-  return { sum, any };
+  return { sum, any, reczne };
 }
+
+/* CZY TEN DZIEŃ LEKOWY JEST JUŻ ZAMKNIĘTY.
+
+   TU BYŁ BŁĄD, zgłosił go Kuba: „jak mam alarm o 20 i on przestanie
+   dzwonić, to w kalendarzu dawka pokazuje się jako nie wzięta — a to
+   powinno się pokazywać dopiero z końcem dnia".
+
+   Miał rację, i to nie tylko estetycznie. Pudełko wysyła „missed" po
+   ostatnim przypomnieniu doby (D56) — a przypomnienie NIE jest porą
+   brania leku (CLAUDE.md 4b). Kuba bierze tabletkę kiedy chce, także
+   o 22:00 albo o 1 w nocy. „Missed" o 20:06 znaczy więc dokładnie tyle,
+   że o 20:06 jeszcze jej nie wziął — a nie, że jej nie weźmie.
+
+   Skutek był podwójny i oba były złe: kalendarz malował dzisiejszy dzień
+   na czerwono, a skuteczność spadała — obie liczby cofały się same, gdy
+   tabletka poszła dwie godziny później. Ekran straszył zamiast informować,
+   przy leku przeciwzakrzepowym.
+
+   Dzień lekowy kończy się o DAY_START_HOUR, i to `todayKey()` już wie. */
+function dzienZamkniety(key){ return key < todayKey(); }
 
 /* Od kiedy dane w ogóle mogą być prawdziwe. Dni wcześniejsze pudełka jeszcze
    nie widziało, więc pusta kratka nie oznacza pominiętej dawki — oznacza, że
@@ -2306,9 +2332,9 @@ function trackingSince(){ return cfg.trackingSince || "2026-08-01"; }
 function beforeTracking(key){ return key < trackingSince(); }
 
 function dayStatus(key){
-  const { sum, any } = dayDose(key);
+  const { sum, any, reczne } = dayDose(key);
   const target = dawkaNaDzien(key);
-  const past = key < todayKey();
+  const past = dzienZamkniety(key);
   /* Wpis ręczny wygrywa nawet przed datą startu — skoro coś tam wpisałeś,
      to znaczy, że wiesz lepiej niż domyślna reguła. */
   if (!any && beforeTracking(key)) return "nodata";
@@ -2322,7 +2348,11 @@ function dayStatus(key){
   if (target <= 0 && sum <= 0) return "off";
   if (!any && !past) return "future";
   if (!any && past)  return "missed";
-  if (sum <= 0)      return "missed";
+  /* Nic jeszcze nie wzięte. Dzień zamknięty - to jest pominięcie. Dzień
+     TRWAJĄCY - to jest „jeszcze nie", czyli ten sam stan co pusta kratka.
+     Wyjątek: wpis RĘCZNY. Skoro sam zaznaczyłeś dziś „nie wzięte", to
+     wiesz lepiej niż reguła - tak samo jak przy `beforeTracking`. */
+  if (sum <= 0)      return (past || reczne) ? "missed" : "future";
   return sum >= target - 0.001 ? "taken" : "partial";
 }
 
@@ -5012,7 +5042,17 @@ function analyze(days){
     if (dawkaNaDzien(key) <= 0 && sum <= 0) continue;
 
     const isTaken = any && sum > 0;
-    if (any || key < todayKey()){
+    /* DZISIEJSZY DZIEŃ WCHODZI DO STATYSTYKI DOPIERO, GDY COŚ ROZSTRZYGNIE.
+
+       Wcześniej stało tu `if (any || key < todayKey())`, przez co „missed"
+       przysłane przez pudełko po ostatnim przypomnieniu wciągało dzisiaj
+       do mianownika jako pominięte — o 20:06, przy tabletce, którą Kuba
+       bierze o 22:00. Skuteczność spadała, a potem sama się cofała.
+       Ta sama przyczyna co czerwona kratka w kalendarzu.
+
+       Wzięta dawka rozstrzyga dzień od razu (jest czym się pochwalić).
+       Niewzięta rozstrzyga go dopiero, gdy dzień lekowy się zamknie. */
+    if (isTaken || dzienZamkniety(key)){
       byDow[dow].total++;
       if (isTaken){ taken++; byDow[dow].taken++; doseSum += sum; } else missed++;
     }
@@ -5206,16 +5246,24 @@ function collectRows(days){
   const rows = [], end = medDate(new Date());
   for (let i = days-1; i >= 0; i--){
     const d = new Date(end); d.setDate(end.getDate()-i);
-    const key = dateKey(d), rec = (doses[key]||{})[0], { sum, any } = dayDose(key);
+    const key = dateKey(d), rec = (doses[key]||{})[0];
+    const { sum, any, reczne } = dayDose(key);
     const noData = !any && beforeTracking(key);
+    /* Raport dla lekarza trzyma się tej samej reguły co kalendarz: dzień
+       bez wziętej dawki jest „pominięty" dopiero po zamknięciu doby lekowej.
+       Inaczej wydruk zrobiony wieczorem pokazywałby dzisiaj jako pominięte,
+       choć tabletka poszłaby dwie godziny później. */
+    const rozstrzygniety = sum > 0 || dzienZamkniety(key) || reczne;
     /* Dzień rozpisany bez leku ma własny status, żeby nie wpadł do rubryki
        „pominięte" — lekarz czytający raport zobaczyłby zaniżoną skuteczność
        tam, gdzie sam zalecił przerwę. */
     const bezLeku = !noData && dawkaNaDzien(key) <= 0 && sum <= 0;
     rows.push({ key,
       status: noData ? "nodata" : bezLeku ? "off"
-            : !any ? (key < todayKey() ? "missed" : "") : (sum > 0 ? "taken" : "missed"),
-      dose: noData || bezLeku ? "" : (any && sum > 0 ? nf(sum) : (key < todayKey() ? "0" : "")),
+            : !any ? (dzienZamkniety(key) ? "missed" : "")
+            : (sum > 0 ? "taken" : (rozstrzygniety ? "missed" : "")),
+      dose: noData || bezLeku ? "" : (any && sum > 0 ? nf(sum)
+            : (rozstrzygniety ? "0" : "")),
       time: openTimeOf(rec) != null ? devHM(openTimeOf(rec)) : "",
       src:  rec ? (rec.source === "device" ? "pudełko" : "ręcznie") : "",
       note: rec?.note || "",

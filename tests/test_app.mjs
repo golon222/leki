@@ -69,6 +69,42 @@ check(A.dayDose(shift(-2)).sum===0.5,     "suma dawki dnia = 0,5");
 check(A.dayDose(shift(-1)).sum===0,       "pominiety dzien: 0 tabletek");
 check(A.dayDose(shift(-9)).any===false,   "dzien bez wpisu: any=false");
 
+/* ── "Missed" z pudelka DZIS nie zamyka jeszcze dnia ─────────────────
+   Zgloszenie Kuby: "jak mam alarm o 20 i on przestanie dzwonic, to
+   w kalendarzu dawka pokazuje sie jako nie wzieta - a to powinno sie
+   pokazywac dopiero z koncem dnia".
+
+   Ma racje i nie chodzi o estetyke. Pudelko wysyla "missed" po ostatnim
+   przypomnieniu doby (D56), a przypomnienie NIE jest pora brania leku
+   (CLAUDE.md 4b) - Kuba bierze tabletke takze o 22:00 albo o 1 w nocy.
+   "Missed" o 20:06 znaczy tyle, ze o 20:06 jeszcze jej nie wzial.     */
+D({ doses:{ [today]: { 0:{ status:"missed", dose:0, source:"device" } } } });
+check(A.dayStatus(today)==="future",
+      "'missed' z pudelka DZIS nie maluje kratki na czerwono");
+
+D({ doses:{ [shift(-1)]: { 0:{ status:"missed", dose:0, source:"device" } } } });
+check(A.dayStatus(shift(-1))==="missed",
+      "...ale wczoraj, po zamknieciu doby lekowej, juz tak");
+
+/* Tabletka wzieta pozniej tego samego dnia rozstrzyga dzien od razu. */
+D({ doses:{ [today]: { 0:{ status:"missed", dose:0, source:"device" },
+                       1:{ status:"taken",  dose:1, source:"device" } } } });
+check(A.dayStatus(today)==="taken",
+      "dawka wzieta po alarmie zamyka dzien na zielono");
+
+/* Wpis RECZNY wygrywa takze dzis - skoro sam zaznaczyles "nie wziete",
+   to wiesz lepiej niz regula (ta sama zasada co przy beforeTracking). */
+D({ doses:{ [today]: { 0:{ status:"missed", dose:0, source:"manual" } } } });
+check(A.dayStatus(today)==="missed",
+      "reczne 'nie wziete' na dzis jest respektowane, a nie ukrywane");
+
+/* Stan wyjsciowy z powrotem - kolejna sekcja liczy na te same wpisy. */
+D({ doses:{
+  [shift(-3)]: { 0:{ status:"taken", dose:1, source:"device" } },
+  [shift(-2)]: { 0:{ status:"taken", dose:0.5, source:"manual" } },
+  [shift(-1)]: { 0:{ status:"missed", dose:0, source:"device" } },
+}});
+
 head("Dawka standardowa 0,5 tabletki");
 A.__setState({ cfg:{ defaultDose:0.5 } });
 check(A.dayStatus(shift(-2))==="taken", "przy standardzie 0,5 pol tabletki to pelna dawka");
@@ -465,6 +501,43 @@ D({ cfg:{ schedule:["07:30","23:00"], defaultDose:1 }, doses:{
 an = A.analyze(5);
 check(an.q1===q1a && an.q3===q3a && an.mean===srA && an.withinMean60===zwA,
       "dwa przypomnienia o innych porach nie ruszaja statystyki godzin");
+
+head("Dzisiejszy dzien wchodzi do skutecznosci dopiero, gdy sie rozstrzygnie");
+
+/* Ten sam blad co czerwona kratka w kalendarzu, tylko drozszy: skutecznosc
+   to liczba, ktora oglada lekarz. "Missed" przyslane przez pudelko po
+   ostatnim przypomnieniu wciagalo DZISIAJ do mianownika jako pominiete -
+   o 20:06, przy tabletce, ktora Kuba bierze o 22:00. Wynik spadal, a potem
+   sam sie cofal.                                                        */
+D({ cfg:{ schedule:["20:00"], defaultDose:1 }, doses:{
+  [shift(-1)]: dose(1, 20, 0),
+  [today]:     { 0:{ status:"missed", dose:0, source:"device" } },
+}});
+an = A.analyze(2);
+check(an.taken===1 && an.missed===0,
+      "dzisiejsze 'missed' z pudelka nie liczy sie jako pominieta dawka");
+check(an.total===1, "...i nie wchodzi do mianownika (" + an.total + ")");
+
+/* Wzieta dawka rozstrzyga dzien od razu - jest czym sie pochwalic. */
+D({ cfg:{ schedule:["20:00"], defaultDose:1 }, doses:{
+  [shift(-1)]: dose(1, 20, 0),
+  [today]:     { 0:{ status:"missed", dose:0, source:"device" },
+                 1:{ status:"taken",  dose:1, source:"device" } },
+}});
+an = A.analyze(2);
+check(an.taken===2 && an.total===2,
+      "ale tabletka wzieta po alarmie liczy sie tego samego dnia");
+
+/* Okno 2 dni: dzis + wczoraj. Szersze wciagneloby dni bez wpisu, ktore
+   slusznie licza sie jako pominiete i zaciemnilyby to, co tu mierzymy.
+
+   Wczoraj rozstrzyga sie normalnie - inaczej pominiete dawki znikalyby. */
+D({ cfg:{ schedule:["20:00"], defaultDose:1 }, doses:{
+  [shift(-1)]: { 0:{ status:"missed", dose:0, source:"device" } },
+}});
+an = A.analyze(2);
+check(an.missed===1 && an.total===1,
+      "wczorajsze pominiecie nadal sie liczy - nie chowamy zlych dni");
 
 head("Reczne korekty nie zaklamuja godzin");
 D({ cfg:{ schedule:["08:00"] }, doses:{
