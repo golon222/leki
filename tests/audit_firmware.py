@@ -1044,6 +1044,14 @@ _spr_raw = cialo_surowe("void otaSprobuj()")
 ok("otaSumaWgranej()" in _spr_raw and 'otaSumaZPamieci("otaMd5")' not in _spr_raw,
    "decyzja o OTA opiera sie na tym samym zrodle co status")
 
+# Nieudana proba MUSI zostawic pomiar, nie tylko powod. "Naglowek -1" rozstrzyga
+# hipoteze o odpowiedzi porcjowej, a wolny RAM - o braku pamieci. Bez tych
+# dwoch liczb kazde kolejne dochodzenie zaczyna sie od zgadywania.
+ok("ota:naglowek" in _spr_raw and "getFreeHeap" in _spr_raw,
+   "nieudana aktualizacja zostawia POMIAR (naglowek + wolny RAM), nie sam powod")
+ok("rtcOtaNagl" in cialo_surowe("bool otaWgraj(const String& md5, uint32_t rozmiar)"),
+   "i ten pomiar bierze sie z prawdziwej odpowiedzi serwera")
+
 # Podzial pamieci musi zapowiadac OTA - na huge_app nie ma dokad pisac.
 ok("with OTA" in ino[:3000],
    "naglowek szkicu zapowiada podzial pamieci z druga partycja programu")

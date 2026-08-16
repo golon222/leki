@@ -124,6 +124,13 @@ RTC_DATA_ATTR char     rtcNetMsg[48]    = "";
 RTC_DATA_ATTR bool     rtcOtaProsba     = false;
 RTC_DATA_ATTR char     rtcOtaMsg[56]    = "";
 RTC_DATA_ATTR char     rtcOtaWersja[16] = "";
+/* CO SERWER POWIEDZIAL O DLUGOSCI PLIKU. To nie jest ozdoba, tylko POMIAR.
+   Cala naprawa z 1.42.1 opiera sie na zalozeniu, ze GitHub Pages odpowiada
+   porcjowo (`chunked`) i nie podaje `Content-Length` - a tego nikt nie
+   zmierzyl, bo z serwerem rozmawia wylacznie pudelko. -1 znaczy "serwer nie
+   podal dlugosci" i potwierdza hipoteze; liczba dodatnia ja obala i kaze
+   szukac gdzie indziej. Zero znaczy "jeszcze nie pytalismy".            */
+RTC_DATA_ATTR int32_t  rtcOtaNagl       = 0;
 /* KIEDY zlozono zlecenie. Sluzy do jednego: odroznienia "ktos wlasnie
    nacisnal przycisk" od "to samo zlecenie probuje sie wykonac kolejny
    raz". Swiadome zadanie omija dobowy odstep miedzy probami - odstep
@@ -3415,6 +3422,7 @@ bool otaWgraj(const String& md5, uint32_t rozmiar) {
      dlugosc poda, sprawdzamy zgodnosc; gdy nie poda - po prostu ufamy
      opisowi. Suma kontrolna i tak zweryfikuje calosc przy zapisie.     */
   const int len = http.getSize();
+  rtcOtaNagl = (int32_t)len;          // pomiar - trafi do czarnej skrzynki
   if (len > 0 && (uint32_t)len != rozmiar) {
     LOG("[OTA] rozmiar sie nie zgadza: opis %lu, naglowek %d\n",
         (unsigned long)rozmiar, len);
@@ -4132,6 +4140,17 @@ void otaSprobuj() {
     if (!rtcOtaMsg[0] || strstr(rtcOtaMsg, "pobieram"))
       snprintf(rtcOtaMsg, sizeof(rtcOtaMsg), "pobieranie nie doszlo do konca");
     logbookAdd(rtcOtaMsg[0] ? rtcOtaMsg : "ota:nieudane");
+    /* DRUGA LINIJKA TO POMIAR, nie powtorzenie. Powod z `rtcOtaMsg` mowi,
+       CO sie stalo; ta mowi, co serwer powiedzial o dlugosci pliku i ile
+       zostalo RAM-u. Dopoki tych dwoch liczb nie widac z zewnatrz,
+       "chunked" i "zabraklo pamieci" pozostaja domyslami - a domyslow
+       w tej sprawie bylo juz dosc.                                     */
+    {
+      char m[40];
+      snprintf(m, sizeof(m), "ota:naglowek %ld, wolne %u kB",
+               (long)rtcOtaNagl, (unsigned)(ESP.getFreeHeap() / 1024));
+      logbookAdd(m);
+    }
     LOGLN("[OTA] nieudane - stary program zostaje bez zmian");
     beepErr();
     otaZglos();
