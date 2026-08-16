@@ -1197,7 +1197,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-12.40";
+const APP_VERSION = "2026-08-12.41";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -4454,7 +4454,35 @@ function renderOta(){
     const bylPoZleceniu = zlecono > 0 && widziano > zlecono;
     const odKiedy = zlecono ? relTime(Math.floor(Date.now()/1000) - zlecono) : "";
 
-    if (bylPoZleceniu){
+    /* PUDEŁKO WŁAŚNIE TO ROBI — a ekran krzyczał wtedy „BŁĄD".
+
+       Zgłoszenie Kuby z chwili, w której aktualizacja **się udała**:
+       „aplikacja pokazywała że błąd jest, a jak poczekałem chwilę, to
+       wgrało się". I miał rację, że to wygląda jak awaria.
+
+       Powód jest w kolejności: pudełko wysyła status na POCZĄTKU
+       wybudzenia, a pobiera 1,24 MB na KOŃCU — przez całą tę minutę
+       `lastSeen` jest już świeższy niż zlecenie, więc warunek „łączyło
+       się po zleceniu" jest spełniony, choć praca dopiero trwa.
+
+       Rozstrzyga to samo pudełko: `otaProsba` znaczy „widzę zlecenie
+       i się nim zajmuję", a brak `otaMsg` znaczy, że nie ma jeszcze
+       żadnego powodu do zgłoszenia — bo nic się jeszcze nie skończyło.
+       Nieudana próba melduje powód od razu (`otaZglos()`), więc prawdziwa
+       awaria i tak dojdzie tu w ciągu kilku sekund. Świeżość `lastSeen`
+       domyka sprawę: po trzech minutach cisza przestaje znaczyć „pracuję"
+       i wraca ostrzeżenie. */
+    const odWidziano = widziano ? Math.floor(Date.now()/1000) - widziano : 1e9;
+    const wTrakcie = bylPoZleceniu && st.otaProsba === true && !st.otaMsg
+                     && odWidziano < 180;
+
+    if (wTrakcie){
+      html += `<div style="margin-top:8px;color:var(--warn)">⏳ Pudełko widzi
+               zlecenie i <b>właśnie się nim zajmuje</b>.</div>
+               <div class="dim2" style="margin-top:4px">Pobranie trwa około
+               minuty i kończy się restartem — daj mu tę chwilę i nie otwieraj
+               wieczka. Usłyszysz fanfarę w górę.</div>`;
+    } else if (bylPoZleceniu){
       html += `<div style="margin-top:8px;color:var(--bad)">⚠️ Pudełko łączyło się
                po zleceniu i aktualizacji <b>nie zrobiło</b>.</div>`;
       /* „Nie podało powodu" było przez długi czas OSKARŻENIEM BEZ DOWODU.

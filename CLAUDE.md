@@ -23,7 +23,7 @@ bash tests/run_all.sh
 ```
 
 Musi przejść przed zmianą i po zmianie. Stan wyjściowy:
-**484 + 51 firmware, 866 (×6 pór doby) + 92 + 49 aplikacja, 48 zgodności,
+**484 + 51 firmware, 869 (×6 pór doby) + 92 + 49 aplikacja, 48 zgodności,
 93 reguł bazy, 273 kontroli audytu — 0 błędów.**
 
 Testy pracują na **prawdziwym kodzie**, nie na kopii: `tests/extract.py` wycina
@@ -187,19 +187,19 @@ Szczegóły obejść (ctags, `.cpp` zamiast `.ino`, atrapa `dfu-util`) — D17.
   nieweryfikowanych kanałach nie dawało ono nic poza kosztem (D59). Przed
   uszkodzonym pobraniem chroni `Update.setMD5()`; przed **podmianą** nie chroni
   dziś nic. Nie udawaj, że jest inaczej.
-- **Aktualizacja przez WiFi (D59) — częściowo sprawdzona na płytce.**
-  **Pobranie i uruchomienie nowej wersji DZIAŁA**: 2026-08-12 pudełko samo
-  ściągnęło 1.39.0 i potwierdziło ją jako działającą (dowód: suma `86a4c83b`
-  w jego pamięci, której kabel zapisać nie może). Hasło z NVS też działa —
-  binarka z placeholderem loguje się do bazy.
+- **Aktualizacja przez WiFi z przycisku w aplikacji — DZIAŁA, potwierdzone
+  na płytce 2026-08-16** (D59–D62). Kuba wgrał kablem 1.43.1, nacisnął
+  przycisk, otworzył wieczko i **1.43.2 weszła sama**: dwa piknięcia
+  („zaczynam"), jedno („zapisane, restartuję"), fanfara po starcie i nowy
+  numer wersji w aplikacji. Cała droga — zlecenie z telefonu, pobranie
+  1,24 MB, zapis do drugiej partycji, restart, potwierdzenie — przeszła
+  od początku do końca. **To był pierwszy raz.**
+  Wcześniejsze „udane" OTA nie liczą się jako dowód tej drogi: 1.39.0
+  (2026-08-12) pobrało się samo, ale nikt tego nie zauważył, a wersji
+  zamówionej z przycisku pudełko nie przyjęło ani razu aż do 1.43.2.
   **Nadal niesprawdzone:** rollback po nieudanym starcie (żadna wersja się
   jeszcze nie wysypała), czarna lista zepsutych sum i zachowanie przy
   przerwanym pobieraniu.
-  **Od 1.41.0 nie udało się już ani razu** — Kuba wgrywał kablem 1.41.0.
-  Naprawa z 1.42.1 (`useHTTP10(true)`, D60) celuje w kodowanie porcjowe
-  i **nie była jeszcze uruchomiona na płytce**: pudełko stało na 1.41.0,
-  czyli na kodzie sprzed tej poprawki. Dopóki nie wgra się 1.42.2 i nie
-  zobaczy pobrania, jest to **hipoteza z naprawą**, nie potwierdzenie.
 
 ---
 

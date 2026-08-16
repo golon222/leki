@@ -2853,6 +2853,34 @@ A.renderStatus({ fw: "1.38.0", otaHaslo: true, lastSeen: ZLECONO + 600,
 check(otaHtml().includes("Nie podało powodu") && !otaHtml().includes("nie widzi jeszcze"),
       "pudelko, ktore zlecenie WIDZI i nic nie zrobilo, nadal jest rozliczane");
 
+/* ...ale nie wtedy, gdy wlasnie to robi. Zgloszenie Kuby z chwili, w ktorej
+   aktualizacja SIE UDALA: "aplikacja pokazywala ze blad jest, a jak
+   poczekalem chwile, to wgralo sie". Status leci na POCZATKU wybudzenia,
+   a 1,24 MB pobiera sie na KONCU - przez cala te minute `lastSeen` jest
+   juz swiezszy niz zlecenie, choc praca dopiero trwa.                 */
+const TERAZ_S = Math.floor(Date.now()/1000);
+A.__setState({ cfg: { otaCmd: { md5: OPIS.md5, wersja: OPIS.wersja, ts: TERAZ_S - 30 } } });
+A.renderStatus({ fw: "1.38.0", otaHaslo: true, lastSeen: TERAZ_S - 10,
+                 otaProsba: true });
+check(otaHtml().includes("właśnie się nim zajmuje") && !otaHtml().includes("nie zrobiło"),
+      "pudelko w trakcie pobierania nie jest oskarzane o awarie");
+
+/* Powod od pudelka bije wszystko: nieudana proba melduje go od razu,
+   wiec "pracuje" nie moze przykryc prawdziwej awarii.                 */
+A.renderStatus({ fw: "1.38.0", otaHaslo: true, lastSeen: TERAZ_S - 10,
+                 otaProsba: true, otaMsg: "pobieranie nie doszlo do konca" });
+check(otaHtml().includes("nie zrobiło") && otaHtml().includes("pobieranie nie doszlo"),
+      "...ale zgloszony powod natychmiast przebija 'pracuje'");
+
+/* Cisza dluzsza niz przebieg aktualizacji przestaje znaczyc "pracuje".
+   Zlecenie musi byc STARSZE od ostatniego polaczenia - inaczej mamy
+   zwykle "jeszcze sie nie laczylo", czyli calkiem inny stan.          */
+A.__setState({ cfg: { otaCmd: { md5: OPIS.md5, wersja: OPIS.wersja, ts: TERAZ_S - 7200 } } });
+A.renderStatus({ fw: "1.38.0", otaHaslo: true, lastSeen: TERAZ_S - 3600,
+                 otaProsba: true });
+check(otaHtml().includes("nie zrobiło"),
+      "...a po dluzszej ciszy wraca ostrzezenie, bo minuta dawno minela");
+
 /* Rozjazd sum przestal istniec (D59, 1.40.0): pudelko ignoruje sume
    ze zlecenia, bo porownywanie jej z plikiem bylo obrona iluzoryczna -
    oba kanaly ida przez setInsecure(). Zostaje sam znacznik czasu, ktory
