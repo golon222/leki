@@ -20,7 +20,7 @@
  * 1. IDENTYFIKATOR URZADZENIA
  * ------------------------------------------------------------------ */
 #define DEVICE_ID           "pillbox01"     // klucz w /devices/<DEVICE_ID>
-#define FW_VERSION          "1.42.2"   // widoczna w aplikacji - po wgraniu sprawdz, czy sie zmienila
+#define FW_VERSION          "1.42.3"   // widoczna w aplikacji - po wgraniu sprawdz, czy sie zmienila
 
 /* ---------------------------------------------------------------------
  * 2. FIREBASE  (Realtime Database + Auth email/haslo)
@@ -475,11 +475,22 @@
 #define OTA_MIN_BIN_SIZE    300000
 #define OTA_MAX_BIN_SIZE    1900000
 
-/*     OTA_HTTP_TIMEOUT_MS - pobranie przez slabe WiFi trwa dluzej niz
- *     zwykly zapis do bazy, wiec ma wlasny, hojniejszy limit.
+/*     OTA_HTTP_TIMEOUT_MS - ile czasu w calosci dajemy na pobranie: o tyle
+ *     podnosimy limit czuwania, zeby awakeTooLong() nie przerwalo transferu
+ *     w polowie. To jest budzet na CALA operacje.
+ *
+ *     OTA_HTTP_READ_MS - limit na POJEDYNCZY odczyt ze strumienia, i musi
+ *     byc osobna liczba, bo `HTTPClient::setTimeout()` przyjmuje **uint16_t**
+ *     (sprawdzone w rdzeniu 3.3.11, HTTPClient.h:217). Podanie tam 90000
+ *     nie jest bledem kompilacji - liczba po cichu obcina sie do 24464 ms,
+ *     czyli do czegos, czego nikt nie zamierzal. Trzymamy wiec wartosc,
+ *     ktora w uint16_t mieszcza sie w calosci. 30 s na jeden odczyt to
+ *     i tak wiecej, niz potrzebuje najgorsze WiFi w tym mieszkaniu.
+ *
  *     OTA_BOOT_TRIES - ile razy nowy program moze wystartowac i NIE
  *     dojsc do konca, zanim uznamy go za zepsuty i wrocimy do starego.  */
 #define OTA_HTTP_TIMEOUT_MS 90000
+#define OTA_HTTP_READ_MS    30000
 #define OTA_BOOT_TRIES      3
 
 /* ---------------------------------------------------------------------

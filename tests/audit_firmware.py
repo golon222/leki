@@ -951,6 +951,25 @@ ok("useHTTP10(true)" in _wgraj_raw,
 ok("len > 0 &&" in _wgraj_raw,
    "brak Content-Length nie przerywa pobierania (dlugosc znamy z opisu)")
 
+# HTTPClient::setTimeout() bierze uint16_t (rdzen 3.3.11, HTTPClient.h:217).
+# Wieksza liczba NIE jest bledem kompilacji - obcina sie po cichu (90000 ->
+# 24464 ms), wiec zrodlo zapowiada limit, ktorego program nie ma. Sprawdzamy
+# kazde wywolanie w firmware, nie tylko to przy aktualizacji.
+_zle_limity = []
+for _arg in re.findall(r"\bhttp\.setTimeout\(\s*([A-Za-z_0-9]+)\s*\)", ino):
+    _val = None
+    if _arg.isdigit():
+        _val = int(_arg)
+    else:
+        _d = re.search(rf"#\s*define\s+{_arg}\s+(\d+)", cfg)
+        if _d:
+            _val = int(_d.group(1))
+    if _val is not None and _val > 65535:
+        _zle_limity.append(f"{_arg}={_val}")
+ok(not _zle_limity,
+   "limity http.setTimeout() mieszcza sie w uint16_t (inaczej obcinaja sie po cichu)"
+   + (" - za duze: " + ", ".join(_zle_limity) if _zle_limity else ""))
+
 _wgraj = cialo("bool otaWgraj(const String& md5, uint32_t rozmiar)")
 if _wgraj:
     ok("Update.setMD5(" in _wgraj,

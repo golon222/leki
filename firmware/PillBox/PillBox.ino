@@ -3359,7 +3359,18 @@ bool otaWgraj(const String& md5, uint32_t rozmiar) {
 
   HTTPClient http;
   http.setConnectTimeout(10000);
-  http.setTimeout(OTA_HTTP_TIMEOUT_MS);
+  /* NIE `OTA_HTTP_TIMEOUT_MS` - to bylo po cichu klamstwo.
+
+     `HTTPClient::setTimeout()` bierze **uint16_t** (rdzen 3.3.11,
+     HTTPClient.h:217). Podane tu 90000 nie powodowalo bledu kompilacji,
+     tylko obcinalo sie do 24464 ms - limit, ktorego nikt nie wybral
+     i ktorego nie bylo widac w kodzie. Ten sam rodzaj cichej wpadki co
+     B21: kompilator milczy, a program robi cos innego, niz mowi zrodlo.
+
+     `OTA_HTTP_TIMEOUT_MS` zostaje tam, gdzie ma sens - jako budzet czasu
+     czuwania na cala operacje. Tutaj idzie limit na POJEDYNCZY odczyt,
+     wartosc mieszczaca sie w uint16_t w calosci.                       */
+  http.setTimeout(OTA_HTTP_READ_MS);
   http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
 
   /* HTTP/1.0 - i to jest wlasciwa naprawa, nie obejscie.
