@@ -1053,6 +1053,29 @@ ok("otaSumaWgranej()" in _spr_raw and 'otaSumaZPamieci("otaMd5")' not in _spr_ra
 ok("otaZlecenieWBazie(" in _spr_raw,
    "otaSprobuj() dopytuje baze o zlecenie, zamiast ufac pamieci sprzed wybudzenia")
 
+# Skan sieci zabiera radio na kilka sekund i potrafi zerwac polaczenie, wiec
+# obowiazuje go ta sama zasada co aktualizacje (zasada 11): wolno mu ruszyc
+# dopiero z goToSleep(), czyli po zapisie dawki i wyslaniu statusu. Wywolanie
+# z fetchConfig() albo z obslugi kontaktronu wcisneloby go miedzy otwarcie
+# wieczka a zapis dawki Warfinu.
+ok(len(re.findall(r"^\s*skanujSieci\(\);", code, re.M)) == 1,
+   "skanujSieci() wolane z dokladnie jednego miejsca")
+_gts = cialo("void goToSleep(uint32_t seconds)")
+ok(_gts and "skanujSieci()" in _gts,
+   "i tym miejscem jest goToSleep() - po zapisie dawki, nie w trakcie")
+# Zlecenie kasujemy dopiero po potwierdzonym zapisie listy (zasada 6):
+# skasowane wczesniej znikaloby bez sladu przy zerwanej sieci.
+# cialo_surowe(), nie cialo(): sprawdzamy TRESC literalow ("PUT", "DELETE"),
+# a strip() literaly zjada - kontrola szukalaby tekstu, ktorego juz nie ma.
+_skan = cialo_surowe("void skanujSieci()")
+if _skan:
+    _put = _skan.find('rtdbSend("PUT"')
+    _del = _skan.find('rtdbSend("DELETE"')
+    ok(_put >= 0 and _del > _put and "code == 200" in _skan,
+       "zlecenie skanu kasuje sie dopiero po potwierdzonym zapisie listy")
+else:
+    ok(False, "nie znaleziono skanujSieci() do sprawdzenia")
+
 # Koncowy meldunek wybudzenia MUSI czytac takze ustawienia. Powtorne otwarcie
 # wieczka w ciagu doby i odfiltrowane drgniecie styku omijaja reportEvent(),
 # czyli jedyne inne miejsce z fetchConfig() na tej sciezce - pudelko

@@ -122,6 +122,10 @@ RTC_DATA_ATTR char     rtcNetMsg[48]    = "";
    i tak przeczytamy ja z bazy na nowo. Komunikat i wersja ida do statusu,
    zeby aplikacja umiala napisac, NA CO pudelko czeka.                  */
 RTC_DATA_ATTR bool     rtcOtaProsba     = false;
+/* Prosba o rozejrzenie sie za sieciami WiFi. Zyje tylko do najblizszego
+   snu - po wykonaniu kasujemy zlecenie w bazie, a po restarcie i tak
+   przeczytamy je z bazy na nowo.                                       */
+RTC_DATA_ATTR bool     rtcScanProsba    = false;
 RTC_DATA_ATTR char     rtcOtaMsg[56]    = "";
 RTC_DATA_ATTR char     rtcOtaWersja[16] = "";
 /* CO SERWER POWIEDZIAL O DLUGOSCI PLIKU. To nie jest ozdoba, tylko POMIAR.
@@ -2392,6 +2396,25 @@ void fetchConfig() {
   }
 #endif
 
+  /* --- Prosba o rozejrzenie sie za sieciami WiFi ----------------------
+     Aplikacja nie ma jak tego zrobic sama: Safari nie daje zadnej stronie
+     dostepu do skanowania sieci. A i tak wazniejsza jest lista widziana
+     PRZEZ PUDELKO - to ono ma sie polaczyc, a stoi gdzie indziej niz
+     telefon. Siec swietnie widoczna z kanapy potrafi w ogole nie docierac
+     do pudelka; wpisana z listy telefonu wygladalaby na dobra i nic by
+     nie dzialalo.
+
+     Sam skan robimy przed snem, nie tutaj - z tego samego powodu co przy
+     aktualizacji: `fetchConfig()` bywa wolane w srodku obslugi otwartego
+     wieczka, a skanowanie zabiera radio na kilka sekund i potrafi zerwac
+     polaczenie. Dawka Warfinu ma pierwszenstwo przed wygoda.          */
+  JsonObject sc = doc["wifiScan"].as<JsonObject>();
+  if (!sc.isNull()) {
+    rtcScanProsba = true;
+    LOG("[SCN] aplikacja prosi o liste sieci (zlecenie z %lu)\n",
+        (unsigned long)(sc["ts"] | 0UL));
+  }
+
   /* --- Rozpisanie tygodniowe -----------------------------------------
      Do stringa ida DZIESIATE czesci tabletki, zeby polowka zmiescila sie
      w bajcie. Cokolwiek podejrzanego - choc jeden dzien brakujacy, nie
@@ -4058,6 +4081,73 @@ void otaZglos() {
    i potwierdzona, status wyslany, kolejka opróżniona.
 
    Nie wraca, jesli aktualizacja sie powiodla - konczy restartem.      */
+/* JAKIE SIECI WIDZI PUDELKO - na wyrazna prosbe z aplikacji.
+
+   Powod, dla ktorego to robi PUDELKO, a nie telefon: Safari nie daje
+   zadnej stronie dostepu do skanowania WiFi, wiec aplikacja fizycznie
+   nie ma jak pokazac listy. Ale nawet gdyby miala, wazniejsza jest lista
+   widziana STAD: to pudelko ma sie polaczyc, a stoi w innym miejscu niz
+   telefon. Siec swietnie widoczna z kanapy potrafi nie docierac do
+   pudelka - i wtedy nazwa wybrana z listy telefonu wygladalaby na dobra,
+   a polaczenie nie powstaloby nigdy. Dlatego razem z nazwa idzie SILA
+   SYGNALU: czlowiek od razu widzi, czy pudelko w tym miejscu ma szanse.
+
+   Skan kosztuje kilka sekund radia i potrafi zerwac polaczenie, wiec
+   robimy go dopiero przed snem - po zapisie dawki i wyslaniu statusu,
+   z tego samego powodu co aktualizacje (zasada 11 w duchu).
+
+   Zlecenie w bazie kasujemy DOPIERO po potwierdzonym zapisie listy
+   (zasada 6). Nieudana wysylka zostawia prosbe na miejscu i wraca do
+   niej przy nastepnym wybudzeniu.                                     */
+void skanujSieci() {
+  if (!rtcScanProsba) return;
+
+  if (WiFi.status() != WL_CONNECTED && !wifiConnect()) {
+    LOGLN("[SCN] brak sieci - lista poczeka do nastepnego wybudzenia");
+    return;
+  }
+
+  extendAwake(30000);                 // skan + wysylka, z zapasem
+  const int found = WiFi.scanNetworks();
+  LOG("[SCN] widze %d sieci\n", found);
+
+  JsonDocument doc;
+  doc["ts"] = (uint32_t)(rtcTimeValid ? time(nullptr) : 0);
+  JsonArray arr = doc["nets"].to<JsonArray>();
+  for (int i = 0; i < found && (int)arr.size() < SCAN_MAX_NETS; i++) {
+    String s = WiFi.SSID(i);
+    /* Siec ukryta (pusta nazwa) i nazwa dluzsza, niz dopuszczaja reguly
+       bazy, odpadaja tutaj. Jeden nieznany element odrzucilby CALY wpis,
+       a z nim liste, po ktora ktos wlasnie siegnal.                    */
+    if (s.length() == 0 || s.length() > 32) continue;
+    JsonObject o = arr.add<JsonObject>();
+    o["s"] = s;
+    o["r"] = (int)WiFi.RSSI(i);
+  }
+  WiFi.scanDelete();                  // pamiec po skanie oddajemy od razu
+
+  /* Skan potrafi zerwac lacze - odbudowujemy je przed wysylka. */
+  if (WiFi.status() != WL_CONNECTED && !wifiConnect()) {
+    LOGLN("[SCN] po skanie nie ma sieci - lista poczeka");
+    return;
+  }
+  if (!firebaseSignIn()) {
+    LOGLN("[SCN] brak logowania - lista poczeka");
+    return;
+  }
+
+  String body;
+  serializeJson(doc, body);
+  const int code = rtdbSend("PUT", "/devices/" DEVICE_ID "/scan.json", body);
+  if (code == 200) {
+    rtdbSend("DELETE", "/devices/" DEVICE_ID "/config/wifiScan.json", "");
+    rtcScanProsba = false;
+    LOGLN("[SCN] lista sieci wyslana");
+  } else {
+    LOG("[SCN] nie udalo sie wyslac listy (HTTP %d) - sprobuje pozniej\n", code);
+  }
+}
+
 void otaSprobuj() {
   /* Pamiec z poczatku wybudzenia NIE jest tu warunkiem, tylko przyspieszaczem.
      Gdy `fetchConfig()` widzialo zlecenie - wiemy od razu. Gdy nie widzialo,
@@ -4252,6 +4342,15 @@ void otaSprobuj() {
 
 void goToSleep(uint32_t seconds) {
   buzzerOff();
+
+  /* Lista sieci PRZED aktualizacja, i celowo poza `#if OTA_ENABLED`.
+
+     Przed - bo udana aktualizacja konczy sie restartem, wiec wszystko za
+     nia i tak by nie doszlo; czlowiek czekajacy na liste dostalby zamiast
+     niej ciszę. Kilka sekund skanu przed minuta pobierania nie robi
+     roznicy, a poza blokiem - bo rozgladanie sie za WiFi nie ma nic
+     wspolnego z tym, czy pudelko umie sie aktualizowac.               */
+  skanujSieci();
 
 #if OTA_ENABLED
   /* --- Aktualizacja programu: TU I TYLKO TU  (D59) --------------------

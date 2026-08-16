@@ -83,6 +83,15 @@
               ".validate": false
             }
           },
+          "wifiScan": {
+            ".validate": "newData.hasChildren(['ts'])",
+            "ts": {
+              ".validate": "newData.isNumber() && newData.val() > 0"
+            },
+            "$other": {
+              ".validate": false
+            }
+          },
           "drugName": {
             ".validate": "newData.isString() && newData.val().length <= 40"
           },
@@ -117,6 +126,29 @@
           },
           "$other": {
             ".validate": true
+          }
+        },
+        "scan": {
+          ".validate": "newData.hasChildren(['ts'])",
+          "ts": {
+            ".validate": "newData.isNumber() && newData.val() > 0"
+          },
+          "nets": {
+            "$i": {
+              ".validate": "newData.hasChildren(['s','r'])",
+              "s": {
+                ".validate": "newData.isString() && newData.val().length <= 32"
+              },
+              "r": {
+                ".validate": "newData.isNumber() && newData.val() >= -120 && newData.val() <= 0"
+              },
+              "$other": {
+                ".validate": false
+              }
+            }
+          },
+          "$other": {
+            ".validate": false
           }
         },
         "events": {

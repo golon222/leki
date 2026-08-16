@@ -882,6 +882,7 @@ nav button.act{color:var(--acc)}
       sieci otworzy się sama. Zamknięcie wieczka kończy parowanie.
     </div>
 
+    <div id="netSkan" style="margin-top:14px"></div>
     <label style="margin-top:14px">Nazwa sieci (SSID)</label>
     <input id="netSsid" maxlength="32" autocapitalize="off" autocorrect="off"
            spellcheck="false" placeholder="np. hotspot Kuby">
@@ -1197,7 +1198,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-12.42";
+const APP_VERSION = "2026-08-12.43";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -1234,6 +1235,7 @@ let nvsFailLog = {};      // paczki historii nieudanych zapisow NVS (D47)
 let lidLog = {};          // dziennik wieczka: paczki wpisow z pudelka
 let lidMarks = {};        // "to ja otwieralem" - znaczniki uzytkownika
 let lastRec = null;       // slad po ostatnim uzupelnieniu kalendarza
+let skanSieci = null;     // sieci widziane PRZEZ PUDELKO, na jego prosbe
 
 /* ═══════════════════════════════════════════════════════════════
  *  INFORMACJA ZWROTNA
@@ -1803,6 +1805,13 @@ async function boot(){
   onValue(ref(db, `users/${uid}/lidMarks`), s => {
     lidMarks = s.val() || {}; renderLidLog();
   }, onErr("odczyt znaczników wieczka"));
+
+  /* Lista sieci, które widzi PUDEŁKO. Własna gałąź, nie `status` — jest
+     większa niż cały status i zmienia się raz na ruski rok, więc nie ma
+     po co jeździć razem z meldunkiem baterii. */
+  onValue(ref(db, `devices/${DEVICE_ID}/scan`), s => {
+    skanSieci = s.val() || null; renderSkan();
+  }, onErr("odczyt listy sieci"));
 
   /* ───────── Odświeżanie po powrocie do aplikacji ─────────
      iOS usypia JavaScript, gdy schowasz aplikację, i zrywa połączenie
@@ -3871,6 +3880,7 @@ function renderStatus(st){
   const chip = document.getElementById("batChip");
   renderOpenWarn(st);
   renderNetStan();              // lista znanych sieci przychodzi w statusie
+  renderSkan();                 // "czekam / nie przyszlo" liczy sie z lastSeen
   renderOta();                  // wersja programu i stan aktualizacji też
   renderKafelki();              // podpis kafelka WiFi też z niej korzysta
   renderOstrzezenia();          // liczniki strat przychodzą właśnie w statusie
@@ -4134,6 +4144,7 @@ function renderSettings(){
   renderWeekEditor();
   renderExceptions();
   renderNetStan();
+  renderSkan();                 // `wifiScan` z konfiguracji mówi, że szuka
   renderOta();                  // `otaCmd` z konfiguracji mówi, że czeka
   document.getElementById("drugName").value = cfg.drugName || "Warfin";
   document.getElementById("drugStrength").value = String(cfg.drugStrength ?? 3);
@@ -4699,6 +4710,98 @@ function renderNetStan(){
   }
   box.innerHTML = html;
 }
+
+/* ═══════════ SIECI WIDZIANE PRZEZ PUDEŁKO ═══════════
+
+   Dlaczego skanuje pudełko, a nie telefon: Safari nie daje żadnej stronie
+   dostępu do skanowania WiFi — nie ma takiego API i nie będzie. Ale nawet
+   gdyby było, ważniejsza jest lista widziana STAMTĄD: to pudełko ma się
+   połączyć, a stoi w innym miejscu niż telefon. Sieć świetnie widoczna
+   z kanapy potrafi nie docierać do pudełka — wpisana z listy telefonu
+   wyglądałaby na dobrą i nic by nie działało.
+
+   Dlatego przy każdej sieci stoi SIŁA SYGNAŁU. Przy −82 dBm, jakie
+   pudełko ma dziś, to nie jest ciekawostka, tylko główna informacja. */
+function opisSygnalu(r){
+  if (r >= -60) return { txt: "mocny",  kolor: "var(--ok)" };
+  if (r >= -75) return { txt: "średni", kolor: "var(--warn)" };
+  return         { txt: "słaby",  kolor: "var(--bad)" };
+}
+
+function renderSkan(){
+  const box = document.getElementById("netSkan");
+  if (!box) return;
+  const czeka = !!cfg.wifiScan?.ts;
+  const st = ostatniStatus || {};
+  let html = "";
+
+  if (czeka){
+    /* Ten sam podział co przy aktualizacji i przy nowej sieci: „jeszcze się
+       nie łączyło" to co innego niż „łączyło się i nie zrobiło". Bez tego
+       ekran mówiłby pogodne „szukam" także wtedy, gdy nic już nie przyjdzie. */
+    const zlecono  = Number(cfg.wifiScan.ts) || 0;
+    const widziano = Number(st.lastSeen) || 0;
+    html += widziano > zlecono
+      ? `<div class="dim2" style="color:var(--bad)">⚠️ Pudełko łączyło się po
+         zleceniu, a listy nie przysłało. Spróbuj jeszcze raz.</div>`
+      : `<div class="dim2" style="color:var(--warn)">⏳ Szukam — pudełko rozejrzy
+         się przy najbliższym wybudzeniu. <b>Otwórz i zamknij wieczko</b>, żeby
+         nie czekać do rana.</div>`;
+  }
+
+  const nets = Array.isArray(skanSieci?.nets) ? skanSieci.nets.filter(n => n?.s) : [];
+  if (nets.length){
+    /* Najmocniejsze na górze — po to się na tę listę patrzy. */
+    const pos = [...nets].sort((a,b) => (b.r||-999) - (a.r||-999));
+    const kiedy = skanSieci.ts
+      ? relTime(Math.floor(Date.now()/1000) - Number(skanSieci.ts)) : "";
+    html += `<div class="dim2" style="margin:${czeka?"10px":"0"} 0 6px">
+             Pudełko widziało${kiedy ? " " + esc(kiedy) : ""}:</div>`;
+    html += pos.map((n, i) => {
+      const s = opisSygnalu(Number(n.r) || -120);
+      /* Do handlera idzie INDEKS, nie nazwa — `esc()` nie escapuje
+         apostrofu, a „Kuba's iPhone" wyszedłby z atrybutu onclick
+         i stał się kodem. Ta sama pułapka co przy liście znanych sieci. */
+      return `<div class="row between" style="margin-top:6px;gap:8px">
+        <span style="flex:1">${esc(n.s)}</span>
+        <span class="dim2" style="color:${s.kolor};font-size:12px;white-space:nowrap">
+          ${esc(s.txt)} · ${Number(n.r)} dBm</span>
+        <button class="ghost" style="padding:7px 11px;font-size:13px"
+          onclick="wybierzSiec(${i})">Wybierz</button>
+      </div>`;
+    }).join("");
+  }
+
+  html += `<button class="ghost" style="width:100%;margin-top:${nets.length||czeka?"10px":"0"}"
+             onclick="szukajSieci()"${czeka ? " disabled" : ""}>${
+             czeka ? "Szukam..." : "Pokaż sieci widziane przez pudełko"}</button>`;
+  box.innerHTML = html;
+}
+
+/* Zlecenie skanu. Ta sama droga co nowa sieć i aktualizacja: wpis w bazie,
+   który pudełko wykonuje i kasuje po potwierdzonym zapisie listy. */
+window.szukajSieci = async () => {
+  cfg.wifiScan = { ts: Math.floor(Date.now()/1000) };
+  await zapiszCfg({ wifiScan: cfg.wifiScan }, "Szukanie sieci");
+  renderSkan();
+};
+
+/* Wybór z listy wypełnia pole nazwy — hasło i tak trzeba wpisać ręcznie,
+   bo pudełko go nie zna i znać nie może. */
+window.wybierzSiec = (i) => {
+  const nets = Array.isArray(skanSieci?.nets) ? skanSieci.nets.filter(n => n?.s) : [];
+  const pos = [...nets].sort((a,b) => (b.r||-999) - (a.r||-999));
+  const n = pos[i];
+  if (!n) return;
+  const pole = document.getElementById("netSsid");
+  if (pole) pole.value = n.s;
+  const msg = document.getElementById("netMsg");
+  if (msg){
+    msg.textContent = `Wybrano „${n.s}" — wpisz hasło i wyślij.`;
+    msg.style.color = "var(--dim)";
+  }
+  document.getElementById("netPass")?.focus();
+};
 
 /* Polecenia na liście sieci. Oba idą tą samą drogą co nowa sieć: wpis
    w bazie, który pudełko wykonuje i kasuje. Nie ma tu żadnego „natychmiast" —

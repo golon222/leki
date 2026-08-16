@@ -27,7 +27,7 @@ import "./dom_stub.mjs";
 `;
 
 const footer = `
-export { brakujePokrycia, doReconcile, reconcileDecyzja, opisLadowan, minutyDoPelna, opisLadowania, renderAll, toast, tablet3D, cieniuj, TAB3D_SEGMENTOW, busy, seriaDni, doNastepnej, opisCzasu,
+export { renderSkan, brakujePokrycia, doReconcile, reconcileDecyzja, opisLadowan, minutyDoPelna, opisLadowania, renderAll, toast, tablet3D, cieniuj, TAB3D_SEGMENTOW, busy, seriaDni, doNastepnej, opisCzasu,
          cfg, doses, inr, events, tabletSVG, doseGraphic,
          dayDose, dayStatus, devKey, devHM, devDate, inrState,
          dawkaNaDzien, tydzienDawek, dzienBezLeku, wyjatekNaDzien, opisDawkowania,
@@ -78,6 +78,9 @@ export function __setState(o){
    konkretny dzien musza umiec wymusic miesiac inny niz "teraz" - inaczej
    test dla terminu INR liczonego "dzis + odstep dni" psulby sie caly czas,
    gdy "dzis" wypada blisko konca miesiaca i termin przeskakuje w przod.  */
+/* Lista sieci widzianych przez pudelko przychodzi wlasna galezia bazy,
+   a nie w statusie - podstawiamy ja wprost, tak jak opis firmware.   */
+export function __setSkan(o){ skanSieci = o; renderSkan(); }
 export function __setView(rok, miesiac){ viewYear = rok; viewMonth = miesiac; }
 export { __db, __resetDb };
 `;

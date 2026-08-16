@@ -20,7 +20,7 @@
  * 1. IDENTYFIKATOR URZADZENIA
  * ------------------------------------------------------------------ */
 #define DEVICE_ID           "pillbox01"     // klucz w /devices/<DEVICE_ID>
-#define FW_VERSION          "1.43.2"   // widoczna w aplikacji - po wgraniu sprawdz, czy sie zmienila
+#define FW_VERSION          "1.44.0"   // widoczna w aplikacji - po wgraniu sprawdz, czy sie zmienila
 
 /* ---------------------------------------------------------------------
  * 2. FIREBASE  (Realtime Database + Auth email/haslo)
@@ -489,6 +489,12 @@
  *
  *     OTA_BOOT_TRIES - ile razy nowy program moze wystartowac i NIE
  *     dojsc do konca, zanim uznamy go za zepsuty i wrocimy do starego.  */
+/*     Ile sieci najwyzej odsylamy do aplikacji, gdy poprosi o rozejrzenie
+ *     sie dookola. W bloku mieszkalnym widac ich czasem trzydziesci, a do
+ *     wyboru wlasnej wystarcza te najmocniejsze - reszta to same bajty
+ *     w bazie i na ekranie.                                             */
+#define SCAN_MAX_NETS       12
+
 #define OTA_HTTP_TIMEOUT_MS 90000
 #define OTA_HTTP_READ_MS    30000
 #define OTA_BOOT_TRIES      3

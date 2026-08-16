@@ -2634,6 +2634,61 @@ const zapis2 = A.__db.data?.devices?.pillbox01?.config?.wifiNowa;
 check(zapis2 && !("pass" in zapis2),
       "siec bez hasla nie wysyla pustego pola (reguly wymagaja napisu)");
 
+/* ═══════════ SIECI WIDZIANE PRZEZ PUDELKO ═══════════
+   Aplikacja nie ma jak sama zeskanowac WiFi - Safari nie daje zadnej stronie
+   takiego API. Skanuje wiec pudelko, i tak jest lepiej: to ono ma sie
+   polaczyc, a stoi w innym miejscu niz telefon. Stad sila sygnalu przy
+   kazdej sieci - przy -82 dBm to nie ciekawostka, tylko glowna informacja. */
+head("Sieci widziane przez pudelko");
+const skanHtml = () => document.getElementById("netSkan").innerHTML;
+
+A.__resetDb();
+D();
+A.renderStatus({ battery:80, nets:"dom", ssid:"dom" });
+check(skanHtml().includes("Pokaż sieci"), "przycisk szukania jest zawsze pod reka");
+
+await window.szukajSieci();
+const zlecSkan = A.__db.data?.devices?.pillbox01?.config?.wifiScan;
+check(typeof zlecSkan?.ts === "number" && zlecSkan.ts > 0,
+      "zlecSkanenie skanu ma znacznik czasu (bez niego nie odroznisz 'czeka' od 'nie przyszlo')");
+check(skanHtml().includes("Szukam"), "ekran mowi, ze szuka");
+
+/* Ten sam podzial co przy aktualizacji i nowej sieci: "jeszcze sie nie
+   laczylo" to co innego niz "laczylo sie i nie przyslalo".              */
+A.renderStatus({ battery:80, nets:"dom", ssid:"dom", lastSeen: zlecSkan.ts + 600 });
+check(skanHtml().includes("listy nie przysłało"),
+      "pudelko, ktore laczylo sie po zlecSkaneniu i nic nie przyslalo, jest rozliczane");
+
+/* Lista z pudelka: najmocniejsze na gorze, bo po to sie na nia patrzy. */
+A.__setSkan({ ts: Math.floor(Date.now()/1000),
+              nets: [ { s:"slaba-siec", r:-88 }, { s:"dom", r:-55 },
+                      { s:"sasiad", r:-70 } ] });
+const h = skanHtml();
+check(h.indexOf("dom") < h.indexOf("sasiad") && h.indexOf("sasiad") < h.indexOf("slaba-siec"),
+      "sieci ustawione od najmocniejszej");
+check(h.includes("-55 dBm") && h.includes("mocny"),
+      "przy kazdej sieci sila sygnalu, slowem i liczba");
+check(h.includes("słaby"), "...i uczciwie nazwana, gdy jest slaba");
+/* Ta sama pulapka co przy liscie znanych sieci: "Kuba's iPhone" wyszedlby
+   z atrybutu onclick i stal sie kodem. Do handlera idzie INDEKS.        */
+check(/wybierzSiec\(\d+\)/.test(h) && !/wybierzSiec\('/.test(h),
+      "do handlera idzie INDEKS, nie nazwa sieci");
+
+window.wybierzSiec(0);
+check(document.getElementById("netSsid").value === "dom",
+      "wybor z listy wypelnia pole nazwy");
+
+/* Klikniecie w nieistniejacy wiersz nie moze niczego nadpisac. */
+document.getElementById("netSsid").value = "recznie-wpisana";
+window.wybierzSiec(99);
+check(document.getElementById("netSsid").value === "recznie-wpisana",
+      "klikniecie w nieistniejacy wiersz nie czysci tego, co wpisales");
+
+/* Sieci ukryte (pusta nazwa) firmware odsiewa, ale gdyby jakas przeszla -
+   pusty wiersz z przyciskiem "Wybierz" bylby tylko myleniem.            */
+A.__setSkan({ ts: Math.floor(Date.now()/1000), nets: [ { s:"", r:-60 } ] });
+check(!skanHtml().includes("Wybierz"), "siec bez nazwy nie dostaje wiersza do wyboru");
+
 A.__resetDb();
 D();
 document.getElementById("netSsid").value = "   ";

@@ -51,6 +51,11 @@ class El {
              contains:x=>c.has(x) };
   }
   click(){}
+  /* Puste, ale MUSZA istniec: kod ustawiajacy kursor w polu wola je wprost,
+     a brak metody w atrapie wywalilby test bledem, ktory nie ma nic
+     wspolnego z tym, co ten test sprawdza. */
+  focus(){}
+  blur(){}
 }
 
 const els = new Map();
