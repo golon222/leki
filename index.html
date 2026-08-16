@@ -1197,7 +1197,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-12.39";
+const APP_VERSION = "2026-08-12.40";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -4457,10 +4457,24 @@ function renderOta(){
     if (bylPoZleceniu){
       html += `<div style="margin-top:8px;color:var(--bad)">⚠️ Pudełko łączyło się
                po zleceniu i aktualizacji <b>nie zrobiło</b>.</div>`;
+      /* „Nie podało powodu" było przez długi czas OSKARŻENIEM BEZ DOWODU.
+         Pudełko odczytuje ustawienia na POCZĄTKU wybudzenia, a aktualizację
+         robi na KOŃCU. Zlecenie złożone pomiędzy tymi chwilami trafiało do
+         bazy, pudełko meldowało się ze świeżym `lastSeen` — i o zleceniu
+         nie wiedziało. Ekran mówił wtedy „łączyło się i nie zrobiło", czyli
+         zarzucał awarię tam, gdzie wiadomość po prostu nie doszła.
+         Firmware od 1.43.0 dopytuje bazę tuż przed próbą, więc to się nie
+         powtórzy — ale pudełko i tak WYSYŁA, czy zlecenie widzi (`otaProsba`),
+         i od tego zależy, co tu napisać. Milczenie nie może być traktowane
+         jak wina. */
       html += st.otaMsg
         ? `<div style="margin-top:4px">Powód: <b>${esc(st.otaMsg)}</b></div>`
-        : `<div class="dim2" style="margin-top:4px">Nie podało powodu — przy
-           następnym połączeniu powinno go dopisać.</div>`;
+        : (st.otaProsba === false
+          ? `<div class="dim2" style="margin-top:4px">Pudełko <b>nie widzi jeszcze
+             zlecenia</b> — odczytało ustawienia chwilę przed jego zapisaniem.
+             Otwórz wieczko jeszcze raz, wtedy je zobaczy.</div>`
+          : `<div class="dim2" style="margin-top:4px">Nie podało powodu — przy
+             następnym połączeniu powinno go dopisać.</div>`);
     } else {
       html += `<div style="margin-top:8px;color:var(--warn)">⏳ Zlecone${
                odKiedy ? " " + esc(odKiedy) : ""} — pudełko zaktualizuje się przy

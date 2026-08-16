@@ -3288,6 +3288,42 @@ void otaWyzerujLicznik() {
   prefs.end();
 }
 
+/* CZY W BAZIE STOI ZLECENIE - pytamy TU, tuz przed proba.
+
+   TU BYLA DZIURA, przez ktora "kliknij i pudelko przyjmie" nie dzialalo,
+   i to niezaleznie od tego, co robilo samo pobieranie.
+
+   Wygladalo to tak: `rtcOtaProsba` ustawia sie WYLACZNIE w `fetchConfig()`,
+   a `fetchConfig()` leci na POCZATKU wybudzenia. Aktualizacja rusza na
+   KONCU, z `goToSleep()`. Miedzy jednym a drugim mija cale wybudzenie.
+   Jesli czlowiek nacisnal przycisk w tej wlasnie chwili - albo po prostu
+   ulamek sekundy po tym, jak pudelko odczytalo ustawienia - to zlecenie
+   bylo juz w bazie, pudelko meldowalo sie ze swiezym `lastSeen`, a o
+   zleceniu NIE WIEDZIALO. Wychodzilo z `otaSprobuj()` pierwsza linijka,
+   po cichu, bez powodu.
+
+   Aplikacja pokazywala wtedy najgorszy z mozliwych ekranow: "pudelko
+   laczylo sie po zleceniu i aktualizacji NIE ZROBILO - nie podalo powodu".
+   Czyli oskarzenie o awarie tam, gdzie pudelko po prostu nie dostalo
+   wiadomosci. Kuba widzial to kilka razy pod rzad i mial racje, ze "cos
+   jest nie tak z calym procesem".
+
+   Naprawa jest jedna i zamyka cala te klase bledow: nie ufamy temu, co
+   pamietamy z poczatku wybudzenia, tylko pytamy baze JESZCZE RAZ, w chwili
+   gdy naprawde mamy zamiar cos zrobic. Kosztuje to jedno male zapytanie
+   przy wlaczonym juz radiu - kilkaset bajtow.                          */
+bool otaZlecenieWBazie(uint32_t& tsZlecenia) {
+  String resp;
+  const int code = rtdbSend("GET", "/devices/" DEVICE_ID "/config/otaCmd.json",
+                            "", &resp);
+  if (code != 200 || resp.length() < 2 || resp == "null") return false;
+
+  JsonDocument doc;
+  if (deserializeJson(doc, resp) != DeserializationError::Ok) return false;
+  if (!doc["ts"].isNull()) tsZlecenia = doc["ts"].as<uint32_t>();
+  return true;
+}
+
 /* Pobiera SAM OPIS - kilkaset bajtow zamiast 1,2 MB. Dzieki temu
    codzienne sprawdzenie "czy jest cos nowego" kosztuje tyle, co zwykly
    zapis do bazy, a nie cala aktualizacje.                             */
@@ -4019,7 +4055,16 @@ void otaZglos() {
 
    Nie wraca, jesli aktualizacja sie powiodla - konczy restartem.      */
 void otaSprobuj() {
-  if (!rtcOtaProsba) return;                    // aplikacja o nic nie prosila
+  /* Pamiec z poczatku wybudzenia NIE jest tu warunkiem, tylko przyspieszaczem.
+     Gdy `fetchConfig()` widzialo zlecenie - wiemy od razu. Gdy nie widzialo,
+     a radio nadal stoi, PYTAMY BAZE JESZCZE RAZ: zlecenie mogło dojechać
+     w trakcie tego wybudzenia. Patrz `otaZlecenieWBazie()` - to jest ta
+     dziura, przez ktora "kliknij i pudelko przyjmie" nie dzialalo.
+
+     Bez radia nie ma jak zapytac i nie ma jak pobrac, wiec wtedy - i tylko
+     wtedy - wychodzimy po cichu: nic sie nie stalo i nic nie zginelo,
+     zlecenie poczeka do nastepnego wybudzenia.                          */
+  if (!rtcOtaProsba && WiFi.status() != WL_CONNECTED) return;
 
   /* TU BYL BLAD - i objaw byl dokladnie taki, jak opisal Kuba: "otworzylem
      dwa razy i nie wiem dlaczego aktualizacja sie nie zrobila", a ekran
@@ -4051,6 +4096,19 @@ void otaSprobuj() {
     rtcStatusDirty = true;
     LOGLN("[OTA] brak logowania - aktualizacja czeka");
     return;
+  }
+
+  /* DOPYTANIE O ZLECENIE - dopiero tutaj, bo dopiero tu mamy pewny token.
+     Gdy `fetchConfig()` widzialo zlecenie na poczatku wybudzenia, ten krok
+     sie nie wykonuje. Gdy nie widzialo, pytamy baze jeszcze raz - i to
+     zamyka dziure opisana przy `otaZlecenieWBazie()`.                   */
+  if (!rtcOtaProsba) {
+    uint32_t tsSwieze = 0;
+    if (!otaZlecenieWBazie(tsSwieze)) return;   // aplikacja naprawde o nic nie prosi
+    rtcOtaProsba = true;
+    rtcOtaTs     = tsSwieze;
+    LOG("[OTA] zlecenie dojechalo w trakcie wybudzenia (z %lu) - biore je teraz\n",
+        (unsigned long)tsSwieze);
   }
 
   const uint32_t teraz = rtcTimeValid ? (uint32_t)time(nullptr) : 0;

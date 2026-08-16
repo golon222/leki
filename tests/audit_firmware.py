@@ -1047,6 +1047,12 @@ ok("otaSumaWgranej()" in _spr_raw and 'otaSumaZPamieci("otaMd5")' not in _spr_ra
 # Nieudana proba MUSI zostawic pomiar, nie tylko powod. "Naglowek -1" rozstrzyga
 # hipoteze o odpowiedzi porcjowej, a wolny RAM - o braku pamieci. Bez tych
 # dwoch liczb kazde kolejne dochodzenie zaczyna sie od zgadywania.
+# Zlecenie czytamy JESZCZE RAZ tuz przed proba. Poleganie na tym, co
+# `fetchConfig()` widzialo na poczatku wybudzenia, gubilo kazde zlecenie
+# zlozone w trakcie - a ekran oskarzal wtedy pudelko o awarie.
+ok("otaZlecenieWBazie(" in _spr_raw,
+   "otaSprobuj() dopytuje baze o zlecenie, zamiast ufac pamieci sprzed wybudzenia")
+
 ok("ota:naglowek" in _spr_raw and "getFreeHeap" in _spr_raw,
    "nieudana aktualizacja zostawia POMIAR (naglowek + wolny RAM), nie sam powod")
 ok("rtcOtaNagl" in cialo_surowe("bool otaWgraj(const String& md5, uint32_t rozmiar)"),

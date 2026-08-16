@@ -2835,6 +2835,24 @@ A.renderStatus({ fw: "1.38.0", otaHaslo: true, lastSeen: ZLECONO + 600 });
 check(otaHtml().includes("nie zrobiło") && otaHtml().includes("Nie podało powodu"),
       "bez powodu z pudelka ekran nadal ostrzega, zamiast milczec");
 
+/* ...ale milczenie NIE moze byc traktowane jak wina, gdy pudelko wprost
+   melduje, ze zlecenia jeszcze nie widzi. Pudelko czyta ustawienia na
+   POCZATKU wybudzenia, a aktualizacje robi na KONCU; zlecenie zlozone
+   pomiedzy tymi chwilami bylo juz w bazie, `lastSeen` bylo swieze, a
+   pudelko o niczym nie wiedzialo. Ekran oskarzal wtedy o awarie cos,
+   do czego wiadomosc po prostu nie doszla (zgloszenie Kuby).          */
+A.renderStatus({ fw: "1.38.0", otaHaslo: true, lastSeen: ZLECONO + 600,
+                 otaProsba: false });
+check(otaHtml().includes("nie widzi jeszcze"),
+      "pudelko, ktore zlecenia NIE widzi, nie jest oskarzane o awarie");
+check(!otaHtml().includes("Nie podało powodu"),
+      "...i nie dostaje przy okazji drugiego, sprzecznego komunikatu");
+
+A.renderStatus({ fw: "1.38.0", otaHaslo: true, lastSeen: ZLECONO + 600,
+                 otaProsba: true });
+check(otaHtml().includes("Nie podało powodu") && !otaHtml().includes("nie widzi jeszcze"),
+      "pudelko, ktore zlecenie WIDZI i nic nie zrobilo, nadal jest rozliczane");
+
 /* Rozjazd sum przestal istniec (D59, 1.40.0): pudelko ignoruje sume
    ze zlecenia, bo porownywanie jej z plikiem bylo obrona iluzoryczna -
    oba kanaly ida przez setInsecure(). Zostaje sam znacznik czasu, ktory
