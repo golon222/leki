@@ -153,7 +153,7 @@ toolchainu (pierwsze uruchomienie kilka minut, kolejne szybkie).
 **Uruchom to po każdej zmianie w firmware.**
 
 Stan: `PillBox.ino` **63% flasha** (1,24 MB z 1,875 MB), `PillBoxTest.ino` 20%.
-Zapas ~727 kB.
+Zapas ~724 kB.
 
 **Podział pamięci musi być `Minimal SPIFFS (1.9MB APP with OTA/190KB SPIFFS)`**,
 bo tak jest w nagłówku szkicu. Zmieniony w 1.38.0 z `Huge APP` (D59):
