@@ -197,6 +197,11 @@ Szczegóły obejść (ctags, `.cpp` zamiast `.ino`, atrapa `dfu-util`) — D17.
   Wcześniejsze „udane" OTA nie liczą się jako dowód tej drogi: 1.39.0
   (2026-08-12) pobrało się samo, ale nikt tego nie zauważył, a wersji
   zamówionej z przycisku pudełko nie przyjęło ani razu aż do 1.43.2.
+  **Wybudzenie o 3:00 też dowozi aktualizację — potwierdzone 2026-08-17.**
+  Kuba złożył zlecenie wieczorem i poszedł spać; rano pudełko miało nową
+  wersję, bez otwierania wieczka i bez ładowarki. Granica doby lekowej
+  (`MIDNIGHT_CHECK`) daje więc pełny meldunek: sync zegara, odczyt
+  ustawień, opróżnienie kolejki i szansa dla aktualizacji.
   **Nadal niesprawdzone:** rollback po nieudanym starcie (żadna wersja się
   jeszcze nie wysypała), czarna lista zepsutych sum i zachowanie przy
   przerwanym pobieraniu.
