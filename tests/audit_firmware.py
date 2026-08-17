@@ -446,6 +446,24 @@ ok("autoTest();" in code and "GEST_TEST" in code, "trzy klikniecia uruchamiaja a
 ok("GEST_PORTAL" in code and code.count("startWifiPortal();") >= 2,
    "przytrzymanie otwiera portal WiFi")
 
+# Przycisk musi byc probkowany ZANIM ruszy robota z siecia. Obserwowany
+# dopiero w czekajNaZamkniecieIGest() gubil gest wykonany w naturalnym
+# momencie ("otwieram wieczko i od razu przytrzymuje"), bo ta funkcja
+# startuje po reportEvent() - czyli po kilkunastu sekundach radia.
+_setup = cialo("void setup()")
+_i_probka = _setup.find("msPrzyciskOd = millis()") if _setup else -1
+_i_radio  = _setup.find("wifiConnect()") if _setup else -1
+ok(_i_probka >= 0 and (_i_radio < 0 or _i_probka < _i_radio),
+   "przycisk probkowany na poczatku wybudzenia, przed robota z siecia")
+ok("msPrzyciskOd ? msPrzyciskOd : t0" in code,
+   "przytrzymanie liczy sie od chwili wcisniecia, nie od startu petli")
+# Klikniecie ma pikniecie od dawna; przytrzymanie musi miec swoje, inaczej
+# do konca nie wiadomo, czy pudelko przyjelo gest.
+_czek = cialo("Gest czekajNaZamkniecieIGest(uint32_t limitMs)")
+ok(_czek and "GEST_PORTAL" in _czek and "buzzerTone" in
+   _czek[:_czek.find("return GEST_PORTAL")],
+   "przyjecie przytrzymania potwierdza sie dzwiekiem od razu")
+
 # Punkt dostepowy to najdrozszy tryb pracy - zamkniecie wieczka musi go konczyc.
 ap = code[code.find("void startWifiPortal("):]
 ap = ap[:ap.find("\n}")]

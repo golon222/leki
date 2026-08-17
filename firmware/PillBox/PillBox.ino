@@ -374,6 +374,24 @@ bool byloOtwarte    = false;    // czy w tym wybudzeniu wieczko bylo otwarte
 uint32_t msZamkniecia = 0;      // millis() w chwili wykrycia zamkniecia
 bool portalRequested = false;   // przycisk trzymany przy resecie -> portal WiFi
 Gest gestPoOtwarciu  = GEST_BRAK;  // co uzytkownik pokazal po otwarciu wieczka
+/* KIEDY W TYM WYBUDZENIU PIERWSZY RAZ ZOBACZYLISMY WCISNIETY PRZYCISK.
+
+   TU BYLA DZIURA, zglosil ja Kuba: "otwieram wieczko i przytrzymuje
+   przycisk, i nic nie wyszukuje... po ktorejs probie mi sie udalo".
+
+   Przycisk jest obserwowany WYLACZNIE w `czekajNaZamkniecieIGest()`,
+   a ta funkcja startuje dopiero PO `reportEvent()`, czyli po polaczeniu
+   z siecia, zalogowaniu do bazy, wyslaniu zdarzenia i statusu. To trwa
+   od dwoch do kilkunastu sekund. Czlowiek, ktory otwiera wieczko i od
+   razu wciska przycisk, trzyma go przez CALY ten czas w prozni - a gdy
+   petla wreszcie rusza, odlicza swoje 1,8 s OD NOWA. Zeby portal wstal,
+   trzeba bylo trzymac lacznie kilkanascie sekund, nie wiedzac o tym.
+   Puszczenie przycisku wczesniej gubilo gest bez sladu.
+
+   Zapisujemy wiec chwile wcisniecia NAJWCZESNIEJ, jak sie da - tuz po
+   skonfigurowaniu pinow, zanim cokolwiek dotknie radia. Zwykla globalna,
+   nie RTC: kazde wybudzenie zaczyna od zera i tak ma byc.            */
+uint32_t msPrzyciskOd = 0;
 
 bool batterySaver = false;      // true = za niskie napiecie, nie wlaczamy radia
 bool timeSyncedThisWake = false;
@@ -3982,7 +4000,11 @@ String logbookJson() {
 Gest czekajNaZamkniecieIGest(uint32_t limitMs) {
   uint32_t t0 = millis();
   bool byl = buttonPressed();
-  uint32_t wcisnietyOd = byl ? t0 : 0;
+  /* Gdy przycisk jest wcisniety JUZ TERAZ, a widzielismy go takim na
+     poczatku wybudzenia, to znaczy, ze czlowiek trzyma go od tamtej
+     chwili - przez cala robote z siecia. Odliczamy wiec od niej, a nie
+     od startu tej petli. Inaczej kazalibysmy trzymac drugie tyle. */
+  uint32_t wcisnietyOd = byl ? (msPrzyciskOd ? msPrzyciskOd : t0) : 0;
   int klikniec = 0;
   bool radioZgaszone = false;
   uint32_t ostatniPing = millis();
@@ -4064,6 +4086,11 @@ Gest czekajNaZamkniecieIGest(uint32_t limitMs) {
        zeby bylo wiadomo, ze gest zostal przyjety.                      */
     if (teraz && wcisnietyOd && millis() - wcisnietyOd >= GEST_PRZYTRZYM_MS) {
       LOGLN("[GST] przytrzymanie -> portal WiFi");
+      /* Potwierdzenie W CHWILI przyjecia gestu, a nie dopiero gdy portal
+         wstanie. Klikniecie ma swoje pikniecie od dawna, przytrzymanie
+         nie mialo zadnego - wiec do ostatniej chwili nie bylo wiadomo,
+         czy pudelko w ogole zauwazylo, ze cos od niego chcesz.        */
+      buzzerInit(); buzzerTone(2600); delay(120); buzzerOff();
       return GEST_PORTAL;
     }
     if (klikniec >= GEST_KLIKNIEC) {
@@ -5139,6 +5166,12 @@ void setup() {
   rtcBootCount++;
   configureInputs();          // MUSI byc przed oknem testowym ponizej
   buzzerOff();
+
+  /* Przycisk sprawdzamy TERAZ, a nie dopiero przy czekaniu na zamkniecie
+     wieczka - patrz komentarz przy `msPrzyciskOd`. Jeden odczyt pinu,
+     zero kosztu, a ratuje gest wykonany w naturalnym momencie: "otwieram
+     i od razu przytrzymuje".                                          */
+  if (buttonPressed()) msPrzyciskOd = millis();
 
 #if OTA_ENABLED
   /* Licznik startow swiezo wgranej wersji - jak najwczesniej, zanim
