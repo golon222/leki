@@ -1,188 +1,114 @@
 #!/usr/bin/env bash
 # Uruchamia caly zestaw testow.  Uzycie:  bash tests/run_all.sh
+#
+# CICHO PRZY SUKCESIE, GLOSNO PRZY BLEDZIE - i to nie jest kosmetyka.
+#
+# Pelny wypis to bylo ~900 linii i ~39 000 znakow, z czego 533 linie to samo
+# "OK" i naglowki sekcji. Czytal to glownie Claude, przy kazdym uruchomieniu,
+# kilka razy dziennie - czyli placilismy tokenami za informacje "nic sie nie
+# stalo". Teraz udany krok to JEDNA linijka z liczba zaliczonych kontroli.
+#
+# Zasada, ktorej nie wolno tu zlamac: oszczedzamy WYLACZNIE na sukcesie.
+# Krok, ktory zawiedzie, wypluwa CALE swoje wyjscie - bo wtedy liczy sie
+# dokladnie to, co zwykle jest szumem: ktora kontrola, z jakim komunikatem,
+# w ktorej linii. Skrocony komunikat o bledzie kosztowalby wiecej niz
+# oszczedza, bo za nim ida kolejne uruchomienia "a pokaz mi szczegoly".
+#
+#   SZCZEGOLY=1 bash tests/run_all.sh    - stary, pelny wypis
 set -e
 cd "$(dirname "$0")"
 
-echo "════════ 1/10  Testy logiki firmware (C++) ════════"
-python3 extract.py
-g++ -O0 -std=c++17 test_firmware.cpp -o /tmp/pillbox_tests
-/tmp/pillbox_tests
+# Jednolinijkowe streszczenie udanego kroku: bierzemy liczbe, ktora ten krok
+# sam o sobie podaje, zamiast zgadywac po liczbie linii.
+podsumuj() {
+  local s
+  s=$(grep -oE "ZALICZONE: [0-9]+" "$1" | tail -1 || true)
+  [ -n "$s" ] && { echo "$s"; return; }
+  s=$(grep -oE "[0-9]+ kontroli zaliczonych" "$1" | tail -1 || true)
+  [ -n "$s" ] && { echo "$s"; return; }
+  s=$(grep -c "^  OK" "$1" || true)
+  [ "${s:-0}" -gt 0 ] && { echo "$s kontroli OK"; return; }
+  echo "OK"
+}
 
-echo
-echo "════════ 1b/10  Testy odpornosci firmware (C++) ════════"
-g++ -O0 -std=c++17 test_firmware_stress.cpp -o /tmp/pillbox_stress
-/tmp/pillbox_stress
+# Ostrzezen kompilatora NIE chowamy bez sladu - liczymy je i mowimy, ze sa.
+# Cicha zmiana "warning" w "nic" to dokladnie ten rodzaj oszczednosci,
+# ktory kiedys kosztuje wieczor.
+ostrzezenia() {
+  local n; n=$(grep -c "warning:" "$1" || true)
+  [ "${n:-0}" -gt 0 ] && printf '  (%s ostrzezen kompilatora)' "$n"
+  return 0
+}
 
-echo
-echo "════════ 2/10  Testy logiki aplikacji (Node) ════════"
-node build_app_module.mjs
-node test_app.mjs
+krok() {
+  local nazwa="$1"; shift
+  local log; log="$(mktemp)"
+  if "$@" >"$log" 2>&1; then
+    if [ -n "${SZCZEGOLY:-}" ]; then
+      echo "════════ $nazwa ════════"; cat "$log"; echo
+    else
+      printf '  ✓ %-44s %s%s\n' "$nazwa" "$(podsumuj "$log")" "$(ostrzezenia "$log")"
+    fi
+    rm -f "$log"
+  else
+    echo
+    echo "✖  BLAD w kroku: $nazwa"
+    echo "──────────────────────────────────────────────────────────────"
+    # Same linie bledow, ale W CALOSCI - w tym projekcie kazda z nich niesie
+    # plik, numer linii i nazwe kontroli, czyli komplet potrzebny do naprawy.
+    # Gdy nic nie pasuje do wzorca (wysypka kompilatora, crash), NIE zgadujemy
+    # co bylo wazne - pokazujemy wszystko.
+    local trafienia
+    trafienia=$(grep -nE "FAIL|BLAD|UWAGA|error:|Error|Traceback|Assertion" "$log" || true)
+    if [ -n "$trafienia" ]; then
+      echo "$trafienia"
+      echo "──"
+      tail -5 "$log"
+      echo "──"
+      echo "Pelny wypis tego kroku: $log"
+      echo "Albo od nowa:  SZCZEGOLY=1 bash tests/run_all.sh"
+    else
+      cat "$log"
+      rm -f "$log"
+    fi
+    exit 1
+  fi
+}
 
-echo
-echo "════════ 2b/10  Aplikacja o roznych porach doby ════════"
+krok "1/10  logika firmware (C++)"        bash -c 'python3 extract.py && g++ -O0 -std=c++17 test_firmware.cpp -o /tmp/pillbox_tests && /tmp/pillbox_tests'
+krok "1b/10 odpornosc firmware (C++)"     bash -c 'g++ -O0 -std=c++17 test_firmware_stress.cpp -o /tmp/pillbox_stress && /tmp/pillbox_stress'
+krok "2/10  logika aplikacji (Node)"      bash -c 'node build_app_module.mjs && node test_app.mjs'
+
 # Granica doby lekowej (DAY_START_HOUR) sprawia, ze aplikacja zachowuje sie
 # inaczej miedzy polnoca a 3:00 niz w ciagu dnia. Bledy w tym oknie sa
 # niewidoczne, jesli testy zawsze uruchamiaja sie po poludniu - dlatego
 # przesuwamy strefe czasowa tak, zeby przejsc przez cala dobe.
-UTC_H=$((10#$(date -u +%H)))
-for TARGET in 1 2 3 8 20 23; do
-  OFF=$(( (TARGET - UTC_H + 24) % 24 ))
-  if [ "$OFF" -le 12 ]; then ZONE="Etc/GMT-$OFF"; else ZONE="Etc/GMT+$((24-OFF))"; fi
-  printf "  %02d:xx czasu lokalnego (%s)  " "$TARGET" "$ZONE"
-  TZ="$ZONE" node test_app.mjs > /tmp/pillbox_tz.log 2>&1 \
-    && grep -o "ZALICZONE: [0-9]*" /tmp/pillbox_tz.log \
-    || { echo "BLAD"; grep "FAIL" /tmp/pillbox_tz.log; exit 1; }
-done
+pory_doby() {
+  local utc_h; utc_h=$((10#$(date -u +%H)))
+  local target off zone
+  for target in 1 2 3 8 20 23; do
+    off=$(( (target - utc_h + 24) % 24 ))
+    if [ "$off" -le 12 ]; then zone="Etc/GMT-$off"; else zone="Etc/GMT+$((24-off))"; fi
+    echo "── $(printf '%02d' "$target"):xx czasu lokalnego ($zone)"
+    TZ="$zone" node test_app.mjs || return 1
+  done
+}
+krok "2b/10 aplikacja o 6 porach doby"    pory_doby
 
-echo
-echo "════════ 2c/10  Testy odpornosci aplikacji (Node) ════════"
-node test_stress.mjs
-
-echo
-echo "════════ 2d/10  Kolejka zapisow w telefonie (Node) ════════"
+krok "2c/10 odpornosc aplikacji (Node)"   node test_stress.mjs
 # Najgrozniejszy tryb awarii aplikacji: Firebase offline nie odrzuca
 # obietnicy, tylko wisi. Te testy URUCHAMIAJA kolejke, zamiast czytac jej
 # kod wyrazeniami regularnymi.
-node test_kolejka.mjs
-
-echo
-echo "════════ 2e/10  Zgodnosc pudelka i aplikacji ════════"
+krok "2d/10 kolejka zapisow w telefonie"  node test_kolejka.mjs
 # Ten sam znacznik czasu przepuszczony przez PRAWDZIWY kod obu stron.
 # Rozjazd tutaj oznacza tabletke zapisana na innym dniu w kalendarzu niz
 # w pudelku - blad, ktory ujawnia sie dopiero tydzien pozniej.
-g++ -O2 -std=c++17 crosscheck_days.cpp -o crosscheck_bin
-node test_crosscheck.mjs
-
-echo
-echo "════════ 2f/10  Reguly bazy kontra to, co naprawde wysylamy ════════"
+krok "2e/10 zgodnosc pudelka i aplikacji" bash -c 'g++ -O2 -std=c++17 crosscheck_days.cpp -o crosscheck_bin && node test_crosscheck.mjs'
 # "$other": false odrzuca CALY wpis, gdy trafi w nim nieznane pole.
 # Sprawdzamy prawdziwy database.rules.json przeciw prawdziwym payloadom.
-node test_rules.mjs
-
-echo
-echo "════════ 3/10  Kontrola firmware (audyt) ════════"
-python3 audit_firmware.py
-
-echo
-echo "════════ 4/10  Kontrola statyczna ════════"
-python3 - <<'PY'
-import re, json, pathlib, sys
-root = pathlib.Path(__file__).resolve().parent.parent if '__file__' in dir() else pathlib.Path('.')
-root = pathlib.Path('..')
-bad = 0
-
-for f in ['database.rules.json', 'manifest.json']:
-    json.load(open(root/f, encoding='utf-8'))
-    print(f'  OK   {f} — poprawny JSON')
-
-html = (root/'index.html').read_text(encoding='utf-8')
-js = re.search(r'<script type="module">(.*?)</script>', html, re.S).group(1)
-missing = sorted(set(re.findall(r'getElementById\("([\w-]+)"\)', js))
-                 - set(re.findall(r'id="([\w-]+)"', html)))
-if missing: bad += 1; print('  BLAD id bez odpowiednika w HTML:', missing)
-else: print('  OK   wszystkie getElementById maja swoj element')
-
-# Kazda sekcja ekranu musi miec sparowane znaczniki. Ekranow jest teraz
-# kilkanascie i powstaja przez przenoszenie blokow miedzy nimi - jeden
-# zgubiony </div> rozjezdza uklad dopiero na telefonie i niczego nie wywala.
-import re as _re
-_body = html[html.index('<div id="app"'):html.index('<script type="module">')]
-_zle = []
-for _m in _re.finditer(r'<section id="(tab-[\w-]+)"', _body):
-    _a = _m.start(); _b = _body.index('</section>', _a)
-    _sec = _body[_a:_b]
-    for _t in ('div', 'details', 'button', 'span'):
-        _o = len(_re.findall(rf'<{_t}[\s>]', _sec))
-        _c = len(_re.findall(rf'</{_t}>', _sec))
-        if _o != _c:
-            _zle.append(f'{_m.group(1)}: <{_t}> {_o}/{_c}')
-if _zle:
-    bad += 1; print('  BLAD niesparowane znaczniki w sekcjach: ' + '; '.join(_zle))
-else:
-    print('  OK   kazda sekcja ekranu ma sparowane znaczniki')
-
-# Nad <header> nie moze stac NIC. Naglowek jest position:sticky i sam
-# rezerwuje miejsce na pasek statusu iOS (env(safe-area-inset-top)), wiec
-# element wstawiony przed nim laduje pod zegarkiem systemu - poza zasiegiem
-# palca - i spycha caly uklad w dol. Tak zniknal przycisk powrotu.
-_m = _re.search(r'<div id="app"[^>]*>(.*?)<header>', html, _re.S)
-if not _m:
-    bad += 1; print('  BLAD nie znaleziono naglowka aplikacji')
-else:
-    _miedzy = _re.sub(r'<!--.*?-->', '', _m.group(1), flags=_re.S).strip()
-    if _miedzy:
-        bad += 1
-        print('  BLAD miedzy <div id="app"> a <header> stoi tresc: ' + _miedzy[:60])
-    else:
-        print('  OK   nic nie stoi nad naglowkiem (pasek statusu iOS)')
-
-handlers = set(re.findall(r'on(?:click|change)="(\w+)\(', html)) - {'if'}
-orphan = [h for h in handlers if f'window.{h}' not in js]
-if orphan: bad += 1; print('  BLAD handlery bez definicji:', orphan)
-else: print(f'  OK   {len(handlers)} handlerow onclick/onchange ma definicje')
-
-# Nawiasy liczymy TYM SAMYM dokladnym skanerem co dla programu
-# diagnostycznego. Wyrazenia regularne dawaly tu falszywe alarmy na
-# apostrofach w HTML-u portalu i w polskich komentarzach.
-def zbalansowany(src):
-    i, n, depth, par, st = 0, len(src), 0, 0, "code"
-    while i < n:
-        c = src[i]
-        if st == "code":
-            if c == "/" and i+1 < n and src[i+1] == "*": st = "blk"; i += 2; continue
-            if c == "/" and i+1 < n and src[i+1] == "/": st = "ln";  i += 2; continue
-            if c == '"': st = "str"; i += 1; continue
-            if c == "'": st = "chr"; i += 1; continue
-            if   c == "{": depth += 1
-            elif c == "}": depth -= 1
-            elif c == "(": par += 1
-            elif c == ")": par -= 1
-        elif st == "blk":
-            if c == "*" and i+1 < n and src[i+1] == "/": st = "code"; i += 2; continue
-        elif st == "ln":
-            if c == "\n": st = "code"
-        elif st in ("str", "chr"):
-            if c == "\\": i += 2; continue
-            if (st == "str" and c == '"') or (st == "chr" and c == "'"): st = "code"
-        i += 1
-    return depth == 0 and par == 0 and st == "code"
-
-for f in ['firmware/PillBox/PillBox.ino', 'firmware/PillBox/config.h',
-          'firmware/PillBoxTest/PillBoxTest.ino']:
-    s = (root/f).read_text(encoding='utf-8')
-    ifs = len(re.findall(r'^\s*#\s*if', s, re.M)); ends = len(re.findall(r'^\s*#\s*endif', s, re.M))
-    if not zbalansowany(s) or ifs != ends:
-        bad += 1; print(f'  BLAD {f}: nawiasy/#if niezbalansowane')
-    else:
-        print(f'  OK   {f} — nawiasy i #if/#endif zbalansowane')
-
-cfg = (root/'firmware/PillBox/config.h').read_text(encoding='utf-8')
-ino = (root/'firmware/PillBox/PillBox.ino').read_text(encoding='utf-8')
-defined = set(re.findall(r'#\s*define\s+(\w+)', cfg))
-unused = [d for d in defined if d not in ino and d not in
-          ('LOG','LOGLN','REED_MODE','BUTTON_MODE')]
-if unused: print('  UWAGA nieuzywane ustawienia w config.h:', unused)
-else: print('  OK   kazde ustawienie z config.h jest uzywane')
-
-for pl in ['pillsLeft','inrMin','inrMax','drugName','drugStrength']:
-    if f'"{pl}"' not in (root/'database.rules.json').read_text(encoding='utf-8'):
-        bad += 1; print(f'  BLAD reguly bazy nie znaja pola {pl}')
-print('  OK   reguly bazy pokrywaja pola konfiguracji')
-
-t = root/"firmware/PillBoxTest/PillBoxTest.ino"
-if t.exists():
-    src = t.read_text(encoding="utf-8")
-    if src.count("void setup()") == 1 and src.count("void loop()") == 1:
-        print("  OK   program diagnostyczny - jedno setup() i loop()")
-    else:
-        bad += 1; print("  BLAD PillBoxTest.ino: zle setup()/loop()")
-    if "gpio_hold_en(" in src and "gpio_deep_sleep_hold_en()" in src:
-        print("  OK   program diagnostyczny testuje sen tak samo jak firmware")
-    else:
-        bad += 1; print("  BLAD PillBoxTest.ino: brak zatrzasku pinu przed snem")
-
-sys.exit(1 if bad else 0)
-PY
+krok "2f/10 reguly bazy kontra payloady"  node test_rules.mjs
+krok "3/10  kontrola firmware (audyt)"    python3 audit_firmware.py
+krok "4/10  kontrola statyczna"           python3 statyczna.py
 
 echo
 echo "✔  Wszystkie testy zakonczone powodzeniem."

@@ -376,7 +376,14 @@ naprawy.
   w `setup()`, zasady z sekcji 2 zapisane jako testy.
 - `tests/crosscheck_days.cpp` + `test_crosscheck.mjs` — zgodność liczenia dób
   między firmware a aplikacją.
-- `bash tests/run_all.sh` uruchamia całość.
+- `tests/statyczna.py` — kontrola statyczna repo (brakujące elementy HTML,
+  niesparowane znaczniki, handlery bez definicji, nawiasy w firmware). Do
+  2026-08-17 była wklejona w runnera jako heredoc, więc nie dało się jej ani
+  uruchomić osobno, ani sprawdzić mutacją bez odpalania całego zestawu.
+- `bash tests/run_all.sh` uruchamia całość. **Cichy przy sukcesie, głośny przy
+  błędzie**: udany przebieg to 12 linii zamiast 900, ale krok, który zawiedzie,
+  pokazuje wszystkie swoje linie błędu i zostawia pełny log na dysku.
+  `SZCZEGOLY=1` przywraca pełny wypis.
 - `bash tests/kompiluj_firmware.sh` — **prawdziwy toolchain Arduino**
   (`esp32:esp32@3.3.11`), oba szkice, dwa razy: jako `.cpp` i przez prawdziwą
   ścieżkę `.ino` z generowanymi prototypami (B21/D26 — przez miesiąc

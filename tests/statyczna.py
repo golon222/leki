@@ -1,0 +1,130 @@
+#!/usr/bin/env python3
+"""Kontrola statyczna repo - krok 4/10 zestawu testow.
+
+Do 2026-08-17 ten kod byl WKLEJONY w run_all.sh jako heredoc. Wyjety, bo
+skryptu wklejonego w runnera nie da sie ani uruchomic osobno przy szukaniu
+jednej usterki, ani sprawdzic mutacja bez odpalania calego zestawu.
+
+Sprawdza rzeczy, ktorych nie widac w testach jednostkowych, a ktore psuja
+aplikacje na telefonie: brakujace elementy HTML, niesparowane znaczniki,
+tresc nad naglowkiem (pasek statusu iOS), handlery bez definicji,
+niezbalansowane nawiasy w firmware, pola konfiguracji nieznane regulom bazy.
+
+Uzycie:  python3 tests/statyczna.py
+"""
+import re, json, pathlib, sys
+root = pathlib.Path(__file__).resolve().parent.parent if '__file__' in dir() else pathlib.Path('.')
+root = pathlib.Path('..')
+bad = 0
+
+for f in ['database.rules.json', 'manifest.json']:
+    json.load(open(root/f, encoding='utf-8'))
+    print(f'  OK   {f} — poprawny JSON')
+
+html = (root/'index.html').read_text(encoding='utf-8')
+js = re.search(r'<script type="module">(.*?)</script>', html, re.S).group(1)
+missing = sorted(set(re.findall(r'getElementById\("([\w-]+)"\)', js))
+                 - set(re.findall(r'id="([\w-]+)"', html)))
+if missing: bad += 1; print('  BLAD id bez odpowiednika w HTML:', missing)
+else: print('  OK   wszystkie getElementById maja swoj element')
+
+# Kazda sekcja ekranu musi miec sparowane znaczniki. Ekranow jest teraz
+# kilkanascie i powstaja przez przenoszenie blokow miedzy nimi - jeden
+# zgubiony </div> rozjezdza uklad dopiero na telefonie i niczego nie wywala.
+import re as _re
+_body = html[html.index('<div id="app"'):html.index('<script type="module">')]
+_zle = []
+for _m in _re.finditer(r'<section id="(tab-[\w-]+)"', _body):
+    _a = _m.start(); _b = _body.index('</section>', _a)
+    _sec = _body[_a:_b]
+    for _t in ('div', 'details', 'button', 'span'):
+        _o = len(_re.findall(rf'<{_t}[\s>]', _sec))
+        _c = len(_re.findall(rf'</{_t}>', _sec))
+        if _o != _c:
+            _zle.append(f'{_m.group(1)}: <{_t}> {_o}/{_c}')
+if _zle:
+    bad += 1; print('  BLAD niesparowane znaczniki w sekcjach: ' + '; '.join(_zle))
+else:
+    print('  OK   kazda sekcja ekranu ma sparowane znaczniki')
+
+# Nad <header> nie moze stac NIC. Naglowek jest position:sticky i sam
+# rezerwuje miejsce na pasek statusu iOS (env(safe-area-inset-top)), wiec
+# element wstawiony przed nim laduje pod zegarkiem systemu - poza zasiegiem
+# palca - i spycha caly uklad w dol. Tak zniknal przycisk powrotu.
+_m = _re.search(r'<div id="app"[^>]*>(.*?)<header>', html, _re.S)
+if not _m:
+    bad += 1; print('  BLAD nie znaleziono naglowka aplikacji')
+else:
+    _miedzy = _re.sub(r'<!--.*?-->', '', _m.group(1), flags=_re.S).strip()
+    if _miedzy:
+        bad += 1
+        print('  BLAD miedzy <div id="app"> a <header> stoi tresc: ' + _miedzy[:60])
+    else:
+        print('  OK   nic nie stoi nad naglowkiem (pasek statusu iOS)')
+
+handlers = set(re.findall(r'on(?:click|change)="(\w+)\(', html)) - {'if'}
+orphan = [h for h in handlers if f'window.{h}' not in js]
+if orphan: bad += 1; print('  BLAD handlery bez definicji:', orphan)
+else: print(f'  OK   {len(handlers)} handlerow onclick/onchange ma definicje')
+
+# Nawiasy liczymy TYM SAMYM dokladnym skanerem co dla programu
+# diagnostycznego. Wyrazenia regularne dawaly tu falszywe alarmy na
+# apostrofach w HTML-u portalu i w polskich komentarzach.
+def zbalansowany(src):
+    i, n, depth, par, st = 0, len(src), 0, 0, "code"
+    while i < n:
+        c = src[i]
+        if st == "code":
+            if c == "/" and i+1 < n and src[i+1] == "*": st = "blk"; i += 2; continue
+            if c == "/" and i+1 < n and src[i+1] == "/": st = "ln";  i += 2; continue
+            if c == '"': st = "str"; i += 1; continue
+            if c == "'": st = "chr"; i += 1; continue
+            if   c == "{": depth += 1
+            elif c == "}": depth -= 1
+            elif c == "(": par += 1
+            elif c == ")": par -= 1
+        elif st == "blk":
+            if c == "*" and i+1 < n and src[i+1] == "/": st = "code"; i += 2; continue
+        elif st == "ln":
+            if c == "\n": st = "code"
+        elif st in ("str", "chr"):
+            if c == "\\": i += 2; continue
+            if (st == "str" and c == '"') or (st == "chr" and c == "'"): st = "code"
+        i += 1
+    return depth == 0 and par == 0 and st == "code"
+
+for f in ['firmware/PillBox/PillBox.ino', 'firmware/PillBox/config.h',
+          'firmware/PillBoxTest/PillBoxTest.ino']:
+    s = (root/f).read_text(encoding='utf-8')
+    ifs = len(re.findall(r'^\s*#\s*if', s, re.M)); ends = len(re.findall(r'^\s*#\s*endif', s, re.M))
+    if not zbalansowany(s) or ifs != ends:
+        bad += 1; print(f'  BLAD {f}: nawiasy/#if niezbalansowane')
+    else:
+        print(f'  OK   {f} — nawiasy i #if/#endif zbalansowane')
+
+cfg = (root/'firmware/PillBox/config.h').read_text(encoding='utf-8')
+ino = (root/'firmware/PillBox/PillBox.ino').read_text(encoding='utf-8')
+defined = set(re.findall(r'#\s*define\s+(\w+)', cfg))
+unused = [d for d in defined if d not in ino and d not in
+          ('LOG','LOGLN','REED_MODE','BUTTON_MODE')]
+if unused: print('  UWAGA nieuzywane ustawienia w config.h:', unused)
+else: print('  OK   kazde ustawienie z config.h jest uzywane')
+
+for pl in ['pillsLeft','inrMin','inrMax','drugName','drugStrength']:
+    if f'"{pl}"' not in (root/'database.rules.json').read_text(encoding='utf-8'):
+        bad += 1; print(f'  BLAD reguly bazy nie znaja pola {pl}')
+print('  OK   reguly bazy pokrywaja pola konfiguracji')
+
+t = root/"firmware/PillBoxTest/PillBoxTest.ino"
+if t.exists():
+    src = t.read_text(encoding="utf-8")
+    if src.count("void setup()") == 1 and src.count("void loop()") == 1:
+        print("  OK   program diagnostyczny - jedno setup() i loop()")
+    else:
+        bad += 1; print("  BLAD PillBoxTest.ino: zle setup()/loop()")
+    if "gpio_hold_en(" in src and "gpio_deep_sleep_hold_en()" in src:
+        print("  OK   program diagnostyczny testuje sen tak samo jak firmware")
+    else:
+        bad += 1; print("  BLAD PillBoxTest.ino: brak zatrzasku pinu przed snem")
+
+sys.exit(1 if bad else 0)
