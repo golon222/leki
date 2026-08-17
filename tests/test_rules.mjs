@@ -223,6 +223,44 @@ check(POLA_STATUSU.every(p => p in PRZYKLAD_STATUSU),
       `pola statusu nieopisane w tescie: ${POLA_STATUSU.filter(p => !(p in PRZYKLAD_STATUSU))}`);
 ok("pelny status z pushStatus()", "devices/pillbox1/status", PRZYKLAD_STATUSU);
 
+/* Lista sieci widzianych przez pudelko (D65). Zapis odrzucony przez reguly
+   wyglada DOKLADNIE tak samo jak "nic sie nie stalo" - a tego objawu
+   szukalismy w tym projekcie przez kilka dni. Stad te testy: sprawdzaja,
+   ze prawdziwy ksztalt wysylany przez skanujSieci() przejdzie, i ze
+   smiec nie przejdzie.                                                */
+head("Lista sieci z pudelka przechodzi przez reguly");
+ok("lista z kilkoma sieciami", "devices/pillbox1/scan",
+   { ts: 1750000000, nets: { 0: { s: "dom", r: -55 }, 1: { s: "sasiad", r: -82 } } });
+ok("pusta lista - pudelko nie widzi nic", "devices/pillbox1/scan", { ts: 1750000000 });
+/* DOKLADNIE ten ksztalt wysyla skanujSieci(): ArduinoJson serializuje `nets`
+   jako TABLICE, nie obiekt z kluczami. Firebase zapisuje ja jako obiekt
+   z indeksami, ale reguly musza przepuscic jedno i drugie - inaczej test
+   przechodzilby na ksztalcie, ktorego pudelko nigdy nie wysyla.        */
+ok("tablica, tak jak serializuje ja ArduinoJson", "devices/pillbox1/scan",
+   { ts: 1750000000, nets: [ { s: "dom", r: -55 }, { s: "sasiad", r: -82 } ] });
+/* Hotspot iPhone'a z apostrofem w nazwie. W aplikacji to pulapka na onclick,
+   tutaj sprawdzamy tylko, ze reguly go nie odrzuca.                    */
+ok("nazwa z apostrofem", "devices/pillbox1/scan",
+   { ts: 1750000000, nets: { 0: { s: "Kuba's iPhone", r: -60 } } });
+odrzuc("lista bez znacznika czasu", "devices/pillbox1/scan",
+       { nets: { 0: { s: "dom", r: -55 } } });
+odrzuc("siec bez sily sygnalu", "devices/pillbox1/scan",
+       { ts: 1750000000, nets: { 0: { s: "dom" } } });
+odrzuc("nazwa dluzsza niz 32 znaki", "devices/pillbox1/scan",
+       { ts: 1750000000, nets: { 0: { s: "s".repeat(33), r: -55 } } });
+/* Dodatkowe pole odrzuca CALY wpis, a z nim liste, po ktora ktos siegnal -
+   ta sama rodzina co D6/D13/D15. Dlatego firmware odsiewa u siebie. */
+odrzuc("nieznane pole przy sieci", "devices/pillbox1/scan",
+       { ts: 1750000000, nets: { 0: { s: "dom", r: -55, kanal: 6 } } });
+odrzuc("sila sygnalu jako napis", "devices/pillbox1/scan",
+       { ts: 1750000000, nets: { 0: { s: "dom", r: "-55" } } });
+
+/* Zlecenie skanu z aplikacji. */
+ok("prosba o skan", "devices/pillbox1/config/wifiScan", { ts: 1750000000 });
+odrzuc("prosba bez znacznika czasu", "devices/pillbox1/config/wifiScan", {});
+odrzuc("prosba z doklejonym polem", "devices/pillbox1/config/wifiScan",
+       { ts: 1750000000, kto: "kuba" });
+
 /* Historia nieudanych zapisow NVS (D47) - lepiona recznie w nvsFailLogJson(),
    tak jak lidLogJson() ponizej, wiec te same zasady: pola bierzemy z opisu,
    nie z parsowania funkcji, bo wynik to zserializowany String, nie doc[]. */
