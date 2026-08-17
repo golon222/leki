@@ -933,16 +933,37 @@ nav button.act{color:var(--acc)}
 
     <!-- Instrukcja jest częścią mechanizmu, nie ozdobą obok niego: bez bota
          u BotFathera nie ma tokenu, a bez tokenu ten ekran nie ma co zapisać.
-         Trzy kroki, w kolejności, w której się je wykonuje.              -->
+
+         PIERWSZA WERSJA MIAŁA TRZY KROKI I KUBA UTKNĄŁ NA DRUGIM.
+         Pytanie brzmiało dosłownie: „gdzie ja mam napisać /start" — a na
+         zrzucie widać, że napisał je BotFatherowi, bo własnego bota jeszcze
+         nie miał. Instrukcja mówiła „znajdź swojego nowego bota", milcząc
+         o tym, że BotFather podaje do niego gotowy link, i że w nowym czacie
+         nie trzeba nic pisać, bo jest przycisk START.
+
+         Dwa kroki zwinięte w jeden („napisz /newbot, dostaniesz token")
+         wyglądały na krótsze, a kosztowały pytanie. Rozmowa z BotFatherem
+         ma trzy tury i teraz każda jest wypisana osobno — razem z tym, co
+         BotFather odpowie, żeby dało się sprawdzić, czy to jeszcze ta
+         ścieżka.                                                          -->
     <div class="card" style="margin-top:14px;background:var(--card2)">
-      <b>Jak to podłączyć — trzy kroki</b>
+      <b>Jak to podłączyć</b>
       <div class="dim2" style="margin-top:8px;line-height:1.6">
         <b>1.</b> W Telegramie znajdź <b>@BotFather</b> i napisz do niego
-        <b>/newbot</b>. Poda nazwę i długi token — skopiuj go.<br>
-        <b>2.</b> Znajdź swojego nowego bota i napisz do niego cokolwiek,
-        choćby <b>/start</b>. Bez tego Telegram nie pozwoli mu odezwać się
-        pierwszemu.<br>
-        <b>3.</b> Wklej token poniżej i naciśnij <i>Znajdź mnie</i>.
+        <b>/newbot</b> — <i>nie</i> /start.<br>
+        <b>2.</b> Zapyta o nazwę bota. Wpisz dowolną, np. <b>PillBox Kuby</b>.<br>
+        <b>3.</b> Zapyta o adres. Musi kończyć się na <b>bot</b> i być
+        niezajęty, np. <b>pillbox_kuby_bot</b>.<br>
+        <b>4.</b> Odpisze <i>„Done!”</i> i poda <b>długi token</b> po
+        <i>„Use this token to access the HTTP API”</i> — skopiuj go.<br>
+        <b>5.</b> W tej samej wiadomości jest <b>link t.me/…</b> do Twojego
+        bota. Kliknij go i naciśnij niebieski przycisk <b>START</b> na dole.
+        Nic nie musisz pisać.<br>
+        <b>6.</b> Wróć tutaj, wklej token i naciśnij <i>Znajdź mnie</i>.
+      </div>
+      <div class="dim2" style="margin-top:8px;line-height:1.5;font-size:12px">
+        Krok 5 jest obowiązkowy: dopóki nie zaczepisz bota pierwszy, Telegram
+        nie pozwala mu nic do Ciebie wysłać. Pudełko nie ma na to wpływu.
       </div>
     </div>
 
@@ -1274,7 +1295,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-17.44";
+const APP_VERSION = "2026-08-17.45";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -4443,8 +4464,14 @@ window.tgZnajdzCzat = async () => {
       if (c?.id != null) chat = String(c.id);
     }
     if (!chat){
-      pokaz(`Bot @${bot.username} działa, ale nie napisałeś jeszcze do niego. `
-            + "Wyślij mu /start i naciśnij ponownie.", "warn");
+      /* Ten komunikat musi mówić DOKĄD iść, nie tylko czego brakuje.
+         Kuba utknął dokładnie tu i zapytał „gdzie ja mam napisać /start" —
+         więc podajemy nazwę bota, przez którą da się go znaleźć wyszukiwarką
+         Telegrama, i mówimy o przycisku, a nie o komendzie: w nowym czacie
+         START jest gotowym przyciskiem i nic nie trzeba pisać. */
+      pokaz(`Token działa — to bot @${bot.username}. Ale jeszcze go nie `
+            + `zaczepiłeś: otwórz czat @${bot.username} w Telegramie, naciśnij `
+            + "START na dole i wróć tu po „Znajdź mnie”.", "warn");
       return;
     }
     document.getElementById("tgChat").value = chat;
