@@ -68,12 +68,26 @@ Test to złapie, ale komunikat zrozumiesz szybciej, znając powód (D6, D13, D15
 2. **Żadnych zmian sprzętowych.** Płytka jest zlutowana i docelowo zaklejona.
 3. **`config.h` JEST w repo — celowo, i tak ma zostać.**
    Trzyma wyłącznie placeholder `TUTAJ_WPISZ_HASLO`, nigdy prawdziwego hasła.
-   Powód: Kuba pracuje tak, że pobiera folder `firmware/` z GitHuba i otwiera
+
+   **Placeholder nie jest kompromisem dla wygody — jest warunkiem, na którym
+   stoi aktualizacja przez WiFi** (zgłoszenie Kuby: *„to urządzenie trzyma
+   hasło i dlatego też można robić aktualizacje przez WiFi"*). Binarkę buduje
+   automat z **tego** repo, w publicznym repozytorium. Gdyby hasło musiało być
+   wkompilowane, budowanie binarki byłoby jego wyciekiem — czyli automat nie
+   mógłby istnieć, a bez automatu nie ma OTA. To działa dlatego, że hasło żyje
+   **w pamięci trwałej pudełka** (NVS), a `config.h` jest już tylko **ziarnem**
+   przy pierwszym wgraniu kablem. Patrz ograniczenie 10 — to jedna decyzja
+   opisana z dwóch stron, nie dwie osobne.
+
+   Drugi powód, praktyczny: Kuba pobiera folder `firmware/` z GitHuba i otwiera
    go wprost w Arduino IDE. Bez `config.h` w komplecie szkic się nie otwiera,
-   a on musi zmieniać nazwy plików na telefonie albo MacBooku przed wyjazdem.
-   Krótka próba trzymania tu tylko `config.example.h` **została cofnięta na
-   jego wyraźną prośbę** — nie przywracaj jej.
+   a on musiałby zmieniać nazwy plików na telefonie albo MacBooku przed
+   wyjazdem. Krótka próba trzymania tu tylko `config.example.h` **została
+   cofnięta na jego wyraźną prośbę** — nie przywracaj jej.
+
    Prawdziwe hasło żyje wyłącznie na jego dysku i **nigdy nie wraca do repo**.
+   `WEB_API_KEY` zostaje świadomie: ten sam klucz jest publiczny w `index.html`
+   na GitHub Pages, a barierą jest `database.rules.json`, nie jego tajność.
 4. **`DAY_START_HOUR = 3`** identycznie w firmware i aplikacji.
 4b. **`cfg.schedule` to godziny PRZYPOMNIEŃ, nie pory brania leku.**
    Kuba bierze tabletkę kiedy chce — o 10, o 14, o 21, czasem o 2 w nocy.
@@ -123,6 +137,7 @@ Test to złapie, ale komunikat zrozumiesz szybciej, znając powód (D6, D13, D15
    drogę do pudełka poza portalem. Portal fizyczny zostaje na zawsze.
 
 10. **Hasło do Firebase czytamy z NVS, nigdy wprost z `config.h`** (D59).
+   To ta sama decyzja co ograniczenie 3, widziana od strony kodu.
    `hasloDoLogowania()` daje pierwszeństwo pamięci trwałej; `config.h` jest
    już tylko **ziarnem** przy pierwszym wgraniu kablem. Powód jest twardy:
    binarkę aktualizacji buduje automat z tego repo, a w repo stoi placeholder.

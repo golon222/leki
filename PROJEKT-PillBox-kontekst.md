@@ -64,7 +64,18 @@ rozstrzyga `DECYZJE.md`, bo jest prowadzony na bieżąco, wpis po wpisie.
 3. **`config.h` JEST w repo — celowo.** Trzyma wyłącznie placeholder
    `TUTAJ_WPISZ_HASLO`; prawdziwe hasło nigdy tu nie wraca.
 
-   Była próba wyjęcia go z repo na rzecz `config.example.h`. **Cofnięta na
+   **Od 1.38.0 placeholder przestał być kompromisem i stał się warunkiem, na
+   którym stoi aktualizacja przez WiFi.** Kuba ujął to jednym zdaniem: *„to
+   urządzenie trzyma hasło i dlatego też można robić aktualizacje przez WiFi"*.
+   Binarkę buduje automat z **tego** repo, publicznie. Gdyby hasło musiało być
+   wkompilowane, budowanie binarki byłoby jego wyciekiem — czyli automat nie
+   mógłby istnieć, a bez automatu nie ma OTA. Całą konstrukcję trzyma to, że
+   hasło żyje **w NVS pudełka** (D59), a `config.h` jest już tylko ziarnem przy
+   pierwszym wgraniu kablem. Ograniczenie to jest więc jedną decyzją opisaną
+   z dwóch stron: tu jako „plik zostaje w repo", w D59 jako „hasło czytamy
+   z pamięci trwałej".
+
+   Była też próba wyjęcia go z repo na rzecz `config.example.h`. **Cofnięta na
    wyraźną prośbę Kuby** — i to jest dobra lekcja o tym, czyj komfort się liczy.
    On nie klonuje repo: pobiera folder `firmware/` i otwiera go wprost
    w Arduino IDE. Bez `config.h` w komplecie szkic się nie otwiera, więc przed
