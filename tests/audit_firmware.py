@@ -16,18 +16,53 @@ def warn(c, m):
 def strip(src):
     """Usuwa komentarze i literaly, zeby zostal sam kod.
 
-    UWAGA na apostrofy. W kodzie strony portalu jest HTML w rodzaju
-    autocapitalize='off' - pojedynczy apostrof w NAPISIE. Dawny wzorzec
-    traktowal go jak poczatek literalu znakowego i zjadal wszystko do
-    nastepnego apostrofu, czyli kawal pliku razem z definicjami funkcji.
-    Audyt sprawdzal potem tekst, ktorego w kodzie nie ma - i cicho
-    przepuszczal bledy. W C literal znakowy to DOKLADNIE jeden znak albo
-    sekwencja z ukosnikiem, i tak to teraz zapisujemy.
+    SKANER ZNAK PO ZNAKU, NIE CIAG WYRAZEN REGULARNYCH - i to jest naprawa
+    bledu, ktory ta funkcja miala juz raz.
+
+    Wzorce dzialaly osobno, a jezyk czyta sie po kolei. Wystarczyl adres
+    w napisie - "https://" - zeby wzorzec kasujacy komentarze `//` zjadl
+    reszte linii RAZEM z zamykajacym cudzyslowem. Od tego miejsca kolejny
+    wzorzec liczyl napisy z przesunieciem o jeden i kasowal kod. Przy
+    trzech takich adresach w pliku wychodzilo na zero i nikt nie zauwazyl;
+    czwarty (bot Telegram, D67) urwal 32 kB zrodla - w tym CALY `switch
+    (wakeReason)`, na ktorym stoi kilkanascie kontroli.
+
+    To dokladnie ta sama klasa wpadki co poprzednio z apostrofem w HTML-u
+    portalu: audyt sprawdzal wtedy tekst, ktorego w kodzie nie ma, i cicho
+    przepuszczal bledy. Roznica jest taka, ze tamten raz objawil sie
+    cisza, a ten wyjatkiem - bo `code.index()` nie znalazl czego szukal.
+    Cichy wariant jest grozniejszy, wiec zamiast lepic trzeci wzorzec
+    przechodzimy na skanowanie, ktore nie ma jak sie rozjechac.
+
+    Zwraca kod z zachowanymi znakami nowej linii (numery linii i kolejnosc
+    definicji musza sie zgadzac), pustymi napisami "" i pustymi literalami
+    znakowymi ''.
     """
-    s = re.sub(r"/\*.*?\*/", "", src, flags=re.S)
-    s = re.sub(r"//[^\n]*", "", s)
-    s = re.sub(r'"(\\.|[^"\\])*"', '""', s)
-    return re.sub(r"'(\\.|[^'\\])'", "''", s)
+    out, i, n = [], 0, len(src)
+    while i < n:
+        c = src[i]
+        if c == "/" and i + 1 < n and src[i+1] == "*":       # komentarz blokowy
+            koniec = src.find("*/", i + 2)
+            koniec = n if koniec < 0 else koniec + 2
+            out.append("\n" * src.count("\n", i, koniec))
+            i = koniec
+        elif c == "/" and i + 1 < n and src[i+1] == "/":     # komentarz do konca linii
+            koniec = src.find("\n", i)
+            i = n if koniec < 0 else koniec
+        elif c == '"' or c == "'":                           # literal
+            out.append(c + c)
+            poczatek = i
+            i += 1
+            while i < n and src[i] != c:
+                i += 2 if src[i] == "\\" else 1
+            i += 1                                           # zamykajacy znak
+            # Niedomkniety cudzyslow to blad skladni, ktory zlapie kompilator -
+            # ale numery linii w audycie maja sie zgadzac takze wtedy.
+            out.append("\n" * src.count("\n", poczatek, min(i, n)))
+        else:
+            out.append(c)
+            i += 1
+    return "".join(out)
 
 code = strip(ino)
 
@@ -552,15 +587,40 @@ ok("alarmJuzObsluzony(slot)" in tim,
 # drugie przypomnienie ("przypomnij jeszcze raz o 23:00") zamilkloby na
 # zawsze - i to dokladnie wtedy, kiedy jest potrzebne.
 ok("rtcAlarmDoneMask" in code, "znacznik jest maska slotow, nie flaga na dobe")
-_ret = tim[tim.find("rtcAlarmRetries >= MAX_ALARM_RETRIES"):]
+# Odleglosc liczymy w KODZIE, nie w surowym zrodle - inaczej kontrola mierzy
+# dlugosc komentarzy zamiast tego, co robi program. To ta sama lekcja co D62:
+# tam kontrola zaliczala sie na opisie naprawy stojacym obok niej, tu padala
+# przez komentarz dolozony kilka linii wyzej (D67). Ani jedno, ani drugie nie
+# jest wlasciwoscia programu.
+_tim = strip(tim)
+_ret = _tim[_tim.find("rtcAlarmRetries >= MAX_ALARM_RETRIES"):]
 ok("oznaczAlarmObsluzony(slot);" in _ret[:700],
    "po wyczerpaniu prob alarm zostawia slad, ze TO przypomnienie juz dzwonilo")
 ok("ostatniSlotDoby()" in _ret[:1200],
    "'missed' dopiero po OSTATNIM przypomnieniu doby, nie po pierwszym")
 # Kolejnosc, nie samo wystapienie: warunek MUSI stac przed zapisem, inaczej
 # "missed" leci zawsze, a ostatniSlotDoby() wisi obok jako ozdoba.
-_i_war, _i_miss = _ret.find("slot == ostatniSlotDoby()"), _ret.find('reportEvent("missed"')
+# Ta para pyta o TRESC napisu ("missed", a nie "open"), wiec pracuje na
+# surowym zrodle - odleglosci nie mierzy, tylko kolejnosc, wiec komentarz
+# dolozony w tym miejscu jej nie rusza.
+_ret_zr = tim[tim.find("rtcAlarmRetries >= MAX_ALARM_RETRIES"):]
+_i_war = _ret_zr.find("slot == ostatniSlotDoby()")
+_i_miss = _ret_zr.find('reportEvent("missed"')
 ok(0 <= _i_war < _i_miss, "zapis 'missed' stoi ZA tym warunkiem, nie obok niego")
+# I stoi WEWNATRZ tej galezi, a nie za jej zamknieciem. Bez tego warunek
+# mogl zostac ozdoba: `if (...) { LOG } else { LOG } reportEvent("missed")`
+# przechodzi poprzednia kontrole i wysyla "missed" po KAZDYM przypomnieniu.
+_i_else = _ret_zr.find("} else {", _i_war)
+ok(0 <= _i_war < _i_miss < _i_else,
+   "'missed' stoi WEWNATRZ galezi ostatniego przypomnienia, nie za nia")
+# Powiadomienie na telefon idzie odwrotnie niz "missed" - po KAZDYM
+# nieodebranym przypomnieniu (wybor Kuby, D67). Wiec musi stac PRZED
+# rozgalezieniem na ostatni slot, nie w jednej z jego polowek.
+if re.search(r"#\s*define\s+TG_ENABLED\s+1", cfg):
+    _i_tg = _ret_zr.find("tgZglosNieodebrane(slot);")
+    ok(0 <= _i_tg < _i_war,
+       "powiadomienie na telefon leci po KAZDYM nieodebranym przypomnieniu, "
+       "nie tylko po ostatnim")
 ok('nvsPutU16("almMask"' in ino, "maska przezywa reset - zapisywana w pamieci trwalej")
 # Tu szukamy NAPISU, wiec na surowym zrodle - strip() zamienia literaly na "".
 _ldm = ino[ino.find("void loadDayMarkers()"):]
@@ -1097,6 +1157,72 @@ ok("rtcOtaNagl" in cialo_surowe("bool otaWgraj(const String& md5, uint32_t rozmi
 # Podzial pamieci musi zapowiadac OTA - na huge_app nie ma dokad pisac.
 ok("with OTA" in ino[:3000],
    "naglowek szkicu zapowiada podzial pamieci z druga partycja programu")
+
+# ---------- 9j. Powiadomienia na telefon - bot Telegram (D67) ----------
+if re.search(r"#\s*define\s+TG_ENABLED\s+1", cfg):
+    # Ta sama zasada 11 co przy aktualizacji i skanie sieci: radio wolno
+    # zabrac dopiero z goToSleep(), czyli po zapisie dawki i wyslaniu
+    # statusu. Wywolanie z obslugi kontaktronu wcisneloby uzgodnienie TLS
+    # miedzy otwarcie wieczka a zapis dawki Warfinu.
+    ok(len(re.findall(r"^\s*tgWyslijZalegle\(\);", code, re.M)) == 1,
+       "tgWyslijZalegle() wolane z dokladnie jednego miejsca")
+    ok(_gts and "tgWyslijZalegle()" in _gts,
+       "i tym miejscem jest goToSleep() - po zapisie dawki, nie w trakcie")
+    # KOLEJNOSC W GOTOSLEEP. Skan potrafi zerwac lacze, a udana aktualizacja
+    # konczy sie restartem - wiadomosc puszczona za nimi nie poszlaby wcale.
+    if _gts:
+        _i_tg   = _gts.find("tgWyslijZalegle()")
+        _i_skan = _gts.find("skanujSieci()")
+        _i_ota  = _gts.find("otaSprobuj()")
+        ok(0 <= _i_tg < _i_skan and _i_tg < _i_ota,
+           "powiadomienie idzie PRZED skanem sieci i przed aktualizacja")
+
+    _tgw = cialo_surowe("void tgWyslijZalegle()")
+    # Pusta skrzynka nie moze kosztowac ani miliampera: wyjscie na TG_NIC
+    # musi stac PRZED jakimkolwiek wifiConnect().
+    if _tgw:
+        _i_nic  = _tgw.find("d == TG_NIC")
+        _i_wifi = _tgw.find("wifiConnect()")
+        ok(0 <= _i_nic < _i_wifi,
+           "pusta skrzynka wychodzi PRZED wlaczeniem radia")
+        # Zasada 6: znacznik zdejmujemy dopiero po potwierdzonej wysylce.
+        # Kasowanie przed proba gubiloby powiadomienie przy kazdym bledzie
+        # sieci - a to jest jedyna droga, ktora ma dzialac bez telefonu.
+        ok("if (tgWyslijTekst(" in _tgw and "rtcTgSlot   = -1;" in _tgw,
+           "znacznik przypomnienia kasuje sie dopiero po udanej wysylce")
+        ok("rtcTgBattZgloszona = true;" in _tgw,
+           "ostrzezenie o baterii oznacza sie jako wyslane, zeby nie wracalo co dobe")
+    else:
+        ok(False, "nie znaleziono tgWyslijZalegle() do sprawdzenia")
+
+    # ZASADA 9 (D38, D67): token kasujemy z bazy DOPIERO po potwierdzonym
+    # zapisie w NVS. Odwrotna kolejnosc znaczy token stracony na zawsze -
+    # trzeba by zakladac nowego bota u BotFathera.
+    _fc = cialo_surowe("void fetchConfig()")
+    _i_tgnowy = _fc.find('doc["tgNowy"]')
+    if _i_tgnowy >= 0:
+        _blok_tg = _fc[_i_tgnowy:_fc.find('doc["wifiScan"]', _i_tgnowy)]
+        _i_zapis = _blok_tg.find("tgUtrwal(")
+        _i_kas   = _blok_tg.find('config/tgNowy.json')
+        ok(0 <= _i_zapis < _i_kas,
+           "token kasujemy z bazy dopiero PO potwierdzonym zapisie w pamieci (zasada 9)")
+        ok("else {" in _blok_tg and "ZOSTAJE w bazie" in _blok_tg,
+           "nieudany zapis zostawia token w bazie do nastepnej proby")
+    else:
+        ok(False, "fetchConfig() nie czyta tgNowy")
+
+    # Token nie ma prawa trafic ani do logu, ani do statusu. Log Kuba wkleja
+    # w zgloszeniach, a status pudelko nadpisuje w bazie przy kazdym
+    # wybudzeniu - oba miejsca zyja dluzej niz sam token.
+    _tgt = cialo_surowe("bool tgWyslijTekst(const String& tekst)")
+    ok(_tgt and "url" in _tgt and not re.search(r"LOG\w*\([^)]*url", _tgt),
+       "adres z tokenem nie trafia do logu")
+    ok('doc["tgTok"]' not in _st_raw and "tgTokenZPamieci()" not in _st_raw,
+       "status wysylany do aplikacji nie zawiera tokenu bota")
+    # Dwa kanaly TLS naraz to okolo 100 kB na ukladzie, ktory ma 400 kB -
+    # na tym wywracalo sie pobieranie firmware (D60).
+    ok(_tgt and "rtdbClient.stop()" in _tgt,
+       "kanal do bazy zwalniany przed otwarciem polaczenia z Telegramem")
 
 # ---------- 10. Rzeczy do uzupelnienia przez uzytkownika ----------
 todo = "TUTAJ_WPISZ_HASLO_C" in cfg

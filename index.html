@@ -743,6 +743,10 @@ nav button.act{color:var(--acc)}
     <span class="kop">Sieć WiFi pudełka
       <div class="dim2" id="kafelWifi">—</div></span></button>
 
+  <button class="kafel" onclick="showTab('tg')">
+    <span class="kop">Powiadomienia na telefon
+      <div class="dim2" id="kafelTg">—</div></span></button>
+
   <button class="kafel" onclick="showTab('dev')">
     <span class="kop">Urządzenie
       <div class="dim2" id="kafelDev">stan pudełka, wersja, wylogowanie</div></span></button>
@@ -898,6 +902,78 @@ nav button.act{color:var(--acc)}
       Wyślij sieć do pudełka</button>
     <div id="netMsg" class="dim2" style="text-align:center;margin-top:8px;min-height:15px"></div>
     <div id="netStan" style="margin-top:10px"></div>
+  </div>
+</section>
+
+<!-- ═══════════════ POWIADOMIENIA NA TELEFON (D67) ═══════════════
+
+     Wysyła PUDEŁKO, nie ta aplikacja — i to jest jedyny powód, dla którego
+     całość w ogóle działa. Strona dodana do ekranu głównego iPhone'a nie
+     dostaje od systemu ani sekundy procesora, kiedy jej nie patrzysz;
+     o 20:00 nie ma jak niczego przypomnieć. Pudełko właśnie wtedy jest
+     wybudzone, bo skończyło dzwonić.
+
+     Cena jest jedna i mówimy o niej wprost na ekranie: powiadomienie
+     wymaga, żeby PUDEŁKO miało internet. Ta sama granica, która dotyczy
+     dawek jadących do kalendarza — nie nowa.                            -->
+<section id="tab-tg" class="hide">
+  <div class="card">
+    <div class="muted">
+      Pudełko napisze Ci na Telegramie, gdy zadzwoni o porze przypomnienia
+      i nikt go nie otworzy. Osobno — raz — ostrzeże, gdy bateria będzie na
+      wyczerpaniu.
+    </div>
+    <div class="dim2" style="margin-top:8px;line-height:1.5">
+      <b>Wiadomość wysyła pudełko, nie ta aplikacja.</b> Dzięki temu przyjdzie
+      także wtedy, gdy telefon leży zablokowany w kieszeni — ale wymaga, żeby
+      pudełko miało w tej chwili internet.
+    </div>
+
+    <div id="tgStan" style="margin-top:14px"></div>
+
+    <!-- Instrukcja jest częścią mechanizmu, nie ozdobą obok niego: bez bota
+         u BotFathera nie ma tokenu, a bez tokenu ten ekran nie ma co zapisać.
+         Trzy kroki, w kolejności, w której się je wykonuje.              -->
+    <div class="card" style="margin-top:14px;background:var(--card2)">
+      <b>Jak to podłączyć — trzy kroki</b>
+      <div class="dim2" style="margin-top:8px;line-height:1.6">
+        <b>1.</b> W Telegramie znajdź <b>@BotFather</b> i napisz do niego
+        <b>/newbot</b>. Poda nazwę i długi token — skopiuj go.<br>
+        <b>2.</b> Znajdź swojego nowego bota i napisz do niego cokolwiek,
+        choćby <b>/start</b>. Bez tego Telegram nie pozwoli mu odezwać się
+        pierwszemu.<br>
+        <b>3.</b> Wklej token poniżej i naciśnij <i>Znajdź mnie</i>.
+      </div>
+    </div>
+
+    <label style="margin-top:14px">Token bota od BotFathera</label>
+    <input id="tgToken" maxlength="64" autocapitalize="off" autocorrect="off"
+           spellcheck="false" placeholder="np. 1234567890:AAH...">
+    <div class="row" style="margin-top:10px;gap:8px">
+      <button class="ghost" style="flex:1" onclick="tgZnajdzCzat()">Znajdź mnie</button>
+    </div>
+    <label style="margin-top:10px">Identyfikator czatu</label>
+    <input id="tgChat" maxlength="24" inputmode="numeric" autocapitalize="off"
+           autocorrect="off" spellcheck="false" placeholder="wypełni się sam">
+    <div class="dim2" style="margin-top:6px;font-size:12px">
+      <i>Znajdź mnie</i> odczytuje go z wiadomości, którą napisałeś do bota.
+      Jeśli nie zadziała, wpisz go ręcznie — pokaże Ci go bot <b>@userinfobot</b>.
+    </div>
+
+    <button class="primary" style="width:100%;margin-top:12px" onclick="tgPolacz()">
+      Wyślij bota do pudełka</button>
+    <div id="tgMsg" class="dim2" style="text-align:center;margin-top:8px;min-height:15px"></div>
+
+    <button class="ghost" style="width:100%;margin-top:12px" onclick="tgProbna()">
+      Wyślij wiadomość próbną</button>
+    <div class="dim2" style="margin-top:6px;font-size:12px">
+      Pudełko napisze ją przy najbliższym połączeniu — czyli zwykle przy
+      następnym otwarciu wieczka. To jedyny sposób sprawdzenia bota bez
+      czekania na pominiętą dawkę.
+    </div>
+
+    <button class="danger" style="width:100%;margin-top:12px" onclick="tgOdlacz()">
+      Odłącz bota</button>
   </div>
 </section>
 
@@ -1198,7 +1274,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-12.43";
+const APP_VERSION = "2026-08-17.44";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -3880,6 +3956,7 @@ function renderStatus(st){
   const chip = document.getElementById("batChip");
   renderOpenWarn(st);
   renderNetStan();              // lista znanych sieci przychodzi w statusie
+  renderTgStan();               // `tg` i `tgMsg` też przychodzą w statusie
   renderSkan();                 // "czekam / nie przyszlo" liczy sie z lastSeen
   renderOta();                  // wersja programu i stan aktualizacji też
   renderKafelki();              // podpis kafelka WiFi też z niej korzysta
@@ -4117,6 +4194,18 @@ function renderKafelki(){
       ? `połączone przez ${st.ssid}` + (ile ? ` · zna ${ile}` : "")
       : (ile ? `zna ${ile} ${ile === 1 ? "sieć" : "sieci"}` : "brak danych z pudełka");
   }
+
+  /* Podpis mówi STAN, nie nazwę działu: „bot podłączony" kontra „niepodłączony"
+     to jedyne, po co się tu zagląda. Trzeci przypadek — starszy firmware,
+     który tego pola nie przysyła — nie może wyglądać jak „niepodłączony",
+     bo kazałby szukać usterki tam, gdzie jej nie ma. */
+  const tg = document.getElementById("kafelTg");
+  if (tg){
+    const st = ostatniStatus || {};
+    tg.textContent = st.tg === true  ? "bot Telegram podłączony"
+                   : st.tg === false ? "bot niepodłączony — pudełko nie napisze"
+                   : "wymaga programu pudełka 1.45.0";
+  }
 }
 
 function renderSettings(){
@@ -4144,6 +4233,7 @@ function renderSettings(){
   renderWeekEditor();
   renderExceptions();
   renderNetStan();
+  renderTgStan();               // `tgNowy` / `tgCmd` z konfiguracji mówią, że czekają
   renderSkan();                 // `wifiScan` z konfiguracji mówi, że szuka
   renderOta();                  // `otaCmd` z konfiguracji mówi, że czeka
   document.getElementById("drugName").value = cfg.drugName || "Warfin";
@@ -4285,6 +4375,193 @@ window.wyslijSiec = async () => {
   msg.style.color = "var(--ok)";
   renderNetStan();
 };
+
+/* ═══════════════ POWIADOMIENIA NA TELEFON — BOT TELEGRAM (D67) ═══════════════
+
+   Aplikacja robi tu trzy rzeczy i żadna z nich nie jest wysyłaniem
+   wiadomości: sprawdza token, znajduje identyfikator czatu i przekazuje
+   jedno i drugie pudełku. Samo pisanie należy do pudełka — patrz komentarz
+   przy sekcji `tab-tg`.
+
+   Z Telegramem rozmawia PRZEGLĄDARKA, która certyfikat sprawdza. To nie
+   jest drobiazg: pudełko łączy się z `setInsecure()`, więc gdyby ono miało
+   weryfikować token, nie odróżniłoby prawdziwej odpowiedzi od podstawionej.
+   Tutaj weryfikacja jest darmowa i prawdziwa, a pudełko dostaje już tylko
+   sprawdzone dane.                                                       */
+
+/* Token ma stały kształt: liczba, dwukropek, ciąg znaków. Sprawdzamy go
+   TUTAJ, zanim cokolwiek poleci do bazy — reguły odrzuciłyby literówkę
+   dopiero po zapisie, a odmowa bazy wygląda dla użytkownika identycznie
+   jak awaria i nie mówi, co poprawić. */
+function tgTokenPoprawny(t){
+  return /^\d{5,}:[A-Za-z0-9_-]{20,}$/.test(t);
+}
+
+/* Zapytania do Telegrama idą przez `fetch` z limitem czasu. Bez limitu
+   przycisk „Znajdź mnie" potrafi wisieć bez końca w metrze, a to jedyny
+   moment, w którym użytkownik nie wie, czy coś się dzieje.
+
+   AbortSignal.timeout() nie jest tu użyte świadomie — Safari dostało je
+   dopiero w 16.4, a ta aplikacja ma działać także na starszym iOS. */
+async function tgZapytaj(token, metoda){
+  const ctrl = new AbortController();
+  const stoper = setTimeout(() => ctrl.abort(), 8000);
+  try {
+    const r = await fetch(`https://api.telegram.org/bot${token}/${metoda}`,
+                          { signal: ctrl.signal, cache: "no-store" });
+    const j = await r.json();
+    /* Telegram odpowiada HTTP 200 także na błąd logiczny, a treść błędu
+       siedzi w `description` — więc na sam kod HTTP patrzeć nie wolno. */
+    if (!j.ok) throw new Error(j.description || "Telegram odmówił");
+    return j.result;
+  } finally {
+    clearTimeout(stoper);
+  }
+}
+
+window.tgZnajdzCzat = async () => {
+  const token = document.getElementById("tgToken").value.trim();
+  const msg   = document.getElementById("tgMsg");
+  const pokaz = (t, kolor) => { msg.textContent = t; msg.style.color = `var(--${kolor})`; };
+
+  if (!tgTokenPoprawny(token)){
+    pokaz("To nie wygląda na token od BotFathera — skopiuj go jeszcze raz, całość.", "bad");
+    return;
+  }
+  pokaz("Pytam Telegrama…", "warn");
+  try {
+    /* Najpierw `getMe`: rozstrzyga, czy token w ogóle żyje. Bez tego kroku
+       zły token i brak wiadomości do bota dają ten sam komunikat, a to dwie
+       zupełnie różne rzeczy do naprawienia. */
+    const bot = await tgZapytaj(token, "getMe");
+    const updates = await tgZapytaj(token, "getUpdates");
+    /* Bierzemy NAJNOWSZĄ wiadomość, nie pierwszą: gdyby ktoś parował bota
+       po raz drugi z innego konta, pierwsza pokazywałaby stary czat. */
+    let chat = null;
+    for (const u of (updates || [])){
+      const c = u?.message?.chat || u?.my_chat_member?.chat;
+      if (c?.id != null) chat = String(c.id);
+    }
+    if (!chat){
+      pokaz(`Bot @${bot.username} działa, ale nie napisałeś jeszcze do niego. `
+            + "Wyślij mu /start i naciśnij ponownie.", "warn");
+      return;
+    }
+    document.getElementById("tgChat").value = chat;
+    pokaz(`Znalazłem: bot @${bot.username}, czat ${chat}. Teraz wyślij go do pudełka.`, "ok");
+  } catch (e){
+    /* Przeglądarka blokuje część zapytań między domenami i wtedy nie podaje
+       powodu — komunikat musi więc kierować do drogi ręcznej, a nie kończyć
+       się na „nie udało się". Ręczne wpisanie zostaje na zawsze, dokładnie
+       z tego samego powodu, dla którego zostaje ręczne wpisywanie sieci
+       WiFi: droga automatyczna nie może zabierać tej, która działa zawsze. */
+    pokaz("Nie mogę zapytać Telegrama (" + (e.message || "brak połączenia")
+          + "). Wpisz identyfikator czatu ręcznie — poda go @userinfobot.", "bad");
+  }
+};
+
+window.tgPolacz = async () => {
+  const token = document.getElementById("tgToken").value.trim();
+  const chat  = document.getElementById("tgChat").value.trim();
+  const msg   = document.getElementById("tgMsg");
+  const pokaz = (t, kolor) => { msg.textContent = t; msg.style.color = `var(--${kolor})`; };
+
+  if (!tgTokenPoprawny(token)){
+    pokaz("Najpierw wklej poprawny token od BotFathera.", "bad"); return;
+  }
+  /* Identyfikator czatu bywa ujemny (grupy), więc nie sprawdzamy „liczba
+     dodatnia", tylko kształt. Reguły bazy pilnują długości. */
+  if (!/^-?\d{3,}$/.test(chat)){
+    pokaz("Identyfikator czatu to sama liczba — użyj „Znajdź mnie” albo wpisz ją ręcznie.", "bad");
+    return;
+  }
+  /* Token i czat idą JEDNYM polem `tgNowy`, nie dwoma osobnymi: reguły bazy
+     wymagają obu naraz, a pudełko zapisuje je razem albo wcale. Połowiczna
+     konfiguracja wyglądałaby jak działająca i nie byłaby.
+
+     `ts` nie jest ozdobą — bez niego nie da się odróżnić „pudełko jeszcze
+     się nie łączyło" od „łączyło się i bota NIE przyjęło". Ta sama lekcja
+     co przy `wifiNowa` i przy aktualizacji. */
+  cfg.tgNowy = { token, chat, ts: Math.floor(Date.now()/1000) };
+  await zapiszCfg({ tgNowy: cfg.tgNowy }, "Bot Telegram");
+  document.getElementById("tgToken").value = "";
+  pokaz("Wysłane — pudełko odbierze bota przy najbliższym połączeniu.", "ok");
+  renderTgStan();
+};
+
+window.tgProbna = async () => {
+  cfg.tgCmd = { akcja: "test", ts: Math.floor(Date.now()/1000) };
+  await zapiszCfg({ tgCmd: cfg.tgCmd }, "Wiadomość próbna");
+  toast("Zlecone — pudełko napisze przy najbliższym połączeniu", "ok", 3600);
+  renderTgStan();
+};
+
+window.tgOdlacz = async () => {
+  if (!confirm("Odłączyć bota? Pudełko przestanie wysyłać powiadomienia.")) return;
+  cfg.tgCmd = { akcja: "usun", ts: Math.floor(Date.now()/1000) };
+  await zapiszCfg({ tgCmd: cfg.tgCmd }, "Odłączenie bota");
+  /* Kasujemy też ewentualne zaległe `tgNowy` — inaczej pudełko odebrałoby
+     najpierw odłączenie, a potem z tej samej konfiguracji podłączyło bota
+     z powrotem. Kolejność czytania w `fetchConfig()` jest właśnie taka. */
+  if (cfg.tgNowy){
+    cfg.tgNowy = null;
+    await zapiszCfg({ tgNowy: null }, "Odłączenie bota");
+  }
+  toast("Zlecone — pudełko odłączy bota przy najbliższym połączeniu", "ok", 3600);
+  renderTgStan();
+};
+
+/* Stan podłączenia, widziany z trzech stron naraz: co mówi pudełko, co
+   jeszcze czeka w bazie i jak dawno pudełko się odzywało.
+
+   Rozróżnienie „nie łączyło się od zlecenia" kontra „łączyło się i nie
+   przyjęło" jest tu tym samym mechanizmem co przy sieci WiFi i przy
+   aktualizacji — i tą samą lekcją, która w tym projekcie wracała cztery
+   razy: „nie wiem" jest osobnym stanem, nie łagodniejszą odmianą „nie". */
+function renderTgStan(){
+  const box = document.getElementById("tgStan");
+  if (!box) return;
+  const st = ostatniStatus || {};
+  const czeka = cfg.tgNowy?.token;
+  const cmd = cfg.tgCmd?.akcja;
+  let html = "";
+
+  if (st.tg === true){
+    html += `<div class="dim2" style="color:var(--ok)">
+      <b>Bot podłączony.</b> Pudełko ma token w swojej pamięci i może pisać.</div>`;
+  } else if (st.tg === false){
+    html += `<div class="dim2" style="color:var(--warn)">
+      <b>Pudełko nie ma jeszcze bota.</b> Przejdź trzy kroki poniżej.</div>`;
+  } else {
+    /* Starszy firmware nie przysyła tego pola wcale. Milczenie o czymś,
+       czego nie wiemy, jest lepsze niż zgadnięcie „nie ma". */
+    html += `<div class="dim2">Pudełko nie zgłosiło jeszcze, czy ma bota —
+      wymaga programu 1.45.0 albo nowszego.</div>`;
+  }
+
+  if (czeka){
+    const wyslane  = +cfg.tgNowy?.ts || 0;
+    const widziane = +st.lastSeen || 0;
+    const minelo = wyslane && widziane && widziane > wyslane + 60;
+    html += minelo
+      ? `<div class="dim2" style="color:var(--bad);margin-top:8px">
+           <b>Pudełko łączyło się po wysłaniu i bota nie przyjęło.</b><br>
+           ${st.tgMsg ? `Powód z pudełka: <b>${esc(st.tgMsg)}</b><br>` : ""}
+           Sprawdź token — musi się zgadzać co do znaku.</div>`
+      : `<div class="dim2" style="color:var(--warn);margin-top:8px">
+           Token czeka na pudełko. Zniknie stąd sam, gdy pudełko go odbierze
+           i zapisze u siebie.</div>`;
+  }
+  if (cmd){
+    html += `<div class="dim2" style="color:var(--warn);margin-top:8px">
+      Czeka na pudełko: ${cmd === "usun" ? "odłączenie bota" : "wiadomość próbna"}.</div>`;
+  }
+  if (!czeka && st.tgMsg){
+    html += `<div class="dim2" style="margin-top:8px">
+      Ostatnio z pudełka: <b>${esc(st.tgMsg)}</b></div>`;
+  }
+  box.innerHTML = html;
+}
 
 /* ═══════════════ AKTUALIZACJA PROGRAMU PUDEŁKA (D59) ═══════════════
 
@@ -5509,6 +5786,7 @@ const EKRANY = {
   lek:  { tytul:"Lek i dawkowanie",    nav:"set", wraca:"set" },
   sinr: { tytul:"INR",                 nav:"set", wraca:"set" },
   wifi: { tytul:"Sieć WiFi pudełka",   nav:"set", wraca:"set" },
+  tg:   { tytul:"Powiadomienia",       nav:"set", wraca:"set" },
   dev:  { tytul:"Urządzenie",          nav:"set", wraca:"set" },
   diag: { tytul:"Diagnostyka",         nav:"set", wraca:"set" },
   ev:   { tytul:"Zdarzenia z pudełka", nav:"set", wraca:"diag" },
@@ -5543,6 +5821,7 @@ window.showTab = t => {
   if (t === "lek")  renderSettings();
   if (t === "sinr") renderSettings();
   if (t === "wifi") renderSettings();
+  if (t === "tg")   renderTgStan();
   /* Opis wersji firmware pytamy PRZY KAŻDYM wejściu na ten ekran, a nie
      tylko raz przy starcie aplikacji.
 

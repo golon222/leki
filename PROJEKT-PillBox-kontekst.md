@@ -324,6 +324,12 @@ naprawy.
   wybudzenia: otwarcia wieczka, ładowarki i wybudzenia o 3:00.
   `otaSprobuj()` **sam dopytuje bazę** o zlecenie, zamiast ufać temu, co
   `fetchConfig()` widziało na początku wybudzenia (3.11c).
+- **Powiadomienie na telefon** (bot Telegram, D67): po każdym nieodebranym
+  przypomnieniu i raz przy słabej baterii. Alarm tylko **zapamiętuje zamiar**;
+  wysyłka idzie z `goToSleep()` i jako **pierwsza** z trzech rzeczy przed snem
+  — przed skanem (potrafi zerwać łącze) i przed aktualizacją (kończy się
+  restartem). Przy pustej skrzynce funkcja wychodzi przed włączeniem radia.
+  Powiadomienie starsze niż 3 h kasuje się zamiast wysyłać.
 - **Skan sieci WiFi na żądanie** (`config/wifiScan`): pudełko rozgląda się
   dookoła i publikuje listę z siłą sygnału do własnej gałęzi `scan`. Chodzi
   w `goToSleep()` z tego samego powodu co OTA — zabiera radio na kilka sekund
@@ -359,6 +365,13 @@ naprawy.
   (wtedy jest przycisk, który naprawdę wznawia). Trzeci stan nie może pojawiać
   się w trakcie udanej aktualizacji — przez minutę pobierania `lastSeen` jest
   już świeższy niż zlecenie, więc rozstrzyga `otaProsba` z pudełka, nie zegar.
+- **Ekran „Powiadomienia na telefon"** (D67): trzy kroki parowania bota,
+  automatyczne znalezienie identyfikatora czatu (przeglądarka rozmawia
+  z Telegramem po **sprawdzonym** certyfikacie, czego pudełko nie potrafi)
+  i wpisanie ręczne, które zostaje na zawsze — droga automatyczna nie może
+  zabierać tej, która działa zawsze. Stan bota rozróżnia trzy przypadki:
+  „podłączony", „niepodłączony" i **„starszy firmware o tym nie mówi"** —
+  bo „nie wiem" jest osobnym stanem, nie łagodniejszą odmianą „nie".
 - **Lista sieci widzianych przez pudełko** — przycisk nad polem nazwy. Ręczne
   wpisywanie zostaje nietknięte i **musi zostać**: sieci ukrytych żaden skan nie
   pokaże. Aplikacja nie skanuje sama, bo Safari nie udostępnia takiego API —
@@ -445,6 +458,14 @@ Uczciwie, bo to ma znaczenie przy ocenie ryzyka.
 - **Jakim kodem baza odrzuca wpis łamiący reguły.** Decyzja D13 zakłada 400 — bo
   tylko wtedy `trwaleOdrzucony()` zdejmie wpis z kolejki. Nikt tego nie zmierzył;
   `pushEventRecord()` loguje teraz odpowiedź bazy, więc pierwszy log rozstrzygnie.
+- **Powiadomienia Telegram — nigdy nie wysłane z prawdziwego pudełka** (D67).
+  Kod kompiluje się i przechodzi 82 kontrole, ale ani jedna wiadomość nie
+  przeszła jeszcze przez `api.telegram.org` z płytki. Nieznane pozostają
+  trzy rzeczy: czy TLS do Telegrama zestawia się przy zajętym kanale do
+  Firebase (dlatego kanał zwalniamy — ale to obrona, nie pomiar), ile
+  naprawdę kosztuje jedno takie wybudzenie w mAh, i czy Telegram nie
+  odrzuca zapytań z tego adresu IP. Rozstrzygnie to przycisk **„wyślij
+  wiadomość próbną"** — po to powstał.
 - **Prąd ładowania 350 mA** to wartość katalogowa XIAO, nie pomiar. Szacunek
   czasu ładowania opiera się na niej i na założeniu ~250 mA netto.
 - **Model wykrywania ładowania** testowany na przebiegach wymyślonych z tych
@@ -474,9 +495,30 @@ Uczciwie, bo to ma znaczenie przy ocenie ryzyka.
    że hasła WiFi przechodzą przez bazę. Reguły ograniczają dostęp do właściciela
    i pudełka, ale to była decyzja świadoma, nie przypadek.
 
-1. **Powiadomienia push na telefon** — odłożone do hasła **„dawaj kod"**.
-   Rekomendacja: bot Telegram (jedno zapytanie HTTP z pudełka, darmowe,
-   natywne powiadomienia na iPhonie).
+1. ~~**Powiadomienia push na telefon**~~ — **ZROBIONE w 1.45.0** (D67), na
+   hasło Kuby: *„Dobra czas telegrama zrobić żeby przychodził mi sms"*.
+
+   Bot Telegram, wiadomość wysyła **pudełko**. To nie jest szczegół
+   implementacji, tylko cała konstrukcja: strona dodana do ekranu głównego
+   iPhone'a nie dostaje od systemu ani sekundy procesora, kiedy nikt na nią
+   nie patrzy — o 20:00 nie ma jak niczego przypomnieć. Pudełko właśnie
+   wtedy jest wybudzone, bo skończyło dzwonić.
+
+   **Kiedy pisze** (zakres wybrał Kuba, jest węższy niż proponowany):
+   po **każdym** nieodebranym przypomnieniu oraz **raz** przy słabej
+   baterii. Bez potwierdzeń wzięcia i bez domykania doby — powiadomienie,
+   które przychodzi codziennie, przestaje być powiadomieniem.
+
+   **Rozjeżdża się z „missed" świadomie.** Wpis `missed` powstaje dopiero
+   przy ostatnim przypomnieniu doby (**D64**, dane), a wiadomość leci po
+   każdym — ma dotrzeć wtedy, gdy da się jeszcze coś z tym zrobić.
+
+   **Czego to NIE potrafi, i tak też jest napisane na ekranie:** wymaga,
+   żeby **pudełko** miało internet. Bez sieci nie przyjdzie nic — ta sama
+   granica, która obowiązuje dawki jadące do kalendarza.
+
+   **Nie sprawdzone na płytce.** Kod się kompiluje i przechodzi testy;
+   pierwszym dowodem będzie przycisk „wyślij wiadomość próbną".
 2. **Tanie wybudzenie kontrolne co 30 min** bez włączania radia, żeby
    wykrywać podłączenie ładowarki szybciej. Zaproponowane, **czeka na decyzję** —
    dokłada warunek obok ścieżki alarmu o dawce, czyli w najbardziej wrażliwym
