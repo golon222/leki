@@ -20,7 +20,7 @@
  * 1. IDENTYFIKATOR URZADZENIA
  * ------------------------------------------------------------------ */
 #define DEVICE_ID           "pillbox01"     // klucz w /devices/<DEVICE_ID>
-#define FW_VERSION          "1.44.0"   // widoczna w aplikacji - po wgraniu sprawdz, czy sie zmienila
+#define FW_VERSION          "1.45.0"   // widoczna w aplikacji - po wgraniu sprawdz, czy sie zmienila
 
 /* ---------------------------------------------------------------------
  * 2. FIREBASE  (Realtime Database + Auth email/haslo)
@@ -498,6 +498,48 @@
 #define OTA_HTTP_TIMEOUT_MS 90000
 #define OTA_HTTP_READ_MS    30000
 #define OTA_BOOT_TRIES      3
+
+/* ---------------------------------------------------------------------
+ * 7k. POWIADOMIENIA NA TELEFON  (bot Telegram)  -  od 1.45.0, D67
+ *
+ *     Dzwonek slychac w domu. Wiadomosc dociera wszedzie - i to jest cala
+ *     roznica: pudelko dzwoni przez dwie minuty do pustego mieszkania,
+ *     a Kuba dowiaduje sie o tym dopiero, gdy wroci.
+ *
+ *     WYSYLA PUDELKO, NIE TELEFON. Aplikacja spi razem z telefonem i nie
+ *     ma jak niczego przypomniec; iOS nie budzi stron internetowych.
+ *     Pudelko w porze przypomnienia i tak jest wybudzone - to jedyne
+ *     miejsce w calym ukladzie, ktore w tej chwili zyje.
+ *
+ *     CO ZA TYM IDZIE, i trzeba to powiedziec wprost: powiadomienie
+ *     wymaga, zeby PUDELKO mialo internet. Bez sieci nie przyjdzie nic -
+ *     dokladnie tak jak nie dojezdza wtedy dawka do kalendarza.
+ *
+ *     TOKEN BOTA NIE STOI TUTAJ. Ten plik jest w repo, a binarke buduje
+ *     automat - token wkompilowany bylby tokenem opublikowanym. Zyje
+ *     w pamieci trwalej (NVS), przyjety z aplikacji dokladnie tak samo
+ *     jak haslo do WiFi: zapis, odczyt kontrolny, i dopiero potem
+ *     kasowanie z bazy (zasada 9). To ta sama decyzja co przy hasle do
+ *     Firebase (zasada 10), tylko dotyczy innego sekretu.
+ *
+ *     TG_MAX_WIEK_S - po tylu sekundach powiadomienie przestaje mie sens
+ *     i kasujemy je zamiast wysylac. "Nie wziales tabletki o 20:00"
+ *     dostarczone nastepnego dnia po poludniu nie jest przypomnieniem,
+ *     tylko dezinformacja: dawka dawno zostala wzieta albo dzien dawno
+ *     zamkniety. Jedyny wyjatek od zasady 6 w tej sekcji, swiadomy -
+ *     i nie dotyczy zadnych danych o leku, tylko samego przypomnienia.
+ *     Dane o dawce jada osobno, kolejka zdarzen, i tych nie gubimy nigdy.
+ *
+ *     TG_BATT_RESET_PCT - powyzej tego poziomu wolno ostrzec o baterii
+ *     ponownie. Bez tego progu jedna wiadomosc na cale zycie urzadzenia
+ *     (a Kuba prosil o JEDNA na rozladowanie, nie o jedna w ogole).
+ * ------------------------------------------------------------------ */
+#define TG_ENABLED          1
+#define TG_HOST             "api.telegram.org"
+#define TG_MAX_WIEK_S       10800           // 3 h - potem juz nie wysylamy
+#define TG_BATT_RESET_PCT   50              // powyzej tego znow wolno ostrzec
+#define TG_TOKEN_MAX        64              // tyle znakow ma token z BotFathera
+#define TG_CHAT_MAX         24              // id czatu to liczba, czasem ujemna
 
 /* ---------------------------------------------------------------------
  * 8. KOLEJKA OFFLINE

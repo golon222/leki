@@ -3098,6 +3098,117 @@ A.renderStatus({ fw: "1.38.0", otaHaslo: true, lastSeen: ZLECONO + 600,
 check(otaHtml().includes("wróciło do poprzedniej"),
       "cofnieta wersja jest widoczna, a nie cicha");
 
+/* ═══════ POWIADOMIENIA NA TELEFON — BOT TELEGRAM (D67) ═══════
+   Aplikacja nie wysyla tu ani jednej wiadomosci - robi to pudelko. Jej
+   robota to sprawdzic token, znalezc czat i przekazac jedno i drugie
+   dalej. Wiec to wlasnie sprawdzamy, plus ekran, ktory ma odpowiadac na
+   pytanie "podlaczylem, i co dalej".                                   */
+head("Bot Telegram: token sprawdzany PRZED zapisem");
+
+const TOKEN_OK = "1234567890:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw";
+check(A.tgTokenPoprawny(TOKEN_OK), "prawdziwy token z BotFathera przechodzi");
+check(!A.tgTokenPoprawny(""), "pusty nie");
+check(!A.tgTokenPoprawny("1234567890"), "sam numer bez czesci tajnej nie");
+check(!A.tgTokenPoprawny("AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw"), "sama czesc tajna nie");
+check(!A.tgTokenPoprawny("123:abc"), "za krotki nie");
+/* Spacje na koncach to najczestsza wpadka przy wklejaniu z Telegrama -
+   dlatego pole jest przycinane, a sam wzorzec ich NIE toleruje.       */
+check(!A.tgTokenPoprawny(" " + TOKEN_OK + " "), "z bialymi znakami nie (pole je przycina)");
+
+const tgHtml = () => document.getElementById("tgStan").innerHTML;
+
+head("Bot Telegram: co pokazuje ekran");
+
+A.__setState({ cfg: {} });
+A.cfg.tgNowy = null; A.cfg.tgCmd = null;
+A.renderStatus({ fw: "1.45.0", tg: true });
+check(tgHtml().includes("Bot podłączony"), "pudelko z botem -> ekran to potwierdza");
+
+A.renderStatus({ fw: "1.45.0", tg: false });
+check(tgHtml().includes("nie ma jeszcze bota"), "pudelko bez bota -> ekran mowi wprost");
+
+/* "Nie wiem" jest OSOBNYM stanem, nie lagodniejsza odmiana "nie" - ta sama
+   lekcja co przy WiFi (D25, D32), kalendarzu (D64) i aktualizacji.
+   Starszy firmware nie przysyla `tg` wcale i nie wolno tego pokazac jako
+   "bot niepodlaczony", bo kazaloby szukac usterki tam, gdzie jej nie ma. */
+A.renderStatus({ fw: "1.44.0" });
+check(!tgHtml().includes("nie ma jeszcze bota"),
+      "starszy firmware NIE jest opisany jako 'bez bota'");
+check(tgHtml().includes("1.45.0"), "...tylko jako program, ktory tego nie umie");
+
+/* Czekajacy token: dwa rozne znaczenia i tylko jedno kaze czekac. */
+const ZLECONO_TG = 1750000000;
+A.cfg.tgNowy = { token: TOKEN_OK, chat: "123456789", ts: ZLECONO_TG };
+A.renderStatus({ fw: "1.45.0", tg: false, lastSeen: ZLECONO_TG - 100 });
+check(tgHtml().includes("czeka na pudełko") || tgHtml().includes("Token czeka"),
+      "pudelko jeszcze sie nie laczylo -> czekamy i nic nie robimy");
+check(!tgHtml().includes("nie przyjęło"), "...i NIE oskarzamy go o awarie");
+
+A.renderStatus({ fw: "1.45.0", tg: false, lastSeen: ZLECONO_TG + 600,
+                 tgMsg: "zapis bota do pamieci NIEUDANY" });
+check(tgHtml().includes("nie przyjęło"),
+      "laczylo sie PO wyslaniu i bota nie ma -> to juz stan wymagajacy reakcji");
+check(tgHtml().includes("NIEUDANY"), "...z powodem prosto z pudelka");
+
+A.cfg.tgNowy = null;
+A.renderStatus({ fw: "1.45.0", tg: true, tgMsg: "wyslane: 1" });
+check(tgHtml().includes("wyslane: 1"), "wynik ostatniej wiadomosci widac na ekranie");
+
+head("Bot Telegram: zapis idzie przez kolejke, nie golym set()");
+
+A.__resetDb();
+A.__setState({ cfg: {} });
+document.getElementById("tgToken").value = TOKEN_OK;
+document.getElementById("tgChat").value  = "123456789";
+await window.tgPolacz();
+const zapisany = A.__db.data?.devices?.pillbox01?.config?.tgNowy;
+check(zapisany?.token === TOKEN_OK, "token dojechal do bazy");
+check(zapisany?.chat === "123456789", "razem z czatem - jednym polem, nie dwoma");
+check(typeof zapisany?.ts === "number" && zapisany.ts > 0,
+      "ze znacznikiem czasu, bez ktorego nie da sie odroznic 'czeka' od 'odrzucone'");
+check(document.getElementById("tgToken").value === "",
+      "pole tokenu czysci sie po wyslaniu - sekret nie zostaje na ekranie");
+
+/* Zly token nie ma prawa dojechac do bazy: reguly odrzucilyby go dopiero
+   po zapisie, a odmowa bazy wyglada dla uzytkownika jak awaria i nie mowi,
+   co poprawic.
+
+   UWAGA NA TO, CO TEN TEST NAPRAWDE MIERZY. Pierwsza wersja podawala tu
+   napis "bzdura" - i przechodzila takze po USUNIECIU calej walidacji
+   z `tgPolacz()`, bo zapis odrzucaly wtedy reguly bazy (token krotszy niz
+   21 znakow). Test pilnowal wiec regul, nie aplikacji. Dlatego oba
+   przypadki ponizej sa tak dobrane, zeby REGULY JE PRZEPUSCILY: jedyna
+   przeszkoda zostaje ta, o ktora chodzi. Sprawdzone mutacja.          */
+A.__resetDb();
+document.getElementById("tgToken").value = "AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsawQQQ"; // 37 znakow, bez dwukropka
+document.getElementById("tgChat").value  = "123456789";
+await window.tgPolacz();
+check(!A.__db.data?.devices?.pillbox01?.config?.tgNowy,
+      "token bez czesci numerycznej nie trafia do bazy - blokuje go APLIKACJA");
+
+A.__resetDb();
+document.getElementById("tgToken").value = "bzdura";
+document.getElementById("tgChat").value  = "123456789";
+await window.tgPolacz();
+check(!A.__db.data?.devices?.pillbox01?.config?.tgNowy,
+      "token nie z tej parafii nie trafia do bazy w ogole");
+
+A.__resetDb();
+document.getElementById("tgToken").value = TOKEN_OK;
+document.getElementById("tgChat").value  = "nie-liczba";
+await window.tgPolacz();
+check(!A.__db.data?.devices?.pillbox01?.config?.tgNowy,
+      "czat, ktory nie jest liczba, tez nie");
+
+/* KAZDY zapis uzytkownika idzie przez zapiszPewnie() (zasada 5). Firebase
+   offline nie odrzuca obietnicy, tylko wisi - gole set() pokazaloby sukces
+   przy danych, ktore nigdzie nie dotarly.                              */
+const zrodloTg = html.slice(html.indexOf("window.tgPolacz"),
+                            html.indexOf("function renderTgStan"));
+check(zrodloTg.includes("zapiszCfg("),
+      "podlaczenie bota idzie przez zapiszCfg()/zapiszPewnie()");
+check(!/\bset\(/.test(zrodloTg), "i nigdzie nie siega po gole set()");
+
 head("Zgodnosc wersji aplikacji");
 check(/const APP_VERSION = "([\d.\-]+)"/.test(html), "index.html deklaruje wersje");
 const av = html.match(/const APP_VERSION = "([\d.\-]+)"/)?.[1];

@@ -23,8 +23,8 @@ bash tests/run_all.sh
 ```
 
 Musi przejść przed zmianą i po zmianie. Stan wyjściowy:
-**484 + 51 firmware, 888 (×6 pór doby) + 92 + 49 aplikacja, 48 zgodności,
-105 reguł bazy, 276 kontroli audytu — 0 błędów.**
+**517 + 51 firmware, 915 (×6 pór doby) + 92 + 49 aplikacja, 48 zgodności,
+119 reguł bazy, 296 kontroli audytu — 0 błędów.**
 
 **Runner jest cichy przy sukcesie i głośny przy błędzie** (D66). Udany przebieg
 to 12 linii: jedna na krok, z liczbą zaliczonych kontroli. Krok, który zawiedzie,
@@ -158,6 +158,20 @@ Test to złapie, ale komunikat zrozumiesz szybciej, znając powód (D6, D13, D15
    `scan`** (D65) i kasuje zlecenie `wifiScan` dopiero po potwierdzonym
    zapisie listy.
 
+12. **Token bota Telegram idzie tą samą drogą co hasło WiFi i podlega tej
+   samej zasadzie 9** (D67). Aplikacja → baza → zapis w NVS → **odczyt
+   kontrolny** → dopiero potem kasowanie z bazy. W `config.h` stać nie może
+   z tego samego powodu co hasło do Firebase (ograniczenie 10): binarkę
+   buduje automat z publicznego repo.
+   Wysyłka rusza **wyłącznie z `goToSleep()`** i jako **pierwsza** z trzech
+   rzeczy przed snem — skan potrafi zerwać łącze, a udana aktualizacja
+   kończy się restartem. Przy pustej skrzynce `tgWyslijZalegle()` wychodzi
+   **przed** włączeniem radia; zwykłe wybudzenie nie płaci za to nic.
+   Powiadomienie starsze niż `TG_MAX_WIEK_S` **kasujemy zamiast wysyłać** —
+   jedyny wyjątek od zasady 6 w tym obszarze, i nie dotyczy żadnych danych
+   o leku. Token nie trafia **ani do logu, ani do statusu**. Audyt pilnuje
+   każdego z tych punktów.
+
 Blok pomiaru napięcia **wolno** zmieniać (zakaz zniesiony). Audyt nie blokuje —
 zgłasza tylko uwagę, żeby zmiana przypadkowa nie wyglądała jak świadoma.
 
@@ -200,8 +214,8 @@ naprawdę wgrywa. Nie jest częścią `run_all.sh`: wymaga sieci i ~500 MB
 toolchainu (pierwsze uruchomienie kilka minut, kolejne szybkie).
 **Uruchom to po każdej zmianie w firmware.**
 
-Stan: `PillBox.ino` **63% flasha** (1,24 MB z 1,875 MB), `PillBoxTest.ino` 20%.
-Zapas ~724 kB.
+Stan: `PillBox.ino` **63% flasha** (1 248 053 B z 1,875 MB), `PillBoxTest.ino` 20%.
+Zapas ~718 kB.
 
 **Podział pamięci musi być `Minimal SPIFFS (1.9MB APP with OTA/190KB SPIFFS)`**,
 bo tak jest w nagłówku szkicu. Zmieniony w 1.38.0 z `Huge APP` (D59):
@@ -223,6 +237,9 @@ Szczegóły obejść (ctags, `.cpp` zamiast `.ino`, atrapa `dfu-util`) — D17.
 
 - Firmware **się kompiluje**, ale **nigdy nie było uruchomione z tego repo** na
   płytce. Kompilacja niczego nie wgrywa. Nie twierdź, że „działa".
+- **Powiadomienia Telegram (1.45.0) — ani jedna wiadomość nie wyszła jeszcze
+  z płytki.** Kod się kompiluje i ma 82 kontrole, ale to nie jest dowód.
+  Rozstrzygnie przycisk „wyślij wiadomość próbną" — po to powstał.
 - Prąd ładowania 350 mA to wartość katalogowa, nie pomiar.
 - **Jakim kodem baza odrzuca wpis łamiący reguły.** Cała decyzja D13 zakłada
   400 — bo tylko wtedy `trwaleOdrzucony()` zdejmie wpis z kolejki. Nikt tego
@@ -264,4 +281,5 @@ Szczegóły obejść (ctags, `.cpp` zamiast `.ino`, atrapa `dfu-util`) — D17.
   jego konkretny opis z liczbami.
 - Gdy coś jest niepewne — powiedz wprost, że to hipoteza, i **dołóż pomiar**
   zamiast zgadywać kolejny raz.
-- Powiadomienia push: czeka na hasło **„dawaj kod"**. Rekomendacja: bot Telegram.
+- Powiadomienia na telefon: **zrobione w 1.45.0** (D67) — bot Telegram, wysyła
+  **pudełko**. Nie sprawdzone na płytce; wymaga podłączenia bota w aplikacji.

@@ -92,6 +92,33 @@
               ".validate": false
             }
           },
+          "tgNowy": {
+            ".validate": "newData.hasChildren(['token','chat'])",
+            "token": {
+              ".validate": "newData.isString() && newData.val().length > 20 && newData.val().length <= 64"
+            },
+            "chat": {
+              ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 24"
+            },
+            "ts": {
+              ".validate": "newData.isNumber() && newData.val() > 0"
+            },
+            "$other": {
+              ".validate": false
+            }
+          },
+          "tgCmd": {
+            ".validate": "newData.hasChildren(['akcja'])",
+            "akcja": {
+              ".validate": "newData.isString() && (newData.val() === 'usun' || newData.val() === 'test')"
+            },
+            "ts": {
+              ".validate": "newData.isNumber() && newData.val() > 0"
+            },
+            "$other": {
+              ".validate": false
+            }
+          },
           "drugName": {
             ".validate": "newData.isString() && newData.val().length <= 40"
           },
@@ -117,6 +144,12 @@
         "status": {
           "battery": {
             ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100"
+          },
+          "tg": {
+            ".validate": "newData.isBoolean()"
+          },
+          "tgMsg": {
+            ".validate": "newData.isString() && newData.val().length <= 64"
           },
           "volt": {
             ".validate": "newData.isNumber()"

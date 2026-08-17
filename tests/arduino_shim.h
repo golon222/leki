@@ -118,9 +118,24 @@ public:
      jedynej sciezki, w ktorej dane znikaja po cichu.
      failKeys pozwala udawac awarie konkretnego klucza.                 */
   std::set<std::string> failKeys;
+  /* CICHA STRATA: zapis MELDUJE sukces, a wartosc nie zostaje.
+
+     To jest jedyna awaria, przed ktora broni odczyt kontrolny w
+     `hasloUtrwal()` i `tgUtrwal()` - i dopoki atrapa jej nie umiala,
+     usuniecie tego odczytu przechodzilo przez wszystkie testy. Sprawdzone
+     mutacja: `return zapisC;` zamiast porownania z odczytem nie psulo ani
+     jednej kontroli, bo `failKeys` zwraca zero JUZ z samego zapisu, czyli
+     testuje inna galaz niz ta, o ktora chodzi.
+
+     Czwarty raz ta sama lekcja co w D30, tym razem od strony, ktorej
+     wtedy nie zamknelismy: atrapa umiala zawiesc GLOSNO, a NVS w tym
+     urzadzeniu potrafi zawiesc CICHO (D46, D47) - i wlasnie dlatego
+     kod nie ufa wynikowi zapisu, tylko czyta z powrotem.               */
+  std::set<std::string> cichoGubKlucze;
   size_t putString(const char* k, const String& v) {
     if (failKeys.count(k)) return 0;
     if (strict && !_started) return 0;      // NVS: zapis bez uchwytu nie przechodzi
+    if (cichoGubKlucze.count(k)) return v.s.size();   // "zapisalem" - i nic nie ma
     str[k] = v.s;
     /* PRAWDZIWE putString zwraca liczbe ZAPISANYCH BAJTOW, wiec dla pustego
        napisu ZERO - czyli tyle samo, co zapis nieudany. Atrapa zwracala tu
@@ -165,7 +180,8 @@ public:
     return bylo; }
   void wipe() { str.clear(); us.clear(); sh.clear(); ul.clear(); ui.clear();
                 uc.clear();
-                failKeys.clear(); _started = false; zagniezdzoneBegin = 0; }
+                failKeys.clear(); cichoGubKlucze.clear();
+                _started = false; zagniezdzoneBegin = 0; }
 };
 
 /* ---------- ADC / GPIO ---------- */

@@ -2091,6 +2091,16 @@ head("Kolejka pod nieustajacym 401");
   CHECK(!hasloWPamieci(), "i pudelko NIE uwaza sie za samodzielne");
   prefs.wipe();
 
+  /* A TERAZ AWARIA, PRZED KTORA TEN ODCZYT NAPRAWDE BRONI: zapis melduje
+     sukces i nic nie zostaje. Do 1.45.0 atrapa tego nie umiala, wiec
+     usuniecie odczytu kontrolnego z hasloUtrwal() nie psulo ani jednej
+     kontroli - a to od tej wartosci zalezy zgoda na aktualizacje. */
+  prefs.cichoGubKlucze.insert("fbpass");
+  CHECK(!hasloUtrwal(String("tajne-haslo")),
+        "zapis hasla, ktory MELDUJE sukces i nic nie zapisal, jest wykryty odczytem");
+  CHECK(!hasloWPamieci(), "i pudelko nadal NIE uwaza sie za samodzielne");
+  prefs.wipe();
+
   head("Decyzja o aktualizacji: czego pilnuje");
 
   const String DOBRA  = "0123456789abcdef0123456789abcdef";
@@ -2189,6 +2199,118 @@ head("Kolejka pod nieustajacym 401");
   for (OtaDecyzja d : WSZYSTKIE)
     if (String(otaOpisDecyzji(d)) == String("nieznany stan")) bezOpisu++;
   CHECK(bezOpisu == 0, "kazdy powod odmowy ma swoj opis dla aplikacji (%d bez)", bezOpisu);
+
+  prefs.wipe();
+}
+
+/* ═══════════════ BOT TELEGRAM  (D67) ═══════════════
+   Powiadomienie o pominietej dawce Warfinu na telefon. Wysylka to czyste
+   we/wy (HTTPS), wiec testujemy dwie rzeczy, ktore testowac sie DAJA:
+   pamiec trwala na token i decyzje, czy w ogole pisac.                */
+{
+  head("Bot Telegram: token w pamieci trwalej");
+
+  const String TOKEN = "1234567890:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw";
+  const String CZAT  = "123456789";
+
+  prefs.wipe();
+  CHECK(!tgSkonfigurowany(), "swieze pudelko nie ma bota");
+  CHECK(tgTokenZPamieci().length() == 0, "i nie ma tokenu");
+
+  CHECK(tgUtrwal(TOKEN, CZAT), "zapis tokenu i czatu sie udaje");
+  CHECK(tgSkonfigurowany(), "po zapisie bot jest podlaczony");
+  CHECK(tgTokenZPamieci() == TOKEN, "token wraca z pamieci bez zmian");
+  CHECK(tgChatZPamieci() == CZAT, "czat wraca z pamieci bez zmian");
+
+  /* Odczyt kontrolny - to od niego zalezy, czy skasujemy token z bazy
+     (zasada 9). Zapis "na wiare" dalby stan, w ktorym aplikacja pokazuje
+     "bot podlaczony", pudelko go nie ma, a token zniknal z bazy.      */
+  prefs.wipe();
+  prefs.failKeys.insert("tgTok");
+  CHECK(!tgUtrwal(TOKEN, CZAT), "nieudany zapis tokenu zwraca falsz, nie ciche 'ok'");
+  CHECK(!tgSkonfigurowany(), "i bot NIE jest uznany za podlaczony");
+  prefs.failKeys.clear();
+
+  /* Polowiczna konfiguracja to najgorszy z mozliwych stanow: wyglada jak
+     dzialajaca. Sam czat bez tokenu nie ma czym napisac.              */
+  prefs.wipe();
+  prefs.failKeys.insert("tgChat");
+  CHECK(!tgUtrwal(TOKEN, CZAT), "nieudany zapis CZATU tez zwraca falsz");
+  CHECK(!tgSkonfigurowany(), "polowiczna konfiguracja nie liczy sie jako bot");
+  prefs.failKeys.clear();
+
+  /* CICHA STRATA - jedyna awaria, przed ktora broni odczyt kontrolny.
+     NVS melduje sukces, a wartosci nie ma. Bez tego przypadku usuniecie
+     odczytu z tgUtrwal() przechodzilo przez caly zestaw (D46, D47).  */
+  prefs.wipe();
+  prefs.cichoGubKlucze.insert("tgTok");
+  CHECK(!tgUtrwal(TOKEN, CZAT),
+        "zapis, ktory MELDUJE sukces i nic nie zapisal, jest wykryty odczytem");
+  CHECK(!tgSkonfigurowany(), "i bot NIE jest uznany za podlaczony");
+  prefs.wipe();
+  prefs.cichoGubKlucze.insert("tgChat");
+  CHECK(!tgUtrwal(TOKEN, CZAT), "to samo dla cicho zgubionego czatu");
+  prefs.wipe();
+
+  prefs.wipe();
+  CHECK(!tgUtrwal(String(""), CZAT), "pusty token odrzucamy przed zapisem");
+  CHECK(!tgUtrwal(TOKEN, String("")), "pusty czat odrzucamy przed zapisem");
+  {
+    String zaDlugi;
+    for (int i = 0; i < TG_TOKEN_MAX + 5; i++) zaDlugi += "x";
+    CHECK(!tgUtrwal(zaDlugi, CZAT), "token dluzszy niz limit odrzucamy przed zapisem");
+    String zaDlugiCzat;
+    for (int i = 0; i < TG_CHAT_MAX + 5; i++) zaDlugiCzat += "9";
+    CHECK(!tgUtrwal(TOKEN, zaDlugiCzat), "czat dluzszy niz limit tez odrzucamy");
+  }
+  CHECK(!tgSkonfigurowany(), "zaden z odrzuconych zapisow nie podlaczyl bota");
+
+  CHECK(tgUtrwal(TOKEN, CZAT) && tgSkonfigurowany(), "ponowne podlaczenie dziala");
+  tgZapomnij();
+  CHECK(!tgSkonfigurowany(), "odlaczenie bota kasuje go z pamieci");
+  CHECK(tgTokenZPamieci().length() == 0, "i token naprawde znika, nie tylko flaga");
+
+  head("Bot Telegram: kiedy pisac, a kiedy nie");
+
+  const uint32_t POWSTALO = 1750000000;
+  /* Wzorzec: jest o czym pisac, jest komu, powstalo przed chwila. */
+  CHECK(tgDecyzja(true, true, POWSTALO, POWSTALO + 60) == TG_WYSLIJ,
+        "komplet warunkow -> piszemy");
+
+  /* Pusta skrzynka WYCHODZI PIERWSZA - to jest warunek, dzieki ktoremu
+     zwykle wybudzenie nie placi za te funkcje ani miliampera. Sprawdzamy
+     go takze bez bota, zeby kolejnosc pytan byla wymuszona testem,
+     a nie tylko opisana w komentarzu.                                */
+  CHECK(tgDecyzja(true,  false, POWSTALO, POWSTALO + 60) == TG_NIC,
+        "nic nie czeka -> nie ruszamy radia");
+  CHECK(tgDecyzja(false, false, POWSTALO, POWSTALO + 60) == TG_NIC,
+        "pusta skrzynka wygrywa nawet nad brakiem bota (kolejnosc pytan)");
+
+  CHECK(tgDecyzja(false, true, POWSTALO, POWSTALO + 60) == TG_BRAK_BOTA,
+        "bez bota nie mamy komu pisac - i mowimy to wprost");
+
+  /* Przeterminowanie. "Nie wziales tabletki o 20:00" dostarczone nazajutrz
+     w poludnie nie jest przypomnieniem, tylko dezinformacja - dawka dawno
+     zostala wzieta albo dzien dawno zamkniety.                        */
+  CHECK(tgDecyzja(true, true, POWSTALO, POWSTALO + TG_MAX_WIEK_S + 1) == TG_ZA_STARE,
+        "powiadomienie starsze niz limit -> kasujemy, nie wysylamy");
+  CHECK(tgDecyzja(true, true, POWSTALO, POWSTALO + TG_MAX_WIEK_S) == TG_WYSLIJ,
+        "dokladnie na granicy wieku jeszcze wysylamy");
+  CHECK(tgDecyzja(true, true, POWSTALO, POWSTALO + TG_MAX_WIEK_S - 1) == TG_WYSLIJ,
+        "chwile przed granica oczywiscie tez");
+
+  /* Nieznany czas nie jest powodem do milczenia - ta sama zasada co przy
+     dniach bez leku: milkniemy WYLACZNIE wtedy, gdy wiemy na pewno.  */
+  CHECK(tgDecyzja(true, true, 0, POWSTALO + 999999) == TG_WYSLIJ,
+        "bez znanego czasu powstania wysylamy (nie umiemy zmierzyc wieku)");
+  CHECK(tgDecyzja(true, true, POWSTALO, 0) == TG_WYSLIJ,
+        "bez wiarygodnego zegara wysylamy, zamiast milczec");
+
+  /* Zegar cofniety przez NTP po dlugim offline. Roznica wychodzi ujemna,
+     a na liczbach bez znaku to jest wielka liczba dodatnia - dokladnie
+     ten rodzaj wpadki, ktory kasowalby swieze powiadomienia jako stare. */
+  CHECK(tgDecyzja(true, true, POWSTALO, POWSTALO - 5000) == TG_WYSLIJ,
+        "zegar cofniety w tyl nie robi ze swiezej wiadomosci starej");
 
   prefs.wipe();
 }

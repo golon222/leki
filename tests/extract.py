@@ -34,6 +34,11 @@ WANTED = [
     # hasloJestPrawdziwe musi byc pierwsze - reszta go wola.
     "hasloJestPrawdziwe", "hasloZPamieci", "hasloWPamieci", "hasloUtrwal",
     "hasloDoLogowania", "otaDecyzja", "otaOpisDecyzji",
+    # Bot Telegram (D67). tgSkonfigurowany wola oba czytania, wiec ida przed nim.
+    # tgDecyzja NIE jest tu wymieniona - stoi w bloku @extract razem
+    # z enumem TgDecyzja, wiec trafia do testow tamta droga.
+    "tgTokenZPamieci", "tgChatZPamieci", "tgSkonfigurowany", "tgUtrwal",
+    "tgZapomnij",
     "przesunZnaczniki", "queuePush", "queueCount", "queuePeek", "queuePop", "queueDrop",
     "queueShiftTimestamps", "rekordKompletny", "trwaleOdrzucony", "flushQueue",
     "makeRecordAt", "makeRecord",

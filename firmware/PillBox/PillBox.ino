@@ -188,6 +188,36 @@ RTC_DATA_ATTR uint16_t rtcNvsFailLogSent  = 0;
 
 RTC_DATA_ATTR uint16_t rtcQueueDropped  = 0;    // wpisy zdjete z kolejki bez wyslania
 
+/* --- Powiadomienia na telefon (bot Telegram, D67) ---------------------
+   Zamiar, nie tresc. Trzymamy NUMER przypomnienia i CZAS jego powstania,
+   a zdanie budujemy dopiero przy wysylce - dzieki temu w cennej pamieci
+   RTC leza dwie liczby zamiast bufora na tekst.
+
+   Czas nie jest ozdoba, tylko warunkiem: powiadomienie starsze niz
+   TG_MAX_WIEK_S kasujemy zamiast wysylac. Pudelko bywa offline dobe,
+   a "nie wziales tabletki o 20:00" dostarczone nazajutrz w poludnie
+   informuje o czyms, co dawno przestalo byc prawda.
+
+   rtcTgSlot = -1 znaczy "nie ma czego wysylac". Slot, a nie sama flaga,
+   bo w wiadomosci ma stac GODZINA tego przypomnienia - inaczej dwa
+   przypomnienia w ciagu wieczora daja dwie identyczne wiadomosci i nie
+   wiadomo, ktora jest ktora.                                          */
+RTC_DATA_ATTR int8_t   rtcTgSlot        = -1;   // nieodebrane przypomnienie do zgloszenia
+RTC_DATA_ATTR uint32_t rtcTgSlotTs      = 0;    // ...i kiedy powstalo
+RTC_DATA_ATTR bool     rtcTgBattCzeka   = false;// ostrzezenie o baterii do wyslania
+/* Ostrzezenie o baterii ma przyjsc RAZ na rozladowanie, a nie przy kazdym
+   wybudzeniu ponizej progu (wyrazna prosba Kuby: "tylko jeden jak pudelko
+   ma malo bateri"). Znacznik kasuje sie sam po naladowaniu powyzej
+   TG_BATT_RESET_PCT - inaczej druga wiadomosc nie przyszlaby nigdy.   */
+RTC_DATA_ATTR bool     rtcTgBattZgloszona = false;
+/* Prosba z aplikacji o wiadomosc probna. Zyje do najblizszego snu -
+   po wykonaniu kasujemy zlecenie w bazie, tak samo jak `wifiCmd`.    */
+RTC_DATA_ATTR bool     rtcTgTestProsba  = false;
+/* Co sie stalo z ostatnia wiadomoscia. Idzie do statusu, bo inaczej
+   "bot nie pisze" ma trzy nieodroznialne przyczyny: pudelko nie ma
+   tokenu, ma i Telegram odmowil, albo nie bylo jeszcze o czym pisac.  */
+RTC_DATA_ATTR char     rtcTgMsg[56]     = "";
+
 /* =====================================================================
  *  STAN GLOBALNY
  * ===================================================================== */
@@ -235,6 +265,26 @@ enum OtaDecyzja {
   OTA_PODDANO,          // OTA_MAX_FAILS prob z rzedu bez skutku
   OTA_ZEPSUTA,          // ta wersja juz raz nie wstala
   OTA_ZLY_OPIS          // plik z opisem nie ma sensu (rozmiar, suma)
+};
+/* @extract-end */
+
+/* Co zrobic z czekajacym powiadomieniem na telefon (D67).
+
+   Osobne wartosci, a nie true/false, z tego samego powodu co przy OTA:
+   "nie mam komu wyslac" i "za pozno, zeby to mialo sens" konczy sie tak
+   samo - cisza - a znaczy co innego i co innego trzeba z tym zrobic.
+   Pierwsze kaze podlaczyc bota w aplikacji, drugie jest normalna praca
+   urzadzenia, ktore wrocilo do sieci po dobie offline.
+
+   Stoi TUTAJ, przed pierwsza definicja funkcji, bo `tgDecyzja()` zwraca
+   ten typ (B21/D26). Znaczniki @extract oddaja go testom, zeby nie
+   pracowaly na wlasnej kopii listy.                                    */
+/* @extract-begin */
+enum TgDecyzja {
+  TG_WYSLIJ = 0,        // jest co wyslac, jest komu i nie jest za pozno
+  TG_NIC,               // nic nie czeka
+  TG_BRAK_BOTA,         // nikt nie podlaczyl bota w aplikacji
+  TG_ZA_STARE           // powstalo dawno - wysylka bylaby dezinformacja
 };
 /* @extract-end */
 
@@ -1835,6 +1885,89 @@ String hasloDoLogowania() {
   return String(DEVICE_PASSWORD);
 }
 
+/* --- BOT TELEGRAM: token i czat w pamieci trwalej  (D67) ---------------
+
+   TEN SAM WZOR CO HASLO DO BAZY, i to nie przypadek. Token bota jest
+   sekretem dokladnie tej samej klasy: kto go ma, ten pisze w imieniu bota
+   i czyta wszystko, co ktos do niego napisze. W config.h stac nie moze,
+   bo ten plik jest w repo, a binarke buduje automat - wkompilowany token
+   bylby tokenem opublikowanym przy pierwszej aktualizacji.
+
+   Przychodzi wiec z aplikacji przez baze, ta sama droga co haslo do WiFi,
+   i podlega tej samej zasadzie 9: zapis, ODCZYT KONTROLNY, i dopiero
+   potem kasowanie z bazy. NVS w tym urzadzeniu potrafi zawiesc (D46,
+   D47), a token zapisany "na wiare" dalby stan najgorszy z mozliwych -
+   aplikacja pokazywalaby "bot podlaczony", a wiadomosci nie przyszlyby
+   nigdy i nikt by nie wiedzial dlaczego.                               */
+String tgTokenZPamieci() {
+  prefs.begin(NVS_NAMESPACE, true);
+  String t = prefs.getString("tgTok", "");
+  prefs.end();
+  return t;
+}
+
+String tgChatZPamieci() {
+  prefs.begin(NVS_NAMESPACE, true);
+  String c = prefs.getString("tgChat", "");
+  prefs.end();
+  return c;
+}
+
+/* Bot jest podlaczony dopiero wtedy, gdy sa OBA. Sam token nie ma do kogo
+   napisac, samo id czatu nie ma czym.                                  */
+bool tgSkonfigurowany() {
+  return tgTokenZPamieci().length() > 0 && tgChatZPamieci().length() > 0;
+}
+
+/* Zapis obu wartosci naraz, potwierdzony odczytem. Zwraca false takze
+   wtedy, gdy zapisala sie tylko jedna polowa - polowiczna konfiguracja
+   wygladalaby jak dzialajaca, a nie byla.                              */
+bool tgUtrwal(const String& token, const String& chat) {
+  if (!token.length() || token.length() > TG_TOKEN_MAX) return false;
+  if (!chat.length()  || chat.length()  > TG_CHAT_MAX)  return false;
+  prefs.begin(NVS_NAMESPACE, false);
+  const bool zapisT = nvsPutStr("tgTok", token);
+  const bool zapisC = zapisT ? nvsPutStr("tgChat", chat) : false;
+  const String kontrolaT = zapisC ? prefs.getString("tgTok", "")  : String("");
+  const String kontrolaC = zapisC ? prefs.getString("tgChat", "") : String("");
+  prefs.end();
+  return zapisC && kontrolaT == token && kontrolaC == chat;
+}
+
+void tgZapomnij() {
+  prefs.begin(NVS_NAMESPACE, false);
+  prefs.remove("tgTok");
+  prefs.remove("tgChat");
+  prefs.end();
+}
+
+/* --- Czy w ogole wysylac - i dlaczego nie ----------------------------
+   Wydzielone z `tgWyslijZalegle()` wylacznie po to, zeby dalo sie to
+   przetestowac bez sieci i bez pamieci trwalej, tak samo jak
+   `alarmPotwierdzony()` (D15b) i `otaDecyzja()` (D59). Sama wysylka to
+   czyste we/wy; decyzja da sie sprawdzic na argumentach.
+
+   KOLEJNOSC PYTAN JEST TRESCIA. Najpierw "czy jest o czym pisac" - bo
+   przy pustej skrzynce nie wolno wlaczyc radia ani na sekunde, a to
+   sprawdzenie kosztuje jedno porownanie. Potem "czy jest komu" i dopiero
+   na koncu "czy nie za pozno".
+
+   Nieznany czas nie jest powodem do milczenia. `teraz == 0` znaczy, ze
+   pudelko nie ma wiarygodnego zegara, a `tsPowstania == 0`, ze nie mialo
+   go w chwili zdarzenia - w obu razach nie umiemy zmierzyc wieku
+   wiadomosci i wysylamy ja. To ta sama zasada, co przy dniach bez leku:
+   milkniemy wylacznie wtedy, gdy wiemy na pewno.                       */
+/* @extract-begin */
+TgDecyzja tgDecyzja(bool botPodlaczony, bool cosCzeka,
+                    uint32_t tsPowstania, uint32_t teraz) {
+  if (!cosCzeka)      return TG_NIC;
+  if (!botPodlaczony) return TG_BRAK_BOTA;
+  if (tsPowstania && teraz && teraz > tsPowstania &&
+      teraz - tsPowstania > (uint32_t)TG_MAX_WIEK_S) return TG_ZA_STARE;
+  return TG_WYSLIJ;
+}
+/* @extract-end */
+
 bool firebaseSignIn() {
   if (idToken.length() > 20) {
     /* Zwykle wybudzenie trwa sekundy, wiec token nie zdazy wygasnac.
@@ -2110,6 +2243,20 @@ bool pushStatus() {
      zadnej nie bylo - i to tez jest informacja.                        */
   doc["netMsg"] = rtcNetMsg;
   doc["fw"]       = FW_VERSION;
+#if TG_ENABLED
+  /* Bot Telegram (D67). Dwa pola, bo "bot nie pisze" ma inaczej trzy
+     nieodroznialne z zewnatrz przyczyny: pudelko nie ma tokenu, ma go
+     i Telegram odmawia, albo nie bylo jeszcze o czym pisac. Pierwsza
+     kaze wrocic do ekranu parowania, druga zalozyc bota od nowa,
+     trzecia nie kaze robic nic. Ta sama lekcja co `otaMsg` i `netMsg`.
+
+     Samego tokenu nie wysylamy NIGDY - ani w calosci, ani w skrocie.
+     Aplikacja go zna, bo sama go wpisala; do niczego nie potrzebuje go
+     z powrotem, a status jest jedynym miejscem, ktore pudelko nadpisuje
+     w bazie przy kazdym wybudzeniu.                                   */
+  doc["tg"]     = tgSkonfigurowany();
+  doc["tgMsg"]  = rtcTgMsg;
+#endif
 #if OTA_ENABLED
   /* Aktualizacja przez WiFi (D59). `otaMsg` to odpowiedz na pytanie
      "dlaczego jeszcze nie" - bez niej przycisk w aplikacji wygladalby
@@ -2393,6 +2540,66 @@ void fetchConfig() {
     rtcOtaTs = ota["ts"] | 0UL;
     LOG("[OTA] aplikacja prosi o aktualizacje (zlecenie z %lu) - zrobie to przed snem\n",
         (unsigned long)rtcOtaTs);
+  }
+#endif
+
+#if TG_ENABLED
+  /* --- Bot Telegram przyslany z aplikacji (D67) ------------------------
+     Ta sama skrzynka nadawcza co `wifiNowa` i DOKLADNIE TA SAMA KOLEJNOSC
+     (zasada 9): najpierw zapis do pamieci trwalej, potem sprawdzenie, czy
+     sie udal, i dopiero wtedy kasowanie sekretu z bazy.
+
+     Token bota jest sekretem tej samej klasy co haslo do WiFi: kto go ma,
+     pisze w imieniu bota i czyta wszystko, co ktos do niego napisze.
+     Odwrotna kolejnosc dawalaby stan, w ktorym aplikacja pokazuje "bot
+     podlaczony", pudelko go nie ma, a token zniknal z bazy - czyli trzeba
+     zakladac nowego u BotFathera. Reguly bazy i tak pilnuja dostepu, ale
+     krotszy czas zycia jest tansza obrona niz kazda inna.              */
+  JsonObject tg = doc["tgNowy"].as<JsonObject>();
+  if (!tg.isNull()) {
+    String tok  = tg["token"] | "";
+    String chat = tg["chat"]  | "";
+    if (!tok.length() || !chat.length()) {
+      snprintf(rtcTgMsg, sizeof(rtcTgMsg), "odrzucony: brak tokenu albo czatu");
+    } else if (tgUtrwal(tok, chat)) {
+      int kod = rtdbSend("DELETE", "/devices/" DEVICE_ID "/config/tgNowy.json", "");
+      snprintf(rtcTgMsg, sizeof(rtcTgMsg), "bot przyjety, kasowanie tokenu HTTP %d", kod);
+      LOG("[TG ] bot przyjety z aplikacji, kasowanie tokenu z bazy: HTTP %d\n", kod);
+    } else {
+      snprintf(rtcTgMsg, sizeof(rtcTgMsg), "zapis bota do pamieci NIEUDANY");
+      LOGLN("[TG ] nie udalo sie zapisac bota - token ZOSTAJE w bazie do nastepnej proby");
+    }
+  }
+
+  /* --- Polecenie w sprawie bota: odlacz / napisz probna ---------------
+     Bez tokenu, wiec kasujemy je po wykonaniu tak samo jak `wifiCmd` -
+     takze wtedy, gdy sie nie udalo. Niekasowalne polecenie probowaloby
+     sie wykonac przy kazdym polaczeniu i nie dalo sie odwolac.
+
+     WYJATEK: `test` kasuje sie w `tgWyslijZalegle()`, i to dopiero po
+     udanej wysylce. Powod jest ten sam, dla ktorego istnieje ten przycisk:
+     ma rozstrzygnac, czy bot dziala. Skasowanie zlecenia tutaj znaczyloby,
+     ze proba przepada przy pierwszym braku sieci - a czlowiek widzi cisze
+     i nie wie, czy to bot, czy siec.                                    */
+  JsonObject tgc = doc["tgCmd"].as<JsonObject>();
+  if (!tgc.isNull()) {
+    String akcja = tgc["akcja"] | "";
+    if (akcja == "usun") {
+      tgZapomnij();
+      rtcTgSlot = -1;
+      rtcTgSlotTs = 0;
+      rtcTgBattCzeka = false;
+      rtcTgTestProsba = false;
+      snprintf(rtcTgMsg, sizeof(rtcTgMsg), "bot odlaczony");
+      int kod = rtdbSend("DELETE", "/devices/" DEVICE_ID "/config/tgCmd.json", "");
+      LOG("[TG ] bot odlaczony na zadanie aplikacji (kasowanie HTTP %d)\n", kod);
+    } else if (akcja == "test") {
+      rtcTgTestProsba = true;
+      LOGLN("[TG ] aplikacja prosi o wiadomosc probna - wysle przed snem");
+    } else {
+      snprintf(rtcTgMsg, sizeof(rtcTgMsg), "nieznane polecenie bota");
+      rtdbSend("DELETE", "/devices/" DEVICE_ID "/config/tgCmd.json", "");
+    }
   }
 #endif
 
@@ -4054,6 +4261,247 @@ void autoTest() {
 }
 
 /* =====================================================================
+ * 10b. POWIADOMIENIA NA TELEFON  (bot Telegram, D67)
+ *
+ *      Dzwonek slychac w domu. Wiadomosc dociera wszedzie - i o to tu
+ *      chodzi. Pudelko dzwoni przez dwie minuty do pustego mieszkania,
+ *      a czlowiek dowiaduje sie o pominietej dawce Warfinu dopiero
+ *      wieczorem, gdy wroci i otworzy aplikacje.
+ *
+ *      DLACZEGO WYSYLA PUDELKO. Telefon spi razem z wlascicielem, a iOS
+ *      nie budzi stron dodanych do ekranu glownego - aplikacja fizycznie
+ *      nie ma jak niczego przypomniec o 20:00. Pudelko w tej chwili jest
+ *      wybudzone, bo wlasnie skonczylo dzwonic. To jedyne miejsce w calym
+ *      ukladzie, ktore wtedy zyje.
+ *
+ *      CENA, i mowimy o niej wprost takze w aplikacji: powiadomienie
+ *      wymaga, zeby PUDELKO mialo internet. Bez sieci nie przyjdzie nic.
+ *      To ta sama granica, ktora obowiazuje dawki jadace do kalendarza -
+ *      nie nowa slabosc, tylko ta sama.
+ * ===================================================================== */
+#if TG_ENABLED
+/* Samo zapytanie. Zwraca true wylacznie przy HTTP 200 od Telegrama -
+   od tego zalezy, czy skasujemy czekajace powiadomienie (zasada 6).
+
+   TOKEN IDZIE W ADRESIE, WIEC ADRESU NIE LOGUJEMY. Telegram nie zna
+   innej drogi; nasza jest nie wpisac go do niczego, co Kuba moglby
+   wkleic w zgloszeniu. W logu zostaje sam kod odpowiedzi.
+
+   ZWALNIAMY KANAL DO BAZY, ZANIM OTWORZYMY DRUGI. Ten sam powod co przy
+   OTA: `rtdbClient` jest globalny i trzyma otwarte TLS przez cale
+   wybudzenie, a dwa konteksty mbedTLS naraz to okolo 100 kB na ukladzie,
+   ktory ma 400 kB. Pobranie firmware wywracalo sie na tym (D60). Tutaj
+   przesylamy kilkaset bajtow, wiec restart jest znacznie mniej prawdo-
+   podobny - ale stawka jest wiadomosc o pominietej dawce leku
+   przeciwzakrzepowego, a cena to jedno dodatkowe uzgodnienie TLS przy
+   nastepnym zapytaniu do bazy. `rtdbSend()` odbudowuje kanal sam.    */
+bool tgWyslijTekst(const String& tekst) {
+  const String token = tgTokenZPamieci();
+  const String chat  = tgChatZPamieci();
+  if (!token.length() || !chat.length()) return false;
+
+  rtdbClient.stop();
+
+  WiFiClientSecure client;
+  client.setInsecure();
+  client.setTimeout(15);
+
+  HTTPClient http;
+  http.setConnectTimeout(8000);
+  http.setTimeout(12000);
+
+  String url = String("https://") + TG_HOST + "/bot" + token + "/sendMessage";
+  if (!http.begin(client, url)) {
+    LOGLN("[TG ] nie moge otworzyc polaczenia");
+    return false;
+  }
+
+  /* Tresc budujemy ArduinoJsonem, a nie skladaniem napisow - cudzyslow
+     albo znak nowej linii w tekscie zepsulby caly pakiet. Wiadomosci sa
+     dzisiaj nasze wlasne, ale ta funkcja nie ma prawa zalezec od tego,
+     ze nikt jej nigdy nie poda cudzego napisu.                       */
+  JsonDocument doc;
+  doc["chat_id"] = chat;
+  doc["text"]    = tekst;
+  String body;
+  serializeJson(doc, body);
+
+  http.addHeader("Content-Type", "application/json");
+  const int code = http.POST(body);
+  http.end();
+
+  LOG("[TG ] wiadomosc: HTTP %d\n", code);
+  return code == 200;
+}
+
+/* --- Zamiar: zapamietaj, ze jest o czym napisac ----------------------
+   Rozdzielenie zamiaru od wysylki jest tu celowe i wazne. Alarm konczy
+   sie w `case WAKE_TIMER`, czyli w polowie wybudzenia - a radio zabrane
+   w tym miejscu weszloby miedzy nieodebrane przypomnienie a zapis
+   zdarzenia "missed" do kolejki. Dane o leku ida pierwsze; wiadomosc
+   czeka na `goToSleep()`, tak samo jak aktualizacja i skan sieci
+   (zasada 11).                                                       */
+void tgZglosNieodebrane(int slot) {
+  rtcTgSlot   = (int8_t)slot;
+  rtcTgSlotTs = rtcTimeValid ? (uint32_t)time(nullptr) : 0;
+  LOG("[TG ] przypomnienie %d bez odzewu - napisze przed snem\n", slot);
+}
+
+/* Bateria: jedna wiadomosc na rozladowanie, nie jedna na wybudzenie.
+
+   Kuba poprosil o dokladnie to ("tylko jeden jak pudelko ma malo
+   bateri"), i bez znacznika byloby inaczej: ponizej progu pudelko
+   przechodzi tedy przy KAZDYM otwarciu wieczka, czyli codziennie.
+
+   Znacznik zdejmuje sie po naladowaniu powyzej TG_BATT_RESET_PCT.
+   Gdyby zostawal na stale, druga wiadomosc nie przyszlaby nigdy - a
+   ogniwo rozladuje sie jeszcze wiele razy.
+
+   Zero procent oznacza tu takze "nie ma baterii, zasilanie z USB"
+   (odczyty ponizej 2 V, patrz readBattery), wiec ten przypadek
+   pomijamy - inaczej kazde podlaczenie kabla do programowania konczylo
+   by sie wiadomoscia o rozladowanym ogniwie.                         */
+void tgSprawdzBaterie() {
+  if (batteryPercentage >= TG_BATT_RESET_PCT) {
+    rtcTgBattZgloszona = false;
+    return;
+  }
+  if (batteryPercentage <= 0 || batteryPercentage > BATT_WARN_PCT) return;
+  if (rtcTgBattZgloszona || rtcTgBattCzeka) return;
+  rtcTgBattCzeka = true;
+  LOG("[TG ] bateria %d%% - napisze przed snem\n", batteryPercentage);
+}
+
+/* Zdanie, ktore czlowiek przeczyta na telefonie.
+
+   Godzina bierze sie z harmonogramu, nie z zegara: `slots[]` to pora
+   PRZYPOMNIENIA (zasada 4b) i wlasnie ona ma stac w wiadomosci. Przy
+   dwoch przypomnieniach w ciagu wieczora inaczej przyszlyby dwa
+   identyczne zdania.
+
+   Zdanie NIE mowi "nie wziales" jako fakt, tylko opisuje to, co pudelko
+   naprawde wie: dzwonilo i nikt go nie otworzyl. Tabletke da sie wziac
+   z blistra lezacego obok - to nie jest czeste, ale klamstwo w tym
+   miejscu podkopalo by zaufanie do wszystkich pozostalych wiadomosci. */
+String tgTekstNieodebrane(int slot) {
+  String godz = (slot >= 0 && slot < slotCount) ? slots[slot] : String("");
+  String s = "⏰ PillBox: tabletka nieodebrana\n\n";
+  if (godz.length()) s += "Przypomnienie " + godz + " — pudełko dzwoniło i nikt go nie otworzył.";
+  else               s += "Pudełko dzwoniło i nikt go nie otworzył.";
+  s += "\n\nJeśli wziąłeś ją bez otwierania pudełka, zaznacz dawkę ręcznie w aplikacji.";
+  return s;
+}
+
+String tgTekstBateria() {
+  String s = "🔋 PillBox: słaba bateria\n\n";
+  s += "Zostało " + String(batteryPercentage) + "% — naładuj pudełko.";
+  s += "\n\nPrzy pustym ogniwie nie zadzwoni i nie przyśle powiadomienia.";
+  return s;
+}
+
+/* --- Wysylka: TU I TYLKO TU  ------------------------------------------
+   Wolane z `goToSleep()`, czyli po zapisie dawki, wyslaniu statusu
+   i oproznieniu kolejki - dokladnie z tego samego powodu, dla ktorego
+   stad rusza aktualizacja i skan sieci (zasada 11). W tym miejscu nie ma
+   juz czego opoznic.
+
+   PRZED skanem sieci i przed aktualizacja, i to jest wazne w tej
+   kolejnosci: skan potrafi zerwac lacze, a udana aktualizacja konczy sie
+   restartem - wiadomosc wyslana za nimi nie poszlaby wcale.
+
+   Przy pustej skrzynce funkcja wychodzi PRZED wlaczeniem radia. Cisza nie
+   kosztuje tu nic - ani miliampera, ani sekundy czuwania.             */
+void tgWyslijZalegle() {
+  tgSprawdzBaterie();
+
+  const bool cosCzeka = (rtcTgSlot >= 0) || rtcTgBattCzeka || rtcTgTestProsba;
+  const uint32_t teraz = rtcTimeValid ? (uint32_t)time(nullptr) : 0;
+  /* Wiek liczymy dla nieodebranego przypomnienia - ono jedno traci sens
+     ze starosci. Ostrzezenie o baterii jest prawdziwe tak dlugo, jak
+     ogniwo jest slabe, a wiadomosc probna wysyla sie na zadanie i wtedy
+     "za pozno" nie ma znaczenia.                                      */
+  const uint32_t tsWieku = (rtcTgSlot >= 0) ? rtcTgSlotTs : 0;
+
+  const TgDecyzja d = tgDecyzja(tgSkonfigurowany(), cosCzeka, tsWieku, teraz);
+
+  if (d == TG_NIC) return;
+
+  if (d == TG_BRAK_BOTA) {
+    snprintf(rtcTgMsg, sizeof(rtcTgMsg), "bot niepodlaczony - nie mam komu pisac");
+    LOGLN("[TG ] jest o czym napisac, ale bot nie jest podlaczony");
+    /* Znacznikow NIE kasujemy: bot moze dojechac z aplikacji w ciagu
+       najblizszych minut, a wtedy wiadomosc jeszcze ma sens. Po
+       TG_MAX_WIEK_S zdejmie ja gałąź TG_ZA_STARE ponizej.            */
+    return;
+  }
+
+  if (d == TG_ZA_STARE) {
+    snprintf(rtcTgMsg, sizeof(rtcTgMsg), "przypomnienie za stare - nie wyslalem");
+    LOGLN("[TG ] czekajace powiadomienie jest starsze niz 3 h - kasuje je");
+    rtcTgSlot   = -1;
+    rtcTgSlotTs = 0;
+    return;
+  }
+
+  if (WiFi.status() != WL_CONNECTED && !wifiConnect()) {
+    snprintf(rtcTgMsg, sizeof(rtcTgMsg), "brak sieci - wiadomosc czeka");
+    LOGLN("[TG ] brak sieci - wiadomosc poczeka do nastepnego wybudzenia");
+    return;
+  }
+  extendAwake(20000);                    // uzgodnienie TLS z zapasem
+
+  /* KAZDA rzecz kasuje sie osobno i dopiero po swoim wlasnym HTTP 200
+     (zasada 6). Wspolny warunek na koncu gubilby wiadomosc, ktora
+     przeszla, razem z ta, ktora nie przeszla.                        */
+  int wyslane = 0, nieudane = 0;
+
+  if (rtcTgSlot >= 0) {
+    if (tgWyslijTekst(tgTekstNieodebrane(rtcTgSlot))) {
+      rtcTgSlot   = -1;
+      rtcTgSlotTs = 0;
+      wyslane++;
+    } else nieudane++;
+  }
+
+  if (rtcTgBattCzeka) {
+    if (tgWyslijTekst(tgTekstBateria())) {
+      rtcTgBattCzeka     = false;
+      rtcTgBattZgloszona = true;         // do naladowania juz o tym nie piszemy
+      wyslane++;
+    } else nieudane++;
+  }
+
+  if (rtcTgTestProsba) {
+    const bool ok = tgWyslijTekst(
+        "✅ PillBox: wiadomość próbna\n\n"
+        "Bot działa. Tak wyglądają powiadomienia z pudełka.");
+    if (ok) { rtcTgTestProsba = false; wyslane++; }
+    else    nieudane++;
+    /* Zlecenie z bazy kasujemy TYLKO po udanej probie. Nieudana ma
+       wrocic przy nastepnym wybudzeniu - inaczej "wyslij probna"
+       konczylo by sie cisza, ktorej nie da sie odroznic od zepsutego
+       bota.                                                          */
+    if (ok && firebaseSignIn())
+      rtdbSend("DELETE", "/devices/" DEVICE_ID "/config/tgCmd.json", "");
+  }
+
+  if (nieudane)
+    snprintf(rtcTgMsg, sizeof(rtcTgMsg), "Telegram odmowil (%d z %d)",
+             nieudane, wyslane + nieudane);
+  else
+    snprintf(rtcTgMsg, sizeof(rtcTgMsg), "wyslane: %d", wyslane);
+
+  /* Powod dojezdza OD RAZU, nie przy nastepnym wybudzeniu - ta sama
+     lekcja co przy `otaZglos()` (D59). Radio jeszcze zyje, wiec meldunek
+     nic nie kosztuje, a bez niego ekran przez kilka godzin twierdzilby,
+     ze wszystko w porzadku.                                          */
+  if (nieudane || wyslane) {
+    if (!pushStatus()) rtcStatusDirty = true;
+  }
+}
+#endif  /* TG_ENABLED */
+
+/* =====================================================================
  * 11.  DEEP SLEEP
  * ===================================================================== */
 /* --- Aktualizacja: wykonanie ---------------------------------------
@@ -4342,6 +4790,18 @@ void otaSprobuj() {
 
 void goToSleep(uint32_t seconds) {
   buzzerOff();
+
+#if TG_ENABLED
+  /* --- Powiadomienie na telefon: PIERWSZE z trzech rzeczy przed snem ---
+     Kolejnosc nie jest dowolna. Skan sieci potrafi zerwac lacze, a udana
+     aktualizacja konczy sie restartem - wiadomosc puszczona za nimi nie
+     poszlaby wcale albo poszlaby dopiero nastepnego dnia. Z trzech rzeczy,
+     ktore pudelko robi przed zasnieciem, ta jedna dotyczy leku.
+
+     Przy pustej skrzynce `tgWyslijZalegle()` wychodzi przed wlaczeniem
+     radia, wiec zwykle wybudzenie nie placi za to nic.                */
+  tgWyslijZalegle();
+#endif
 
   /* Lista sieci PRZED aktualizacja, i celowo poza `#if OTA_ENABLED`.
 
@@ -5112,6 +5572,23 @@ void setup() {
                i aplikacja musialaby go odkrecac, gdyby tabletka poszla
                o 22:00. Doby, ktore skoncza sie bez dawki, i tak domyka
                checkDayRollover().                                     */
+            /* --- Powiadomienie na telefon: po KAZDYM nieodebranym ------
+               Tu rozchodzi sie ono ze zdarzeniem "missed", i to swiadomie.
+
+               Wpis "missed" powstaje dopiero przy ostatnim przypomnieniu
+               doby, bo wcześniejszy malowalby dzien na czerwono o 20:00,
+               a tabletka moze pojsc o 22:00 (D64). To dotyczy DANYCH.
+
+               Wiadomosc na telefon jest czyms innym: ma dotrzec wtedy, gdy
+               jeszcze da sie cos z tym zrobic. O 23:00 na przypominanie
+               jest po prostu pozno. Kuba wybral wprost "po kazdym
+               nieodebranym", i to jest wlasciwy wybor - przypomnienie nie
+               jest zapisem w kalendarzu i nie musi czekac na rozstrzygniecie
+               doby.                                                      */
+#if TG_ENABLED
+            tgZglosNieodebrane(slot);
+#endif
+
             if (slot == ostatniSlotDoby()) {
               LOGLN("[ALM] pominieta dawka");
               note("dawka pominieta");

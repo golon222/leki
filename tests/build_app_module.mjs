@@ -51,7 +51,8 @@ export { renderSkan, brakujePokrycia, doReconcile, reconcileDecyzja, opisLadowan
          INR_ZAKRES_MIN, INR_ZAKRES_MAX, INR_ODSTEPY, inrKrokiZakresu, renderSettings,
          ostrzMilczy, MILCZY_PROG_H,
          ostrzZatkana, ZATKANA_SWIEZOSC_H, nvsMalo, NVS_MALO, lastRec,
-         renderOta, pobierzOpisFirmware };
+         renderOta, pobierzOpisFirmware,
+         tgTokenPoprawny, renderTgStan };
 /* Opis wersji firmware czytany jest przez fetch(), ktorego w testach nie
    ma. Podstawiamy go wprost, zeby dalo sie sprawdzic KAZDY stan ekranu
    aktualizacji - takze ten, w ktorym pudelko nie ma hasla.            */

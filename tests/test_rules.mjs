@@ -217,7 +217,11 @@ const PRZYKLAD_STATUSU = {
      nie uruchomila - 32 znaki albo pusto, nigdy nic pomiedzy.         */
   otaMsg: "za malo baterii - postaw na ladowarke", otaWersja: "1.38.0",
   otaHaslo: true, otaFail: 0, otaBad: "",
-  otaMd5: "0123456789abcdef0123456789abcdef", otaProsba: true
+  otaMd5: "0123456789abcdef0123456789abcdef", otaProsba: true,
+  /* Bot Telegram (D67). Samego TOKENU tu nie ma i nie moze byc - status
+     jest jedynym wezlem, ktory pudelko nadpisuje przy kazdym wybudzeniu,
+     a token jest sekretem tej samej klasy co haslo do WiFi.           */
+  tg: true, tgMsg: "wyslane: 1"
 };
 check(POLA_STATUSU.every(p => p in PRZYKLAD_STATUSU),
       `pola statusu nieopisane w tescie: ${POLA_STATUSU.filter(p => !(p in PRZYKLAD_STATUSU))}`);
@@ -260,6 +264,44 @@ ok("prosba o skan", "devices/pillbox1/config/wifiScan", { ts: 1750000000 });
 odrzuc("prosba bez znacznika czasu", "devices/pillbox1/config/wifiScan", {});
 odrzuc("prosba z doklejonym polem", "devices/pillbox1/config/wifiScan",
        { ts: 1750000000, kto: "kuba" });
+
+/* --- Bot Telegram (D67) ------------------------------------------------
+   Token jedzie przez baze tak samo jak haslo do WiFi i tak samo znika po
+   odebraniu. Reguly sa tu OSTATNIA linia obrony przed wpisem, ktorego
+   pudelko nie zrozumie - a odrzucony wpis wyglada dokladnie tak samo jak
+   "nic sie nie stalo", wiec sprawdzamy obie strony.                     */
+head("Bot Telegram przechodzi przez reguly");
+const TOKEN_OK = "1234567890:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw";
+ok("bot z aplikacji", "devices/pillbox1/config/tgNowy",
+   { token: TOKEN_OK, chat: "123456789", ts: 1750000000 });
+ok("czat grupowy (id ujemne)", "devices/pillbox1/config/tgNowy",
+   { token: TOKEN_OK, chat: "-1001234567890" });
+odrzuc("bot bez czatu",  "devices/pillbox1/config/tgNowy", { token: TOKEN_OK });
+odrzuc("bot bez tokenu", "devices/pillbox1/config/tgNowy", { chat: "123456789" });
+odrzuc("token za krotki", "devices/pillbox1/config/tgNowy",
+       { token: "123:abc", chat: "123456789" });
+odrzuc("token za dlugi", "devices/pillbox1/config/tgNowy",
+       { token: "1".repeat(65), chat: "123456789" });
+odrzuc("pusty czat", "devices/pillbox1/config/tgNowy",
+       { token: TOKEN_OK, chat: "" });
+odrzuc("czat jako liczba, nie napis", "devices/pillbox1/config/tgNowy",
+       { token: TOKEN_OK, chat: 123456789 });
+/* Doklejone pole odrzuca CALY wpis, wiec token nie dojechalby wcale -
+   ta sama rodzina bledow co D6/D13/D15.                               */
+odrzuc("bot z doklejonym polem", "devices/pillbox1/config/tgNowy",
+       { token: TOKEN_OK, chat: "123456789", kto: "kuba" });
+
+ok("odlaczenie bota", "devices/pillbox1/config/tgCmd",
+   { akcja: "usun", ts: 1750000000 });
+ok("wiadomosc probna", "devices/pillbox1/config/tgCmd",
+   { akcja: "test", ts: 1750000000 });
+odrzuc("polecenie bota bez akcji", "devices/pillbox1/config/tgCmd", { ts: 1750000000 });
+odrzuc("akcja bota spoza slownika", "devices/pillbox1/config/tgCmd",
+       { akcja: "wyslij", ts: 1750000000 });
+/* Token w POLECENIU bylby wyciekiem bez zadnego zysku: polecenia nie
+   znikaja po odebraniu tak jak `tgNowy`, tylko po wykonaniu.          */
+odrzuc("token doklejony do polecenia", "devices/pillbox1/config/tgCmd",
+       { akcja: "test", token: TOKEN_OK });
 
 /* Historia nieudanych zapisow NVS (D47) - lepiona recznie w nvsFailLogJson(),
    tak jak lidLogJson() ponizej, wiec te same zasady: pola bierzemy z opisu,
