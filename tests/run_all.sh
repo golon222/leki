@@ -14,7 +14,13 @@
 # w ktorej linii. Skrocony komunikat o bledzie kosztowalby wiecej niz
 # oszczedza, bo za nim ida kolejne uruchomienia "a pokaz mi szczegoly".
 #
-#   SZCZEGOLY=1 bash tests/run_all.sh    - stary, pelny wypis
+# TE 12 LINII TO JEST POTWIERDZENIE, a nie jego skrot. Nie odpalaj zestawu po
+# raz drugi z SZCZEGOLY=1 "zeby sprawdzic dokladniej" i nie przepuszczaj go
+# przez grep - liczby podaje kazdy krok sam o sobie, a "✔" na koncu pojawia sie
+# wylacznie wtedy, gdy WSZYSTKIE kroki wyszly (set -e + jawny exit 1).
+#
+#   SZCZEGOLY=1 bash tests/run_all.sh    - stary, pelny wypis (~2300 linii),
+#                                          do grzebania w konkretnym tescie
 set -e
 cd "$(dirname "$0")"
 

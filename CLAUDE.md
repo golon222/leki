@@ -31,7 +31,15 @@ to 12 linii: jedna na krok, z liczbą zaliczonych kontroli. Krok, który zawiedz
 pokazuje **wszystkie** swoje linie błędu (plik, numer linii, nazwa kontroli),
 ostatnie linie logu i ścieżkę do pełnego wypisu. Nie skracaj tej drugiej części —
 oszczędzamy wyłącznie na informacji „nic się nie stało".
-`SZCZEGOLY=1 bash tests/run_all.sh` przywraca stary, pełny wypis.
+**Te 12 linii TO JEST potwierdzenie — nie skrót potwierdzenia.** Nie odpalaj
+zestawu po raz drugi z `SZCZEGOLY=1`, żeby „sprawdzić dokładniej", i nie
+przepuszczaj go przez `grep`: liczby w tych linijkach podaje każdy krok sam
+o sobie, a `✔` na końcu pojawia się wyłącznie wtedy, gdy **wszystkie** kroki
+wyszły. Pełny wypis (`SZCZEGOLY=1 bash tests/run_all.sh`, ~2300 linii) służy do
+grzebania w konkretnym teście, nie do upewniania się, że zielone jest zielone.
+
+Krok, który zawiedzie, zostawia **pełny log na dysku** i podaje jego ścieżkę —
+`cat` na niej jest tańszy niż powtórny przebieg całości.
 
 Testy pracują na **prawdziwym kodzie**, nie na kopii: `tests/extract.py` wycina
 funkcje z `PillBox.ino`, `tests/build_app_module.mjs` buduje moduł z `index.html`.
