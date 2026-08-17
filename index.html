@@ -1309,7 +1309,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-17.46";
+const APP_VERSION = "2026-08-17.47";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -4869,6 +4869,34 @@ function renderOta(){
     html += `<div style="margin-top:8px;color:var(--bad)">⚠️ Pudełko nie ma zapisanego
              hasła do bazy, więc aktualizacja odcięłaby je od aplikacji.
              Wgraj firmware kablem albo podaj hasło w portalu WiFi.</div>`;
+  } else if (dostepna && !rozne){
+    /* WERSJE SIE ZGADZAJA - i to bije wiszace zlecenie.
+
+       TU BYL BLAD, zglosil go Kuba wprost: „jak przejdzie aktualizacja, to
+       i tak pokazuje aplikacja, że się nie zrobiło i błąd, a błąd ma
+       wyskoczyć, jak faktycznie aktualizacja nie przejdzie".
+
+       Warunek `czeka` stal WYZEJ niz sprawdzenie, czy w ogole jest co
+       pobierac. Po UDANEJ aktualizacji zlecenie potrafi jeszcze chwile
+       wisiec w bazie - pudelko kasuje je dopiero, gdy samo uzna sprawe za
+       zamknieta - wiec ekran pokazywal czerwone „nie zrobiło" na pudelku,
+       ktore wlasnie zrobilo wszystko, o co proszono. Wgrany 1.45.0,
+       dostepny 1.45.0, i alarm.
+
+       Kolejnosc jest wiec teraz taka: najpierw pytamy, czy jest COKOLWIEK
+       do zrobienia. Gdy nie ma - sprawa jest zamknieta, nawet jesli papier
+       jeszcze lezy. Alarm zostaje wylacznie dla przypadku, w ktorym
+       naprawde czegos brakuje.                                        */
+    html += `<div class="dim2" style="margin-top:6px">Pudełko ma najnowszą wersję.</div>`;
+    if (czeka){
+      /* Zlecenie zniknie samo przy najblizszym polaczeniu, ale niech to
+         bedzie NAPISANE - milczenie o wiszacym wpisie to znowu zgadywanie. */
+      html += `<div class="dim2" style="margin-top:4px">Zlecenie z aplikacji jeszcze
+               wisi, ale nie ma już czego pobierać — pudełko skasuje je przy
+               najbliższym połączeniu.</div>
+               <button class="ghost" style="width:100%;margin-top:8px"
+                 onclick="anulujAktualizacje()">Odwołaj zlecenie</button>`;
+    }
   } else if (czeka){
     /* DWA STANY, KTÓRE WYGLĄDAŁY TAK SAMO — a znaczą co innego dla tego,
        co masz zrobić dalej. Ta sama lekcja co przy sieci WiFi (D25, D32).
@@ -4977,7 +5005,11 @@ function renderOta(){
      kablem — i straszy na ekranie, na którym wszystko już się zgadza.
      Zgłosił to Kuba: „czemu nadal jest że nieudane próby", przy pudełku
      mającym najnowszą wersję i bez żadnego zlecenia w toku.          */
-  const licznikIstotny = czeka || rozne;
+  /* Licznik prob ma sens tylko wtedy, gdy jest jeszcze co pobierac. Po
+     udanej aktualizacji „nieudane próby: 1 z 3" to juz tylko slad po
+     historii - straszacy na ekranie, na ktorym wszystko sie zgadza.
+     `rozne` jest tu warunkiem KONIECZNYM, nie alternatywa dla `czeka`. */
+  const licznikIstotny = rozne;
   if (!licznikIstotny){
     /* nic nie pokazujemy — to historia, nie stan */
   } else if (st.otaFail >= OTA_LIMIT_PROB){

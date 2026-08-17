@@ -3092,6 +3092,36 @@ const zl3 = A.__db.data?.devices?.pillbox01?.config?.otaCmd;
 check(typeof zl3?.ts === "number" && zl3.ts > ZLECONO,
       "...a nacisniecie zapisuje SWIEZY znacznik - po nim pudelko znosi blokade");
 
+/* ZLECENIE WISI, ALE NIE MA JUZ CZEGO POBIERAC - i to NIE jest awaria.
+
+   Zgloszenie Kuby ze zrzutu: wgrany 1.45.0, dostepny 1.45.0, a mimo to
+   czerwone "Pudelko laczylo sie po zleceniu i aktualizacji NIE ZROBILO"
+   plus "Nieudane proby: 1 z 3". Jego slowa: "blad ma wyskoczyc, jak
+   faktycznie aktualizacja nie przejdzie".
+
+   Przyczyna: warunek `czeka` stal WYZEJ niz sprawdzenie, czy w ogole jest
+   co pobierac. Po UDANEJ aktualizacji zlecenie potrafi jeszcze chwile
+   wisiec w bazie (pudelko kasuje je dopiero, gdy uzna sprawe za zamknieta),
+   wiec ekran oskarzal pudelko, ktore wlasnie zrobilo wszystko, o co
+   proszono.                                                            */
+A.__setState({ cfg: { otaCmd: { md5: OPIS.md5, wersja: OPIS.wersja, ts: ZLECONO } } });
+A.renderStatus({ fw: OPIS.wersja, otaHaslo: true, lastSeen: ZLECONO + 600,
+                 otaProsba: false, otaFail: 1 });
+check(otaHtml().includes("najnowszą"),
+      "zgodne wersje: ekran mowi, ze nie ma czego pobierac");
+check(!otaHtml().includes("nie zrobiło"),
+      "...i NIE oskarza pudelka o nieudana aktualizacje");
+check(!otaHtml().includes("Nieudane próby"),
+      "...ani nie straszy licznikiem prob, gdy nie ma czego probowac");
+check(otaHtml().includes("jeszcze") && otaHtml().includes("Odwołaj zlecenie"),
+      "...ale mowi wprost, ze zlecenie jeszcze wisi, i pozwala je zdjac");
+
+/* Gdy wersje sie ROZNIA, alarm ma dzialac dokladnie jak dotad. */
+A.renderStatus({ fw: "1.38.0", otaHaslo: true, lastSeen: ZLECONO + 600,
+                 otaProsba: true, otaFail: 1 });
+check(otaHtml().includes("nie zrobiło"),
+      "przy prawdziwej roznicy wersji ostrzezenie nadal wyskakuje");
+
 /* Cofnieta wersja - pudelko dziala, ale nie na tym, co mu wgraliśmy. */
 A.renderStatus({ fw: "1.38.0", otaHaslo: true, lastSeen: ZLECONO + 600,
                  otaBad: "c".repeat(32) });
