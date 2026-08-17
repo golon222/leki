@@ -3154,6 +3154,72 @@ A.cfg.tgNowy = null;
 A.renderStatus({ fw: "1.45.0", tg: true, tgMsg: "wyslane: 1" });
 check(tgHtml().includes("wyslane: 1"), "wynik ostatniej wiadomosci widac na ekranie");
 
+/* ═══════ KOD PAROWANIA — OBRONA PRZED CUDZYM CZATEM ═══════
+   Znalazl to Kuba jednym pytaniem: "a to nie jest tak, ze jak ktos podepnie
+   tego bota, to bedzie dostawal moje wiadomosci?".
+
+   Sam bot dziury nie ma - pudelko pisze na JEDEN zapisany czat. Dziura byla
+   w tym ekranie: "Znajdz mnie" bralo czat z NAJNOWSZEJ wiadomosci od
+   kogokolwiek, a nazwa bota jest publiczna z koniecznosci (Telegram wymaga
+   globalnie unikalnej i pokazuje ja w wyszukiwarce). Wystarczylo, ze obcy
+   napisze do bota chwile po Kubie.
+
+   To najgrozniejszy mozliwy blad w tym obszarze: powiadomienia o dawkach
+   Warfinu jechalyby do obcej osoby, cicho, i wygladaloby to jak sukces.  */
+head("Bot Telegram: kod parowania odsiewa cudze czaty");
+
+const KOD = A.tgKodParowania();
+check(/^PB-\d{6}$/.test(KOD), "kod parowania ma czytelny, przepisywalny kszalt");
+check(A.tgKodParowania() === KOD,
+      "i jest STABILNY - inaczej czlowiek przepisze jeden, a aplikacja szuka drugiego");
+
+const czat = (id, text, imie) => ({ message:{ chat:{ id, first_name:imie }, text } });
+const ustawTg = (updates) => A.__setTelegram({ getUpdates:{ ok:true, result:updates } });
+const tgMsgTxt = () => document.getElementById("tgMsg").textContent;
+
+document.getElementById("tgToken").value = TOKEN_OK;
+document.getElementById("tgChat").value  = "";
+
+/* TO JEST TEN TEST. Obcy napisal do bota PO nas - i to jego wiadomosc jest
+   najnowsza. Bez kodu aplikacja wzielaby 999, czyli czat obcej osoby.   */
+ustawTg([ czat(111, "PB-000000 " + KOD, "Kuba"), czat(999, "czesc", "Obcy") ]);
+await window.tgZnajdzCzat();
+check(document.getElementById("tgChat").value === "111",
+      "przy dwoch czatach wybrany jest TEN Z KODEM, nie najnowszy");
+check(tgMsgTxt().includes("111"), "...i ekran pokazuje ktory to czat");
+/* Sam fakt, ze kod ochronil parowanie, nie znaczy, ze wszystko jest w
+   porzadku - obcy nadal zna nazwe bota. O tym trzeba powiedziec.        */
+check(/UWAGA|różnych osób/.test(tgMsgTxt()),
+      "...i ostrzega, ze do bota pisze ktos jeszcze");
+
+/* Obcy pisze, my nie. Cisza ma dwa rozne powody i kazdy kaze zrobic co
+   innego - zlanie ich w jedno "nie znalazlem" to piaty raz tego samego
+   bledu w tym projekcie ("nie wiem" podane jako "nie").                 */
+document.getElementById("tgChat").value = "";
+ustawTg([ czat(999, "halo", "Obcy") ]);
+await window.tgZnajdzCzat();
+check(document.getElementById("tgChat").value === "",
+      "wiadomosc bez kodu NIE paruje czatu, nawet gdy jest jedyna");
+check(tgMsgTxt().includes(KOD), "...a ekran podaje kod, ktory nalezy wyslac");
+
+ustawTg([]);
+await window.tgZnajdzCzat();
+check(document.getElementById("tgChat").value === "",
+      "brak jakichkolwiek wiadomosci tez nie paruje niczego");
+check(/nikt jeszcze/.test(tgMsgTxt()),
+      "...i mowi wprost, ze nikt do bota nie napisal (inny powod, inny komunikat)");
+
+/* Kod w dowolnym miejscu wiadomosci - ludzie dopisuja "czesc, PB-123456". */
+document.getElementById("tgChat").value = "";
+ustawTg([ czat(222, "czesc, mam kod " + KOD + " dzieki", "Kuba") ]);
+await window.tgZnajdzCzat();
+check(document.getElementById("tgChat").value === "222",
+      "kod wsrod innego tekstu tez sie liczy");
+
+/* Przy jednym czacie zadnego ostrzezenia byc nie moze - falszywy alarm
+   przy normalnym parowaniu uczyloby go ignorowac.                       */
+check(!/UWAGA/.test(tgMsgTxt()), "przy jednym czacie NIE ma ostrzezenia o obcych");
+
 head("Bot Telegram: zapis idzie przez kolejke, nie golym set()");
 
 A.__resetDb();

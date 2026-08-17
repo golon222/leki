@@ -957,13 +957,16 @@ nav button.act{color:var(--acc)}
         <b>4.</b> Odpisze <i>„Done!”</i> i poda <b>długi token</b> po
         <i>„Use this token to access the HTTP API”</i> — skopiuj go.<br>
         <b>5.</b> W tej samej wiadomości jest <b>link t.me/…</b> do Twojego
-        bota. Kliknij go i naciśnij niebieski przycisk <b>START</b> na dole.
-        Nic nie musisz pisać.<br>
+        bota. Kliknij go i wyślij mu <b><span id="tgKodTxt">—</span></b><br>
         <b>6.</b> Wróć tutaj, wklej token i naciśnij <i>Znajdź mnie</i>.
       </div>
       <div class="dim2" style="margin-top:8px;line-height:1.5;font-size:12px">
-        Krok 5 jest obowiązkowy: dopóki nie zaczepisz bota pierwszy, Telegram
-        nie pozwala mu nic do Ciebie wysłać. Pudełko nie ma na to wpływu.
+        Krok 5 jest obowiązkowy z dwóch powodów. Po pierwsze: dopóki nie
+        zaczepisz bota, Telegram nie pozwala mu nic do Ciebie wysłać.
+        Po drugie — <b>ten kod rozstrzyga, że to Ty</b>. Nazwa bota jest
+        publiczna, więc obcy może do niego napisać; bez kodu aplikacja
+        mogłaby wziąć jego czat zamiast Twojego i pudełko wysyłałoby
+        powiadomienia o Twoim leku komuś innemu.
       </div>
     </div>
 
@@ -995,6 +998,17 @@ nav button.act{color:var(--acc)}
 
     <button class="danger" style="width:100%;margin-top:12px" onclick="tgOdlacz()">
       Odłącz bota</button>
+
+    <!-- Co token DAJE temu, kto go zdobędzie. Mówimy to wprost, bo to jest
+         sekret dotyczący leku przeciwzakrzepowego: fałszywe „dawka wzięta"
+         jest groźniejsze niż brak powiadomienia. -->
+    <div class="dim2" style="margin-top:14px;line-height:1.5;font-size:12px">
+      <b>Gdyby token gdzieś wyciekł:</b> ktoś mógłby pisać do Ciebie jako ten
+      bot — także rzeczy nieprawdziwe o Twoim leku. Nie dałoby mu to dostępu
+      do Twojego konta Telegram ani do innych rozmów. Naprawa jest szybka:
+      napisz BotFatherowi <b>/revoke</b>, dostaniesz nowy token i sparujesz
+      pudełko od nowa. Stary przestaje działać natychmiast.
+    </div>
   </div>
 </section>
 
@@ -1295,7 +1309,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-17.45";
+const APP_VERSION = "2026-08-17.46";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -4440,6 +4454,46 @@ async function tgZapytaj(token, metoda){
   }
 }
 
+/* --- KOD PAROWANIA -----------------------------------------------------
+
+   TU BYŁA DZIURA, i znalazł ją Kuba jednym pytaniem: „a to nie jest tak,
+   że jak ktoś podepnie tego bota, to będzie dostawał moje wiadomości?".
+
+   Sam bot jej nie ma — pudełko pisze na JEDEN zapisany identyfikator
+   czatu, więc obcy, który naciśnie START, dostaje ciszę. Dziura była
+   w tym ekranie: „Znajdź mnie" brało czat z NAJNOWSZEJ wiadomości, jaką
+   bot dostał od kogokolwiek.
+
+   A nazwa bota jest publiczna z konieczności — Telegram wymaga, żeby była
+   globalnie unikalna, i pokazuje ją w wyszukiwarce. Wystarczyło więc, że
+   ktoś obcy napisze do bota chwilę po Kubie, a naciśnięcie „Znajdź mnie"
+   zapisałoby JEGO czat. Pudełko zaczęłoby wysyłać powiadomienia o dawkach
+   Warfinu obcej osobie — cicho, bez śladu, i wyglądałoby to jak sukces.
+
+   Naprawa u źródła: aplikacja losuje kod, a szuka WYŁĄCZNIE wiadomości,
+   która ten kod zawiera. Obcy go nie zna, więc jego wiadomości są dla
+   parowania niewidzialne. Kod jest jednorazowy i nigdzie nie jest
+   zapisywany — żyje tylko w pamięci otwartej karty.
+
+   Efekt ubocznie upraszcza instrukcję: wysłanie kodu JEST zaczepieniem
+   bota, więc osobny krok z przyciskiem START znika.                     */
+let tgKod = "";
+function tgKodParowania(){
+  if (!tgKod){
+    /* crypto, nie Math.random(): kod ma być nieprzewidywalny dla kogoś,
+       kto zna nazwę bota i próbuje zgadywać. Awaryjnie Math.random(),
+       żeby brak crypto nie zablokował całego ekranu. */
+    let n;
+    if (globalThis.crypto?.getRandomValues){
+      const b = new Uint32Array(1);
+      crypto.getRandomValues(b);
+      n = b[0];
+    } else n = Math.floor(Math.random() * 4294967296);
+    tgKod = "PB-" + String(n % 1000000).padStart(6, "0");
+  }
+  return tgKod;
+}
+
 window.tgZnajdzCzat = async () => {
   const token = document.getElementById("tgToken").value.trim();
   const msg   = document.getElementById("tgMsg");
@@ -4449,6 +4503,7 @@ window.tgZnajdzCzat = async () => {
     pokaz("To nie wygląda na token od BotFathera — skopiuj go jeszcze raz, całość.", "bad");
     return;
   }
+  const kod = tgKodParowania();
   pokaz("Pytam Telegrama…", "warn");
   try {
     /* Najpierw `getMe`: rozstrzyga, czy token w ogóle żyje. Bez tego kroku
@@ -4456,26 +4511,46 @@ window.tgZnajdzCzat = async () => {
        zupełnie różne rzeczy do naprawienia. */
     const bot = await tgZapytaj(token, "getMe");
     const updates = await tgZapytaj(token, "getUpdates");
-    /* Bierzemy NAJNOWSZĄ wiadomość, nie pierwszą: gdyby ktoś parował bota
-       po raz drugi z innego konta, pierwsza pokazywałaby stary czat. */
-    let chat = null;
+
+    /* Szukamy WYŁĄCZNIE wiadomości z naszym kodem. Wśród nich bierzemy
+       najnowszą — gdyby ktoś parował po raz drugi, liczy się ta próba. */
+    let chat = null, kto = "";
+    /* Ile RÓŻNYCH czatów pisze do tego bota. Nie jest to ciekawostka:
+       liczba większa niż jeden znaczy, że ktoś obcy go znalazł, i o tym
+       trzeba powiedzieć wprost, nawet gdy parowanie się udało. */
+    const obce = new Set();
     for (const u of (updates || [])){
-      const c = u?.message?.chat || u?.my_chat_member?.chat;
-      if (c?.id != null) chat = String(c.id);
+      const m = u?.message;
+      const c = m?.chat || u?.my_chat_member?.chat;
+      if (c?.id == null) continue;
+      obce.add(String(c.id));
+      if (!String(m?.text || "").includes(kod)) continue;
+      chat = String(c.id);
+      kto  = c.first_name || c.username || "";
     }
+
     if (!chat){
-      /* Ten komunikat musi mówić DOKĄD iść, nie tylko czego brakuje.
-         Kuba utknął dokładnie tu i zapytał „gdzie ja mam napisać /start" —
-         więc podajemy nazwę bota, przez którą da się go znaleźć wyszukiwarką
-         Telegrama, i mówimy o przycisku, a nie o komendzie: w nowym czacie
-         START jest gotowym przyciskiem i nic nie trzeba pisać. */
-      pokaz(`Token działa — to bot @${bot.username}. Ale jeszcze go nie `
-            + `zaczepiłeś: otwórz czat @${bot.username} w Telegramie, naciśnij `
-            + "START na dole i wróć tu po „Znajdź mnie”.", "warn");
+      /* Trzy różne powody tej samej ciszy, i każdy każe zrobić co innego.
+         Zlanie ich w jedno „nie znalazłem" kosztowałoby dokładnie to, co
+         w tym projekcie kosztowało już cztery razy: „nie wiem" podane jako
+         „nie". */
+      if (!obce.size)
+        pokaz(`Token działa — to bot @${bot.username}. Ale nikt jeszcze do niego `
+              + `nie napisał: otwórz czat @${bot.username} w Telegramie i wyślij `
+              + `mu ${kod}`, "warn");
+      else
+        pokaz(`Bot @${bot.username} dostał wiadomości, ale żadna nie zawiera `
+              + `${kod}. Wyślij mu dokładnie ten kod — po to jest, żeby pudełko `
+              + "nie zaczęło pisać do kogoś obcego.", "warn");
       return;
     }
+
     document.getElementById("tgChat").value = chat;
-    pokaz(`Znalazłem: bot @${bot.username}, czat ${chat}. Teraz wyślij go do pudełka.`, "ok");
+    let t = `Znalazłem: ${kto ? kto + ", " : ""}czat ${chat}. Teraz wyślij bota do pudełka.`;
+    if (obce.size > 1)
+      t += ` UWAGA: do tego bota pisze ${obce.size} różnych osób — kod ochronił`
+         + " parowanie, ale rozważ nowego bota.";
+    pokaz(t, obce.size > 1 ? "warn" : "ok");
   } catch (e){
     /* Przeglądarka blokuje część zapytań między domenami i wtedy nie podaje
        powodu — komunikat musi więc kierować do drogi ręcznej, a nie kończyć
@@ -4512,6 +4587,10 @@ window.tgPolacz = async () => {
   cfg.tgNowy = { token, chat, ts: Math.floor(Date.now()/1000) };
   await zapiszCfg({ tgNowy: cfg.tgNowy }, "Bot Telegram");
   document.getElementById("tgToken").value = "";
+  /* Kod jest jednorazowy: po sparowaniu następna próba dostaje nowy.
+     Stary leży w historii czatu z botem, więc ponowne użycie tego samego
+     znaczyłoby, że wystarczy podejrzeć tę historię. */
+  tgKod = "";
   pokaz("Wysłane — pudełko odbierze bota przy najbliższym połączeniu.", "ok");
   renderTgStan();
 };
@@ -4546,6 +4625,13 @@ window.tgOdlacz = async () => {
    aktualizacji — i tą samą lekcją, która w tym projekcie wracała cztery
    razy: „nie wiem" jest osobnym stanem, nie łagodniejszą odmianą „nie". */
 function renderTgStan(){
+  /* Kod parowania pokazujemy w instrukcji, a nie w osobnej ramce: jest
+     częścią kroku 5, a nie informacją obok niego. Generuje się sam przy
+     pierwszym spojrzeniu na ekran i zostaje ten sam do sparowania — inaczej
+     człowiek przepisałby jeden, a aplikacja szukałaby drugiego. */
+  const kodTxt = document.getElementById("tgKodTxt");
+  if (kodTxt) kodTxt.textContent = tgKodParowania();
+
   const box = document.getElementById("tgStan");
   if (!box) return;
   const st = ostatniStatus || {};
