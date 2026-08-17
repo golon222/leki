@@ -93,6 +93,15 @@ Test to złapie, ale komunikat zrozumiesz szybciej, znając powód (D6, D13, D15
    Pudełko zna to samo rozpisanie (`rtcDoseWeek`, `rtcDoseExDay`) i w dniu
    rozpisanym na zero **nie dzwoni i nie zgłasza „missed"**. Wycisza się
    **wyłącznie przy pewnym zerze**: bez zegara albo bez rozpisania dzwoni.
+4d. **Dzień lekowy rozstrzyga się z KOŃCEM doby, nie z ostatnim
+   przypomnieniem** (D64). Pudełko wysyła „missed" po ostatnim przypomnieniu
+   i jako **zdarzenie** to jest prawda — ale przypomnienie nie jest porą brania
+   leku (4b), a Kuba bierze tabletkę także o 22:00. Wzięta dawka rozstrzyga
+   dzień od razu; niewzięta dopiero po `dzienZamkniety()`, czyli po granicy
+   `DAY_START_HOUR`. Obowiązuje w **trzech** miejscach naraz: kalendarz,
+   pierścień skuteczności i raport dla lekarza. Wpis **ręczny** wygrywa także
+   dziś. Bez tego kalendarz malował dzisiejszy dzień na czerwono o 20:06,
+   a skuteczność spadała i sama się cofała dwie godziny później.
 5. **Każdy zapis użytkownika w aplikacji idzie przez `zapiszPewnie()`.**
    Nigdy gołe `set()`. Firebase offline nie odrzuca obietnicy, tylko wisi —
    ekran pokazuje sukces, dane nie docierają. Test tego pilnuje.
@@ -122,11 +131,17 @@ Test to złapie, ale komunikat zrozumiesz szybciej, znając powód (D6, D13, D15
    aktualizacji bez hasła w pamięci, a `hasloUtrwal()` potwierdza zapis
    **odczytem zwrotnym**. Nie upraszczaj żadnego z tych trzech kroków.
 
-11. **Aktualizacja rusza wyłącznie z `goToSleep()`.** To jedyne miejsce, przez
-   które przechodzi każda ścieżka wybudzenia, i jedyne, w którym dawka jest
-   już zapisana i potwierdzona. Wywołanie z `fetchConfig()` albo z obsługi
-   kontaktronu wcisnęłoby minutę radia między otwarcie wieczka a zapis dawki
-   Warfinu. Audyt to sprawdza i złapie taką zmianę.
+11. **Aktualizacja i skan sieci ruszają wyłącznie z `goToSleep()`.** To jedyne
+   miejsce, przez które przechodzi każda ścieżka wybudzenia, i jedyne, w którym
+   dawka jest już zapisana i potwierdzona. Wywołanie z `fetchConfig()` albo
+   z obsługi kontaktronu wcisnęłoby minutę radia między otwarcie wieczka a zapis
+   dawki Warfinu. Audyt sprawdza jedno i drugie i złapie taką zmianę.
+   `otaSprobuj()` **sam dopytuje bazę** o zlecenie (D61) — nie polegaj na tym,
+   co `fetchConfig()` widziało na początku wybudzenia, bo drugie otwarcie
+   wieczka w ciągu doby w ogóle tam nie dochodzi (D62).
+   `skanujSieci()` publikuje listę sieci z siłą sygnału do **własnej gałęzi
+   `scan`** (D65) i kasuje zlecenie `wifiScan` dopiero po potwierdzonym
+   zapisie listy.
 
 Blok pomiaru napięcia **wolno** zmieniać (zakaz zniesiony). Audyt nie blokuje —
 zgłasza tylko uwagę, żeby zmiana przypadkowa nie wyglądała jak świadoma.
@@ -136,13 +151,16 @@ zgłasza tylko uwagę, żeby zmiana przypadkowa nie wyglądała jak świadoma.
 ## Struktura
 
 ```
-firmware/PillBox/PillBox.ino     główny kod (~2600 linii)
+firmware/PillBox/PillBox.ino     główny kod (~5250 linii)
 firmware/PillBox/config.h        ustawienia (w repo, bez hasła)
 firmware/PillBoxTest/            osobny szkic diagnostyczny
 index.html                   cała PWA w jednym pliku
 sw.js, tabletka.gif      service worker + tabletka na ekranie głównym
 tests/                           testy + audyt
+tests/statyczna.py               kontrola statyczna (krok 4/10)
 database.rules.json              reguły Firebase
+DECYZJE.md                       dziennik decyzji (D1–D66)
+PROJEKT-PillBox-kontekst.md      pełny kontekst projektu
 WGRYWANIE.md                     instrukcja wgrywania kablem dla Kuby
 .github/workflows/firmware.yml   automat budujący binarkę do OTA
 ```
