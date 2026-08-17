@@ -52,7 +52,24 @@ export { renderSkan, brakujePokrycia, doReconcile, reconcileDecyzja, opisLadowan
          ostrzMilczy, MILCZY_PROG_H,
          ostrzZatkana, ZATKANA_SWIEZOSC_H, nvsMalo, NVS_MALO, lastRec,
          renderOta, pobierzOpisFirmware,
-         tgTokenPoprawny, renderTgStan };
+         tgTokenPoprawny, renderTgStan, tgKodParowania };
+/* Rozmowa z Telegramem idzie przez fetch(), ktorego w testach nie ma.
+   Podstawiamy odpowiedzi getMe/getUpdates, zeby dalo sie sprawdzic
+   PAROWANIE - w tym przypadek, w ktorym do bota pisze ktos obcy.
+   Bez tego jedyna obrona przed wyslaniem powiadomien o leku obcej osobie
+   nie mialaby ani jednego testu.                                       */
+export function __setTelegram(odp){
+  globalThis.fetch = async (url) => {
+    const u = String(url);
+    if (u.includes("/getMe"))
+      return { ok:true, status:200, json: async () => odp.getMe
+               ?? ({ ok:true, result:{ username:"pillbox_test_bot" } }) };
+    if (u.includes("/getUpdates"))
+      return { ok:true, status:200, json: async () => odp.getUpdates
+               ?? ({ ok:true, result:[] }) };
+    return { ok:false, status:404, json: async () => ({ ok:false, description:"brak" }) };
+  };
+}
 /* Opis wersji firmware czytany jest przez fetch(), ktorego w testach nie
    ma. Podstawiamy go wprost, zeby dalo sie sprawdzic KAZDY stan ekranu
    aktualizacji - takze ten, w ktorym pudelko nie ma hasla.            */
