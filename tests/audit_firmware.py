@@ -1128,6 +1128,15 @@ ok("otaSumaWgranej()" in _spr_raw and 'otaSumaZPamieci("otaMd5")' not in _spr_ra
 # Zlecenie czytamy JESZCZE RAZ tuz przed proba. Poleganie na tym, co
 # `fetchConfig()` widzialo na poczatku wybudzenia, gubilo kazde zlecenie
 # zlozone w trakcie - a ekran oskarzal wtedy pudelko o awarie.
+# Backoff musi byc podnoszony na KAZDEJ sciezce wybudzenia, nie tylko przy
+# otwarciu wieczka. Gdy rosl wylacznie w reportEvent(), wybudzenie z timera
+# bez sieci w kolko liczylo 15 minut - i zjadalo bateria w dwa dni.
+_gts_kol = cialo("void goToSleep(uint32_t seconds)")
+ok(_gts_kol and "kolejnePrzesuniecie(" in _gts_kol,
+   "backoff rozrzedza sie w goToSleep(), czyli na kazdej sciezce wybudzenia")
+ok(len(re.findall(r"rtcRetryCount\s*\+\+", code)) == 0,
+   "i nigdzie indziej licznik ponowien nie rosnie (jedno wybudzenie = jeden krok)")
+
 ok("otaZlecenieWBazie(" in _spr_raw,
    "otaSprobuj() dopytuje baze o zlecenie, zamiast ufac pamieci sprzed wybudzenia")
 

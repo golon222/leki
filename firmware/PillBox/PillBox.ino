@@ -3079,7 +3079,10 @@ void reportEvent(const char* type, int slot) {
      inny od pojedynczego potwierdzenia kolejki. "Nie mam tej dawki
      nigdzie, zapisz ja recznie."                                      */
   const bool zapisane = queuePush(rec);
-  if (rtcRetryCount < 200) rtcRetryCount++;
+  /* Licznika NIE podnosimy tutaj - robi to `goToSleep()` dla kazdej
+     sciezki naraz. Podniesienie w obu miejscach liczyloby jedno
+     wybudzenie dwa razy i rozrzedzalo proby szybciej, niz zapowiada
+     opis backoffu.                                                   */
   /* Otwarcie pudelka jest zawsze potwierdzane dzwiekiem - takze wtedy, gdy
      nie udalo sie go wyslac. Inaczej brak sieci wyglada dokladnie tak samo
      jak zepsute urzadzenie, a to dwie zupelnie rozne sytuacje.           */
@@ -4815,6 +4818,18 @@ void otaSprobuj() {
 
 #endif  /* OTA_ENABLED */
 
+/* O ILE ROZRZEDZIC NASTEPNA PROBE PO TYM WYBUDZENIU.
+
+   Wyjeta z `goToSleep()` do osobnej funkcji wylacznie po to, zeby dalo sie
+   ja przepuscic przez testy. `goToSleep()` dotyka sprzetu i uspienia, wiec
+   w testach nie ruszy - a to wlasnie TU siedzial blad, ktory kosztowal
+   baterie: przesuniecie nie roslo, bo nikt go nie podnosil na sciezce
+   wybudzenia z timera. Mechanizm mial test, okablowanie nie mialo.      */
+uint8_t kolejnePrzesuniecie(uint8_t biezace, bool cosZostalo) {
+  if (!cosZostalo) return 0;                 // dowiezione - liczymy od nowa
+  return biezace < 200 ? (uint8_t)(biezace + 1) : biezace;
+}
+
 void goToSleep(uint32_t seconds) {
   buzzerOff();
 
@@ -4863,6 +4878,33 @@ void goToSleep(uint32_t seconds) {
 #endif
 
   wifiOff();
+
+  /* CZY TO WYBUDZENIE COKOLWIEK DOWIOZLO - i tylko tu o tym decydujemy.
+
+     TU BYL BLAD, i kosztowal baterie. Zglosil go Kuba zrzutem historii:
+     "meldunek bez sieci" co 17 minut, od 9:33 do 17:46 bez przerwy, przy
+     baterii spadajacej z 73% na 50% w osiem godzin. Backoff mial to
+     rozrzedzac - 15, 30, 60, 120, 240 minut - i w testach dzialal.
+
+     Nie dzialal w zyciu, bo `rtcRetryCount` rosl w JEDNYM miejscu:
+     w `reportEvent()`, czyli na sciezce otwarcia wieczka. Wybudzenie
+     z timera, ktore nie zlapalo sieci, konczylo sie samym
+     `rtcStatusDirty = true` - licznika nikt nie podnosil, wiec przesuniecie
+     zostawalo na zerze i `planNextSleep()` w kolko liczylo 15 minut.
+     Sam mechanizm byl sprawdzony testem (`rtcRetryCount = 3` -> 2 h),
+     ale NIKT nie sprawdzil, czy ten licznik w ogole ma jak urosnac.
+     Testowalismy matematyke, nie okablowanie.
+
+     Dlatego decyzja jest teraz JEDNA i stoi tutaj: przez `goToSleep()`
+     przechodzi kazda sciezka wybudzenia, wiec to jedyne miejsce, ktore
+     widzi calosc. Zaleglosc w kolejce albo niedostarczony status znacza
+     "nie dowiozlem" - i wtedy nastepna proba ma byc rzadsza. Czysto
+     zakonczone wybudzenie kasuje przesuniecie od razu.               */
+  {
+    const bool cosZostalo = rtcStatusDirty || rtcOpenClearPend ||
+                            rtcOpenReported != boxIsOpen() || queueCount() > 0;
+    rtcRetryCount = kolejnePrzesuniecie(rtcRetryCount, cosZostalo);
+  }
 
   /* Slad po tym wybudzeniu. Zapisujemy tuz przed snem, zeby zawierał
      takze to, co wydarzylo sie na samym koncu.                        */

@@ -17,7 +17,7 @@ WANTED = [
     "localWeekday", "dateKeyToNum", "dawkaNaDobe", "dzisBezLeku",
     "parseDoseWeek", "parseDoseEx", "saveDosing",
     "matchSlot", "secondsToDayBoundary", "secondsToNextSlot",
-    "openWarnSecondsLeft",
+    "openWarnSecondsLeft", "kolejnePrzesuniecie",
     "jsonEscape",   # przed lidLogJson - ta go wola
     "wakeName", "lidLogAdd", "lidLogCount", "lidLogJson", "lidLogClear",
     # Historia nieudanych zapisow NVS - tez wola jsonEscape.

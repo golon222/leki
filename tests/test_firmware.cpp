@@ -1987,6 +1987,44 @@ head("Kolejka pod nieustajacym 401");
   rtcStatusDirty = true; rtcRetryCount = 3;
   CHECK(planNextSleep() == 7200u, "ponowienia statusu ida tym samym backoffem");
 
+  /* ODSTEPY MUSZA NAPRAWDE ROSNAC PRZEZ KOLEJNE NIEUDANE WYBUDZENIA.
+
+     Powyzsze kontrole sprawdzaly MATEMATYKE backoffu - przy podstawionym
+     rtcRetryCount wychodzily wlasciwe liczby. Nikt nie sprawdzil, czy ten
+     licznik ma jak urosnac, a nie mial: podnosil sie wylacznie w
+     reportEvent(), czyli na sciezce otwarcia wieczka.
+
+     Skutek zobaczyl Kuba na historii pudelka: "meldunek bez sieci" co 17
+     minut, od 9:33 do 17:46, bateria z 73% na 50% w osiem godzin. Testy
+     przez caly ten czas swiecily na zielono.
+
+     Ten test idzie wiec przez KOLEJNE wybudzenia, tak jak robi to
+     goToSleep(), i sprawdza ciag odstepow - a nie pojedynczy przypadek. */
+  {
+    const uint32_t oczekiwane[5] = { 900u, 1800u, 3600u, 7200u, 14400u };
+    uint8_t przesun = 0;
+    for (int i = 0; i < 5; i++) {
+      spokoj(12, 0);
+      rtcStatusDirty = true;
+      rtcRetryCount  = przesun;
+      CHECK(planNextSleep() == oczekiwane[i],
+            "kolejne nieudane wybudzenie rozrzedza probe");
+      przesun = kolejnePrzesuniecie(przesun, true);   // to samo robi goToSleep()
+    }
+    /* Sufit: dalej juz nie rzadziej niz co 4 h. */
+    for (int i = 0; i < 10; i++) przesun = kolejnePrzesuniecie(przesun, true);
+    spokoj(12, 0);
+    rtcStatusDirty = true; rtcRetryCount = przesun;
+    CHECK(planNextSleep() == 14400u, "...ale nie rzadziej niz co 4 h");
+  }
+
+  /* Dowiezione wybudzenie kasuje przesuniecie OD RAZU - inaczej pudelko
+     po odzyskaniu sieci nadal milczaloby przez cztery godziny.        */
+  CHECK(kolejnePrzesuniecie(4, false) == 0,
+        "udane wybudzenie zeruje backoff, nie zmniejsza go o krok");
+  CHECK(kolejnePrzesuniecie(0, true) == 1, "pierwsza porazka podnosi przesuniecie");
+  CHECK(kolejnePrzesuniecie(200, true) == 200, "licznik nie przekreca sie w kolko");
+
   head("Ile spac: ladowarka i granica doby");
   spokoj(12, 0);
   rtcCharging = true;
