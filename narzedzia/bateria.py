@@ -96,7 +96,11 @@ TOKEN_ZYJE_S = 3300.0     # godzina minus TOKEN_MARGIN_S = 300 s
 #     pojemnosc_uzyteczna: LiPo oddaje do progu BATT_CUTOFF_V = 3,20 V
 #       prawie cala pojemnosc, ale ogniwo sie starzeje, a przy 3,35 V
 #       (BATT_SAFE_V) pudelko i tak przestaje wlaczac radio.
-#     samorozladowanie: LiPo, %/miesiac od pojemnosci znamionowej.
+#     samorozladowanie: LiPo, %/miesiac od pojemnosci ZNAMIONOWEJ - czyli
+#       ogniwo 1600 mAh traci na dobe 3,4 raza wiecej mAh niz 470 mAh, przy
+#       identycznym ukladzie. To jedyny powod, dla ktorego scenariusze 1 i 4
+#       (to samo zachowanie, inne ogniwo) maja rozne zuzycie na dobe. Dlatego
+#       tez wieksze ogniwo daje 2,9 x dluzszy czas pracy, a nie 3,4 x.
 # =====================================================================
 OGNIWO = {
     "uzyteczne":        {"min": 0.80, "typ": 0.90, "max": 0.95},
@@ -275,7 +279,10 @@ def wypisz(tytul, opis, pojemnosc, wynik):
         naj = max(t["pozycje"], key=lambda x: x[1])
         print(f"  najwieksza pozycja: {naj[0]} ({100.0 * naj[1] / t['zuzycie']:.0f}% doby)")
 
-    print(f"\n  zuzycie:   {t['zuzycie'] + t['samo']:.3f} mAh na dobe (typowo)")
+    print(f"\n  pobiera pudelko:       {t['zuzycie']:7.3f} mAh/dobe")
+    print(f"  ucieka z ogniwa samo:  {t['samo']:7.3f} mAh/dobe"
+          f"   (samorozladowanie - ROSNIE Z POJEMNOSCIA, nie zalezy od ukladu)")
+    print(f"  razem:                 {t['zuzycie'] + t['samo']:7.3f} mAh/dobe (typowo)")
     print(f"  do wziecia: {t['uzyteczne']:.0f} mAh z {pojemnosc} mAh")
     print(f"\n  >>> CZAS PRACY: {dni_slownie(t['dni'])}   (typowo)")
     print(f"      widelki:   {dni_slownie(wynik['ostroznie']['dni'])}"
@@ -328,10 +335,15 @@ Model, nie pomiar. Prady z kart katalogowych; widelki obejmuja niepewnosc.""")
         ("3b. 1600 mAh, nigdy nie spi (radio gaszone)", w3b),
         ("4. 1600 mAh, zachowanie jak dzis", w1b),
     ]
+    print(f"  {'':<44} {'pudelko':>9} + {'ogniwo':>6}          starczy na")
     for nazwa, wyn in tabela:
         t = wyn["typowo"]
-        print(f"  {nazwa:<44} {t['zuzycie'] + t['samo']:7.2f} mAh/dobe"
+        print(f"  {nazwa:<44} {t['zuzycie']:9.2f} + {t['samo']:6.2f} mAh/dobe"
               f"   {dni_slownie(t['dni']):>22}")
+    print("\n  Kolumna 'ogniwo' to samorozladowanie: 2%/miesiac od pojemnosci\n"
+          "  ZNAMIONOWEJ. Wieksze ogniwo traci wiecej mAh na dobe samo z siebie,\n"
+          "  choc pudelko pobiera dokladnie tyle samo - stad 1 i 4 roznia sie\n"
+          "  w tabeli, mimo ze urzadzenie robi w obu to samo co do sekundy.")
     print()
     baza = w1["typowo"]["dni"]
     _ = baza
