@@ -294,23 +294,23 @@ Model, nie pomiar. Prady z kart katalogowych; widelki obejmuja niepewnosc.""")
         i raz przy otwarciu wieczka. Dzwonienie srednio raz w tygodniu.
         """, 470, w1)
 
-    w2 = policz(scenariusz_bez_snu, 1600, radio_podtrzymane=True)
-    wypisz("2. BEZ SNU  -  1600 mAh, uklad nigdy nie zasypia", """
-        Procesor wybudzony non stop, radio zalogowane w sieci (modem-sleep),
-        pelne sprawdzenie co 15 minut. Deep sleep w ogole nie wystepuje.
-        """, 1600, w2)
-
-    w2b = policz(scenariusz_bez_snu, 1600, radio_podtrzymane=False)
-    wypisz("2b. BEZ SNU, RADIO GASZONE  -  1600 mAh (wariant scenariusza 2)", """
-        To samo, ale radio wlacza sie tylko na sprawdzenie i zaraz gasnie.
-        Procesor dalej nie spi ani sekundy.
-        """, 1600, w2b)
-
-    w3 = policz(scenariusz_cykl, 1600)
-    wypisz("3. CO 15 MINUT NA MINUTE  -  1600 mAh, deep sleep + cykl", """
+    w2 = policz(scenariusz_cykl, 1600)
+    wypisz("2. CO 15 MINUT NA MINUTE  -  1600 mAh, deep sleep + cykl", """
         Deep sleep, wybudzenie co 15 minut, minuta pelnej pracy (siec, baza,
         wszystko), z powrotem spac. 96 takich cykli na dobe.
+        """, 1600, w2)
+
+    w3 = policz(scenariusz_bez_snu, 1600, radio_podtrzymane=True)
+    wypisz("3. CZUJNY CALY CZAS  -  1600 mAh, uklad nigdy nie zasypia", """
+        Procesor wybudzony non stop, radio zalogowane w sieci (modem-sleep),
+        pelne sprawdzenie co 15 minut. Deep sleep w ogole nie wystepuje.
         """, 1600, w3)
+
+    w3b = policz(scenariusz_bez_snu, 1600, radio_podtrzymane=False)
+    wypisz("3b. CZUJNY CALY CZAS, RADIO GASZONE  -  1600 mAh (wariant 3)", """
+        To samo, ale radio wlacza sie tylko na sprawdzenie i zaraz gasnie.
+        Procesor dalej nie spi ani sekundy.
+        """, 1600, w3b)
 
     w1b = policz(scenariusz_obecny, 1600)
     wypisz("4. DLA PORZADKU  -  1600 mAh, zachowanie jak dzis", """
@@ -323,9 +323,9 @@ Model, nie pomiar. Prady z kart katalogowych; widelki obejmuja niepewnosc.""")
     print("=" * 72)
     tabela = [
         ("1. teraz, 470 mAh, deep sleep", w1),
-        ("2. 1600 mAh, nigdy nie spi (radio w sieci)", w2),
-        ("2b. 1600 mAh, nigdy nie spi (radio gaszone)", w2b),
-        ("3. 1600 mAh, co 15 min na minute", w3),
+        ("2. 1600 mAh, co 15 min na minute", w2),
+        ("3. 1600 mAh, nigdy nie spi (radio w sieci)", w3),
+        ("3b. 1600 mAh, nigdy nie spi (radio gaszone)", w3b),
         ("4. 1600 mAh, zachowanie jak dzis", w1b),
     ]
     for nazwa, wyn in tabela:
