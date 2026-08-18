@@ -187,8 +187,9 @@ index.html                   cała PWA w jednym pliku
 sw.js, tabletka.gif      service worker + tabletka na ekranie głównym
 tests/                           testy + audyt
 tests/statyczna.py               kontrola statyczna (krok 4/10)
+narzedzia/bateria.py             symulacja czasu pracy na baterii (D70, nie w run_all)
 database.rules.json              reguły Firebase
-DECYZJE.md                       dziennik decyzji (D1–D66)
+DECYZJE.md                       dziennik decyzji (D1–D70)
 PROJEKT-PillBox-kontekst.md      pełny kontekst projektu
 WGRYWANIE.md                     instrukcja wgrywania kablem dla Kuby
 .github/workflows/firmware.yml   automat budujący binarkę do OTA
