@@ -50,7 +50,14 @@ class El {
   querySelectorAll(){ return []; }
   get classList(){
     const c = this._classes;
-    return { add:x=>c.add(x), remove:x=>c.delete(x), toggle:(x,f)=>f?c.add(x):c.delete(x),
+    /* add() i remove() w przegladarce przyjmuja WIELE klas naraz. Atrapa
+       brala tylko pierwsza, wiec kod czyszczacy cztery stany jednym
+       wywolaniem wygladal w tescie na zepsuty, choc dziala. Ta sama lekcja
+       co przy putString (D39): atrapa niewierna oryginalowi mierzy inna
+       rzecz, niz sie mysli.                                            */
+    return { add:(...xs)=>xs.forEach(x=>c.add(x)),
+             remove:(...xs)=>xs.forEach(x=>c.delete(x)),
+             toggle:(x,f)=>f?c.add(x):c.delete(x),
              contains:x=>c.has(x) };
   }
   click(){}

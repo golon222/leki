@@ -359,6 +359,13 @@ naprawy.
   Obowiązuje w trzech miejscach naraz: kalendarz, pierścień skuteczności, raport
   dla lekarza. Wpis **ręczny** wygrywa także dziś — skoro sam zaznaczyłeś, wiesz
   lepiej niż reguła.
+- **Wygląd stoi na systemie wizualnym** (D74): tokeny koloru, odstępów
+  (skala 4 px), promieni i cieni; kolor zarezerwowany dla stanu dawki;
+  krawędzie włosowe zamiast ramek. Ekran główny to karta dnia (data, stan,
+  tabletka w medalionie, pas faktów, przycisk „Wziąłem teraz"), potem
+  skuteczność i kalendarz, potem zapas i pudełko. Pasek nawigacji jest
+  **zamrożony** po pięciu nieudanych podejściach (D48–D52) i pilnuje tego
+  kontrola statyczna.
 - **Osłona rysowania** (D71): każdy ekran rysuje się przez `rysuj()`, więc
   wyjątek w jednym nie zabiera ze sobą pozostałych ani tego, co stoi za nimi
   w tej samej linijce (`settlePills()`). Nieudane rysowania są liczone i widać

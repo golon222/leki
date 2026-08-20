@@ -422,6 +422,8 @@ check(A.trwanieTxt(65)==="1 min 05 s", "sekundy dwucyfrowe: " + A.trwanieTxt(65)
 check(A.trwanieTxt(3600*14 + 60*32 + 7)==="14 h 32 min 07 s",
       "14 h 32 min 07 s: " + A.trwanieTxt(3600*14+60*32+7));
 check(A.trwanieTxt(86400*2 + 3600)==="2 d 1 h 0 min 00 s", "doby tez: " + A.trwanieTxt(86400*2+3600));
+
+
 check(A.trwanieTxt(null)==="—", "brak danych to kreska");
 
 D({ cfg:{ schedule:["20:00"], defaultDose:1 }, doses:{
@@ -1982,8 +1984,12 @@ check(!/7×/.test(html), "nie obiecujemy siedmiu piknięc, skoro sa dwa");
 
 head("Tabletka na ekranie glownym");
 check(/tabletka\.gif/.test(html), "uzywamy przygotowanego pliku, nie bryly CSS");
-check(/width="58" height="58"/.test(html),
-      "rozmiar taki sam jak poprzedniej tabletki");
+/* Rozmiar zmieniony przy przebudowie wyglądu (D74): tabletka siedzi teraz
+   w okrągłym medalionie 72 px, wiec sam obrazek jest mniejszy. Test pilnuje,
+   ze wymiary sa PODANE - bez nich obrazek "skacze" po wczytaniu i uklad
+   karty przeskakuje w dol.                                              */
+check(/width="46" height="46"/.test(html), "obrazek ma podany rozmiar");
+check(/class="medalion"/.test(html), "i siedzi w medalionie");
 check(/\.tabgif:not\(\.zazyta\)/.test(html),
       "przed wzieciem dawki tabletka wyglada inaczej niz po");
 
@@ -2260,7 +2266,12 @@ head("Pudelko melduje, ile zostalo mu pamieci");
   A.renderStatus({ battery: 80, lastSeen: Math.floor(Date.now()/1000), nvsFree: 512 });
   A.renderDiag();
   const info = document.getElementById("devInfo").innerHTML;
-  check(/wolnej pamięci: 512/.test(info), "liczba widoczna w Diagnostyce");
+  /* Od przebudowy wygladu (D74) fakty o pudelku sa lista etykieta-wartosc,
+     a nie akapitem z <br>. Liczba ma byc widoczna - to jest niezmiennik;
+     jej oprawa juz nie.                                                */
+  check(/Wolnej pamięci/.test(info) && />512</.test(info),
+        "liczba wolnej pamieci widoczna w Diagnostyce");
+  check(/class="fakt"/.test(info), "i podana jako wiersz etykieta-wartosc");
   A.renderStatus({ battery: 80, lastSeen: Math.floor(Date.now()/1000) });
   A.renderDiag();
   check(!/wolnej pamięci/.test(document.getElementById("devInfo").innerHTML),
@@ -3486,6 +3497,73 @@ const zrodloWez = html.slice(html.indexOf("window.wezTeraz"), html.indexOf("wind
 check(zrodloWez.includes("zapiszPewnie("), "zapis idzie przez zapiszPewnie()");
 check(!/\bset\(/.test(zrodloWez), "i nigdzie nie siega po gole set()");
 check(zrodloWez.includes("askConfirm("), "bez potwierdzenia nie zapisuje niczego");
+
+/* Licznik od dawki tyka co sekunde (D57, prosba Kuby) i wlasnie dlatego
+   ma na karcie WLASNY pas pelnej szerokosci, a nie kolumne w rzedzie
+   faktow - w waskiej kolumnie napis lamal sie na dwa wiersze (D74).   */
+check(/id="odDawkiRow"[\s\S]{0,400}id="odDawki"/.test(html),
+      "licznik ma wlasny pas, nie kolumne w rzedzie faktow");
+check(!/hero-fakt[^>]*id="odDawkiRow"/.test(html),
+      "i nie siedzi juz miedzy faktami");
+
+/* ═══════════ WYGLĄD: KARTA DNIA ═══════════
+   Przebudowa wygladu (D74). Sprawdzamy to, co niesie ZNACZENIE, a nie
+   upodobania: czy karta mowi kolorem to samo, co mowi tekstem, i czy
+   liczby na niej znikaja wtedy, gdy nie ma czego pokazac.             */
+head("Karta dnia - stan i fakty");
+const kartaKl = () => [...document.getElementById("todayCard")._classes];
+
+D();
+A.renderToday();
+check(kartaKl().includes("st-warn"), "dawka jeszcze nie wzieta - karta ostrzega");
+check(document.getElementById("todayDate").textContent.startsWith("Dzisiaj · "),
+      "naglowek podaje date: " + document.getElementById("todayDate").textContent);
+
+D({ doses:{ [today]: { 0:{ status:"taken", dose:1, source:"device", ts:Math.floor(Date.now()/1000) } } } });
+A.renderToday();
+check(kartaKl().includes("st-ok"), "wzieta - karta na zielono");
+check(!kartaKl().includes("st-warn"), "i bez sladu poprzedniego stanu");
+
+D({ doses:{ [today]: { 0:{ status:"missed", dose:0, source:"device", ts:Math.floor(Date.now()/1000) } } } });
+A.renderToday();
+check(kartaKl().includes("st-bad"), "pominieta - karta na czerwono");
+
+D({ cfg:{ doseWeek:[0,0,0,0,0,0,0] } });
+A.renderToday();
+check(kartaKl().includes("st-off"), "dzien bez leku ma wlasny, spokojny stan");
+check(document.getElementById("faktNastBox").classList.contains("hide"),
+      "i nie pokazuje godziny przypomnienia - nie ma czego przypominac");
+
+/* Seria pokazuje sie dopiero wtedy, gdy jest czym sie chwalic. "1 dzien"
+   po jednym dniu to nie seria, tylko wczoraj.                          */
+const dawki = {};
+for (let i = 1; i <= 6; i++)
+  dawki[shift(-i)] = { 0:{ status:"taken", dose:1, source:"device", ts:Math.floor(Date.now()/1000) - i*86400 } };
+D({ doses: dawki });
+A.renderToday();
+check(!document.getElementById("faktSeriaBox").classList.contains("hide"), "seria widoczna");
+check(document.getElementById("faktSeria").textContent === "6 dni",
+      "z liczba dni: " + document.getElementById("faktSeria").textContent);
+D({ doses:{ [shift(-1)]:{ 0:{ status:"taken", dose:1, source:"device", ts:Math.floor(Date.now()/1000)-86400 } } } });
+A.renderToday();
+check(document.getElementById("faktSeriaBox").classList.contains("hide"),
+      "jeden dzien to jeszcze nie seria");
+
+head("Wyglad - system, nie upodobania");
+/* Te kontrole pilnuja rzeczy, ktore latwo cofnac przypadkiem przy nastepnej
+   zmianie wygladu, a ktore powstaly z konkretnego powodu.              */
+check(/class="medalion"/.test(html), "tabletka ma oprawe, nie lezy na tle karty");
+check((html.match(/class="ikonka"/g) || []).length === 6,
+      "kazdy kafelek Ustawien ma swoja ikone");
+check(/\.fakt\{/.test(html), "fakty o pudelku maja uklad etykieta-wartosc");
+check(/#todayCard\.st-ok/.test(html) && /#todayCard\.st-bad/.test(html),
+      "karta dnia ma stany w kolorach znaczen");
+/* 44 px to najmniejszy cel, w ktory palec trafia pewnie (wytyczne Apple). */
+check(/button\{[^}]*min-height:44px/.test(html), "przyciski maja cel dotykowy");
+check(/--s1:4px/.test(html) && /--r:20px/.test(html), "skale odstepow i promieni sa tokenami");
+/* Pasek nawigacji jest zamrozony po pieciu nieudanych podejsciach (D48-D52). */
+check(!/nav\{[^}]*backdrop-filter/.test(html.replace(/\/\*[\s\S]*?\*\//g, "")),
+      "pasek nawigacji nadal bez rozmycia tla (D49)");
 
 head("Tabletka - lekka wersja WEBP");
 D({ doses:{ [today]: { 0:{ status:"taken", dose:1, source:"device", ts: Math.floor(Date.now()/1000) } } } });

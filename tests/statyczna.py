@@ -120,6 +120,56 @@ else:
     else:
         print('  OK   zapas w GIF-ie na miejscu')
 
+# ── SYSTEM WIZUALNY (D74) ───────────────────────────────────────────────
+_css = re.search(r'<style>(.*?)</style>', html, re.S).group(1)
+# Komentarze WYCINAMY przed analiza. Pierwsza wersja tej kontroli zglosila
+# blad, bo trafila we wlasny komentarz opisujacy regule paska nawigacji -
+# kontrola czytajaca opis kodu zamiast kodu mierzy nie to, co trzeba.
+_css = re.sub(r'/\*.*?\*/', '', _css, flags=re.S)
+
+# Pasek nawigacji jest ZAMROZONY po pieciu nieudanych podejsciach (D48-D52).
+# backdrop-filter zostal z niego USUNIETY swiadomie (D49) - to on jest
+# najkosztowniejsza czescia kompozycji przy przewijaniu na iOS. Gdyby wrocil
+# przy jakims odswiezaniu wygladu, objaw wrocilby razem z nim, a nikt nie
+# skojarzylby jednego z drugim.
+_nav = re.search(r'\bnav\{([^}]*)\}', _css)
+if not _nav:
+    bad += 1; print('  BLAD nie znaleziono regul paska nawigacji')
+elif 'backdrop-filter' in _nav.group(1):
+    bad += 1; print('  BLAD backdrop-filter wrocil do paska nawigacji (patrz D49)')
+elif 'padding-bottom:env(safe-area-inset-bottom)' not in _nav.group(1):
+    bad += 1; print('  BLAD pasek nawigacji przestal rezerwowac miejsce nad wcieciem')
+else:
+    print('  OK   pasek nawigacji nietkniety (D48-D52)')
+
+# Kolor w tej aplikacji NIESIE ZNACZENIE: zielony/zolty/czerwony naleza do
+# stanu dawki. Wartosci szesnastkowe wpisane wprost w style omijaja ten
+# system - i wlasnie tak rodzi sie interfejs, w ktorym pieć odcieni zieleni
+# znaczy pieć roznych rzeczy. Progi sa z pomiaru stanu po przebudowie.
+_hex_css = re.findall(r'#[0-9a-fA-F]{3,8}\b', _css)
+if len(_hex_css) > 40:
+    bad += 1
+    print(f'  BLAD za duzo kolorow wpisanych wprost w CSS ({len(_hex_css)}) - uzyj zmiennych')
+else:
+    print(f'  OK   kolory ida przez zmienne ({len(_hex_css)} wyjatkow w CSS)')
+
+# Skala odstepow: cztery piksele i jej wielokrotnosci. "Jeszcze dwa piksele"
+# w jednym miejscu to poczatek ukladu zlozonego z poprawek.
+for _zm in ('--s1:4px', '--s2:8px', '--s3:12px', '--s4:16px'):
+    if _zm not in _css:
+        bad += 1; print(f'  BLAD brak zmiennej skali odstepow: {_zm}')
+else:
+    print('  OK   skala odstepow zdefiniowana')
+
+# Cele dotykowe: przycisk ponizej 44 px to cel wielkosci litery, a nie palca
+# (wytyczne Apple). Sprawdzamy sama regule bazowa - warianty moga byc mniejsze
+# swiadomie, ale domyslny przycisk nie.
+_btn = re.search(r'(?<![\w.#-])button\{([^}]*)\}', _css)
+if not _btn or 'min-height:44px' not in _btn.group(1):
+    bad += 1; print('  BLAD domyslny przycisk nie ma minimalnej wysokosci 44 px')
+else:
+    print('  OK   przyciski maja cel dotykowy 44 px')
+
 handlers = set(re.findall(r'on(?:click|change)="(\w+)\(', html)) - {'if'}
 orphan = [h for h in handlers if f'window.{h}' not in js]
 if orphan: bad += 1; print('  BLAD handlery bez definicji:', orphan)

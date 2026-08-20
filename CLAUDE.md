@@ -23,8 +23,8 @@ bash tests/run_all.sh
 ```
 
 Musi przejść przed zmianą i po zmianie. Stan wyjściowy:
-**526 + 51 firmware, 987 (×6 pór doby) + 92 + 49 aplikacja, 48 zgodności,
-119 reguł bazy, 301 kontroli audytu, 18 kontroli statycznych — 0 błędów.**
+**526 + 51 firmware, 1008 (×6 pór doby) + 92 + 49 aplikacja, 48 zgodności,
+119 reguł bazy, 301 kontroli audytu, 22 kontrole statyczne — 0 błędów.**
 
 **Runner jest cichy przy sukcesie i głośny przy błędzie** (D66). Udany przebieg
 to 12 linii: jedna na krok, z liczbą zaliczonych kontroli. Krok, który zawiedzie,
@@ -172,6 +172,17 @@ Test to złapie, ale komunikat zrozumiesz szybciej, znając powód (D6, D13, D15
    o leku. Token nie trafia **ani do logu, ani do statusu**. Audyt pilnuje
    każdego z tych punktów.
 
+14. **System wizualny ma reguły — nie zmieniaj ich „na oko"** (D74).
+   Kolor niesie znaczenie: zielony/żółty/czerwony należą do stanu dawki
+   i nigdzie indziej. Odstępy idą po skali `--s1..--s7` (4 px), promienie
+   po `--r*`, krawędzie to półprzezroczysta biel (`--line`), nie pełny
+   kolor. Domyślny przycisk ma 44 px wysokości. **Pasek nawigacji jest
+   zamrożony** (D48–D52): ani rozmycia tła, ani zmian rezerwy na wcięcie
+   ekranu. Kontrola statyczna pilnuje każdego z tych punktów.
+   Wygląd sprawdzaj **na renderze**, nie w wyobraźni — podgląd z atrapą
+   Firebase i Playwright w rozdzielczości iPhone'a wyłapał w jedną sesję
+   cztery rzeczy niewidoczne w kodzie.
+
 13. **Osłona rysowania (`rysuj()`) obejmuje WYŁĄCZNIE rysowanie** (D71).
    Wyjątek połknięty w renderze ratuje ekran; połknięty w zapisie gubi dawkę
    po cichu. `doReconcile()`, `settlePills()`, `zapiszPewnie()` i `zapiszCfg()`
@@ -195,7 +206,7 @@ tabletka.gif                 zapas dla przeglądarki bez WEBP (D72)
 tests/                           testy + audyt
 tests/statyczna.py               kontrola statyczna (krok 4/10)
 database.rules.json              reguły Firebase
-DECYZJE.md                       dziennik decyzji (D1–D73)
+DECYZJE.md                       dziennik decyzji (D1–D74)
 PROJEKT-PillBox-kontekst.md      pełny kontekst projektu
 WGRYWANIE.md                     instrukcja wgrywania kablem dla Kuby
 .github/workflows/firmware.yml   automat budujący binarkę do OTA

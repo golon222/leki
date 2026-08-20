@@ -19,14 +19,91 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <title>PillBox</title>
 <style>
+/* ═══════════════════════════════════════════════════════════════════════
+   SYSTEM WIZUALNY PillBox
+
+   Jedna zasada, z której wynika reszta: to jest aplikacja o leku
+   przeciwzakrzepowym, a nie o sobie samej. Wszystko, co tu jest, ma
+   robić miejsce dla trzech informacji — czy dawka jest wzięta, ile jej
+   zostało w opakowaniu i czy pudełko żyje. Ozdoba, która o tym nie mówi,
+   zabiera im uwagę.
+
+   Stąd konkretne wybory poniżej:
+
+   • KOLOR NIESIE ZNACZENIE, nie nastrój. Zielony/żółty/czerwony są
+     zarezerwowane dla stanu dawki. Interfejs poza nimi jest neutralny —
+     dzięki temu jedna zielona kratka w kalendarzu widoczna jest z metra.
+   • KRAWĘDZIE SĄ WŁOSOWE. Obrysy to półprzezroczysta biel (rgba), a nie
+     pełny kolor: na czarnym tle dają cienką linię zamiast rysunku
+     ramki. To jedna z dwóch rzeczy, po których poznaje się interfejs
+     robiony za pieniądze.
+   • GŁĘBIA ZAMIAST OBWÓDEK. Warstwy różnią się jasnością powierzchni
+     i cieniem, nie grubością ramki — tak jak w iOS 26.
+   • JEDNA SKALA ODSTĘPÓW (4 px) i JEDNA SKALA PISMA. Wartości „na oko"
+     (13.5 px tu, 12.5 px tam) są dokładnie tym, co odróżnia projekt
+     złożony z poprawek od projektu zaprojektowanego.
+
+   Czego NIE WOLNO tu zmieniać, choćby wyglądało to kusząco:
+   • paska nawigacji — ani rozmycia tła, ani rezerwy na wcięcie ekranu
+     (D48–D52: pięć podejść, zero trafień; obowiązuje stan z D49);
+   • znaczeń kolorów stanu dawki (zielony/żółty/czerwony/szary/„bez leku”);
+   • wzorców, na których stoją testy: nav{…padding-bottom:env(...)},
+     html,body{…overflow-x:hidden}, svg{max-width:100%}, main{overflow-x:hidden}.
+   ═══════════════════════════════════════════════════════════════════════ */
+
 :root{
-  --bg:#0b1220; --bg2:#0f1829;
-  --card:#151f33; --card2:#1d2942; --line:#26344f;
-  --txt:#e8eefc; --dim:#8ea0c0; --dim2:#61748f;
-  --ok:#34d399; --bad:#f87171; --warn:#fbbf24; --acc:#5eead4;
+  /* ---- powierzchnie ----
+     Tło jest niemal czarne i lekko chłodne. Karta nie jest „jaśniejszym
+     granatem", tylko cienką warstwą światła położoną na tle — dlatego
+     gradient, a nie płaski kolor.                                      */
+  --bg:#070a11; --bg2:#0b0f18;
+  --card:#111726; --card2:#182034; --card3:#1e283f;
+  --line:rgba(255,255,255,.075);        /* włosowa krawędź            */
+  --line2:rgba(255,255,255,.13);        /* mocniejsza, do wyróżnień   */
+
+  /* ---- tekst ----
+     Czysta biel na czarnym tle wibruje i męczy przy dłuższym czytaniu,
+     dlatego najjaśniejszy stopień to lekko ciepły błękit.              */
+  --txt:#eef1f8; --dim:#9aa5bd; --dim2:#6d7891;
+
+  /* ---- znaczenia ----
+     Te pięć kolorów to jedyne miejsce, w którym barwa cokolwiek znaczy.
+     Każdy ma trzy postacie: pełną (tekst, kropka), miękką (tło) i
+     krawędziową (obrys) — żeby te same stany wyglądały tak samo
+     w kalendarzu, na wykresie, w ostrzeżeniu i na kafelku.             */
+  --ok:#34d399;   --ok-soft:rgba(52,211,153,.13);   --ok-edge:rgba(52,211,153,.42);
+  --warn:#fbbf24; --warn-soft:rgba(251,191,36,.12); --warn-edge:rgba(251,191,36,.42);
+  --bad:#fb7185;  --bad-soft:rgba(251,113,133,.12); --bad-edge:rgba(251,113,133,.42);
+  --acc:#5eead4;  --acc-soft:rgba(94,234,212,.12);  --acc-edge:rgba(94,234,212,.36);
+  --inr:#a78bfa;  --inr-soft:rgba(167,139,250,.12); --inr-edge:rgba(167,139,250,.4);
+
   --pill:#8ab4f8; --pillEdge:#5b8ede;
-  --r:16px;
+
+  /* ---- rytm ----
+     Wszystkie odstępy są wielokrotnością czterech. Nie ma tu miejsca na
+     „jeszcze dwa piksele" — z takich dwóch pikseli bierze się wrażenie,
+     że ekran złożono z kawałków.                                       */
+  --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:20px; --s6:24px; --s7:32px;
+
+  /* ---- promienie ----
+     Współśrodkowe: element wewnątrz karty ma promień mniejszy dokładnie
+     o wypełnienie, którym karta go otacza. Inaczej narożniki „pływają"
+     jeden w drugim — widać to nawet wtedy, gdy nikt nie umie nazwać, co
+     jest nie tak.                                                      */
+  --r:20px; --r-lg:16px; --r-md:12px; --r-sm:9px; --r-pill:999px;
+
+  /* ---- głębia ---- */
+  --e1:0 1px 2px rgba(0,0,0,.45);
+  --e2:0 2px 6px -3px rgba(0,0,0,.6), 0 12px 28px -20px rgba(0,0,0,.9);
+  --e3:0 8px 20px -8px rgba(0,0,0,.7), 0 32px 64px -32px rgba(0,0,0,1);
+
+  /* ---- ruch ----
+     Jedna krzywa na wejście (lekko sprężysta) i jedna na wyjście. Ruch
+     ma potwierdzać dotknięcie, nie zabawiać.                           */
+  --ruch:.22s cubic-bezier(.2,.8,.3,1);
+  --ruch-spr:.34s cubic-bezier(.2,.9,.25,1.15);
 }
+
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 /* Cokolwiek szerszego od ekranu powodowalo poziome przewijanie i kalendarz
    "uciekal" w bok. Blokujemy to twardo na poziomie dokumentu.            */
@@ -34,94 +111,183 @@ html,body{overscroll-behavior-y:none;max-width:100%;overflow-x:hidden}
 svg{max-width:100%}
 main{overflow-x:hidden}
 body{margin:0;background:
-      radial-gradient(1200px 600px at 50% -10%, #16233c 0%, transparent 60%), var(--bg);
-     color:var(--txt);font:16px/1.5 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,sans-serif;
+      radial-gradient(1100px 520px at 50% -8%, #16203a 0%, transparent 62%),
+      radial-gradient(700px 400px at 90% 8%, rgba(94,234,212,.05) 0%, transparent 70%),
+      var(--bg);
+     background-attachment:fixed;
+     color:var(--txt);
+     font:16px/1.5 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,sans-serif;
      /* BEZ padding-bottom. Pasek nawigacji jest position:fixed, wiec liczy
         sie wzgledem OKNA, nie wzgledem wypelnienia body - to wypelnienie
         niczego mu nie dawalo, a dokladalo wysokosci pod trescia. Przy
         odbiciu (rubber-band) na iOS pasek odrywal sie przez to od dolu.
         Miejsce na sam pasek rezerwuje `main` swoim padding-bottom.      */
-     padding:0;-webkit-font-smoothing:antialiased}
+     padding:0;-webkit-font-smoothing:antialiased;
+     text-rendering:optimizeLegibility}
+
+/* Liczby w interfejsie: stała szerokość cyfr. Bez tego licznik tabletek
+   i procenty "skaczą" w bok przy każdej zmianie wartości.               */
+.num,#batBig,#pillsBig,#adherence,.stat b,.day,.doseval,.inrbig,.sv,.hero-val
+  {font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1}
 
 /* ---------- szkielet ----------
    Pasek statusu iOS: to NAGŁÓWEK rezerwuje na niego miejsce własnym
    paddingiem. Gdyby robiło to body, przyklejony nagłówek wjeżdżałby
    pod zegarek i wskaźnik baterii przy przewijaniu.                    */
-header{display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:20;
-       padding:calc(10px + env(safe-area-inset-top)) 18px 10px;
-       background:rgba(11,18,32,.92);-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);border-bottom:1px solid var(--line)}
+header{display:flex;align-items:center;gap:var(--s3);position:sticky;top:0;z-index:20;
+       padding:calc(10px + env(safe-area-inset-top)) var(--s5) 10px;
+       background:linear-gradient(180deg,rgba(7,10,17,.96),rgba(7,10,17,.82));
+       -webkit-backdrop-filter:saturate(180%) blur(18px);
+       backdrop-filter:saturate(180%) blur(18px);
+       border-bottom:1px solid var(--line)}
 header .ttl{flex:1;min-width:0}
-header h1{font-size:17px;margin:0;font-weight:650;letter-spacing:-.01em;
+header h1{font-size:19px;margin:0;font-weight:700;letter-spacing:-.02em;
           white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-header .sub{font-size:11.5px;color:var(--dim2);margin-top:1px;
+header .sub{font-size:11.5px;color:var(--dim2);margin-top:2px;font-weight:500;
             white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-main{padding:16px 16px calc(96px + env(safe-area-inset-bottom));max-width:580px;margin:0 auto}
-section{animation:fade .28s ease}
-@keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+main{padding:var(--s5) var(--s4) calc(96px + env(safe-area-inset-bottom));
+     max-width:580px;margin:0 auto}
+section{animation:fade .3s cubic-bezier(.2,.8,.3,1)}
+@keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
 
-.card{background:linear-gradient(180deg,var(--card) 0%,#131c2e 100%);
-      border:1px solid var(--line);border-radius:var(--r);padding:16px;margin-bottom:14px;
-      box-shadow:0 1px 0 rgba(255,255,255,.03) inset, 0 8px 24px -18px #000;
+/* ---------- karta ----------
+   Powierzchnia, nie pudełko: jasność rośnie ku górze, krawędź jest
+   włosowa, a nad nią leży jednopikselowe światło (inset). Ten jeden
+   piksel robi różnicę między „prostokątem z ramką" a „materiałem".  */
+.card{background:linear-gradient(180deg,var(--card) 0%,#0e1420 100%);
+      border:1px solid var(--line);border-radius:var(--r);
+      padding:var(--s4);margin-bottom:var(--s3);
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.045), var(--e2);
       overflow-wrap:anywhere}
 /* Bez min-width:0 elementy w kontenerach flex nie chcą się kurczyć poniżej
    swojej treści i wypychają zawartość poza kartę.                        */
 .card .row > *{min-width:0}
 .stat, .inrrow > span{min-width:0}
-.card h3{margin:0 0 4px;font-size:15px;font-weight:650}
-.muted{color:var(--dim);font-size:13px}
-.dim2{color:var(--dim2);font-size:12px}
-.row{display:flex;gap:10px;align-items:center}
+.card h3{margin:0 0 var(--s1);font-size:15.5px;font-weight:650;letter-spacing:-.01em}
+.muted{color:var(--dim);font-size:13px;line-height:1.5}
+.dim2{color:var(--dim2);font-size:12px;line-height:1.45}
+.row{display:flex;gap:var(--s3);align-items:center}
 .between{justify-content:space-between}
-hr.sep{border:0;border-top:1px solid var(--line);margin:14px 0}
+hr.sep{border:0;border-top:1px solid var(--line);margin:var(--s4) 0}
 
-button{font:inherit;border:0;border-radius:12px;padding:11px 15px;background:var(--card2);
-       color:var(--txt);cursor:pointer;transition:transform .1s, filter .15s;font-weight:500}
-button:active{transform:scale(.96)}
-button.primary{background:linear-gradient(180deg,#5eead4,#2dd4bf);color:#06322c;font-weight:700}
-button.ghost{background:transparent;border:1px solid var(--line);color:var(--dim)}
-button.danger{background:rgba(248,113,113,.16);color:#fecaca}
-button[disabled]{opacity:.4;pointer-events:none}
-input,select{font:inherit;background:var(--card2);color:var(--txt);border:1px solid var(--line);
-      border-radius:12px;padding:11px 12px;width:100%;min-width:0;outline:none;
-      -webkit-appearance:none;appearance:none}
+/* Nagłówek działu — mała, rozstrzelona wersalikami etykieta. Wchodzi
+   wszędzie tam, gdzie karta potrzebuje podpisu, a nie tytułu.        */
+.over{font-size:10.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
+      color:var(--dim2)}
+
+/* ---------- przyciski ----------
+   Wysokość 44 px to nie estetyka, tylko najmniejszy cel, w który palec
+   trafia pewnie (wytyczne Apple). Przycisk główny ma delikatną poświatę
+   w swoim kolorze — dzięki niej wiadomo, gdzie patrzeć, bez krzyku.  */
+button{font:inherit;border:0;border-radius:var(--r-md);padding:12px 16px;
+       background:var(--card2);color:var(--txt);cursor:pointer;font-weight:600;
+       letter-spacing:-.01em;min-height:44px;
+       transition:transform .12s cubic-bezier(.2,.8,.3,1), filter var(--ruch),
+                  background var(--ruch), box-shadow var(--ruch)}
+button:active{transform:scale(.97);filter:brightness(1.08)}
+button.primary{background:linear-gradient(180deg,#5ee7d4,#2cc5b3);color:#04302a;
+               font-weight:700;font-size:15px;
+               box-shadow:0 1px 0 rgba(255,255,255,.28) inset,
+               0 6px 18px -14px rgba(45,212,191,.9)}
+button.ghost{background:rgba(255,255,255,.035);border:1px solid var(--line);color:var(--dim)}
+button.ghost:active{background:rgba(255,255,255,.07)}
+button.danger{background:var(--bad-soft);color:#fecdd3;border:1px solid var(--bad-edge)}
+button[disabled]{opacity:.35;pointer-events:none}
+
+input,select{font:inherit;background:rgba(255,255,255,.04);color:var(--txt);
+      border:1px solid var(--line);border-radius:var(--r-md);padding:12px 13px;
+      width:100%;min-width:0;outline:none;min-height:44px;
+      -webkit-appearance:none;appearance:none;transition:border-color var(--ruch),
+      background var(--ruch), box-shadow var(--ruch)}
 /* Pole daty na iOS ma własną, dużą szerokość minimalną i potrafi rozepchnąć
    sąsiada poza kartę. Poniższe wymusza, żeby respektowało kontener.       */
 input[type=date]{min-height:44px;line-height:20px;text-align:left}
-input:focus,select:focus{border-color:var(--acc)}
-label{font-size:12px;color:var(--dim2);display:block;margin:12px 0 5px;
-      text-transform:uppercase;letter-spacing:.06em;font-weight:600}
+input:focus,select:focus{border-color:var(--acc-edge);background:rgba(94,234,212,.05);
+      box-shadow:0 0 0 3px rgba(94,234,212,.10)}
+input::placeholder{color:var(--dim2)}
+label{font-size:10.5px;color:var(--dim2);display:block;margin:var(--s4) 0 6px;
+      text-transform:uppercase;letter-spacing:.1em;font-weight:700}
 
 /* Dwa pola obok siebie. Siatka z minmax(0,…) nie da się rozepchnąć
    zawartością, w odróżnieniu od flexboxa.                                */
 .pair{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);
-      gap:10px;margin-top:12px;align-items:end}
+      gap:var(--s3);margin-top:var(--s3);align-items:end}
 .pair > div{min-width:0}
-.pair label{margin:0 0 5px}
+.pair label{margin:0 0 6px}
 
-.chip{font-size:11.5px;padding:5px 10px;border-radius:999px;background:var(--card2);
-      color:var(--dim);white-space:nowrap;border:1px solid var(--line)}
-.chip.on{color:var(--ok);border-color:rgba(52,211,153,.35)}
-.chip.warn{color:var(--warn);border-color:rgba(251,191,36,.35)}
-.chip.off{color:var(--bad);border-color:rgba(248,113,113,.35)}
+.chip{font-size:11.5px;font-weight:600;padding:6px 11px;border-radius:var(--r-pill);
+      background:rgba(255,255,255,.05);color:var(--dim);white-space:nowrap;
+      border:1px solid var(--line)}
+.chip.on{color:var(--ok);border-color:var(--ok-edge);background:var(--ok-soft)}
+.chip.warn{color:var(--warn);border-color:var(--warn-edge);background:var(--warn-soft)}
+.chip.off{color:var(--bad);border-color:var(--bad-edge);background:var(--bad-soft)}
+
+/* ═══════════════ EKRAN GŁÓWNY — KARTA DNIA ═══════════════
+   Pierwsza rzecz po otwarciu aplikacji odpowiada na pytanie, dla którego
+   ta aplikacja istnieje: czy wziąłem dziś tabletkę. Odpowiedź ma być
+   czytelna z odległości ręki, bez czytania — stąd wielkość i kolor.   */
+#todayCard{padding:var(--s5);position:relative;overflow:hidden}
+/* Delikatna poświata w kolorze stanu dnia. Klasę ustawia renderToday(). */
+#todayCard::before{content:"";position:absolute;inset:0;pointer-events:none;
+      background:radial-gradient(420px 160px at 85% -30%, var(--stan-blask,transparent), transparent 70%);
+      transition:background .4s}
+#todayCard.st-ok  {--stan-blask:rgba(52,211,153,.16)}
+#todayCard.st-warn{--stan-blask:rgba(251,191,36,.14)}
+#todayCard.st-bad {--stan-blask:rgba(251,113,133,.14)}
+#todayCard.st-off {--stan-blask:rgba(255,255,255,.05)}
+#todayCard > *{position:relative}
+/* Stopień pisma dobrany tak, żeby najdłuższy możliwy stan („Wzięte —
+   mniejsza dawka") zmieścił się obok medalionu w dwóch wierszach, a
+   najczęstsze („Wzięte", „Jeszcze nie wzięte") w jednym lub dwóch bez
+   dzielenia wyrazu. Większy wygląda efektownie na zrzucie i psuje układ
+   w telefonie.                                                        */
+#todayState{font-size:25px;font-weight:800;letter-spacing:-.03em;line-height:1.12;
+            margin-top:5px;text-wrap:balance}
+#todayWhen{font-size:13.5px;color:var(--dim);margin-top:5px;font-weight:500}
+
+/* Pasek faktów pod stanem dnia: seria i czas od ostatniej dawki.
+   Rozdzielone włosową kreską, nie ramkami — to jedna informacja
+   w dwóch częściach, a nie dwa osobne pudełka.                     */
+.hero-fakty{display:flex;gap:var(--s4);margin-top:var(--s4);padding-top:var(--s4);
+      border-top:1px solid var(--line)}
+.hero-fakt{flex:1;min-width:0}
+.hero-val{font-size:16px;font-weight:700;letter-spacing:-.01em;
+          font-variant-numeric:tabular-nums}
+.hero-lbl{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+          color:var(--dim2);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hero-lbl span{display:block;letter-spacing:.02em;text-transform:none;font-weight:500;
+               font-size:10.5px;opacity:.85;margin-top:1px}
+.hero-fakt + .hero-fakt{border-left:1px solid var(--line);padding-left:var(--s4)}
+#odDawkiRow{margin-top:var(--s3);padding-top:var(--s3);border-top:1px solid var(--line)}
+#odDawkiRow .hero-lbl{margin-top:0}
+
+/* Oprawa tabletki na karcie dnia. */
+.medalion{width:64px;height:64px;flex:none;border-radius:50%;display:grid;place-items:center;
+      background:radial-gradient(circle at 32% 26%, rgba(255,255,255,.11), rgba(255,255,255,.02) 60%);
+      border:1px solid var(--line);box-shadow:inset 0 1px 0 rgba(255,255,255,.06), var(--e1)}
 
 /* ---------- kalendarz ---------- */
-.calhead{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
-.calhead b{font-size:17px;text-transform:capitalize;font-weight:650}
-.calhead button{padding:8px 14px;font-size:18px;line-height:1}
+.calhead{display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--s4)}
+.calhead b{font-size:18px;text-transform:capitalize;font-weight:700;letter-spacing:-.02em}
+.calhead button{padding:0;width:38px;height:38px;min-height:38px;font-size:19px;line-height:1;
+                border-radius:50%;display:flex;align-items:center;justify-content:center}
 .grid{display:grid;grid-template-columns:repeat(7,1fr);gap:5px}
-.dow{text-align:center;font-size:10.5px;color:var(--dim2);font-weight:600;letter-spacing:.04em;padding-bottom:4px}
-.day{aspect-ratio:1;border-radius:12px;background:#141d2f;display:flex;flex-direction:column;
-     align-items:center;justify-content:center;font-size:13.5px;font-weight:600;position:relative;
-     cursor:pointer;border:1.5px solid #1d2942;color:var(--dim);transition:transform .1s}
-.day:active{transform:scale(.93)}
+.dow{text-align:center;font-size:10px;color:var(--dim2);font-weight:700;letter-spacing:.08em;
+     padding-bottom:6px;text-transform:uppercase}
+.day{aspect-ratio:1;border-radius:var(--r-md);background:rgba(255,255,255,.028);
+     display:flex;flex-direction:column;align-items:center;justify-content:center;
+     font-size:13.5px;font-weight:650;position:relative;cursor:pointer;
+     border:1px solid var(--line);color:var(--dim);
+     transition:transform .12s cubic-bezier(.2,.8,.3,1), background var(--ruch)}
+.day:active{transform:scale(.9)}
 .day.blank{background:transparent;border-color:transparent;cursor:default}
-.day.taken  {background:rgba(52,211,153,.14);border-color:rgba(52,211,153,.5);color:#a7f3d0}
-.day.partial{background:rgba(251,191,36,.13);border-color:rgba(251,191,36,.5);color:#fde68a}
-.day.missed {background:rgba(248,113,113,.13);border-color:rgba(248,113,113,.5);color:#fecaca}
-.day.future {opacity:.45}
+.day.taken  {background:var(--ok-soft);border-color:var(--ok-edge);color:#a7f3d0}
+.day.partial{background:var(--warn-soft);border-color:var(--warn-edge);color:#fde68a}
+.day.missed {background:var(--bad-soft);border-color:var(--bad-edge);color:#fecdd3}
+.day.future {opacity:.4}
 /* Brak danych to NIE to samo co pominieta dawka - musi byc widocznie inny:
    szary, wyblakly, z przerywanym obrysem. */
-.day.nodata {opacity:.32;border-style:dashed;color:var(--dim2)}
+.day.nodata {opacity:.3;border-style:dashed;color:var(--dim2);background:transparent}
 
 /* Dzien rozpisany BEZ leku (zero w schemacie tygodniowym albo wyjatek na
    date - np. odstawienie przed zabiegiem).
@@ -130,8 +296,28 @@ label{font-size:12px;color:var(--dim2);display:block;margin:12px 0 5px;
    brak danych (wyblakly = nikt nie wie). Tu wszystko jest w porzadku i
    wiadomo dlaczego, wiec: spokojny obrys bez wypelnienia i pozioma kreska
    w miejscu, gdzie inne dni pokazuja liczbe tabletek.                    */
-.day.off {background:#111a2b;border-color:#26334d;color:var(--dim2);opacity:.75}
+.day.off {background:rgba(255,255,255,.015);border-color:var(--line2);
+          color:var(--dim2);opacity:.8}
 .day.off .nodrug{font-size:11px;color:var(--dim2);line-height:1;margin-top:2px}
+.day.today{box-shadow:0 0 0 2px var(--acc), 0 6px 18px -10px rgba(94,234,212,.7);opacity:1}
+/* Dzien, w ktorym mija odstep miedzy pomiarami INR. Obramowanie przerywane,
+   a nie tlo - dzien ma juz kolor od stanu dawki i nie wolno go zaslonic.
+   outline nie kłóci się z box-shadow, wiec "dzis" i "termin" moga wypasc
+   tego samego dnia i oba beda widoczne.                                  */
+.day.inrdue{outline:2px dashed var(--warn);outline-offset:-2px;opacity:1}
+/* Ikonka terminu w tym samym rogu co znacznik pomiaru - inaczej trzeba by
+   szukac wzrokiem dwoch roznych miejsc na tej samej kratce.               */
+.day .inrdue-i{position:absolute;top:3px;right:4px;width:11px;height:11px}
+.day .dose{position:absolute;bottom:4px;font-size:9px;font-weight:800;opacity:.85}
+.day .inr{position:absolute;top:3px;right:4px;width:11px;height:11px}
+/* Legenda w dwóch równych kolumnach — przy zawijaniu flexem znaczniki
+   rozjeżdżały się w pionie i wyglądało to niechlujnie.               */
+.legend{display:grid;grid-template-columns:1fr 1fr;gap:9px var(--s3);
+        font-size:11.5px;color:var(--dim2);margin-top:var(--s4);
+        padding-top:var(--s3);border-top:1px solid var(--line)}
+.legend span{display:flex;align-items:center;gap:7px;min-width:0}
+.legend i{display:inline-block;width:9px;height:9px;border-radius:3px;flex:none}
+.legend svg{flex:none}
 
 /* ═══════════════ INFORMACJA ZWROTNA ═══════════════
    Najważniejsza rzecz w całej tej sekcji: użytkownik ma ZAWSZE wiedzieć,
@@ -142,7 +328,7 @@ label{font-size:12px;color:var(--dim2);display:block;margin:12px 0 5px;
 /* Cienki pasek postępu pod nagłówkiem - widoczny tylko podczas pracy. */
 #topbar{position:fixed;left:0;right:0;height:2px;z-index:30;pointer-events:none;
         background:transparent;overflow:hidden;
-        top:calc(52px + env(safe-area-inset-top));opacity:0;transition:opacity .2s}
+        top:calc(56px + env(safe-area-inset-top));opacity:0;transition:opacity .2s}
 #topbar.on{opacity:1}
 #topbar i{display:block;height:100%;width:40%;border-radius:2px;
           background:linear-gradient(90deg,transparent,var(--acc),transparent);
@@ -151,22 +337,21 @@ label{font-size:12px;color:var(--dim2);display:block;margin:12px 0 5px;
 
 /* Komunikaty na dole - nie blokują ekranu, w odróżnieniu od okienek alert. */
 #toasts{position:fixed;left:0;right:0;z-index:60;display:flex;flex-direction:column;
-        align-items:center;gap:8px;pointer-events:none;
+        align-items:center;gap:var(--s2);pointer-events:none;
         bottom:calc(78px + env(safe-area-inset-bottom))}
-.toast{max-width:min(420px,92vw);padding:11px 15px;border-radius:14px;font-size:13.5px;
-       display:flex;align-items:center;gap:9px;line-height:1.35;
-       background:rgba(29,41,66,.97);border:1px solid var(--line);color:var(--txt);
-       box-shadow:0 12px 32px -12px #000;-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);
-       animation:wjedz .26s cubic-bezier(.2,.9,.3,1.3)}
-.toast.ok  {border-color:rgba(52,211,153,.5)}
-.toast.err {border-color:rgba(248,113,113,.55)}
+.toast{max-width:min(420px,92vw);padding:12px 16px;border-radius:var(--r-lg);font-size:13.5px;
+       display:flex;align-items:center;gap:10px;line-height:1.35;font-weight:500;
+       background:rgba(24,32,52,.94);border:1px solid var(--line2);color:var(--txt);
+       box-shadow:var(--e3);-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);
+       animation:wjedz var(--ruch-spr)}
+.toast.ok  {border-color:var(--ok-edge)}
+.toast.err {border-color:var(--bad-edge)}
 .toast.gone{animation:zjedz .22s ease forwards}
 .toast svg{flex:none}
-@keyframes wjedz{from{opacity:0;transform:translateY(14px) scale(.96)}
+@keyframes wjedz{from{opacity:0;transform:translateY(16px) scale(.95)}
                  to{opacity:1;transform:none}}
 @keyframes zjedz{to{opacity:0;transform:translateY(8px) scale(.97)}}
 
-/* Kręcące się kółko w przycisku odświeżania. */
 /* Kropka stanu połączenia. Zielona i pulsująca = dane lecą na żywo.
    Szara = aplikacja pokazuje to, co zapamiętała, a nie stan bieżący.
    Bez tego rozróżnienia stary ekran wygląda dokładnie jak aktualny.  */
@@ -185,29 +370,22 @@ label{font-size:12px;color:var(--dim2);display:block;margin:12px 0 5px;
 #pull svg{transition:transform .18s ease}
 #pull.gotowe svg{transform:rotate(180deg);color:var(--acc)}
 
-/* Liczby w interfejsie: stała szerokość cyfr. Bez tego licznik tabletek
-   i procenty "skaczą" w bok przy każdej zmianie wartości.               */
-.num,#batBig,#pillsBig,#adherence,.stat b,.day{font-variant-numeric:tabular-nums}
-
 /* Szkielet zamiast pustki, dopóki dane nie dojdą. */
-.skel{background:linear-gradient(90deg,var(--card2) 25%,#243352 37%,var(--card2) 63%);
+.skel{background:linear-gradient(90deg,rgba(255,255,255,.04) 25%,rgba(255,255,255,.09) 37%,
+      rgba(255,255,255,.04) 63%);
       background-size:400% 100%;animation:polysk 1.4s ease infinite;
-      border-radius:8px;color:transparent !important}
+      border-radius:var(--r-sm);color:transparent !important}
 @keyframes polysk{0%{background-position:100% 50%}100%{background-position:0 50%}}
 
 /* Pierścień skuteczności - czytelniejszy niz sama liczba i ladniejszy. */
 .ring{--p:0;width:62px;height:62px;flex:none;position:relative}
 .ring svg{transform:rotate(-90deg)}
 .ring circle{fill:none;stroke-width:7;stroke-linecap:round}
-.ring .tlo{stroke:var(--card2)}
-.ring .wyp{stroke:var(--ok);transition:stroke-dashoffset .7s cubic-bezier(.3,1,.4,1),stroke .3s}
+.ring .tlo{stroke:rgba(255,255,255,.07)}
+.ring .wyp{stroke:var(--ok);transition:stroke-dashoffset .7s cubic-bezier(.3,1,.4,1),stroke .3s;
+           filter:drop-shadow(0 0 4px rgba(0,0,0,.35))}
 .ring b{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
-        font-size:14px;font-weight:700;font-variant-numeric:tabular-nums}
-
-/* Delikatna seria - motywuje bez krzyku. */
-.streak{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;
-        padding:4px 9px;border-radius:999px;margin-top:8px;
-        background:rgba(94,234,212,.10);color:var(--acc);border:1px solid rgba(94,234,212,.28)}
+        font-size:14px;font-weight:750;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
 
 button:focus-visible,.day:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
 @media (prefers-reduced-motion: reduce){
@@ -260,8 +438,9 @@ button:focus-visible,.day:focus-visible{outline:2px solid var(--acc);outline-off
 /* <picture> jest elementem liniowym - bez tego pod tabletka pojawia sie
    kilka pikseli odstepu od linii tekstu i kafelek "Dzisiaj" rosnie. */
 .tabwrap{display:block;line-height:0}
-.tabgif{display:block;image-rendering:auto}
-.tabgif:not(.zazyta){filter:grayscale(.75) opacity(.55)}
+.tabgif{display:block;image-rendering:auto;
+        filter:drop-shadow(0 8px 16px rgba(0,0,0,.55));transition:filter .4s}
+.tabgif:not(.zazyta){filter:grayscale(.75) opacity(.5)}
 
 #rotateLock{display:none}
 @media screen and (orientation:landscape) and (max-height:520px){
@@ -272,106 +451,116 @@ button:focus-visible,.day:focus-visible{outline:2px solid var(--acc);outline-off
   }
   main,nav,header{display:none !important}
 }
-.day.today{box-shadow:0 0 0 2px var(--acc);opacity:1}
-/* Dzien, w ktorym mija odstep miedzy pomiarami INR. Obramowanie przerywane,
-   a nie tlo - dzien ma juz kolor od stanu dawki i nie wolno go zaslonic.
-   outline nie kłóci się z box-shadow, wiec "dzis" i "termin" moga wypasc
-   tego samego dnia i oba beda widoczne.                                  */
-.day.inrdue{outline:2px dashed var(--warn);outline-offset:-2px;opacity:1}
-/* Ikonka terminu w tym samym rogu co znacznik pomiaru - inaczej trzeba by
-   szukac wzrokiem dwoch roznych miejsc na tej samej kratce.               */
-.day .inrdue-i{position:absolute;top:3px;right:4px;width:11px;height:11px}
-.day .dose{position:absolute;bottom:4px;font-size:9px;font-weight:700;opacity:.9}
-.day .inr{position:absolute;top:3px;right:4px;width:11px;height:11px}
-/* Legenda w dwóch równych kolumnach — przy zawijaniu flexem znaczniki
-   rozjeżdżały się w pionie i wyglądało to niechlujnie.               */
-.legend{display:grid;grid-template-columns:1fr 1fr;gap:9px 10px;
-        font-size:11.5px;color:var(--dim2);margin-top:14px}
-.legend span{display:flex;align-items:center;gap:6px;min-width:0}
-.legend i{display:inline-block;width:9px;height:9px;border-radius:3px;flex:none}
-.legend svg{flex:none}
 
 /* ---------- bateria ---------- */
-.batt{width:52px;height:25px;border:2px solid var(--dim2);border-radius:6px;position:relative;padding:2.5px;flex:none}
-.batt::after{content:"";position:absolute;right:-6px;top:7px;width:4px;height:9px;background:var(--dim2);border-radius:0 2px 2px 0}
-.battfill{height:100%;border-radius:2.5px;width:0;transition:width .5s}
-.bar{height:6px;background:#101828;border-radius:99px;overflow:hidden;border:1px solid var(--line)}
-.bar>div{height:100%;width:0;border-radius:99px;transition:width .5s}
+.batt{width:52px;height:25px;border:2px solid var(--dim2);border-radius:7px;position:relative;
+      padding:2.5px;flex:none}
+.batt::after{content:"";position:absolute;right:-6px;top:7px;width:4px;height:9px;
+             background:var(--dim2);border-radius:0 2px 2px 0}
+.battfill{height:100%;border-radius:3px;width:0;transition:width .5s}
+.bar{height:7px;background:rgba(0,0,0,.35);border-radius:var(--r-pill);overflow:hidden;
+     border:1px solid var(--line)}
+.bar>div{height:100%;width:0;border-radius:var(--r-pill);transition:width .6s cubic-bezier(.3,1,.4,1)}
 
 /* ---------- arkusz ---------- */
-.sheet{position:fixed;inset:0;background:rgba(3,7,16,.72);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);
+.sheet{position:fixed;inset:0;background:rgba(3,6,12,.7);
+       -webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);
        display:none;align-items:flex-end;z-index:60}
 .sheet.show{display:flex;animation:fade .2s}
-.sheet>div{background:var(--bg2);width:100%;max-width:580px;margin:0 auto;border:1px solid var(--line);
-     border-radius:22px 22px 0 0;padding:10px 18px calc(20px + env(safe-area-inset-bottom));
-     max-height:92vh;overflow:auto;animation:up .3s cubic-bezier(.2,.9,.3,1)}
-@keyframes up{from{transform:translateY(40px)}to{transform:none}}
-.grab{width:38px;height:4px;background:var(--line);border-radius:9px;margin:2px auto 14px}
+.sheet>div{background:linear-gradient(180deg,var(--card) 0%,var(--bg2) 100%);
+     width:100%;max-width:580px;margin:0 auto;border:1px solid var(--line2);border-bottom:0;
+     border-radius:26px 26px 0 0;padding:10px var(--s5) calc(var(--s5) + env(safe-area-inset-bottom));
+     max-height:92vh;overflow:auto;box-shadow:var(--e3);
+     animation:up .34s cubic-bezier(.2,.9,.3,1)}
+@keyframes up{from{transform:translateY(48px)}to{transform:none}}
+.grab{width:40px;height:5px;background:rgba(255,255,255,.16);border-radius:9px;margin:2px auto var(--s4)}
 
 /* ---------- sterowanie dawką ---------- */
-.dosewrap{display:flex;align-items:center;justify-content:center;gap:18px;margin:6px 0 4px}
-.stepbtn{width:56px;height:56px;border-radius:50%;font-size:26px;font-weight:300;padding:0;
-         background:var(--card2);border:1px solid var(--line);display:flex;align-items:center;justify-content:center}
+.dosewrap{display:flex;align-items:center;justify-content:center;gap:var(--s5);margin:6px 0 4px}
+.stepbtn{width:58px;height:58px;border-radius:50%;font-size:26px;font-weight:300;padding:0;
+         background:rgba(255,255,255,.05);border:1px solid var(--line);
+         display:flex;align-items:center;justify-content:center}
+/* Te same przyciski w karcie „Plan na ten dzień" są działaniem drugiego
+   planu — zmiana planu zdarza się raz na kilka tygodni, poprawka dawki
+   codziennie. Równa wielkość zrównywała je w hierarchii i arkusz wyglądał
+   jak dwa razy to samo.                                                */
+.card .stepbtn{width:44px;height:44px;font-size:21px}
 .dosebox{text-align:center;min-width:132px}
-.doseval{font-size:34px;font-weight:750;letter-spacing:-.02em;line-height:1.1}
-.doselbl{font-size:12px;color:var(--dim2);margin-top:1px}
-.pillrow{display:flex;gap:8px;justify-content:center;align-items:center;min-height:66px;margin:8px 0 2px}
-.changed{border:1px solid rgba(94,234,212,.4);background:rgba(94,234,212,.07);
-         border-radius:12px;padding:10px 12px;font-size:13px;margin-top:12px}
+.doseval{font-size:40px;font-weight:800;letter-spacing:-.035em;line-height:1.05}
+.doselbl{font-size:12px;color:var(--dim2);margin-top:3px;font-weight:500}
+.pillrow{display:flex;gap:var(--s2);justify-content:center;align-items:center;
+         min-height:66px;margin:var(--s2) 0 2px}
+.changed{border:1px solid var(--acc-edge);background:var(--acc-soft);
+         border-radius:var(--r-lg);padding:12px 14px;font-size:13px;margin-top:var(--s3)}
 
 /* Sześć przycisków licznika. Flex je rozpychał — „−100" ma szerszą treść
    niż „+1", więc ostatni wychodził poza kartę. Grid z minmax(0,1fr)
    wymusza równe kolumny niezależnie od zawartości.                    */
-.pillpad{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:5px;margin-top:12px}
-.pillpad button{padding:11px 2px;font-size:13.5px;font-weight:600;min-width:0;
+.pillpad{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:5px;margin-top:var(--s3)}
+.pillpad button{padding:11px 2px;font-size:13.5px;font-weight:700;min-width:0;min-height:42px;
                 white-space:nowrap;overflow:hidden}
-.pillpad .minus{background:rgba(248,113,113,.16);color:#fecaca}
-.pillpad .plus {background:rgba(52,211,153,.16);color:#a7f3d0}
+/* Kolor jest w tej aplikacji zarezerwowany dla stanu dawki, a te przyciski
+   nie mówią nic o dawce — tylko poprawiają licznik w opakowaniu. Czerwone
+   i zielone klawisze robiły z tego kalkulator i przyciągały wzrok mocniej
+   niż kalendarz obok. Znaczenie niesie znak, nie barwa.                 */
+.pillpad button{background:rgba(255,255,255,.045);border:1px solid var(--line);color:var(--dim)}
+.pillpad .minus{color:var(--dim)}
+.pillpad .plus {color:var(--txt)}
 
 /* ---------- kafelki statystyk ---------- */
-.stats{display:grid;grid-template-columns:repeat(2,1fr);gap:9px;margin-top:14px}
-.stat{background:#101a2b;border:1px solid var(--line);border-radius:12px;padding:11px 12px}
-.stat .sv{font-size:23px;font-weight:750;letter-spacing:-.02em;line-height:1.15}
-.stat .sl{font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.05em;
-          font-weight:600;margin-top:1px}
+/* align-items:start — bez tego kafelek z krótkim podpisem rozciąga się do
+   wysokości sąsiada z długim i zostaje w nim pas pustki, którego nikt nie
+   zamawiał.                                                              */
+.stats{display:grid;grid-template-columns:repeat(2,1fr);gap:var(--s2);margin-top:var(--s4);
+       align-items:start}
+.stat{background:rgba(255,255,255,.032);border:1px solid var(--line);border-radius:var(--r-lg);
+      padding:11px 12px}
+.stat .sv{font-size:21px;font-weight:800;letter-spacing:-.03em;line-height:1.1}
+.stat .sl{font-size:9.5px;color:var(--dim);text-transform:uppercase;letter-spacing:.08em;
+          font-weight:700;margin-top:3px;line-height:1.3}
+/* Podpis pod liczbą tłumaczy, skąd ona jest — ale nie może rozpychać
+   kafelka na trzy wiersze; wtedy siatka statystyk rozjeżdża się w pionie. */
+.stat .dim2{font-size:11px;line-height:1.35;margin-top:3px}
+
+/* Wiersz „etykieta — wartość". Wszędzie tam, gdzie interfejs wylicza
+   fakty o urządzeniu albo o ustawieniu: wzrok skacze po wartościach
+   z prawej, zamiast czytać każdy wiersz od początku.                 */
+.fakt{display:flex;align-items:baseline;justify-content:space-between;gap:var(--s3);
+      padding:9px 0;border-bottom:1px solid var(--line);font-size:13.5px;color:var(--dim)}
+.fakt:last-child{border-bottom:0}
+.fakt b{color:var(--txt);font-weight:650;text-align:right;min-width:0;
+        overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
 
 /* ---------- INR ---------- */
-.inrbig{font-size:46px;font-weight:750;letter-spacing:-.03em;line-height:1}
+.inrbig{font-size:52px;font-weight:800;letter-spacing:-.04em;line-height:1}
 .inrlist{max-height:none}
-.inrrow{display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid var(--line)}
+.inrrow{display:flex;align-items:center;gap:var(--s3);padding:12px 0;border-bottom:1px solid var(--line)}
 .inrrow:last-child{border-bottom:0}
 .inrdot{width:9px;height:9px;border-radius:50%;flex:none}
-.inrval{font-weight:700;font-size:16px;min-width:42px}
+.inrval{font-weight:750;font-size:16px;min-width:42px;font-variant-numeric:tabular-nums}
 
-/* ---------- nawigacja ---------- */
+/* ---------- nawigacja ----------
+   UWAGA: pozycjonowanie i rezerwa na wcięcie ekranu są ZAMROŻONE (D48–D52).
+   Pięć podejść do „rozjeżdżania się przy przewijaniu", zero trafień;
+   obowiązuje stan z D49 — bez backdrop-filter, tło nieprzezroczyste.
+   Wolno tu zmieniać kolor, pismo i wskaźnik aktywnej zakładki. Nic więcej. */
 nav{position:fixed;bottom:0;left:0;right:0;display:flex;z-index:30;
     background:var(--bg2);border-top:1px solid var(--line);
     padding-bottom:env(safe-area-inset-bottom);
-    /* D48: probowalismy translateZ(0) + backface-visibility:hidden (wlasna
-       warstwa kompozycji) przy zachowanym backdrop-filter. Kuba zglosil, ze
-       pasek nadal sie "rozjezdza" przy scrollowaniu w dol tak samo jak
-       wczesniej - hipoteza z D48 byla wiec zla albo niewystarczajaca.
-
-       D49: zamiast kolejnej laty na to samo miejsce, usuniety zostal
-       backdrop-filter w calosci - to on jest najkosztowniejsza czescia tej
-       kompozycji (na iOS liczy sie na kazdej klatce przewijania od nowa,
-       bo musi znac aktualna tresc POD paskiem). Tlo zrobione nieprzezroczyste
-       (var(--bg2), bez alpha) zamiast polprzezroczystego+rozmytego - wyglada
-       niemal identycznie w tym ciemnym motywie, bo pod paskiem i tak zawsze
-       jest ciemne tlo aplikacji, ale nie wymaga juz zadnego rozmycia na
-       biezaco. translateZ(0) zostaje jako tania, standardowa podpowiedz
-       kompozycji.
-
-       NIE ZWERYFIKOWANE NA PRAWDZIWYM IPHONE - kolejna hipoteza, ale tym
-       razem eliminujaca caly podejrzany mechanizm zamiast go tylko obchodzic.
-       Jesli TO tez nie pomoze, podejrzenie przenosi sie na cos innego niz
-       kompozycja paska - patrz D49 w DECYZJE.md.                        */
     transform:translateZ(0);-webkit-transform:translateZ(0);
     will-change:transform}
-nav button{flex:1;background:none;border-radius:0;padding:9px 0 8px;font-size:10.5px;color:var(--dim2);
-           display:flex;flex-direction:column;align-items:center;gap:3px;font-weight:600}
-nav button svg{width:21px;height:21px}
+nav button{flex:1;background:none;border-radius:0;padding:10px 0 9px;font-size:10px;
+           color:var(--dim2);display:flex;flex-direction:column;align-items:center;gap:4px;
+           font-weight:650;letter-spacing:.01em;min-height:0;position:relative;
+           transition:color var(--ruch)}
+nav button svg{width:22px;height:22px;transition:transform var(--ruch-spr)}
 nav button.act{color:var(--acc)}
+nav button.act svg{transform:translateY(-1px) scale(1.06)}
+/* Kreska nad aktywną zakładką — jedyny sposób, żeby wiedzieć, gdzie się
+   jest, bez czytania podpisów.                                        */
+nav button.act::before{content:"";position:absolute;top:0;left:50%;transform:translateX(-50%);
+    width:26px;height:2.5px;border-radius:0 0 3px 3px;background:var(--acc);
+    box-shadow:0 0 12px rgba(94,234,212,.8)}
 .hide{display:none!important}
 
 /* ---------- powrot z podekranu ----------
@@ -379,31 +568,43 @@ nav button.act{color:var(--acc)}
    litery, a to jest przycisk, ktorego uzywa sie najczesciej ze wszystkich
    na podekranie.                                                          */
 #backBtn{display:block;background:transparent;border:0;color:var(--acc);
-         font-size:15px;font-weight:600;padding:4px 4px 12px;margin:0 0 2px}
-#backBtn:active{opacity:.6}
+         font-size:15px;font-weight:650;padding:4px 4px 12px;margin:0 0 2px;min-height:0}
+#backBtn:active{opacity:.6;transform:none}
 
 /* ---------- kafelki nawigacyjne ----------
    Ustawienia to spis tresci, a nie sciana formularzy: kazda pozycja tylko
    przenosi na swoj ekran. Wczesniej byly to sekcje rozwijane w miejscu -
    dzialalo, ale zeby dojsc do szostej rzeczy, trzeba bylo przewinac piec
    rozwinietych. Kafelek robi to samo jednym dotknieciem i zawsze tak samo. */
-.kafel{display:flex;align-items:center;gap:12px;width:100%;text-align:left;
-       padding:15px 16px;margin-top:10px;background:var(--card);border:1px solid var(--line);
-       border-radius:16px;color:var(--txt);font-size:15px;font-weight:600}
+/* Ikona w medalionie w kolorze działu. Sam tekst w rzędzie sześciu
+   identycznych kafelków wymaga czytania każdego z osobna; kolor i kształt
+   pozwalają trafić w ten właściwy wzrokiem, bez czytania.              */
+.kafel .ikonka{width:36px;height:36px;flex:none;border-radius:11px;display:grid;place-items:center;
+       background:color-mix(in srgb, var(--ikol) 14%, transparent);
+       border:1px solid color-mix(in srgb, var(--ikol) 30%, transparent);
+       color:var(--ikol)}
+.kafel .ikonka svg{width:19px;height:19px}
+.kafel{display:flex;align-items:center;gap:var(--s3);width:100%;text-align:left;
+       padding:13px var(--s3);margin-top:var(--s2);
+       background:linear-gradient(180deg,var(--card) 0%,#0e1420 100%);
+       border:1px solid var(--line);
+       border-radius:var(--r-lg);color:var(--txt);font-size:15px;font-weight:650;
+       box-shadow:inset 0 1px 0 rgba(255,255,255,.04);letter-spacing:-.01em}
 .kafel:active{background:var(--card2)}
 .kafel .kop{flex:1;min-width:0}
-.kafel .kop .dim2{font-weight:400;margin-top:2px}
+.kafel .kop .dim2{font-weight:500;margin-top:3px}
 /* Strzalka w prawo - ten sam ksztalt co w sekcjach zwijanych, tylko bez obrotu:
    tam znaczyla "rozwinie sie tutaj", tu znaczy "przeniesie Cie dalej". */
-.kafel::after{content:"";width:8px;height:8px;flex:none;
+.kafel::after{content:"";width:7px;height:7px;flex:none;margin-right:2px;opacity:.35;
               border-right:2px solid var(--dim2);border-bottom:2px solid var(--dim2);
               transform:rotate(-45deg)}
 
 /* ---------- filtry ---------- */
-.filtry{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
-.filtr{padding:7px 12px;border-radius:999px;font-size:12.5px;font-weight:600;
-       background:var(--card2);border:1px solid var(--line);color:var(--dim)}
-.filtr.act{background:rgba(94,234,212,.15);border-color:var(--acc);color:var(--acc)}
+.filtry{display:flex;flex-wrap:wrap;gap:6px;margin-top:var(--s2)}
+.filtr{padding:8px 13px;border-radius:var(--r-pill);font-size:12.5px;font-weight:650;
+       background:rgba(255,255,255,.04);border:1px solid var(--line);color:var(--dim);
+       min-height:0}
+.filtr.act{background:var(--acc-soft);border-color:var(--acc-edge);color:var(--acc)}
 
 /* ---------- sekcje zwijane ----------
    Ustawienia to ekran, na ktory wchodzi sie po JEDNA rzecz. Wszystko naraz
@@ -429,6 +630,18 @@ nav button.act{color:var(--acc)}
 /* Pierwsza etykieta w rozwinietej sekcji nie potrzebuje gornego odstepu -
    ma go juz od samej sekcji. */
 .sekcia>label:first-child{margin-top:0}
+
+/* ---------- ekran logowania i powitalny ----------
+   Kompozycja wyśrodkowana w pionie, a nie przyklejona do góry: ekran
+   logowania to sześć elementów na pustej stronie i zepchnięte pod
+   nagłówek wyglądają jak formularz, który się nie doczytał.          */
+.login-box{max-width:400px;margin:0 auto;width:100%;
+      padding:0 var(--s6) calc(var(--s6) + env(safe-area-inset-bottom))}
+#login{min-height:100dvh;display:flex;align-items:center;
+       padding-top:env(safe-area-inset-top)}
+#login h1{font-size:30px;letter-spacing:-.035em;font-weight:800}
+#login label{margin-top:var(--s4)}
+#splash{opacity:1;transition:opacity .3s}
 
 /* ---------- raport ---------- */
 #report{display:none}
@@ -460,15 +673,21 @@ nav button.act{color:var(--acc)}
 </div>
 
 <!-- ═══════════════ LOGOWANIE ═══════════════ -->
-<div id="login" class="hide" style="padding:calc(56px + env(safe-area-inset-top)) 24px 40px;max-width:420px;margin:0 auto">
-  <div style="text-align:center;margin-bottom:26px" id="loginPill"></div>
-  <!-- NAZWA-EKRAN-LOGOWANIA -->
-  <h1 style="font-size:24px;margin:0 0 6px;text-align:center;font-weight:700">PillBox</h1>
-  <p class="muted" style="text-align:center;margin-top:0">Zaloguj się, żeby zobaczyć kalendarz.</p>
-  <label>E-mail</label><input id="email" type="email" autocomplete="username" inputmode="email">
-  <label>Hasło</label><input id="pass" type="password" autocomplete="current-password">
-  <p id="loginErr" style="color:var(--bad);font-size:13px;min-height:18px"></p>
-  <button class="primary" style="width:100%" onclick="doLogin()">Zaloguj</button>
+<div id="login" class="hide">
+  <div class="login-box">
+    <div style="text-align:center;margin-bottom:var(--s5)" id="loginPill"></div>
+    <!-- NAZWA-EKRAN-LOGOWANIA -->
+    <h1 style="margin:0 0 6px;text-align:center">PillBox</h1>
+    <p class="muted" style="text-align:center;margin:0 0 var(--s5)">Zaloguj się, żeby zobaczyć kalendarz.</p>
+    <label>E-mail</label><input id="email" type="email" autocomplete="username" inputmode="email">
+    <label>Hasło</label><input id="pass" type="password" autocomplete="current-password">
+    <p id="loginErr" style="color:var(--bad);font-size:13px;min-height:18px;margin:10px 0 0"></p>
+    <button class="primary" style="width:100%;height:50px" onclick="doLogin()">Zaloguj</button>
+    <!-- Jedno zdanie o tym, gdzie te dane są. Aplikacja o leku, która nie
+         mówi nic o prywatności, każe się tego domyślać.                 -->
+    <p class="dim2" style="text-align:center;margin:var(--s5) 0 0">
+      Kalendarz dawek widzi wyłącznie Twoje konto.</p>
+  </div>
 </div>
 
 <!-- ═══════════════ APLIKACJA ═══════════════ -->
@@ -522,32 +741,80 @@ nav button.act{color:var(--acc)}
   </div>
 
   <div class="card" id="todayCard">
-    <div class="row between" style="align-items:flex-start">
-      <div>
-        <div class="dim2" style="text-transform:uppercase;letter-spacing:.06em;font-weight:600">Dzisiaj</div>
-        <div id="todayState" style="font-size:19px;font-weight:650;margin-top:3px;line-height:1.25">—</div>
-        <div class="muted" id="todayWhen"></div>
-        <div id="streak"></div>
+    <div class="row between" style="align-items:flex-start;gap:var(--s4)">
+      <div style="min-width:0;flex:1">
+        <div class="over" id="todayDate">Dzisiaj</div>
+        <div id="todayState">—</div>
+        <div id="todayWhen"></div>
       </div>
-      <div class="pillrow" id="todayPill" style="min-height:0;margin:0"></div>
+      <!-- Tabletka w medalionie. Sam obrazek na tle karty wyglądał jak
+           zdjęcie wklejone w interfejs; okrągła oprawa z włosową krawędzią
+           robi z niego element aplikacji, a nie ilustrację obok niej. -->
+      <div class="medalion" id="todayPill"></div>
     </div>
+
     <!-- „Wziąłem teraz" — jedno tapnięcie zamiast czterech kroków przez
          kalendarz. Pokazuje się WYŁĄCZNIE w dniu, w którym jest co wziąć
          i nic jeszcze nie zapisano; po zapisie znika, żeby nie kusić do
          drugiego kliknięcia. Zapis idzie z potwierdzeniem — przy leku
          przeciwzakrzepowym przypadkowe „wzięte" ma cenę. -->
-    <button class="primary hide" id="wezTerazBtn" style="width:100%;margin-top:12px"
+    <button class="primary hide" id="wezTerazBtn" style="width:100%;margin-top:var(--s4);height:48px"
             onclick="wezTeraz()">Wziąłem teraz</button>
-    <!-- Licznik chodzi co sekundę z prawdziwego zegara (D57). Cyfry tabelaryczne,
-         inaczej napis skacze na szerokość przy każdym tyknięciu. -->
-    <div class="dim2 hide" id="odDawkiRow" style="margin-top:10px;padding-top:10px;
-         border-top:1px solid var(--line);font-size:12.5px">Od poprzedniej dawki:
-      <b id="odDawki" style="font-variant-numeric:tabular-nums">—</b><span id="odDawkiKiedy"></span></div>
-    <div class="dim2 hide" id="nightHint" style="margin-top:10px;padding-top:10px;
+
+    <!-- Trzy liczby, które mówią o rytmie brania leku. Rozdzielone
+         włosowymi kreskami, nie ramkami: to jedna informacja w trzech
+         częściach, a nie trzy osobne kafelki.
+         Licznik chodzi co sekundę z prawdziwego zegara (D57). Cyfry
+         tabelaryczne, inaczej napis skacze na szerokość przy tyknięciu. -->
+    <div class="hero-fakty">
+      <div class="hero-fakt hide" id="faktSeriaBox">
+        <div class="hero-val" id="faktSeria">—</div>
+        <div class="hero-lbl">seria</div>
+      </div>
+      <div class="hero-fakt hide" id="faktNastBox">
+        <div class="hero-val" id="faktNast">—</div>
+        <div class="hero-lbl">następne o</div>
+      </div>
+    </div>
+
+    <!-- Licznik od poprzedniej dawki dostał WŁASNY, pełnej szerokości pas,
+         a nie kolumnę w rzędzie faktów. Powód jest twardy: tyka co sekundę
+         (D57, na wyraźną prośbę Kuby), więc jego napis rośnie do „1 d 2 h
+         16 min 02 s" — w wąskiej kolumnie łamał się na dwa wiersze i
+         rozpychał sąsiadów tak, że etykieta obok kończyła się wielokropkiem.
+         Skrócenie zapisu odebrałoby sekundy, czyli to, o co Kuba prosił.
+         Zmieniamy więc miejsce, nie treść.                              -->
+    <div class="hide" id="odDawkiRow">
+      <div class="hero-lbl" style="margin-bottom:2px">od poprzedniej dawki</div>
+      <div class="row between" style="gap:var(--s3);align-items:baseline">
+        <b class="num" id="odDawki" style="font-size:15px;font-weight:700">—</b>
+        <span class="dim2" id="odDawkiKiedy" style="text-align:right"></span>
+      </div>
+    </div>
+
+    <div class="dim2 hide" id="nightHint" style="margin-top:var(--s3);padding-top:var(--s3);
          border-top:1px solid var(--line);font-size:12.5px"></div>
   </div>
 
   <div class="card">
+    <!-- Skuteczność stoi NAD kalendarzem, nie pod nim. Pod spodem, za
+         legendą, była podsumowaniem, którego nikt nie doczytał; nad siatką
+         jest pytaniem, na które siatka odpowiada.                       -->
+    <div class="row between" style="align-items:center;margin-bottom:var(--s4);
+         padding-bottom:var(--s4);border-bottom:1px solid var(--line)">
+      <div style="min-width:0">
+        <div class="over">Skuteczność w tym miesiącu</div>
+        <div class="dim2" id="adhSub" style="margin-top:4px"></div>
+      </div>
+      <div class="ring" id="adhRing">
+        <svg width="62" height="62" viewBox="0 0 62 62">
+          <circle class="tlo" cx="31" cy="31" r="26"/>
+          <circle class="wyp" cx="31" cy="31" r="26" id="adhArc"
+                  stroke-dasharray="163.4" stroke-dashoffset="163.4"/>
+        </svg>
+        <b id="adherence">–</b>
+      </div>
+    </div>
     <div class="calhead">
       <button class="ghost" onclick="shiftMonth(-1)">‹</button>
       <b id="monthLbl"></b>
@@ -570,21 +837,6 @@ nav button.act{color:var(--acc)}
         <path d="M6 3.6v3.1" stroke="#101828" stroke-width="1.5" stroke-linecap="round"/>
         <circle cx="6" cy="8.7" r=".85" fill="#101828"/></svg>czas na pomiar INR</span>
     </div>
-    <hr class="sep">
-    <div class="row between" style="align-items:center">
-      <div style="min-width:0">
-        <div class="muted">Skuteczność w tym miesiącu</div>
-        <div class="dim2" id="adhSub" style="margin-top:2px"></div>
-      </div>
-      <div class="ring" id="adhRing">
-        <svg width="62" height="62" viewBox="0 0 62 62">
-          <circle class="tlo" cx="31" cy="31" r="26"/>
-          <circle class="wyp" cx="31" cy="31" r="26" id="adhArc"
-                  stroke-dasharray="163.4" stroke-dashoffset="163.4"/>
-        </svg>
-        <b id="adherence">–</b>
-      </div>
-    </div>
   </div>
 
   <!-- ZAPAS TABLETEK -->
@@ -595,8 +847,9 @@ nav button.act{color:var(--acc)}
         <div class="muted" id="pillsSub">—</div>
       </div>
       <div style="text-align:right">
-        <div id="pillsBig" style="font-size:32px;font-weight:750;line-height:1">–</div>
-        <div class="dim2">tabletek</div>
+        <div id="pillsBig" style="font-size:34px;font-weight:800;line-height:1;
+             letter-spacing:-.035em">–</div>
+        <div class="dim2" style="margin-top:2px">tabletek</div>
       </div>
     </div>
     <div class="bar" style="margin-top:12px"><div id="pillsBar"></div></div>
@@ -742,26 +995,39 @@ nav button.act{color:var(--acc)}
   <!-- Ustawienia to SPIS TRESCI. Kazda pozycja przenosi na swoj ekran,
        zamiast rozwijac sie w miejscu (D43). -->
   <button class="kafel" onclick="showTab('lek')">
+    <span class="ikonka" style="--ikol:var(--pill)"><svg viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="2.6" y="8.4" width="18.8" height="7.2" rx="3.6"
+      transform="rotate(-40 12 12)"/><path d="M9.2 6.9l5.6 6.7" transform="rotate(-40 12 12)"/></svg></span>
     <span class="kop">Lek i dawkowanie
       <div class="dim2" id="kafelLek">—</div></span></button>
 
   <button class="kafel" onclick="showTab('sinr')">
+    <span class="ikonka" style="--ikol:var(--inr)"><svg viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 14l4.5-5 3.5 4 3-7 4 8h3"/></svg></span>
     <span class="kop">INR
       <div class="dim2" id="kafelInr">zakres terapeutyczny i odstęp pomiarów</div></span></button>
 
   <button class="kafel" onclick="showTab('wifi')">
+    <span class="ikonka" style="--ikol:var(--acc)"><svg viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 8.5a16 16 0 0 1 19 0"/><path d="M5.5 12a11.5 11.5 0 0 1 13 0"/><path d="M8.5 15.5a7 7 0 0 1 7 0"/><circle cx="12" cy="19" r="1.1" fill="currentColor" stroke="none"/></svg></span>
     <span class="kop">Sieć WiFi pudełka
       <div class="dim2" id="kafelWifi">—</div></span></button>
 
   <button class="kafel" onclick="showTab('tg')">
+    <span class="ikonka" style="--ikol:var(--ok)"><svg viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 4.5L2.8 11.4l5.2 1.9L18.5 7l-8 7.4.4 5.1 3-3.6 4 3z"/></svg></span>
     <span class="kop">Powiadomienia na telefon
       <div class="dim2" id="kafelTg">—</div></span></button>
 
   <button class="kafel" onclick="showTab('dev')">
+    <span class="ikonka" style="--ikol:var(--warn)"><svg viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2.5" width="12" height="19" rx="3"/><path d="M10.5 5.6h3"/></svg></span>
     <span class="kop">Urządzenie
       <div class="dim2" id="kafelDev">stan pudełka, wersja, wylogowanie</div></span></button>
 
   <button class="kafel" onclick="showTab('diag')">
+    <span class="ikonka" style="--ikol:var(--dim)"><svg viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2.5 6 4-13 2.5 7h5"/></svg></span>
     <span class="kop">Diagnostyka
       <div class="dim2">zdarzenia z pudełka, autotest, historia, test wieczka</div></span></button>
 
@@ -1260,9 +1526,18 @@ nav button.act{color:var(--acc)}
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round">
       <path d="M4 20V11M9.5 20V5M15 20v-6M20.5 20V8"/></svg>Analiza</button>
   <button id="nav-set" onclick="showTab('set')">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round">
-      <circle cx="12" cy="12" r="3.2"/>
-      <path d="M12 2.5v2.6M12 18.9v2.6M21.5 12h-2.6M5.1 12H2.5M18.7 5.3l-1.8 1.8M7.1 16.9l-1.8 1.8M18.7 18.7l-1.8-1.8M7.1 7.1L5.3 5.3"/></svg>Ustawienia</button>
+    <!-- Trybik, nie słońce. Poprzednia ikona (kółko z ośmioma promieniami)
+         czytała się jako jasność ekranu, a nie jako ustawienia aplikacji. -->
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+         stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="3.1"/>
+      <path d="M19.4 15a1.6 1.6 0 0 0 .33 1.77l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.6 1.6 0 0 0-1.77-.33
+               1.6 1.6 0 0 0-1 1.46V21a2 2 0 1 1-4 0v-.11a1.6 1.6 0 0 0-1.05-1.46 1.6 1.6 0 0 0-1.77.33l-.06.06
+               a2 2 0 1 1-2.83-2.83l.06-.06A1.6 1.6 0 0 0 4.6 15a1.6 1.6 0 0 0-1.46-1H3a2 2 0 1 1 0-4h.11
+               A1.6 1.6 0 0 0 4.6 8.9a1.6 1.6 0 0 0-.33-1.77l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06
+               a1.6 1.6 0 0 0 1.77.33H9a1.6 1.6 0 0 0 1-1.46V3a2 2 0 1 1 4 0v.11a1.6 1.6 0 0 0 1 1.46
+               1.6 1.6 0 0 0 1.77-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.6 1.6 0 0 0-.33 1.77V9
+               a1.6 1.6 0 0 0 1.46 1H21a2 2 0 1 1 0 4h-.11a1.6 1.6 0 0 0-1.46 1z"/></svg>Ustawienia</button>
 </nav>
 </div>
 
@@ -1272,7 +1547,8 @@ nav button.act{color:var(--acc)}
     <div class="grab"></div>
     <div class="row between" style="margin-bottom:6px">
       <b id="sheetDate" style="font-size:17px"></b>
-      <button class="ghost" style="padding:7px 12px" onclick="closeSheet()">Zamknij</button>
+      <button class="ghost" style="padding:7px 12px;min-height:36px;font-size:13.5px"
+              onclick="closeSheet()">Zamknij</button>
     </div>
     <div id="sheetBody"></div>
   </div>
@@ -1319,7 +1595,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-20.48";
+const APP_VERSION = "2026-08-20.49";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -1624,7 +1900,7 @@ function doseGraphic(dose, size=54){
 }
 
 /* ═══════════════ LOGOWANIE ═══════════════ */
-document.getElementById("loginPill").innerHTML  = tabletSVG(1, 76, 99);
+document.getElementById("loginPill").innerHTML  = tabletSVG(1, 64, 99);
 document.getElementById("splashPill").innerHTML = tabletSVG(1, 64, 98);
 
 window.doLogin = async () => {
@@ -2715,7 +2991,7 @@ function odswiezOdDawki(){
      policzonej raz przy rysowaniu — inaczej sekundy stałyby w miejscu. */
   document.getElementById("odDawki").textContent =
     trwanieTxt(Math.floor(Date.now()/1000) - d.ts);
-  document.getElementById("odDawkiKiedy").textContent = " · " + kiedyDawkaTxt(d);
+  document.getElementById("odDawkiKiedy").textContent = kiedyDawkaTxt(d);
 }
 
 let tikTimer = null;
@@ -2746,9 +3022,17 @@ function renderToday(){
   document.getElementById("todayPill").innerHTML =
     `<picture class="tabwrap">
        <source srcset="tabletka.webp" type="image/webp">
-       <img src="tabletka.gif" alt="Warfin" width="58" height="58"
+       <img src="tabletka.gif" alt="Warfin" width="46" height="46"
             class="tabgif${any && sum > 0 ? " zazyta" : ""}">
      </picture>`;
+
+  /* Data w nagłówku karty. „Dzisiaj" samo w sobie nie mówi nic o tym,
+     KTÓRĄ dobę widzisz — a po północy, przed granicą doby lekowej, to
+     wciąż wczorajsza data (patrz podpowiedź nocna niżej).            */
+  const dNag = new Date(key + "T12:00:00");
+  const dataEl = document.getElementById("todayDate");
+  if (dataEl) dataEl.textContent = "Dzisiaj · " + dNag.toLocaleDateString("pl-PL",
+    { weekday:"long", day:"numeric", month:"long" });
   if (target <= 0 && sum <= 0){
     /* Dzień rozpisany bez leku. Musi być powiedziane wprost i spokojnym
        kolorem — „jeszcze nie wzięte" na pomarańczowo w dniu odstawienia
@@ -2770,6 +3054,36 @@ function renderToday(){
     document.getElementById("todayWhen").textContent =
       `${nf(sum)} tabl.` + (r?.ts ? ` · o ${devHM(r.ts)}` : "");
   }
+  /* Poświata karty w kolorze stanu dnia. To jedyne miejsce, gdzie kolor
+     wychodzi poza tekst — i robi dokładnie to samo, co on: mówi, jak jest
+     z dzisiejszą dawką, zanim cokolwiek przeczytasz.                  */
+  const karta = document.getElementById("todayCard");
+  if (karta){
+    const stan = target <= 0 && sum <= 0 ? "st-off"
+               : !any                    ? "st-warn"
+               : sum <= 0                ? "st-bad" : "st-ok";
+    karta.classList.remove("st-ok","st-warn","st-bad","st-off");
+    karta.classList.add(stan);
+  }
+
+  /* Pas faktów: seria, czas od dawki, najbliższe przypomnienie. Każdy
+     chowa się osobno, gdy nie ma czego pokazać — pusta kolumna z myślnikiem
+     wygląda jak awaria, a nie jak brak danych.                        */
+  const seria = seriaDni();
+  const seriaBox = document.getElementById("faktSeriaBox");
+  if (seriaBox){
+    seriaBox.classList.toggle("hide", seria < 2);
+    document.getElementById("faktSeria").textContent = `${seria} dni`;
+  }
+  const nast = doNastepnej();
+  const nastBox = document.getElementById("faktNastBox");
+  if (nastBox){
+    /* W dniu bez leku pudełko nie przypomni — pokazywanie godziny byłoby
+       zaproszeniem do wzięcia tabletki, której brać nie wolno.        */
+    nastBox.classList.toggle("hide", !nast || (target <= 0 && sum <= 0));
+    if (nast) document.getElementById("faktNast").textContent = nast.h;
+  }
+
   /* Przycisk „Wziąłem teraz" ma sens dokładnie w jednym przypadku: dziś
      jest co wziąć i nic jeszcze nie zapisano. W dniu bez leku byłby
      zachętą do wzięcia tabletki, której brać nie wolno; po zapisanej
@@ -4188,7 +4502,8 @@ function renderStatus(st){
     document.getElementById("lastSyncRel").textContent = "";
     document.getElementById("queueInfo").innerHTML = "";
     document.getElementById("devInfo").innerHTML =
-      `ID: <b>${DEVICE_ID}</b><br>Urządzenie nie wysłało jeszcze żadnych danych.`;
+      `<div class="fakt"><span>Identyfikator</span><b>${esc(DEVICE_ID)}</b></div>` +
+      `<div class="dim2" style="margin-top:var(--s2)">Urządzenie nie wysłało jeszcze żadnych danych.</div>`;
     return;
   }
   /* Wszystko, co przychodzi z bazy, moze byc czymkolwiek - tekstem po
@@ -4209,9 +4524,13 @@ function renderStatus(st){
      ogniwie swoje napięcie, więc każdy pomiar wychodziłby 100%. Dlatego
      wyszarzamy liczbę: ma być widoczna, ale nie ma udawać aktualnej.  */
   document.getElementById("batBig").style.color = laduje ? "var(--dim2)" : col;
+  /* „0.00 V" czyta się jak awaria, a znaczy tylko tyle, że starszy program
+     pudełka tego pola nie przysyła. Brak pomiaru mówimy słowem, nie zerem. */
+  const volt = num(st.volt);
   document.getElementById("batVolt").textContent = laduje
     ? "Ładowanie — napięcie pokazuje ładowarkę, nie ogniwo"
-    : `${num(st.volt).toFixed(2)} V · ogniwo 470 mAh`;
+    : volt > 0 ? `${volt.toFixed(2)} V · ogniwo 470 mAh`
+               : "ogniwo 470 mAh";
   const f = document.getElementById("battFill"); f.style.width = Math.max(6,pct)+"%"; f.style.background = col;
   const b = document.getElementById("batBar");  b.style.width = pct+"%"; b.style.background = col;
   f.classList.toggle("laduje", laduje);
@@ -4264,9 +4583,25 @@ function renderStatus(st){
      mocno od wskazania, znaczy że filtr właśnie nadrabia spadek.        */
   const rawTxt = (typeof st.battRaw === "number" && st.battRaw !== pct)
     ? `<br>Pomiar surowy: ${st.battRaw}% (wskazanie wygładzone)` : "";
+  /* Fakty o pudełku jako lista klucz–wartość, nie akapit z <br>.
+     Poprzednia postać („ID: pillbox01<br>Firmware: 1.45.3<br>…") czytała
+     się jak wydruk diagnostyczny wklejony w interfejs: wszystko tym samym
+     stopniem pisma, bez punktu zaczepienia dla oka. Wartość po prawej,
+     etykieta po lewej, włosowa kreska między wierszami — i te same dane
+     da się przejrzeć wzrokiem, zamiast czytać zdanie po zdaniu.       */
+  const wiersz = (etykieta, wartosc) =>
+    `<div class="fakt"><span>${etykieta}</span><b>${wartosc}</b></div>`;
   document.getElementById("devInfo").innerHTML =
-    `ID: <b>${DEVICE_ID}</b><br>Firmware: ${st.fw||"?"}<br>WiFi: ${esc(st.ssid)||"?"} (${st.rssi||"?"} dBm)<br>` +
-    `Wybudzeń: ${st.boots||0} · w kolejce: ${q}${pamiecTxt(st)}${rawTxt}` + opisLadowan(st);
+    wiersz("Identyfikator", esc(DEVICE_ID)) +
+    wiersz("Sieć WiFi", `${esc(st.ssid) || "—"}` +
+           (Number.isFinite(+st.rssi) ? ` <span class="dim2">${+st.rssi} dBm</span>` : "")) +
+    wiersz("Wybudzeń", String(st.boots || 0)) +
+    wiersz("W kolejce pudełka", String(q)) +
+    (typeof st.nvsFree === "number" && st.nvsFree >= 0
+       ? wiersz("Wolnej pamięci", `${st.nvsFree}` +
+           (st.nvsFree < NVS_MALO ? ` <span style="color:var(--bad)">mało</span>` : "")) : "") +
+    (rawTxt ? `<div class="dim2" style="margin-top:var(--s2)">${rawTxt}</div>` : "") +
+    (opisLadowan(st) ? `<div class="dim2" style="margin-top:var(--s2)">${opisLadowan(st)}</div>` : "");
 }
 
 /* ═══════════════ ZAPAS TABLETEK ═══════════════ */
