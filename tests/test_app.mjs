@@ -1638,7 +1638,7 @@ check(!/await Promise\.all\(\[/.test(html),
 
    Wlasciwy niezmiennik jest odwrotny: dawka w kalendarzu przed
    kosmetyka. Rysowanie moze paść - uzupelnianie nie.                  */
-check(/await doReconcile\(true\);\s*(?:\/\*[\s\S]*?\*\/\s*)?renderStatus\(/.test(html),
+check(/await doReconcile\(true\);\s*(?:\/\*[\s\S]*?\*\/\s*)?rysujWszystkie\(/.test(html),
       "uzupelnianie PRZED rysowaniem w odswiezaniu - wyjatek w renderze go nie zabija");
 {
   /* Kolejnosc liczona wprost W CIELE wakeUp(), zeby test nie zalezal od
@@ -1646,7 +1646,7 @@ check(/await doReconcile\(true\);\s*(?:\/\*[\s\S]*?\*\/\s*)?renderStatus\(/.test
   const od = html.indexOf("Promise.allSettled");
   const cialo = html.slice(od, od + 3000);
   const i = cialo.indexOf("await doReconcile(true);");
-  const r = cialo.indexOf("renderBoxLog(); renderTesty();");
+  const r = cialo.indexOf("rysujWszystkie([");
   check(i > 0 && r > i,
         `w odswiezaniu doReconcile (+${i}) wyprzedza rysowanie (+${r})`);
 }
@@ -1970,7 +1970,7 @@ head("Zdarzenie bez pokrycia w kalendarzu");
 }
 check(/setInterval\([\s\S]{0,200}brakujePokrycia\(\)[\s\S]{0,80}60000\)/.test(html),
       "sprawdzenie chodzi cyklicznie, a nie tylko przy zdarzeniach");
-check(/doReconcile\(true\);\s*renderSettings\(\); renderAll\(\);/.test(html),
+check(/doReconcile\(true\);\s*rysuj\("ustawienia", renderSettings\); renderAll\(\);/.test(html),
       "zmiana ustawien tez uruchamia uzupelnianie - i to PRZED rysowaniem");
 
 head("Instrukcja autotestu zgodna z firmware");
@@ -3304,6 +3304,202 @@ const zrodloTg = html.slice(html.indexOf("window.tgPolacz"),
 check(zrodloTg.includes("zapiszCfg("),
       "podlaczenie bota idzie przez zapiszCfg()/zapiszPewnie()");
 check(!/\bset\(/.test(zrodloTg), "i nigdzie nie siega po gole set()");
+
+/* ═══════════ OSLONA RYSOWANIA ═══════════
+   Jeden ekran, ktory sie wysypal, nie moze zabierac ze soba reszty - ani,
+   co gorsza, tego, co stoi za nim w tej samej linijce (settlePills(),
+   czyli odliczanie tabletek). To ten sam ksztalt bledu co B23/D28.       */
+head("Oslona rysowania");
+D();
+A.__resetRys();
+check(A.rysuj("test", () => 42) === 42, "rysuj oddaje wynik, gdy nic sie nie stalo");
+check(A.rysBledy.length === 0, "udany render nie zostawia sladu");
+
+check(A.rysuj("zepsuty ekran", () => { throw new Error("bum"); }) === null,
+      "wyjatek w renderze nie wychodzi na zewnatrz");
+check(A.rysBledy.length === 1, "nieudany render zostawia wpis");
+check(A.rysBledy[0].ekran === "zepsuty ekran", "wpis pamieta, KTORY ekran");
+check(A.rysBledy[0].opis.includes("bum"), "wpis pamieta, co sie stalo");
+check(A.__rysBledyRazem() === 1, "licznik liczy od uruchomienia aplikacji");
+check(typeof A.rysBledy[0].ts === "number", "wpis ma czas");
+
+for (let i = 0; i < A.RYS_BLEDY_LIMIT + 5; i++)
+  A.rysuj("ekran " + i, () => { throw new Error("bum " + i); });
+check(A.rysBledy.length === A.RYS_BLEDY_LIMIT,
+      `lista nie rosnie w nieskonczonosc (limit ${A.RYS_BLEDY_LIMIT})`);
+check(A.rysBledy[0].opis.includes("bum " + (A.RYS_BLEDY_LIMIT + 4)),
+      "najnowszy blad jest pierwszy");
+
+A.__resetRys();
+let rysDrugi = 0;
+A.rysujWszystkie([["pierwszy", () => { throw new Error("bum"); }],
+                  ["drugi",    () => { rysDrugi = 1; }]]);
+check(rysDrugi === 1, "ekran za tym, ktory sie wysypal, rysuje sie mimo to");
+check(A.rysBledy.length === 1, "i tylko ten jeden zostawia slad");
+
+/* Test na PRAWDZIWYM renderAll(): psujemy element kalendarza i sprawdzamy,
+   ze reszta ekranu glownego mimo to sie narysowala.                     */
+A.__resetRys();
+D({ doses:{ [today]: { 0:{ status:"taken", dose:1, source:"device", ts: Math.floor(Date.now()/1000) } } },
+    cfg:{ pillsLeft: 40 } });
+globalThis.__zepsujEl("calGrid", true);
+document.getElementById("todayState").textContent = "PRZED";
+let wyjatekZRenderAll = null;
+try { A.renderAll(); } catch (e) { wyjatekZRenderAll = e; }
+globalThis.__zepsujEl("calGrid", false);
+check(wyjatekZRenderAll === null, "renderAll() nie wypuszcza wyjatku z kalendarza");
+check(A.rysBledy.some(b => b.ekran === "kalendarz"), "awaria kalendarza jest zapisana");
+check(document.getElementById("todayState").textContent !== "PRZED",
+      "ekran 'Dzisiaj' narysowal sie mimo awarii kalendarza");
+check(document.getElementById("pillsBig").textContent === "39",
+      "zapas tabletek narysowal sie mimo awarii kalendarza (40 - dzisiejsza)");
+
+/* Cichy blad to dokladnie ta rzecz, ktora ten projekt zamienia w widoczna
+   liczbe (D14) - ekran, ktory przestal sie rysowac, wyglada jak ekran bez
+   nowych danych.                                                        */
+A.__resetRys();
+check(A.ostrzRysowanie() === "", "bez awarii nie ma o czym ostrzegac");
+A.rysuj("kalendarz", () => { throw new Error("brak elementu"); });
+const ostrzR = A.ostrzRysowanie();
+check(ostrzR.includes("Nie udało się narysować ekranu"), "awaria trafia do ostrzezen");
+check(ostrzR.includes("kalendarz"), "ostrzezenie mowi, ktory ekran");
+check(ostrzR.includes("brak elementu"), "i podaje powod");
+check(ostrzR.includes("var(--warn)") && !ostrzR.includes("var(--bad)"),
+      "kolor zolty, nie czerwony - dane sa cale, zawodzi ich pokazanie");
+A.renderOstrzezenia();
+check(document.getElementById("setWarn").innerHTML.includes("Nie udało się narysować"),
+      "ostrzezenie wchodzi na liste w Ustawieniach");
+A.__resetRys();
+
+/* Osloniete ma byc RYSOWANIE, i nic wiecej. Zapis, ktory sie nie udal, ma
+   krzyczec - polkniety wyjatek jest tam cena, nie ratunkiem.            */
+const zrodloNasluch = html.slice(html.indexOf("users/${uid}/doses`), s => {"),
+                                 html.indexOf("odczyt kalendarza dawek"));
+check(/settlePills\(\);/.test(zrodloNasluch) && !/rysuj\("[^"]*", settlePills\)/.test(zrodloNasluch),
+      "settlePills() NIE jest owiniety oslona rysowania");
+check(!/rysuj\("[^"]*",\s*doReconcile\)/.test(html) && !/rysuj\([^)]*zapiszPewnie/.test(html),
+      "doReconcile() ani zapiszPewnie() tez nie");
+check(zrodloNasluch.includes('rysuj("diagnostyka", renderDiag)'),
+      "renderDiag stojacy PRZED settlePills jest osloniety");
+
+const zrodloAll = html.slice(html.indexOf("function renderAll(){"),
+                             html.indexOf("REKONCYLIACJA"));
+for (const r of ["renderCalendar", "renderToday", "renderPills", "renderInr", "renderKafelki"])
+  check(new RegExp(`rysuj\\("[^"]+", ${r}\\)`).test(zrodloAll),
+        `${r}() rysuje sie z wlasna oslona`);
+
+/* ═══════════ TABLETKA NA EKRANIE GLOWNYM ═══════════
+   Obrazek wazy dwie trzecie calej aplikacji, wiec idzie w WEBP - ale nie
+   kosztem przegladarki, ktora WEBP nie umie: <img> zostaje na GIF-ie.  */
+/* ═══════════ WZIALEM TERAZ ═══════════
+   Skrot do zapisu dzisiejszej dawki. Chodzi o jedno tapniecie zamiast
+   czterech krokow - ale przy leku przeciwzakrzepowym falszywe "wziete"
+   jest gorsze niz brak wpisu, wiec pytanie jest zawsze, a stan sprawdzamy
+   PONOWNIE po odpowiedzi (wyscig z zapisem pudelka - rodzina B27/B28).  */
+head("Wzialem teraz");
+const wezBtn = () => document.getElementById("wezTerazBtn");
+
+D();
+A.renderToday();
+check(!wezBtn().classList.contains("hide"), "przed wzieciem przycisk jest widoczny");
+check(wezBtn().textContent.includes("1 tabl."), "i mowi, ile tabletek zapisze");
+
+D({ doses:{ [today]: { 0:{ status:"taken", dose:1, source:"device", ts: Math.floor(Date.now()/1000) } } } });
+A.renderToday();
+check(wezBtn().classList.contains("hide"), "po zapisanej dawce przycisk znika");
+
+D({ cfg:{ doseWeek:[0,0,0,0,0,0,0] } });
+A.renderToday();
+check(wezBtn().classList.contains("hide"), "w dniu bez leku przycisku nie ma w ogole");
+
+/* Sam zapis: reczny, z prawdziwa chwila, przez zapiszPewnie(). */
+A.__resetDb(); D({ cfg:{ defaultDose:1.5 } });
+const przedZapisem = Math.floor(Date.now()/1000);
+const pWez = window.wezTeraz();
+window.cfResolve(true);
+await pWez;
+const wpisWez = A.__db.data?.users?.testuid?.doses?.[today]?.[0];
+check(wpisWez?.status === "taken", "dawka zapisana jako wzieta");
+check(wpisWez?.dose === 1.5, "w ilosci z rozpisania na ten dzien");
+check(wpisWez?.source === "manual", "jako wpis reczny - pudelko go nie nadpisze");
+check(wpisWez?.ts >= przedZapisem, "ze znacznikiem TERAZ, nie z poludnia");
+
+/* Odmowa musi znaczyc odmowe. */
+A.__resetDb(); D();
+const pNie = window.wezTeraz();
+window.cfResolve(false);
+await pNie;
+check(!A.__db.data?.users?.testuid?.doses?.[today],
+      "rezygnacja z potwierdzenia nie zapisuje nic");
+
+/* WYSCIG: miedzy pytaniem a odpowiedzia dojezdza zapis z pudelka.
+   Nadpisanie go zabraloby prawdziwa godzine otwarcia wieczka.        */
+A.__resetDb(); D();
+const pWysc = window.wezTeraz();
+A.__setState({ doses:{ [today]: { 0:{ status:"taken", dose:1, source:"device", ts: 1600000000 } } } });
+window.cfResolve(true);
+await pWysc;
+check(!A.__db.data?.users?.testuid?.doses?.[today],
+      "wpis pudelka, ktory dojechal w miedzyczasie, zostaje nietkniety");
+
+/* Dzien rozpisany na zero: nawet wywolane wprost nie moze nic zapisac. */
+A.__resetDb(); D({ cfg:{ doseWeek:[0,0,0,0,0,0,0] } });
+await window.wezTeraz();
+check(!A.__db.data?.users?.testuid?.doses?.[today],
+      "w dniu bez leku nie da sie zapisac dawki tym przyciskiem");
+
+/* Godzina otwarcia wieczka i notatka z istniejacego wpisu maja przetrwac. */
+A.__resetDb();
+D({ doses:{ [today]: { 0:{ status:"missed", dose:0, source:"device",
+                           ts: 1600000000, openTs: 1600000123, note:"po kolacji" } } } });
+const pOpen = window.wezTeraz();
+window.cfResolve(true);
+await pOpen;
+const wpisWez2 = A.__db.data?.users?.testuid?.doses?.[today]?.[0];
+check(wpisWez2?.status === "taken", "pominiecie zgloszone przez pudelko da sie poprawic");
+check(wpisWez2?.openTs === 1600000123, "godzina otwarcia wieczka zostaje");
+check(wpisWez2?.note === "po kolacji", "notatka tez");
+
+/* Ekran zielenieje po POTWIERDZENIU z bazy, nie po klikniecu. Zapis lezacy
+   w kolejce albo odrzucony przez reguly nie moze wygladac jak wzieta
+   tabletka - to dokladnie ta roznica, ktora kosztowala B27.            */
+A.__resetDb(); D();
+A.renderToday();
+A.__db.tryb = "blad";                       // baza nieosiagalna
+const pBlad = window.wezTeraz();
+window.cfResolve(true);
+await pBlad;
+A.__db.tryb = null;
+check(A.dayDose(today).sum === 0, "nieudany zapis nie zmienia lokalnego stanu");
+check(!wezBtn().classList.contains("hide"),
+      "i przycisk zostaje - dawki nadal nie ma zapisanej");
+
+A.__resetDb(); D();
+const pOk = window.wezTeraz();
+window.cfResolve(true);
+await pOk;
+check(A.dayDose(today).sum === 1, "udany zapis widac od razu, bez czekania na nasluch");
+check(wezBtn().classList.contains("hide"), "i przycisk znika");
+
+/* Zasada 5: kazdy zapis uzytkownika przez zapiszPewnie(), nigdy gole set(). */
+const zrodloWez = html.slice(html.indexOf("window.wezTeraz"), html.indexOf("window.saveNote"));
+check(zrodloWez.includes("zapiszPewnie("), "zapis idzie przez zapiszPewnie()");
+check(!/\bset\(/.test(zrodloWez), "i nigdzie nie siega po gole set()");
+check(zrodloWez.includes("askConfirm("), "bez potwierdzenia nie zapisuje niczego");
+
+head("Tabletka - lekka wersja WEBP");
+D({ doses:{ [today]: { 0:{ status:"taken", dose:1, source:"device", ts: Math.floor(Date.now()/1000) } } } });
+A.renderToday();
+const pillHtml = document.getElementById("todayPill").innerHTML;
+check(pillHtml.includes('<source srcset="tabletka.webp" type="image/webp">'),
+      "przegladarka z WEBP dostaje lzejszy plik");
+check(pillHtml.includes('src="tabletka.gif"'), "a bez WEBP zostaje GIF - obrazek nie znika");
+check(pillHtml.includes("zazyta"), "wzieta dawka nadal kreci tabletka");
+check(/<picture[^>]*>[\s\S]*<\/picture>/.test(pillHtml), "znacznik <picture> jest domkniety");
+D({ doses:{} });
+A.renderToday();
+check(!document.getElementById("todayPill").innerHTML.includes("zazyta"),
+      "przed wzieciem tabletka stoi");
 
 head("Zgodnosc wersji aplikacji");
 check(/const APP_VERSION = "([\d.\-]+)"/.test(html), "index.html deklaruje wersje");

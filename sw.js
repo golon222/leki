@@ -3,9 +3,14 @@
 /* WAŻNE: ta wartość musi zgadzać się z APP_VERSION w index.html.
    Jej zmiana to sygnał dla iPhone'a, że jest nowa wersja aplikacji —
    stary cache zostaje wtedy skasowany, a strona sama się przeładuje. */
-const CACHE = "pillbox-2026-08-17.47";
+const CACHE = "pillbox-2026-08-20.48";
+/* Tabletka jest tu w wersji WEBP (135 kB), a nie GIF (407 kB). Instalacja
+   workera pobiera CALA te liste przy kazdej nowej wersji aplikacji, wiec
+   roznica idzie nie raz, tylko przy kazdej aktualizacji.
+   GIF zostaje w repo jako zapas dla przegladarki bez WEBP (patrz <picture>
+   w renderToday) - pobiera go wtedy z sieci, nie z tej listy. */
 const SHELL = ["./", "./index.html",
-  "./tabletka.gif", "./manifest.json"];
+  "./tabletka.webp", "./manifest.json"];
 
 /* TU BYŁ BŁĄD, i to cichy.
 

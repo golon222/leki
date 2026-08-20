@@ -359,6 +359,18 @@ naprawy.
   Obowiązuje w trzech miejscach naraz: kalendarz, pierścień skuteczności, raport
   dla lekarza. Wpis **ręczny** wygrywa także dziś — skoro sam zaznaczyłeś, wiesz
   lepiej niż reguła.
+- **Osłona rysowania** (D71): każdy ekran rysuje się przez `rysuj()`, więc
+  wyjątek w jednym nie zabiera ze sobą pozostałych ani tego, co stoi za nimi
+  w tej samej linijce (`settlePills()`). Nieudane rysowania są liczone i widać
+  je w ostrzeżeniach w Ustawieniach. **Osłona nie obejmuje zapisów** — tam
+  połknięty wyjątek gubiłby dawkę po cichu.
+- **Tabletka na ekranie głównym idzie w WEBP** (135 kB zamiast 407 kB, D72).
+  `<picture>` podaje WEBP przeglądarce, która go umie; `<img src="tabletka.gif">`
+  zostaje jako zapas i nie kosztuje transferu, dopóki nie jest potrzebny.
+- **Przycisk „Wziąłem teraz"** (D73) na karcie „Dzisiaj": widoczny tylko wtedy,
+  gdy jest co wziąć i nic nie zapisano, zawsze z potwierdzeniem, a stan
+  sprawdzany ponownie po odpowiedzi — żeby nie nadpisać zapisu, który dojechał
+  z pudełka w międzyczasie.
 - **Ekran aktualizacji** rozróżnia cztery stany, bo każdy znaczy co innego dla
   tego, co masz zrobić: „zlecone, jeszcze się nie łączyło", „właśnie to robi",
   „łączyło się i nie zrobiło — oto powód" oraz „poddało się po trzech próbach"

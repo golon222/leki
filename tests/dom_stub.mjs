@@ -19,6 +19,7 @@ class El {
      by nie bylo. Ta sama lekcja co przy putString (D39): atrapa niewierna
      oryginalowi mierzy inna rzecz niz sie mysli.                        */
   set textContent(v){
+    if (this._zepsuty) throw new Error(`test: element ${this.id} nie przyjmuje tresci`);
     this._text = String(v);
     /* Przypisanie do textContent wstawia TEKST, nie znaczniki - wiec odczyt
        przez innerHTML oddaje go zaescapowanego. To nie jest szczegol: na tym
@@ -29,6 +30,8 @@ class El {
   get textContent(){ return this._text; }
 
   set innerHTML(v){
+    /* Element „zepsuty" - patrz __zepsujEl() na koncu pliku. */
+    if (this._zepsuty) throw new Error(`test: element ${this.id} nie przyjmuje tresci`);
     this._html = String(v);
     /* Przyblizenie tekstu widocznego: bez tagow i bez encji HTML. */
     this._text = this._html.replace(/<[^>]*>/g, "")
@@ -94,3 +97,10 @@ globalThis.location = { reload: () => {} };
 globalThis.setInterval = () => 0;
 globalThis.__els = els;
 globalThis.__resetEls = () => els.clear();
+/* Wymuszenie AWARII JEDNEGO EKRANU. W przegladarce render pada zwykle na
+   elemencie, ktorego nie ma w tej wersji HTML-a albo na polu, ktorego nie
+   przyslalo starsze pudelko. Atrapa nie potrafi zwrocic null (kazde id
+   dostaje element), wiec zepsucie robimy wprost: taki element odmawia
+   przyjecia tresci. Osloniete rysowanie mozna wtedy sprawdzic na PRAWDZIWYM
+   renderAll(), a nie na zastepniku.                                      */
+globalThis.__zepsujEl = (id, wlacz = true) => { doc.getElementById(id)._zepsuty = wlacz; };

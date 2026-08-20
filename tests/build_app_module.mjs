@@ -51,6 +51,8 @@ export { renderSkan, brakujePokrycia, doReconcile, reconcileDecyzja, opisLadowan
          INR_ZAKRES_MIN, INR_ZAKRES_MAX, INR_ODSTEPY, inrKrokiZakresu, renderSettings,
          ostrzMilczy, MILCZY_PROG_H,
          ostrzZatkana, ZATKANA_SWIEZOSC_H, nvsMalo, NVS_MALO, lastRec,
+         rysuj, rysujWszystkie, rysBledy, ostrzRysowanie, RYS_BLEDY_LIMIT,
+         askConfirm,
          renderOta, pobierzOpisFirmware,
          tgTokenPoprawny, renderTgStan, tgKodParowania };
 /* Rozmowa z Telegramem idzie przez fetch(), ktorego w testach nie ma.
@@ -99,6 +101,10 @@ export function __setState(o){
 /* Lista sieci widzianych przez pudelko przychodzi wlasna galezia bazy,
    a nie w statusie - podstawiamy ja wprost, tak jak opis firmware.   */
 export function __setSkan(o){ skanSieci = o; renderSkan(); }
+/* Osłona rysowania zbiera bledy przez cale zycie aplikacji - testy musza
+   umiec zaczac od zera, inaczej kazdy nastepny sprawdza smieci po poprzednim. */
+export function __resetRys(){ rysBledy.length = 0; rysBledyRazem = 0; }
+export function __rysBledyRazem(){ return rysBledyRazem; }
 export function __setView(rok, miesiac){ viewYear = rok; viewMonth = miesiac; }
 export { __db, __resetDb };
 `;

@@ -62,6 +62,64 @@ else:
     else:
         print('  OK   nic nie stoi nad naglowkiem (pasek statusu iOS)')
 
+# OSLONA RYSOWANIA obejmuje WYLACZNIE rysowanie. Polkniety wyjatek jest
+# ratunkiem dla ekranu i katastrofa dla zapisu: zapis, ktory sie nie udal,
+# ma krzyczec. Gdyby ktos kiedys owinal nia doReconcile(), settlePills()
+# albo zapiszPewnie() "zeby nie wywalalo", dawka gubilaby sie po cichu -
+# dokladnie ten ksztalt bledu, ktory ta oslona ma zamykac (B23/D28).
+_zakazane = ['doReconcile', 'settlePills', 'zapiszPewnie', 'zapiszCfg',
+             'oczekWyslij', 'zapiszReconcile']
+_zle_rys = [f for f in _zakazane
+            if re.search(rf'rysuj\w*\((?:[^()]|\([^()]*\))*\b{f}\b', js)]
+if _zle_rys:
+    bad += 1
+    print('  BLAD oslona rysowania owija zapis:', _zle_rys)
+else:
+    print('  OK   oslona rysowania nie owija zadnego zapisu do bazy')
+
+# Kazdy render wolany z renderAll() ma miec WLASNA oslone - inaczej jeden
+# wysypany ekran znow zabiera ze soba pozostale.
+_all = js[js.index('function renderAll(){') + len('function renderAll(){'):]
+_all = _all[:_all.index('\n}')]
+_gole = re.findall(r'(?<![\w"])(render[A-Z]\w*)\(\)', _all)
+if _gole:
+    bad += 1; print('  BLAD render bez oslony w renderAll():', sorted(set(_gole)))
+else:
+    print('  OK   kazdy ekran w renderAll() ma wlasna oslone')
+
+# Kazdy plik z listy service workera MUSI istniec w repo. Brakujacy plik
+# na tej liscie to blad B12: instalacja workera przestaje sie konczyc,
+# a razem z nia znika CALY mechanizm aktualizacji aplikacji - telefon
+# zostaje na starej wersji i nic o tym nie mowi.
+_sw = (root/'sw.js').read_text(encoding='utf-8')
+_shell = re.findall(r'"\.\/([\w.\-]*)"', _sw[_sw.index('const SHELL'):_sw.index('];', _sw.index('const SHELL'))])
+_brak = [f for f in _shell if f and not (root/f).exists()]
+if _brak:
+    bad += 1; print('  BLAD service worker cache\'uje nieistniejacy plik:', _brak)
+else:
+    print(f'  OK   wszystkie {len(_shell)} pozycji z listy service workera istnieja')
+
+# Obrazek tabletki: lekka wersja WEBP musi byc animowana i naprawde lzejsza,
+# a GIF ma zostac jako zapas dla przegladarki bez WEBP.
+_webp = root/'tabletka.webp'
+_gif  = root/'tabletka.gif'
+if not _webp.exists() or not _gif.exists():
+    bad += 1; print('  BLAD brakuje ktoregos z obrazkow tabletki')
+else:
+    _b = _webp.read_bytes()
+    _ramek = _b.count(b'ANMF')
+    if _b[:4] != b'RIFF' or _b[8:12] != b'WEBP' or _ramek < 2:
+        bad += 1; print(f'  BLAD tabletka.webp nie jest animowanym WEBP (ramek: {_ramek})')
+    elif _webp.stat().st_size >= _gif.stat().st_size:
+        bad += 1; print('  BLAD tabletka.webp nie jest lzejsza od GIF-a')
+    else:
+        print(f'  OK   tabletka.webp — {_ramek} klatek, '
+              f'{_webp.stat().st_size//1024} kB zamiast {_gif.stat().st_size//1024} kB')
+    if 'tabletka.gif' not in js:
+        bad += 1; print('  BLAD zniknal zapas w GIF-ie - przegladarka bez WEBP zostanie bez obrazka')
+    else:
+        print('  OK   zapas w GIF-ie na miejscu')
+
 handlers = set(re.findall(r'on(?:click|change)="(\w+)\(', html)) - {'if'}
 orphan = [h for h in handlers if f'window.{h}' not in js]
 if orphan: bad += 1; print('  BLAD handlery bez definicji:', orphan)

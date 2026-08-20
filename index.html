@@ -257,6 +257,9 @@ button:focus-visible,.day:focus-visible{outline:2px solid var(--acc);outline-off
 /* Nieruchoma tabletka, dopoki dawki nie ma - klatka pierwsza wystarczy.
    Zatrzymujemy animacje filtrem, bo GIF-a nie da sie spauzowac z CSS;
    wyszarzenie samo w sobie niesie informacje "jeszcze nie wzieta".  */
+/* <picture> jest elementem liniowym - bez tego pod tabletka pojawia sie
+   kilka pikseli odstepu od linii tekstu i kafelek "Dzisiaj" rosnie. */
+.tabwrap{display:block;line-height:0}
 .tabgif{display:block;image-rendering:auto}
 .tabgif:not(.zazyta){filter:grayscale(.75) opacity(.55)}
 
@@ -528,6 +531,13 @@ nav button.act{color:var(--acc)}
       </div>
       <div class="pillrow" id="todayPill" style="min-height:0;margin:0"></div>
     </div>
+    <!-- „Wziąłem teraz" — jedno tapnięcie zamiast czterech kroków przez
+         kalendarz. Pokazuje się WYŁĄCZNIE w dniu, w którym jest co wziąć
+         i nic jeszcze nie zapisano; po zapisie znika, żeby nie kusić do
+         drugiego kliknięcia. Zapis idzie z potwierdzeniem — przy leku
+         przeciwzakrzepowym przypadkowe „wzięte" ma cenę. -->
+    <button class="primary hide" id="wezTerazBtn" style="width:100%;margin-top:12px"
+            onclick="wezTeraz()">Wziąłem teraz</button>
     <!-- Licznik chodzi co sekundę z prawdziwego zegara (D57). Cyfry tabelaryczne,
          inaczej napis skacze na szerokość przy każdym tyknięciu. -->
     <div class="dim2 hide" id="odDawkiRow" style="margin-top:10px;padding-top:10px;
@@ -1309,7 +1319,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-17.47";
+const APP_VERSION = "2026-08-20.48";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -1840,7 +1850,7 @@ async function boot(){
        niczym gwarantowana — pierwsze uzupełnianie liczyło na starych
        danych i nikt go już nie powtarzał.                             */
     doReconcile(true);
-    renderSettings(); renderAll();
+    rysuj("ustawienia", renderSettings); renderAll();
   }, onErr("odczyt ustawień urządzenia"));
 
   /* Odliczanie musi tykac samo. Pudelko melduje sie rzadko - i słusznie,
@@ -1863,7 +1873,8 @@ async function boot(){
   setInterval(() => { if (uid && events.length && brakujePokrycia()) doReconcile(true); },
               60000);
 
-  onValue(ref(db, `devices/${DEVICE_ID}/status`), s => renderStatus(s.val()),
+  onValue(ref(db, `devices/${DEVICE_ID}/status`),
+          s => rysuj("stan pudełka", () => renderStatus(s.val())),
           onErr("odczyt stanu pudełka"));
 
   onValue(query(ref(db, `devices/${DEVICE_ID}/events`), orderByChild("ts"), limitToLast(400)), s => {
@@ -1883,7 +1894,7 @@ async function boot(){
        renderDiag() czyta pola statusu, ktorych starszy firmware nie
        przysyla; wyjatek tutaj zabralby ze soba uzupelnianie dawki.    */
     doReconcile(true);          // automatycznie, bez komunikatow
-    renderDiag();
+    rysuj("diagnostyka", renderDiag);
   }, onErr("odczyt zdarzeń z pudełka"));
 
   onValue(ref(db, `users/${uid}/doses`), s => {
@@ -1891,7 +1902,7 @@ async function boot(){
     /* settlePills() SAM pisze do bazy, wiec potrafi rzucic. Gdy stalo
        przed uzupelnianiem, zabieralo je ze soba.                      */
     doReconcile(true);
-    renderAll(); renderDiag(); settlePills();
+    renderAll(); rysuj("diagnostyka", renderDiag); settlePills();
     /* Nasłuchy przychodzą w nieprzewidywalnej kolejności. Jeśli zdarzenia
        dotarły przed kalendarzem, uzupełnianie liczyło na pustym stanie -
        to bezpieczne, ale mogło minąć się z danymi. Powtarzamy po każdej
@@ -1902,11 +1913,13 @@ async function boot(){
           onErr("odczyt wyników INR"));
 
   onValue(ref(db, `devices/${DEVICE_ID}/log`), s => {
-    boxLog = s.val() || []; renderBoxLog(); renderTesty();
+    boxLog = s.val() || [];
+    rysujWszystkie([["historia pudełka", renderBoxLog], ["autotest", renderTesty]]);
   }, onErr("odczyt historii pudełka"));
 
   onValue(ref(db, `devices/${DEVICE_ID}/nvsfaillog`), s => {
-    nvsFailLog = s.val() || {}; renderNvsFailLog();
+    nvsFailLog = s.val() || {};
+    rysuj("historia nieudanych zapisów", renderNvsFailLog);
   }, onErr("odczyt historii nieudanych zapisów"));
 
   onValue(ref(db, `devices/${DEVICE_ID}/lidlog`), s => {
@@ -1984,8 +1997,13 @@ async function boot(){
          ma to odzwierciedlać.                                            */
       await doReconcile(true);
 
-      renderStatus(val(st) ? val(st).val() : null);
-      renderSettings(); renderAll(); renderDiag(); renderBoxLog(); renderTesty();
+      rysujWszystkie([
+        ["stan pudełka",     () => renderStatus(val(st) ? val(st).val() : null)],
+        ["ustawienia",       renderSettings],
+        ["diagnostyka",      renderDiag],
+        ["historia pudełka", renderBoxLog],
+        ["autotest",         renderTesty]]);
+      renderAll();
 
       if (recznie) {
         const bledy = [st, ev, ds, ir, cf].filter(r => r.status === "rejected").length;
@@ -2056,7 +2074,7 @@ async function boot(){
     if (document.hidden || !uid) return;
     try {
       const st = await get(ref(db, `devices/${DEVICE_ID}/status`));
-      renderStatus(st.val());
+      rysuj("stan pudełka", () => renderStatus(st.val()));
     } catch (e) { console.error("dozor stanu:", e); }
   }, 30 * 1000);
 
@@ -2104,17 +2122,65 @@ async function boot(){
   }
 }
 
+/* ═══════════════ OSŁONA RYSOWANIA ═══════════════
+
+   Rysowanie jest kosmetyką — dawka w kalendarzu nie jest. Ale w kodzie
+   jedno stało obok drugiego w tej samej linijce:
+
+       doReconcile(true); renderAll(); renderDiag(); settlePills();
+
+   Wyjątek w KTÓRYMKOLWIEK renderze przerywa całą linijkę. Padał wtedy nie
+   ekran, tylko `settlePills()` — czyli odliczanie tabletek w opakowaniu.
+   Ten sam kształt błędu zjadł już raz dawkę z kalendarza (B23/D28) i został
+   wtedy naprawiony w połowie: `allSettled` uodporniło ODCZYTY, a rysowanie
+   zostało bez osłony.
+
+   `rysuj()` zamyka wyjątek wewnątrz jednego ekranu. Reszta rysuje się dalej,
+   a to, co się nie udało, ląduje w liczniku i w ostrzeżeniu w Ustawieniach —
+   bo cichy błąd to dokładnie ta rzecz, którą ten projekt zamienia w widoczną
+   liczbę (D14).
+
+   CZEGO TĄ FUNKCJĄ NIE WOLNO OWIJAĆ: niczego, co pisze do bazy albo liczy
+   dawkę — `doReconcile()`, `settlePills()`, `zapiszPewnie()`. Połknięty
+   wyjątek jest tam ceną, nie ratunkiem: zapis, który się nie udał, ma
+   krzyknąć. Osłona dotyczy WYŁĄCZNIE funkcji `render*`. Pilnuje tego
+   kontrola statyczna.                                                    */
+const RYS_BLEDY_LIMIT = 10;
+const rysBledy = [];                  // najnowsze na początku
+let rysBledyRazem = 0;                // ile razy w ogóle, od startu aplikacji
+
+function rysuj(nazwa, fn){
+  try { return fn(); }
+  catch (e) {
+    rysBledyRazem++;
+    console.error("rysowanie -", nazwa, e);
+    rysBledy.unshift({ ekran: nazwa, opis: String(e && e.message || e),
+                       ts: Math.floor(Date.now() / 1000) });
+    if (rysBledy.length > RYS_BLEDY_LIMIT) rysBledy.length = RYS_BLEDY_LIMIT;
+    return null;
+  }
+}
+
+/* Kilka ekranów jednym wywołaniem, każdy z własną osłoną. */
+function rysujWszystkie(pary){
+  for (const [nazwa, fn] of pary) rysuj(nazwa, fn);
+}
+
 function renderAll(){
-  renderCalendar(); renderToday(); renderPills(); renderInr();
-  if (curTab === "ana") renderAnalysis();
+  rysuj("kalendarz", renderCalendar);
+  rysuj("dzisiaj", renderToday);
+  rysuj("zapas tabletek", renderPills);
+  rysuj("INR", renderInr);
+  if (curTab === "ana") rysuj("analiza", renderAnalysis);
   /* Ekrany, które pokazują dane z bazy, muszą się odświeżać razem z resztą —
      inaczej lista zdarzeń otwarta w chwili, gdy pudełko coś dosyła, zostaje
      na starym stanie i wygląda, jakby zdarzenie nie doszło. */
-  if (curTab === "ev") renderEvents();
-  renderKafelki();
+  if (curTab === "ev") rysuj("zdarzenia", renderEvents);
+  rysuj("kafelki", renderKafelki);
   /* Arkusz dnia trzeba odświeżyć razem z resztą — inaczej po zapisaniu
      zmiany pasek „Zmiana: … → …" zostawał na ekranie mimo zapisu.      */
-  if (sheetDate && document.getElementById("sheet").classList.contains("show")) renderSheet();
+  if (sheetDate && document.getElementById("sheet").classList.contains("show"))
+    rysuj("arkusz dnia", renderSheet);
 }
 
 /* ═══════════════ REKONCYLIACJA ═══════════════
@@ -2274,7 +2340,7 @@ async function doReconcile(silent = true){
   if (!sciezki.length) {
     lastRec = { at: Date.now(), n: 0, err: null, events: events.length };
     staleRules = false;
-    renderDiag();
+    rysuj("diagnostyka", renderDiag);
     if (!silent) toast(`Kalendarz aktualny · przeanalizowano ${events.length} zdarzeń`, "ok");
     return;
   }
@@ -2292,7 +2358,7 @@ async function doReconcile(silent = true){
 
   lastRec = { at: Date.now(), n, err: bledy.length ? bledy[0].err : null, events: events.length };
   staleRules = przestarzale;
-  renderDiag();
+  rysuj("diagnostyka", renderDiag);
 
   if (bledy.length) {
     /* Cicha porazka jest tu najgorsza z mozliwych. Automat dziala w tle,
@@ -2672,9 +2738,17 @@ function renderToday(){
   /* Tabletka na ekranie glownym to teraz Twoje zdjecie. Rozmiar 58 px -
      dokladnie taki, jaki miala bryla CSS, ktora tu wczesniej stala.
      Kreci sie dopiero, gdy dawka jest wzieta: ruch ma cos znaczyc.   */
+  /* WEBP z zapasem w GIF-ie. Ten sam obrazek waży 135 kB zamiast 407 —
+     przy 58 px na ekranie różnicy nie widać, a to dwie trzecie masy całej
+     aplikacji przy pierwszym wejściu i przy każdej instalacji nowej wersji.
+     <source> bierze przeglądarka, która umie WEBP (iOS od 14), reszta
+     spada na <img> — czyli na dokładnie ten sam plik co dotąd.        */
   document.getElementById("todayPill").innerHTML =
-    `<img src="tabletka.gif" alt="Warfin" width="58" height="58"
-          class="tabgif${any && sum > 0 ? " zazyta" : ""}">`;
+    `<picture class="tabwrap">
+       <source srcset="tabletka.webp" type="image/webp">
+       <img src="tabletka.gif" alt="Warfin" width="58" height="58"
+            class="tabgif${any && sum > 0 ? " zazyta" : ""}">
+     </picture>`;
   if (target <= 0 && sum <= 0){
     /* Dzień rozpisany bez leku. Musi być powiedziane wprost i spokojnym
        kolorem — „jeszcze nie wzięte" na pomarańczowo w dniu odstawienia
@@ -2696,6 +2770,16 @@ function renderToday(){
     document.getElementById("todayWhen").textContent =
       `${nf(sum)} tabl.` + (r?.ts ? ` · o ${devHM(r.ts)}` : "");
   }
+  /* Przycisk „Wziąłem teraz" ma sens dokładnie w jednym przypadku: dziś
+     jest co wziąć i nic jeszcze nie zapisano. W dniu bez leku byłby
+     zachętą do wzięcia tabletki, której brać nie wolno; po zapisanej
+     dawce — zaproszeniem do nadpisania godziny, którą zna pudełko.   */
+  const btn = document.getElementById("wezTerazBtn");
+  if (btn){
+    btn.classList.toggle("hide", !(target > 0 && sum <= 0));
+    btn.textContent = `Wziąłem teraz — ${nf(target)} tabl.`;
+  }
+
   /* Po północy, a przed granicą doby, „dziś” to wciąż wczorajsza data.
      Bez tej informacji wyglądałoby to na błąd aplikacji.              */
   const hint = document.getElementById("nightHint");
@@ -2858,6 +2942,72 @@ window.commitDose = async () => {
     ...(rec.note ? { note: rec.note } : {})
   }}, "Zmiana dawki");
   renderSheet();
+};
+
+/* ═══════════════ WZIĄŁEM TERAZ ═══════════════
+
+   Skrót do tego samego zapisu, który robi arkusz dnia — z czterech kroków
+   (kalendarz → dzień → suwak → zapisz) robi jeden. Cała reszta jest taka
+   sama i taka sama zostaje: wpis ręczny, przez `zapiszPewnie()`, z prawdziwą
+   chwilą w `ts`, żeby „od poprzedniej dawki" i analiza pór miały z czego
+   liczyć.
+
+   Dwie rzeczy są tu inne niż w arkuszu i obie są celowe:
+
+   1. POTWIERDZENIE JEST ZAWSZE. Przycisk stoi na ekranie głównym, czyli
+      tam, gdzie palec ląduje przy odruchowym otwarciu aplikacji. Przy
+      Warfinie fałszywe „wzięte" jest gorsze niż brak wpisu: kalendarz
+      pokazuje zielony dzień, a tabletka leży w pudełku.
+
+   2. SPRAWDZAMY STAN JESZCZE RAZ PO POTWIERDZENIU. Między pokazaniem
+      pytania a odpowiedzią mija kilka sekund — dokładnie tyle, ile trzeba,
+      żeby dojechał zapis z pudełka. Nadpisanie go wpisem ręcznym zabrałoby
+      prawdziwą godzinę otwarcia wieczka i zamieniło ją na „mniej więcej
+      teraz". Ta sama rodzina wyścigów co B27/B28/B29.                  */
+window.wezTeraz = async () => {
+  const key = todayKey();
+  const plan = dawkaNaDzien(key);
+  if (plan <= 0){ toast("Dziś nie bierzesz leku — sprawdź rozpisanie.", "info"); return; }
+  if (dayDose(key).sum > 0){ toast("Dzisiejsza dawka jest już zapisana.", "info"); return; }
+
+  /* Godzina liczona TAK SAMO jak ta, którą ekran pokaże po zapisie
+     (devHM, czyli strefa pudełka). Inaczej potwierdzenie mówiłoby 21:05,
+     a wpis wyświetlał się jako 20:05 — i to wyglądałoby na błąd zapisu. */
+  const godz = devHM(Math.floor(Date.now() / 1000));
+  const ok = await askConfirm("Zapisać dzisiejszą dawkę?",
+    `${nf(plan)} ${plan === 1 ? "tabletka" : "tabl."} o ${godz}. ` +
+    `Wpis zostanie oznaczony jako ręczny i nie będzie już nadpisywany przez pudełko. ` +
+    `Jeśli wziąłeś inną ilość, popraw ją potem w kalendarzu.`);
+  if (!ok) return;
+
+  if (dayDose(key).sum > 0){
+    toast("W międzyczasie zapisało to pudełko — zostawiam jego wpis.", "info");
+    renderAll(); return;
+  }
+
+  const rec = (doses[key] || {})[0] || {};
+  const wpis = {
+    status: "taken",
+    dose: plan,
+    source: "manual",
+    ts: Math.floor(Date.now() / 1000),
+    ...(rec.openTs ? { openTs: rec.openTs } : {}),   // godzina z pudełka zostaje
+    ...(rec.note   ? { note: rec.note }     : {})
+  };
+  const zapisane = await zapiszPewnie({ [`users/${uid}/doses/${key}/0`]: wpis },
+                                      "Dzisiejsza dawka");
+
+  /* Lokalna kopia dostaje wpis DOPIERO po potwierdzeniu z bazy — i to jest
+     cała różnica między „zapisane" a „wysłane". Gdyby ekran zieleniał od
+     samego kliknięcia, zapis odrzucony przez reguły albo leżący w kolejce
+     wyglądałby dokładnie jak wzięta tabletka. Przy nieudanym zapisie mówi
+     już `zapiszPewnie()`: albo „czeka na połączenie", albo — przy odmowie —
+     „to nie minie samo". Ekran ma wtedy nadal pokazywać, że dawki nie ma. */
+  if (zapisane){
+    doses[key] = { ...(doses[key] || {}), 0: wpis };
+    toast(`Zapisane — ${nf(plan)} tabl. o ${godz}`, "ok");
+  }
+  renderAll();
 };
 
 window.saveNote = async txt => {
@@ -3741,10 +3891,36 @@ function ostrzZatkana(){
      </div>`;
 }
 
+/* ═══════════════ EKRAN, KTÓRY SIĘ NIE NARYSOWAŁ ═══════════════
+
+   Osłona rysowania (`rysuj()`) zamyka wyjątek wewnątrz jednego ekranu —
+   i właśnie dlatego musi o nim powiedzieć. Ekran, który cicho przestał się
+   rysować, wygląda dokładnie jak ekran bez nowych danych: kalendarz stoi na
+   wczorajszym stanie i nikt nie wie, że stoi.
+
+   Liczba trafia tam, gdzie mieszkają pozostałe awarie — do ostrzeżeń
+   w Ustawieniach. Kolor żółty, nie czerwony: dane w bazie są całe, zawodzi
+   ich pokazanie. Odświeżenie aplikacji zwykle wystarczy.                */
+function ostrzRysowanie(){
+  if (!rysBledy.length) return "";
+  const b = rysBledy[0];
+  const ekrany = [...new Set(rysBledy.map(x => x.ekran))].join(", ");
+  return `<div style="margin-bottom:10px;padding:10px;border-radius:12px;
+       border:1px solid var(--warn);background:rgba(251,191,36,.10)">
+       <b style="color:var(--warn)">Nie udało się narysować ekranu</b><br>
+       <span class="dim2">${rysBledyRazem === 1 ? "Raz" : `<b>${rysBledyRazem}</b> razy`}
+       od uruchomienia aplikacji · ${esc(ekrany)}.
+       Ostatnio: <b>${esc(b.ekran)}</b> — ${esc(b.opis)}.
+       Dane w bazie są całe — to widok, nie zapis. Zamknij i otwórz aplikację;
+       jeśli wróci, pokaż ten komunikat.</span>
+     </div>`;
+}
+
 function renderOstrzezenia(){
   const el = document.getElementById("setWarn");
   if (!el) return;
-  el.innerHTML = ostrzMilczy() + ostrzZatkana() + ostrzKolejka() + ostrzReguly() + ostrzStraty();
+  el.innerHTML = ostrzMilczy() + ostrzZatkana() + ostrzKolejka() + ostrzReguly()
+               + ostrzStraty() + ostrzRysowanie();
   el.classList.toggle("hide", !el.innerHTML.trim());
 }
 

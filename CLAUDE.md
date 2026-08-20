@@ -23,8 +23,8 @@ bash tests/run_all.sh
 ```
 
 Musi przejść przed zmianą i po zmianie. Stan wyjściowy:
-**526 + 51 firmware, 931 (×6 pór doby) + 92 + 49 aplikacja, 48 zgodności,
-119 reguł bazy, 301 kontroli audytu — 0 błędów.**
+**526 + 51 firmware, 987 (×6 pór doby) + 92 + 49 aplikacja, 48 zgodności,
+119 reguł bazy, 301 kontroli audytu, 18 kontroli statycznych — 0 błędów.**
 
 **Runner jest cichy przy sukcesie i głośny przy błędzie** (D66). Udany przebieg
 to 12 linii: jedna na krok, z liczbą zaliczonych kontroli. Krok, który zawiedzie,
@@ -172,6 +172,12 @@ Test to złapie, ale komunikat zrozumiesz szybciej, znając powód (D6, D13, D15
    o leku. Token nie trafia **ani do logu, ani do statusu**. Audyt pilnuje
    każdego z tych punktów.
 
+13. **Osłona rysowania (`rysuj()`) obejmuje WYŁĄCZNIE rysowanie** (D71).
+   Wyjątek połknięty w renderze ratuje ekran; połknięty w zapisie gubi dawkę
+   po cichu. `doReconcile()`, `settlePills()`, `zapiszPewnie()` i `zapiszCfg()`
+   nigdy nie idą przez osłonę — zapis, który się nie udał, ma krzyknąć.
+   Kontrola statyczna to sprawdza i była sprawdzona mutacją.
+
 Blok pomiaru napięcia **wolno** zmieniać (zakaz zniesiony). Audyt nie blokuje —
 zgłasza tylko uwagę, żeby zmiana przypadkowa nie wyglądała jak świadoma.
 
@@ -184,11 +190,12 @@ firmware/PillBox/PillBox.ino     główny kod (~5250 linii)
 firmware/PillBox/config.h        ustawienia (w repo, bez hasła)
 firmware/PillBoxTest/            osobny szkic diagnostyczny
 index.html                   cała PWA w jednym pliku
-sw.js, tabletka.gif      service worker + tabletka na ekranie głównym
+sw.js, tabletka.webp     service worker + tabletka na ekranie głównym
+tabletka.gif                 zapas dla przeglądarki bez WEBP (D72)
 tests/                           testy + audyt
 tests/statyczna.py               kontrola statyczna (krok 4/10)
 database.rules.json              reguły Firebase
-DECYZJE.md                       dziennik decyzji (D1–D66)
+DECYZJE.md                       dziennik decyzji (D1–D73)
 PROJEKT-PillBox-kontekst.md      pełny kontekst projektu
 WGRYWANIE.md                     instrukcja wgrywania kablem dla Kuby
 .github/workflows/firmware.yml   automat budujący binarkę do OTA
