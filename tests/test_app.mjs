@@ -3687,6 +3687,75 @@ check(document.getElementById("navKropka").classList.contains("hide"),
    aplikacji, ktore pisalo do bazy gołym remove(), z pominieciem
    zapiszPewnie(). Lamalo zasade 5 i miało dokladnie ten tryb awarii,
    przed ktorym ta zasada chroni (D1).                                  */
+head("Kopia zapasowa");
+{
+  D({ cfg:{ defaultDose:1.5, drugName:"Warfin", inrMin:2, inrMax:3 },
+      doses:{ [shift(-1)]:{ 0:{ status:"taken", dose:1, source:"device", ts:at(1,20,0) } } },
+      inr:{ "2026-08-01":{ value:2.4, ts:1 } },
+      dosePlans:{ "2026-07-01":{ dd:1 } } });
+  const k = A.zbierzKopie();
+  check(k.wersja === A.KOPIA_WERSJA, "kopia ma numer wersji");
+  check(Object.keys(k.doses).length === 1 && Object.keys(k.inr).length === 1,
+        "zawiera dawki i pomiary INR");
+  check(Object.keys(k.dosePlans).length === 1, "oraz historie rozpisania");
+  check(k.cfg.defaultDose === 1.5 && k.cfg.drugName === "Warfin", "i ustawienia leku");
+  check(!!k.utworzona && !!k.aplikacja, "ze znacznikiem czasu i wersja aplikacji");
+
+  /* SEKRETY NIE WYCHODZA Z APLIKACJI. Kopia, ktora wycieka, jest gorsza
+     niz jej brak - a plik laduje w iCloud albo na Telegramie.          */
+  A.__setState({ cfg:{ tgNowy:{ token:"123456:TAJNE", chat:"111" },
+                       wifiNowa:{ ssid:"Dom", pass:"haslo123" } } });
+  const kt = JSON.stringify(A.zbierzKopie());
+  check(!kt.includes("TAJNE"), "token bota NIE trafia do kopii");
+  check(!kt.includes("haslo123"), "haslo WiFi tez nie");
+  check(!kt.includes("wifiNowa") && !kt.includes("tgNowy"), "ani same pola sekretow");
+  for (const pole of ["schedule","defaultDose","drugName","inrMin"])
+    check(A.KOPIA_CFG.includes(pole), `ustawienie "${pole}" jest na liscie do kopii`);
+
+  /* ODTWARZANIE DOKLADA, NIE ZASTEPUJE - to jest ten scenariusz, w ktorym
+     ludzie traca dane: "przywrocilem stara kopie i wszystko zniknelo".  */
+  const stary = shift(-10), nowy = shift(-2), reczny = shift(-5);
+  D({ doses:{
+        [nowy]:   { 0:{ status:"taken", dose:1, source:"device", ts:at(2,20,0) } },
+        [reczny]: { 0:{ status:"taken", dose:1, source:"manual", ts:at(5,20,0) } } },
+      inr:{ "2026-08-02":{ value:2.2, ts:1 } } });
+  const plan = A.policzOdtworzenie({
+    doses:{ [stary]:  { 0:{ status:"taken", dose:1, source:"device", ts:1 } },
+            [reczny]: { 0:{ status:"missed", dose:0, source:"device", ts:2 } } },
+    inr:{ "2026-08-02":{ value:9.9, ts:3 }, "2026-07-15":{ value:2.8, ts:4 } } });
+  check(!!plan.sciezki[`users/testuid/doses/${stary}/0`], "dzien z kopii, ktorego nie ma, dochodzi");
+  check(!plan.sciezki[`users/testuid/doses/${nowy}/0`],
+        "dzien, ktorego kopia nie zna, zostaje nietkniety");
+  check(!plan.sciezki[`users/testuid/doses/${reczny}/0`],
+        "WPIS RECZNY w telefonie wygrywa z wpisem z kopii");
+  check(!plan.sciezki["users/testuid/inr/2026-08-02"],
+        "istniejacy pomiar INR nie jest nadpisywany");
+  check(!!plan.sciezki["users/testuid/inr/2026-07-15"], "brakujacy pomiar dochodzi");
+  check(plan.dni === 1 && plan.noweInr === 1,
+        "podglad liczy, co dojdzie: " + plan.dni + " dni / " + plan.noweInr + " INR");
+
+  /* Automat do bazy: raz na dobe i nigdy z pustego kalendarza. */
+  A.__resetDb();
+  A.magazyn.removeItem("pillbox-kopia-dzien");
+  D({ doses:{} });
+  await A.kopiaAutomat();
+  check(!A.__db.data?.users?.testuid?.backup, "pusty kalendarz NIE nadpisuje kopii w bazie");
+  D({ doses:{ [shift(-1)]:{ 0:{ status:"taken", dose:1, source:"device", ts:at(1,20,0) } } } });
+  await A.kopiaAutomat();
+  check(!!A.__db.data?.users?.testuid?.backup?.[today], "kopia dobowa trafia do bazy");
+  const ile = A.__db.writes.length;
+  await A.kopiaAutomat();
+  check(A.__db.writes.length === ile, "druga proba tego samego dnia nic nie zapisuje");
+  check(A.KOPIE_W_BAZIE === 3, "trzymamy trzy ostatnie kopie");
+
+  /* Telegram: dopoki nie wlaczony, token nigdzie nie lezy. */
+  check(A.tgKopiaUst() === null, "kopia na Telegram domyslnie wylaczona");
+  const zrodloTgK = html.slice(html.indexOf("window.tgKopiaWlacz"),
+                               html.indexOf("window.tgKopiaWylacz"));
+  check(zrodloTgK.includes("askConfirm("), "wlaczenie pyta o zgode na token w telefonie");
+  check(zrodloTgK.includes("tego telefonu"), "i mowi wprost, gdzie token zamieszka");
+}
+
 head("Pomiar INR: usuwanie i poprawianie");
 {
   A.__resetDb();

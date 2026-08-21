@@ -1325,6 +1325,10 @@ nav button .kropka-nav{position:absolute;top:6px;right:50%;margin-right:-16px;
       Dojdzie przy najbliższym połączeniu pudełka.
     </div>
 
+    <!-- Kopia zapasowa przez bota. Świadomy wybór, nie domyślne zachowanie:
+         wymaga zapisania tokenu w pamięci telefonu (D81). -->
+    <div id="tgKopiaBox" style="margin-top:14px;padding-top:14px;border-top:1px solid var(--line)"></div>
+
     <button class="danger" style="width:100%;margin-top:12px" onclick="tgOdlacz()">
       Odłącz bota</button>
 
@@ -1428,6 +1432,21 @@ nav button .kropka-nav{position:absolute;top:6px;right:50%;margin-right:-16px;
     <button class="btn" onclick="showTab('hist')" style="width:100%">
       Pokaż całą historię
     </button>
+  </div>
+
+  <!-- KOPIA ZAPASOWA -->
+  <div class="card">
+    <h3>Kopia zapasowa</h3>
+    <p class="muted" style="margin:6px 0 12px">Wszystkie dawki, pomiary INR
+      i ustawienia w jednym pliku.</p>
+    <div id="kopiaStan" class="dim2" style="margin-bottom:10px"></div>
+    <button class="primary" style="width:100%" onclick="zapiszKopie()">Zapisz kopię</button>
+    <button class="ghost" style="width:100%;margin-top:8px" onclick="wczytajKopie()">
+      Odtwórz z pliku</button>
+    <!-- Pole pliku ukryte: na iPhonie natywny „Wybierz plik" wygląda obco,
+         a przycisk obok robi dokładnie to samo. -->
+    <input type="file" id="kopiaPlik" accept="application/json,.json"
+           class="hide" onchange="kopiaWybrana(this)">
   </div>
 
   <!-- WEJSCIE DO TESTU WIECZKA -->
@@ -1636,6 +1655,32 @@ nav button .kropka-nav{position:absolute;top:6px;right:50%;margin-right:-16px;
   </details>
 
   <details class="card sek">
+    <summary><h3>Kopia zapasowa</h3></summary>
+    <div class="sekcia">
+      <p class="muted">Cała historia dawek żyje w jednej bazie. Kopia bierze
+        wszystko, co Twoje: kalendarz, pomiary INR, historię rozpisania
+        i ustawienia leku. <b>Nie bierze tokenu bota ani haseł WiFi</b> —
+        kopia, która wycieka, byłaby gorsza niż jej brak.</p>
+      <p class="muted"><b>Zapisz kopię</b> (Diagnostyka) tworzy plik i oddaje go
+        systemowi — wybierasz iCloud, Pliki albo wysyłasz sobie mailem. To
+        jedyna kopia, która przetrwa nawet utratę konta.</p>
+      <p class="muted"><b>Automatycznie</b> raz na dobę powstaje druga kopia
+        w samej bazie. Chroni przed skasowaniem albo uszkodzeniem danych, ale
+        leży w tej samej chmurze co oryginał. Trzymane są trzy ostatnie.</p>
+      <p class="muted"><b>Na Telegram</b> — opcjonalnie, raz na tydzień, do czatu
+        z Twoim botem. Jedyny automat, który przeżyje utratę konta. Wymaga
+        zapisania tokenu w pamięci telefonu i wysyła dane o leku na serwery
+        Telegrama, więc włącza się to świadomie.</p>
+      <p class="muted"><b>Odtwarzanie dokłada, nie zastępuje.</b> Dzień, którego
+        kopia nie zna, zostaje nietknięty, a Twoje ręczne wpisy wygrywają
+        z plikiem. Przed zapisem zobaczysz, ile dni dojdzie.</p>
+      <p class="muted">Wszystko to dzieje się <b>przy otwarciu aplikacji</b> —
+        strona na ekranie głównym iPhone'a nie dostaje czasu, kiedy na nią
+        nie patrzysz.</p>
+    </div>
+  </details>
+
+  <details class="card sek">
     <summary><h3>Gdy coś nie działa</h3></summary>
     <div class="sekcia">
       <div class="fakt"><span>Dawki nie widać w kalendarzu</span><b>Diagnostyka → Zdarzenia</b></div>
@@ -1799,7 +1844,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-21.55";
+const APP_VERSION = "2026-08-21.56";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -2490,6 +2535,12 @@ async function boot(){
         ["historia pudełka", renderBoxLog],
         ["autotest",         renderTesty]]);
       renderAll();
+
+      /* Kopia NA SAMYM KOŃCU i bez `await`: to najmniej pilna rzecz w całym
+         odświeżaniu. Dawka w kalendarzu jest pierwsza, ekran drugi, kopia
+         trzecia — i nic z tego, co przed nią, nie ma na nią czekać.     */
+      kopiaAutomat();
+      kopiaNaTelegram();
 
       if (recznie) {
         const bledy = [st, ev, ds, ir, cf].filter(r => r.status === "rejected").length;
@@ -4608,6 +4659,7 @@ function wierszZdarzenia(e){
    po drodze do czegos innego.                                           */
 function renderDiag(){
   renderOstrzezenia();          // ostrzezenia zyja w Ustawieniach, nie tutaj
+  renderKopiaStan();
   const el = document.getElementById("diagPodsum");
   if (!el) return;
 
@@ -5525,6 +5577,24 @@ function renderTgStan(){
      gdy zacznie. Przechodzi się ją raz, a stała rozwinięta na zawsze. */
   const kroki = document.getElementById("tgKroki");
   if (kroki) kroki.open = st.tg !== true;
+
+  const kb = document.getElementById("tgKopiaBox");
+  if (kb){
+    const ust = tgKopiaUst();
+    kb.innerHTML = ust
+      ? `<div class="fakt"><span>Kopia zapasowa na Telegram</span>
+           <b style="color:var(--ok)">włączona</b></div>
+         <div class="dim2" style="margin:6px 0 10px">Raz na tydzień, przy otwarciu
+           aplikacji. Ostatnia: ${ust.dzien ? esc(ust.dzien) : "jeszcze nie poszła"}.</div>
+         <button class="ghost" style="width:100%" onclick="kopiaNaTelegram(true)">Wyślij kopię teraz</button>
+         <button class="ghost" style="width:100%;margin-top:8px" onclick="tgKopiaWylacz()">
+           Wyłącz i usuń token z telefonu</button>`
+      : `<div class="fakt"><span>Kopia zapasowa na Telegram</span>
+           <b class="dim2">wyłączona</b></div>
+         <div class="dim2" style="margin:6px 0 10px">Wymaga zapisania tokenu w pamięci
+           tego telefonu.</div>
+         <button class="ghost" style="width:100%" onclick="tgKopiaWlacz()">Włącz kopię na Telegram</button>`;
+  }
   const czeka = cfg.tgNowy?.token;
   const cmd = cfg.tgCmd?.akcja;
   let html = "";
@@ -7113,6 +7183,280 @@ window.makeReport = () => {
         <td>${r.time}</td><td>${r.src}</td><td>${r.inr}</td><td>${esc(r.note)}</td></tr>`).join("")}
     </tbody></table>`;
   setTimeout(()=>window.print(), 120);
+};
+
+/* ═══════════════ KOPIA ZAPASOWA ═══════════════
+
+   Cała historia dawek żyje w jednej bazie Firebase. Raport CSV obejmuje
+   tylko wybrany okres i tylko to, co da się zmieścić w tabeli — nie jest
+   kopią, z której da się cokolwiek odtworzyć.
+
+   Kopia bierze WSZYSTKO, co należy do Kuby: kalendarz dawek, pomiary INR,
+   historię rozpisania i ustawienia leku. Nie bierze niczego, co jest
+   sekretem: ani tokenu bota, ani haseł WiFi, ani znaczników czasu
+   z pudełka. Kopia zapasowa, która wycieka, jest gorsza niż jej brak.  */
+const KOPIA_WERSJA = 1;
+
+/* Pola ustawień, które mają sens po odtworzeniu. Whitelist, nie „wszystko
+   poza" — przy „wszystko poza" pierwsze dołożone pole z sekretem trafia do
+   pliku automatycznie i nikt tego nie zauważa.                          */
+const KOPIA_CFG = ["schedule","tz","tzOffsetMin","defaultDose","doseWeek","doseDays",
+                   "drugName","drugStrength","inrMin","inrMax","inrInterval",
+                   "trackingSince","pillsLeft","pillsBase","pillsBaseFrom",
+                   "pillsCountedUntil"];
+
+function zbierzKopie(){
+  const ust = {};
+  for (const k of KOPIA_CFG) if (cfg[k] !== undefined && cfg[k] !== null) ust[k] = cfg[k];
+  return { wersja: KOPIA_WERSJA, utworzona: new Date().toISOString(),
+           aplikacja: APP_VERSION, urzadzenie: DEVICE_ID,
+           doses, inr, dosePlans, cfg: ust };
+}
+
+/* Ile czego jest w kopii — do podglądu przed odtworzeniem i do podpisu
+   pod przyciskiem. Sama liczba dni mówi więcej niż rozmiar w kilobajtach. */
+function opisKopii(k){
+  const dni = Object.keys(k?.doses || {}).length;
+  const pom = Object.keys(k?.inr || {}).length;
+  return `${dni} ${lm(dni, "dzień", "dni", "dni")} · ${pom} ${lm(pom, "pomiar", "pomiary", "pomiarów")} INR`;
+}
+
+/* ═══════════════ KOPIA NA TELEGRAM ═══════════════
+
+   Trzecia droga i jedyna, która przeżyje utratę konta Firebase: plik ląduje
+   w czacie z Twoim własnym botem, czyli w chmurze Telegrama.
+
+   CENA JEST PODWÓJNA I MÓWIMY O NIEJ WPROST, ZANIM KTOKOLWIEK TO WŁĄCZY:
+
+   1. Token bota musi zamieszkać w pamięci TEGO telefonu. Do tej pory nie
+      leżał nigdzie w aplikacji — pole czyściło się po wysłaniu, a token żył
+      wyłącznie w pamięci trwałej pudełka. Kto ma odblokowany telefon, ma
+      teraz i token; co daje token, tłumaczy Instrukcja (można pisać do
+      Ciebie jako ten bot, nie można wejść na Twoje konto).
+   2. Kopia z danymi o leku trafia na serwery Telegrama. Zwykły czat nie
+      jest szyfrowany end-to-end.
+
+   Dlatego to jest WYBÓR, nie domyślne zachowanie: przełącznik domyślnie
+   wyłączony, a włączenie prosi o token osobno.                          */
+const TG_KOPIA_KLUCZ = "pillbox-tg-kopia";      // { token, chat, dzien }
+
+function tgKopiaUst(){
+  try { return JSON.parse(magazyn.getItem(TG_KOPIA_KLUCZ) || "null"); }
+  catch { return null; }
+}
+
+window.tgKopiaWlacz = async () => {
+  const token = document.getElementById("tgToken")?.value.trim() || "";
+  const chat  = document.getElementById("tgChat")?.value.trim() || "";
+  if (!tgTokenPoprawny(token) || !/^-?\d{3,}$/.test(chat)){
+    toast("Wpisz token i identyfikator czatu w polach powyżej, potem włącz kopię.", "err", 5000);
+    return;
+  }
+  const ok = await askConfirm("Zapisać token w tym telefonie?",
+    "Automatyczna kopia na Telegram wymaga, żeby token bota został w pamięci " +
+    "tego telefonu. Kto ma dostęp do odblokowanego telefonu, ma wtedy i token — " +
+    "może pisać do Ciebie jako ten bot. Do konta ani do kalendarza to nie daje dostępu.");
+  if (!ok) return;
+  try { magazyn.setItem(TG_KOPIA_KLUCZ, JSON.stringify({ token, chat, dzien:"" })); }
+  catch { toast("Nie udało się zapisać w pamięci telefonu.", "err"); return; }
+  toast("Kopia na Telegram włączona — pierwsza pójdzie za chwilę.", "ok");
+  renderKopiaStan();
+  kopiaNaTelegram(true);
+};
+
+window.tgKopiaWylacz = () => {
+  try { magazyn.removeItem(TG_KOPIA_KLUCZ); } catch {}
+  toast("Kopia na Telegram wyłączona, token usunięty z telefonu.", "ok");
+  renderKopiaStan();
+};
+
+/* Wysyłka. Raz na tydzień, bo kopia na zewnątrz nie musi być codzienna —
+   a każda wiadomość w czacie z botem zostaje tam na zawsze i tygodniowa
+   kadencja robi z tego czytelną listę zamiast ściany plików.            */
+window.kopiaNaTelegram = async function kopiaNaTelegram(teraz = false){
+  const ust = tgKopiaUst();
+  if (!ust || !uid) return;
+  const dzis = todayKey();
+  if (!teraz && ust.dzien){
+    const dni = Math.round((new Date(dzis) - new Date(ust.dzien)) / 86400000);
+    if (dni < 7) return;
+  }
+  if (!Object.keys(doses).length) return;
+  try {
+    const tekst = JSON.stringify(zbierzKopie(), null, 1);
+    const dane = new FormData();
+    dane.append("chat_id", ust.chat);
+    dane.append("caption", `Kopia PillBox · ${opisKopii(zbierzKopie())}`);
+    dane.append("document", new File([tekst], `pillbox-kopia-${dzis}.json`,
+                                     { type:"application/json" }));
+    const odp = await fetch(`https://api.telegram.org/bot${ust.token}/sendDocument`,
+                            { method:"POST", body: dane });
+    const wynik = await odp.json();
+    if (!wynik.ok) throw new Error(wynik.description || "Telegram odmówił");
+    magazyn.setItem(TG_KOPIA_KLUCZ, JSON.stringify({ ...ust, dzien: dzis }));
+    if (teraz) toast("Kopia wysłana na Telegram", "ok");
+    renderKopiaStan();
+  } catch (e){
+    console.error("kopia na Telegram:", e);
+    /* Głośno TYLKO wtedy, gdy Kuba właśnie o nią poprosił. Automat, który
+       krzyczy przy każdym braku zasięgu, uczy przewijać komunikaty.    */
+    if (teraz) toast("Nie udało się wysłać na Telegram: " + (e.message || "błąd"), "err", 5000);
+  }
+}
+
+/* Automat: kopia do bazy raz na dobę, przy otwarciu aplikacji.
+
+   „Raz na dobę" znaczy tu dokładnie „przy pierwszym otwarciu aplikacji
+   w danej dobie" — i nie da się inaczej. Strona dodana do ekranu głównego
+   iPhone'a nie dostaje od systemu ani sekundy procesora, kiedy nikt na nią
+   nie patrzy; to ta sama granica, przez którą powiadomienia wysyła pudełko,
+   a nie aplikacja (D67).
+
+   Czego ta kopia NIE robi: nie chroni przed utratą konta Firebase, bo leży
+   w tej samej bazie. Chroni przed skasowaniem albo uszkodzeniem gałęzi
+   z dawkami — czyli przed pomyłką, moją albo czyjąś. Kopia „na zewnątrz"
+   to plik i Telegram; te trzy razem mają sens, każda osobno ma dziurę.
+
+   Trzymamy trzy ostatnie. Więcej nie daje nic poza rachunkiem za miejsce,
+   a rok danych to i tak 34 kB.                                          */
+const KOPIE_W_BAZIE = 3;
+
+async function kopiaAutomat(){
+  if (!uid) return;
+  const dzis = todayKey();
+  try {
+    if (magazyn.getItem("pillbox-kopia-dzien") === dzis) return;   // już dziś była
+    /* Pusty kalendarz to nie jest stan wart utrwalania — pierwsze otwarcie
+       aplikacji na nowym telefonie zrobiłoby kopię zera i przykryło nią
+       poprzednią.                                                       */
+    if (!Object.keys(doses).length) return;
+
+    const kopia = zbierzKopie();
+    await update(ref(db), { [`users/${uid}/backup/${dzis}`]: kopia });
+    magazyn.setItem("pillbox-kopia-dzien", dzis);
+
+    /* Kasujemy najstarsze dopiero PO udanym zapisie nowej — inaczej
+       nieudany zapis zostawiłby nas z mniejszą liczbą kopii niż przed
+       próbą. Rodzina zasady 6.                                          */
+    const snap = await get(ref(db, `users/${uid}/backup`));
+    const daty = Object.keys(snap.val() || {}).sort();
+    for (const d of daty.slice(0, Math.max(0, daty.length - KOPIE_W_BAZIE)))
+      await update(ref(db), { [`users/${uid}/backup/${d}`]: null });
+  } catch (e){
+    /* Cicho. Kopia zapasowa, która krzyczy o nieudanej próbie, uczy
+       przewijać komunikaty — a jutro spróbuje znowu sama. Ślad zostaje
+       w Diagnostyce.                                                    */
+    console.error("kopia automatyczna:", e);
+  }
+}
+
+/* Kiedy ostatnio powstała kopia — do podpisu w Diagnostyce. Bez tego
+   „automat działa" i „automat milczy od miesiąca" wyglądają identycznie. */
+function renderKopiaStan(){
+  const el = document.getElementById("kopiaStan");
+  if (!el) return;
+  const dzien = magazyn.getItem("pillbox-kopia-dzien");
+  const k = zbierzKopie();
+  el.innerHTML = dzien
+    ? `W aplikacji: <b>${esc(opisKopii(k))}</b>. Kopia w bazie z dnia <b>${esc(dzien)}</b>.`
+    : `W aplikacji: <b>${esc(opisKopii(k))}</b>. Automatyczna kopia powstanie
+       przy najbliższym pełnym odświeżeniu.`;
+}
+
+window.zapiszKopie = async () => {
+  const kopia = zbierzKopie();
+  const tekst = JSON.stringify(kopia, null, 1);
+  const plik = new File([tekst], `pillbox-kopia-${todayKey()}.json`,
+                        { type:"application/json" });
+  /* Na iPhonie „Udostępnij" to jedyna droga do plików, iCloud i poczty —
+     zapisu wprost na dysk przeglądarka nie ma. Na desktopie spada na
+     zwykłe pobranie.                                                   */
+  if (navigator.canShare && navigator.canShare({ files:[plik] })){
+    try { await navigator.share({ files:[plik], title:"Kopia zapasowa PillBox" });
+          toast(`Kopia gotowa · ${opisKopii(kopia)}`, "ok"); return; }
+    catch(e){ if (e.name === "AbortError") return; }
+  }
+  const url = URL.createObjectURL(plik), a = document.createElement("a");
+  a.href = url; a.download = plik.name; a.click();
+  setTimeout(()=>URL.revokeObjectURL(url), 3000);
+  toast(`Kopia zapisana · ${opisKopii(kopia)}`, "ok");
+};
+
+/* ═══════════════ ODTWARZANIE Z KOPII ═══════════════
+
+   Najbardziej ryzykowna funkcja w całej aplikacji — jedyna, która potrafi
+   nadpisać dane o leku hurtowo. Stąd trzy zabezpieczenia, z których żadne
+   nie jest ozdobą:
+
+   1. DOKŁADAMY, NIE ZASTĘPUJEMY. Dzień, który jest w telefonie, a nie ma
+      go w kopii, zostaje nietknięty. Kopia sprzed miesiąca nie może zabrać
+      ostatniego miesiąca — a to jest dokładnie ten scenariusz, w którym
+      ludzie tracą dane: „przywróciłem starą kopię i wszystko zniknęło".
+   2. WPIS RĘCZNY W TELEFONIE WYGRYWA z wpisem z kopii. Skoro Kuba coś
+      poprawił ręcznie, wie lepiej niż plik sprzed tygodnia (ta sama
+      zasada, co przy uzupełnianiu kalendarza z pudełka — B27/D32).
+   3. PODGLĄD PRZED ZAPISEM. Pytanie mówi, ile dni dojdzie i ile zostanie
+      pominiętych — a nie „czy na pewno".                                */
+function policzOdtworzenie(kopia){
+  const doOdtworzenia = {};
+  let pominiete = 0, noweInr = 0, pominieteInr = 0;
+
+  for (const [key, wpis] of Object.entries(kopia.doses || {})){
+    const teraz = (doses[key] || {})[0], zKopii = (wpis || {})[0];
+    if (!zKopii || typeof zKopii !== "object") continue;
+    /* Ręczna korekta w telefonie jest ostateczna — plik jej nie rusza. */
+    if (teraz && (teraz.source === "manual" || JSON.stringify(teraz) === JSON.stringify(zKopii))){
+      pominiete++; continue;
+    }
+    doOdtworzenia[`users/${uid}/doses/${key}/0`] = zKopii;
+  }
+  for (const [key, wpis] of Object.entries(kopia.inr || {})){
+    if (!wpis || !Number.isFinite(+wpis.value)) continue;
+    if (inr[key]) { pominieteInr++; continue; }
+    doOdtworzenia[`users/${uid}/inr/${key}`] = wpis;
+    noweInr++;
+  }
+  for (const [key, wpis] of Object.entries(kopia.dosePlans || {}))
+    if (!dosePlans[key]) doOdtworzenia[`users/${uid}/dosePlans/${key}`] = wpis;
+
+  return { sciezki: doOdtworzenia, dni: Object.keys(doOdtworzenia)
+             .filter(p => p.includes("/doses/")).length,
+           pominiete, noweInr, pominieteInr };
+}
+
+window.wczytajKopie = () => document.getElementById("kopiaPlik")?.click();
+
+window.kopiaWybrana = async (input) => {
+  const plik = input.files?.[0];
+  input.value = "";                       // ten sam plik da się wybrać ponownie
+  if (!plik) return;
+  let kopia;
+  try {
+    kopia = JSON.parse(await plik.text());
+  } catch { toast("To nie jest plik kopii — nie da się go odczytać.", "err", 4000); return; }
+
+  if (!kopia || typeof kopia !== "object" || !kopia.doses || kopia.wersja > KOPIA_WERSJA){
+    toast("Plik nie wygląda na kopię z tej aplikacji.", "err", 4000); return;
+  }
+  const plan = policzOdtworzenie(kopia);
+  if (!Object.keys(plan.sciezki).length){
+    toast("Wszystko z tej kopii już jest w aplikacji — nic do odtworzenia.", "info", 4000);
+    return;
+  }
+  const kiedy = kopia.utworzona ? new Date(kopia.utworzona).toLocaleDateString("pl-PL",
+                  { day:"numeric", month:"long", year:"numeric" }) : "nieznana data";
+  const ok = await askConfirm("Odtworzyć z kopii?",
+    `Kopia z ${kiedy}. Dojdzie ${plan.dni} ${lm(plan.dni, "dzień", "dni", "dni")} ` +
+    `i ${plan.noweInr} ${lm(plan.noweInr, "pomiar", "pomiary", "pomiarów")} INR. ` +
+    `Pominięte zostaną dni, które już masz (${plan.pominiete}) — ręcznych wpisów ` +
+    `w telefonie kopia nie nadpisze.`);
+  if (!ok) return;
+
+  busy(true);
+  const ile = Object.keys(plan.sciezki).length;
+  const udane = await zapiszPewnie(plan.sciezki, "Odtworzenie z kopii");
+  busy(false);
+  if (udane) toast(`Odtworzono ${ile} ${lm(ile, "wpis", "wpisy", "wpisów")} z kopii`, "ok", 4000);
 };
 
 window.exportCsv = async () => {

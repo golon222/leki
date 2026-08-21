@@ -304,6 +304,11 @@
               ".validate": false
             }
           }
+        },
+        "backup": {
+          "$data": {
+            ".validate": "newData.hasChildren(['utworzona'])"
+          }
         }
       }
     },
