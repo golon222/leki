@@ -309,6 +309,11 @@ Szczegóły obejść (ctags, `.cpp` zamiast `.ino`, atrapa `dfu-util`) — D17.
 ## Jak pracować z Kubą
 
 - Konkretnie, bez asekuracji. Po polsku.
+- **Publikuj bez pytania.** Jego słowa: *„od razu merguj wszystko, nie pytaj,
+  najwyżej będziemy cofać — i tak muszę zobaczyć, jak to wygląda w aplikacji"*.
+  Skończona zmiana z zielonym zestawem idzie na `main` od razu; pytanie „czy
+  publikować" tylko opóźnia jedyną weryfikację, która się liczy — jego ekran.
+  Cofnięcie jest tańsze niż czekanie.
 - **Jego opisy objawów są cenniejsze niż twoje hipotezy.** W poprzedniej sesji
   kilka razy naprawiano rzeczy, które nie były przyczyną; przełomem zawsze był
   jego konkretny opis z liczbami.
