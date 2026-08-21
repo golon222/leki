@@ -23,7 +23,7 @@ bash tests/run_all.sh
 ```
 
 Musi przejść przed zmianą i po zmianie. Stan wyjściowy:
-**526 + 51 firmware, 1037 (×6 pór doby) + 92 + 49 aplikacja, 48 zgodności,
+**526 + 51 firmware, 1060 (×6 pór doby) + 92 + 49 aplikacja, 48 zgodności,
 119 reguł bazy, 301 kontroli audytu, 24 kontrole statyczne — 0 błędów.**
 
 **Runner jest cichy przy sukcesie i głośny przy błędzie** (D66). Udany przebieg
@@ -216,7 +216,7 @@ tabletka.gif                 zapas dla przeglądarki bez WEBP (D72)
 tests/                           testy + audyt
 tests/statyczna.py               kontrola statyczna (krok 4/10)
 database.rules.json              reguły Firebase
-DECYZJE.md                       dziennik decyzji (D1–D75)
+DECYZJE.md                       dziennik decyzji (D1–D76)
 PROJEKT-PillBox-kontekst.md      pełny kontekst projektu
 WGRYWANIE.md                     instrukcja wgrywania kablem dla Kuby
 .github/workflows/firmware.yml   automat budujący binarkę do OTA

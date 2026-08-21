@@ -698,21 +698,35 @@ const kartaTxt = ["anMean","anMeanSub","anSpread","anSpreadSub","anNear","anNear
 check(!/przypomnien/i.test(kartaTxt) && !/przypomni/i.test(kartaTxt),
       "karta analizy nie wspomina o przypomnieniach: " + kartaTxt);
 
-/* Os wykresu idzie w kolejnosci doby lekowej: 22:00 stoi PRZED 00:00,
-   bo to sasiadujace ze soba pory tego samego wieczora. D53.          */
+/* Os PIONOWA wykresu por idzie w kolejnosci DOBY LEKOWEJ: 22:50 stoi WYZEJ
+   niz 00:04, bo to sasiadujace ze soba pory tego samego wieczora. Gdyby os
+   szla od polnocy, te dwie dawki wyladowalyby na przeciwnych koncach
+   wykresu, a on klamalby o rozrzucie. D53.
+
+   Sprawdzamy na WSPOLRZEDNYCH punktow, nie na etykietach osi - etykiety
+   zaleza od zakresu danych, niezmiennik nie.                           */
 D({ cfg:{ schedule:["20:00"], defaultDose:1 }, doses:{
   [shift(-1)]: dose(1, 22, 50), [shift(-2)]: dose(2, 0, 4) } });
 A.renderAnalysis();
-const osHtml = document.getElementById("anHours").innerHTML;
-check(osHtml.indexOf(">22<") >= 0 && osHtml.indexOf(">22<") < osHtml.indexOf(">00<"),
-      "godzina 22 na osi przed polnoca (22 na " + osHtml.indexOf(">22<")
-      + ", 00 na " + osHtml.indexOf(">00<") + ")");
+{
+  const osHtml = document.getElementById("anHours").innerHTML;
+  const cy = klucz => {
+    const m = osHtml.match(new RegExp(`cy="([\\d.]+)"[^>]*data-k="${klucz}"`));
+    return m ? +m[1] : null;
+  };
+  const yWieczor = cy(shift(-1)), yPolnoc = cy(shift(-2));
+  check(yWieczor != null && yPolnoc != null,
+        "obie dawki maja swoje punkty na wykresie");
+  check(yWieczor < yPolnoc,
+        `22:50 wyzej niz 00:04 (${yWieczor} < ${yPolnoc}) - os idzie doba lekowa`);
+  check(/data-k="/.test(osHtml), "punkt pamieta swoj dzien - da sie go dotknac");
+}
 
 D();
 threw = null;
 try { A.renderAnalysis(); } catch(e){ threw = e; }
 check(!threw, "ekran analizy przy zerze danych: " + (threw?.message||"ok"));
-check(document.getElementById("anHours").innerHTML.includes("kilku dniach"),
+check(document.getElementById("anHours").innerHTML.includes("kilku dawkach"),
       "zamiast pustego wykresu pokazuje sie komunikat");
 
 head("Raport zawiera godziny z pudelka");
@@ -3605,6 +3619,71 @@ check(!/nav\{[^}]*backdrop-filter/.test(html.replace(/\/\*[\s\S]*?\*\//g, "")),
    zakladce w ustawieniach pod tytulem instrukcja". Testy pilnuja jednego:
    ze przeniesione wyjasnienia NAPRAWDE gdzies sa - przeniesienie, ktore
    gubi tresc, jest kasowaniem pod inna nazwa.                          */
+/* ═══════════ WYKRESY ANALIZY (D76) ═══════════
+   Zgloszenie Kuby: "czy mozemy jakos w przyjemniejszy sposob pokazywac te
+   dane w analizie... zeby az chcialo sie tam patrzec i monitorowac".
+   Testy pilnuja tego, co wykres MOWI - nie tego, jak wyglada: czy kratka
+   zgadza sie z kalendarzem, czy os idzie doba lekowa, czy da sie z wykresu
+   wejsc w dzien i poprawic dawke.                                       */
+head("Wykresy analizy");
+{
+  /* Siatka rytmu liczy status TA SAMA funkcja co kalendarz. Gdyby liczyla
+     inaczej, jedna z dwoch kratek klamalaby o wzietej dawce.           */
+  D({ doses:{
+    [shift(-1)]: { 0:{ status:"taken",  dose:1,   source:"device", ts:at(1,20,0) } },
+    [shift(-2)]: { 0:{ status:"taken",  dose:0.5, source:"device", ts:at(2,20,0) } },
+    [shift(-3)]: { 0:{ status:"missed", dose:0,   source:"device", ts:at(3,20,0) } } } });
+  const dni = A.dniRytmu(10);
+  const wg = k => dni.find(d => d.key === k);
+  check(wg(shift(-1)).status === A.dayStatus(shift(-1)), "kratka bierze status z kalendarza");
+  check(wg(shift(-2)).status === "partial", "mniejsza dawka ma wlasny status");
+  check(wg(shift(-3)).status === "missed", "pominieta tez");
+  check(wg(shift(-1)).opis.includes("tabl."), "kazda kratka ma opis pod palec: " + wg(shift(-1)).opis);
+
+  const svg = A.rytmSVG(dni);
+  check(svg.startsWith("<svg"), "siatka rysuje sie jako SVG");
+  check((svg.match(/class="rytm-k"/g) || []).length === dni.length,
+        "kazdy dzien ma swoja kratke");
+  check(svg.includes(`data-k="${shift(-1)}"`), "kratka pamieta swoj dzien - da sie ja dotknac");
+  check(/<title>/.test(svg), "i ma podpowiedz");
+
+  /* Kolor NIE JEST jedynym nosnikiem: mniejsza dawka ma dodatkowo wciety
+     ksztalt, bo zolty i zielony to para najblizsza sobie przy protanopii
+     (zmierzone walidatorem: dE 10,6 - powyzej progu, ale bez zapasu).  */
+  check(A.komorkaRytmu("partial").wciecie === true, "mniejsza dawka ma wtorne kodowanie ksztaltem");
+  check(A.komorkaRytmu("taken").wciecie === false, "pelna dawka nie ma wciecia");
+  check(A.komorkaRytmu("taken").kol === "var(--ok)" &&
+        A.komorkaRytmu("missed").kol === "var(--bad)",
+        "kolory kratek to te same tokeny stanu dawki co wszedzie indziej");
+  check(A.komorkaRytmu("nodata").krycie < 0.3, "brak danych jest ledwie widoczny, a nie szary klocek");
+
+  /* Iskra: tydzien bez ani jednego rozstrzygnietego dnia NIE jest zerem -
+     zero znaczyloby "nic nie wziales", a znaczy "nie bylo czego liczyc".  */
+  const tygodnie = A.skutecznoscTygodniami([
+    ...Array(7).fill({ status:"taken" }),
+    ...Array(7).fill({ status:"nodata" }),
+    ...Array(7).fill({ status:"missed" })]);
+  check(tygodnie.length === 2, "tydzien bez danych wypada z wykresu, nie laduje jako zero");
+  check(tygodnie[0] === 100 && tygodnie[1] === 0, "reszta liczona poprawnie: " + tygodnie.join(","));
+  check(A.iskraSVG([50, 80]).includes("<polyline"), "iskra rysuje linie");
+  check(A.iskraSVG([50]) === "", "z jednego punktu nie ma czego rysowac");
+
+  /* Dni tygodnia: emfaza (jeden odcien, wyrozniony najslabszy dzien),
+     a nie siedem kolorow. Kolor stanu dawki nie jest tu na sprzedaz.   */
+  const dow = A.dowSVG([100, 90, 40, 100, 100, 100, 100],
+                       [true, true, true, true, true, true, true],
+                       ["Pn","Wt","Śr","Cz","Pt","So","Nd"]);
+  check(!/var\(--bad\)|var\(--warn\)/.test(dow), "slupki nie uzywaja kolorow stanu dawki");
+  check((dow.match(/var\(--acc\)/g) || []).length === 7, "wszystkie w jednym odcieniu");
+  check(dow.includes(">40%<") && dow.includes(">100%<"),
+        "podpisane tylko skrajne wartosci, nie wszystkie siedem");
+  check((dow.match(/<text[^>]*font-weight="700"/g) || []).length === 2,
+        "dokladnie dwie liczby na wykresie");
+  const dowBrak = A.dowSVG([0,0,0,0,0,0,0], [false,false,false,false,false,false,false],
+                           ["Pn","Wt","Śr","Cz","Pt","So","Nd"]);
+  check(!/>0%</.test(dowBrak), "dzien bez danych nie udaje zera procent");
+}
+
 head("Instrukcja");
 {
   const pomoc = html.slice(html.indexOf('id="tab-help"'), html.indexOf('id="tab-ev"'));

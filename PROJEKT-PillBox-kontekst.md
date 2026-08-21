@@ -359,6 +359,11 @@ naprawy.
   Obowiązuje w trzech miejscach naraz: kalendarz, pierścień skuteczności, raport
   dla lekarza. Wpis **ręczny** wygrywa także dziś — skoro sam zaznaczyłeś, wiesz
   lepiej niż reguła.
+- **Analiza rysuje trzy wykresy** (D76): siatkę rytmu (kratka na dzień, układ
+  jak w kalendarzu, dotknięcie otwiera dzień), porę brania w czasie (każda
+  dawka to punkt, w tle pasmo ±60 min wokół własnej średniej) i dni tygodnia
+  w jednym odcieniu z wyróżnionym najsłabszym dniem. Wszystko inline SVG,
+  bez bibliotek.
 - **Ekran „Instrukcja"** w Ustawieniach (D75) trzyma wszystko, co tłumaczy:
   jak działa pudełko, co znaczą kolory, parowanie bota, tryb awaryjny WiFi,
   autotest, co robić gdy coś nie działa. Na ekranach roboczych zostaje tylko
