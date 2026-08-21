@@ -522,6 +522,8 @@ button:focus-visible,.day:focus-visible{outline:2px solid var(--acc);outline-off
    kafelka na trzy wiersze; wtedy siatka statystyk rozjeżdża się w pionie. */
 .stat .dim2{font-size:11px;line-height:1.35;margin-top:3px}
 
+.kropka{display:inline-block;width:9px;height:9px;border-radius:3px;margin-right:8px;
+        vertical-align:middle}
 /* Wiersz „etykieta — wartość". Wszędzie tam, gdzie interfejs wylicza
    fakty o urządzeniu albo o ustawieniu: wzrok skacze po wartościach
    z prawej, zamiast czytać każdy wiersz od początku.                 */
@@ -630,6 +632,9 @@ nav button.act::before{content:"";position:absolute;top:0;left:50%;transform:tra
 /* Pierwsza etykieta w rozwinietej sekcji nie potrzebuje gornego odstepu -
    ma go juz od samej sekcji. */
 .sekcia>label:first-child{margin-top:0}
+.sekcia>p:first-child{margin-top:0}
+.sekcia p{margin:0 0 var(--s3)}
+.sekcia p:last-child{margin-bottom:0}
 
 /* ---------- ekran logowania i powitalny ----------
    Kompozycja wyśrodkowana w pionie, a nie przyklejona do góry: ekran
@@ -902,12 +907,13 @@ nav button.act::before{content:"";position:absolute;top:0;left:50%;transform:tra
     </div>
   </div>
 
-  <!-- DODAWANIE POMIARU — najważniejsza rzecz na tym ekranie -->
-  <div class="card" id="inrAddCard" style="border-color:rgba(94,234,212,.35)">
-    <div class="row between">
-      <h3 style="margin:0">Dodaj pomiar</h3>
-      <span class="dim2">data + wynik</span>
-    </div>
+  <!-- DODAWANIE POMIARU. Turkusowy obrys tej karty miał podpowiadać, że to
+       najważniejsza rzecz na ekranie — i wyglądał jak usterka: jedna karta
+       obrysowana na kolor wśród kilku takich samych. Ważność niesie tu
+       pozycja (od razu pod wynikiem) i jedyny na ekranie przycisk główny,
+       nie ramka. Kolor jest w tej aplikacji zarezerwowany dla znaczeń. -->
+  <div class="card" id="inrAddCard">
+    <h3>Dodaj pomiar</h3>
     <div class="pair">
       <div><label>Data pomiaru</label><input type="date" id="inrDate"></div>
       <div><label>Wynik INR</label>
@@ -922,7 +928,6 @@ nav button.act::before{content:"";position:absolute;top:0;left:50%;transform:tra
 
   <div class="card">
     <h3>Przebieg</h3>
-    <div class="muted" style="margin-bottom:8px">Zielone pasmo to Twój zakres terapeutyczny.</div>
     <div id="inrChart"></div>
   </div>
 
@@ -966,20 +971,20 @@ nav button.act::before{content:"";position:absolute;top:0;left:50%;transform:tra
 
   <div class="card">
     <h3>O której bierzesz lek</h3>
-    <div class="muted" style="margin-bottom:6px">Liczba dni w każdej godzinie, od początku doby lekowej.</div>
+    <div class="muted" style="margin-bottom:6px">Liczba dni w każdej godzinie.</div>
     <div id="anHours"></div>
   </div>
 
   <div class="card">
     <h3>Dni tygodnia</h3>
-    <div class="muted" style="margin-bottom:6px">Procent dni, w których lek został wzięty.</div>
+    <div class="muted" style="margin-bottom:6px">Procent dni z wziętym lekiem.</div>
     <div id="anDow"></div>
     <div id="anDowHint" style="margin-top:8px;font-size:13.5px"></div>
   </div>
 
   <div class="card">
     <h3>INR a regularność</h3>
-    <div class="muted" style="margin-bottom:8px">Co działo się w tygodniu poprzedzającym każdy pomiar.</div>
+    <div class="muted" style="margin-bottom:8px">Tydzień przed każdym pomiarem.</div>
     <div id="anInr"></div>
   </div>
 </section>
@@ -1031,13 +1036,19 @@ nav button.act::before{content:"";position:absolute;top:0;left:50%;transform:tra
     <span class="kop">Diagnostyka
       <div class="dim2">zdarzenia z pudełka, autotest, historia, test wieczka</div></span></button>
 
+  <button class="kafel" onclick="showTab('help')">
+    <span class="ikonka" style="--ikol:var(--acc)"><svg viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.2a2.5 2.5 0 1 1 3.3 2.4c-.6.2-.9.7-.9 1.3v.5"/><circle cx="12" cy="16.6" r=".9" fill="currentColor" stroke="none"/></svg></span>
+    <span class="kop">Instrukcja
+      <div class="dim2">jak to działa, kolory, bot, co robić gdy coś nie gra</div></span></button>
+
   <!-- Raport zostaje TU i w tej samej postaci - to jedyna pozycja Ustawien,
        ktorej sie uzywa, a nie ktora sie ustawia. Na samym dole, bo siega sie
        po niego rzadko i zwykle swiadomie. -->
   <div class="card" style="margin-top:16px">
     <h3>Raport dla lekarza</h3>
 
-    <div class="muted">Przyjmowanie leku i wyniki INR w jednym dokumencie.</div>
+
     <label>Zakres</label>
     <select id="repRange">
       <option value="30">ostatnie 30 dni</option>
@@ -1071,10 +1082,11 @@ nav button.act::before{content:"";position:absolute;top:0;left:50%;transform:tra
         Używana w dni, dla których nie rozpisano nic poniżej.
       </div>
       <label style="margin-top:14px">Rozpisanie tygodniowe</label>
+      <!-- Zostaje TYLKO to zdanie: zero w rozpisaniu wygasza alarm pudełka
+           na cały dzień, a tego nie da się odgadnąć z samego pola. Reszta
+           wyjaśnienia mieszka w Instrukcji (D75). -->
       <div class="dim2" style="margin:-4px 0 6px">
-        Warfarynę lekarz często rozpisuje nierówno — np. 1 tabletka codziennie,
-        a w środy pół. Zero znaczy „tego dnia bez leku”: pudełko nie przypomni,
-        a dzień nie policzy się jako pominięty.
+        Zero znaczy „tego dnia bez leku” — pudełko nie przypomni.
       </div>
       <div id="weekEditor"></div>
       <div class="row" style="margin-top:8px">
@@ -1083,7 +1095,7 @@ nav button.act::before{content:"";position:absolute;top:0;left:50%;transform:tra
       <div class="dim2" id="weekHint" style="margin-top:8px;font-size:12px"></div>
 
       <label style="margin-top:14px">Godziny przypomnień</label>
-      <div class="dim2" style="margin:-4px 0 6px">Tabletkę bierzesz, kiedy chcesz — pudełko przypomni o tych godzinach, jeśli jeszcze jej nie wziąłeś.</div>
+      <div class="dim2" style="margin:-4px 0 6px">To godziny przypomnień, nie pory brania leku.</div>
       <div id="slotEditor"></div>
       <div class="row" style="margin-top:10px">
         <button class="ghost" onclick="addSlot()">+ Dodaj przypomnienie</button>
@@ -1096,8 +1108,7 @@ nav button.act::before{content:"";position:absolute;top:0;left:50%;transform:tra
       <label style="margin-top:14px">Pudełko działa od</label>
       <input id="trackFrom" type="date">
       <div class="dim2" style="margin-top:6px;font-size:12px">
-        Dni wcześniejsze zostaną opisane jako „brak danych”, a nie jako pominięte —
-        i nie będą zaniżać skuteczności w raporcie dla lekarza.
+        Wcześniejsze dni to „brak danych”, nie pominięte.
       </div>
   </div>
 
@@ -1106,10 +1117,7 @@ nav button.act::before{content:"";position:absolute;top:0;left:50%;transform:tra
   <details class="card sek">
     <summary><h3 id="exTytul">Wyjątki na konkretne dni</h3></summary>
     <div class="sekcia">
-      <div class="muted">
-        Np. odstawienie przed zabiegiem. Dodaje się je dotknięciem dnia
-        w kalendarzu — tutaj tylko je przeglądasz i kasujesz.
-      </div>
+      <div class="muted">Dodajesz je dotknięciem dnia w kalendarzu.</div>
       <div id="exList" style="margin-top:10px"></div>
     </div>
   </details>
@@ -1127,9 +1135,7 @@ nav button.act::before{content:"";position:absolute;top:0;left:50%;transform:tra
       <button class="primary" style="width:100%;margin-top:12px" onclick="saveInrRange()">Zapisz zakres</button>
 
       <label style="margin-top:18px">Jak często mierzysz</label>
-      <div class="dim2" style="margin:-4px 0 6px">Odstęp ustala lekarz — aplikacja tylko odlicza dni.
-        Termin liczy się od ostatniego wyniku i pojawia się w kalendarzu jako
-        pomarańczowy znak.</div>
+      <div class="dim2" style="margin:-4px 0 6px">Odstęp ustala lekarz — aplikacja odlicza dni.</div>
       <div><label>Co ile</label>
         <select id="inrEvery" onchange="odswiezPodpowiedzInr()"></select></div>
       <div class="dim2" id="inrEveryHint" style="margin-top:6px"></div>
@@ -1140,26 +1146,15 @@ nav button.act::before{content:"";position:absolute;top:0;left:50%;transform:tra
 <section id="tab-wifi" class="hide">
   <div class="card">
 
+    <!-- Zostaje jedno zdanie o paradoksie kury i jajka, bo od niego zależy,
+         czy człowiek w ogóle spróbuje dodać sieć w dobrej kolejności.
+         Hotspot, 2,4 GHz i portal awaryjny przeniesione do Instrukcji (D75):
+         czyta się je raz, a stały tu przy każdym wejściu na ekran.      -->
     <div class="muted">
-      Pudełko pamięta kilka sieci. Nową odbiera przy najbliższym połączeniu —
-      więc żeby ją dostać, musi mieć łączność przez którąś ze starych.
-    </div>
-    <div class="dim2" style="margin-top:8px;line-height:1.5">
-      <b>Dlatego trzymaj tu swój hotspot.</b> Na wyjeździe włączasz hotspot
-      w telefonie, pudełko łączy się z nim i dopiero wtedy odbiera sieć
-      hotelową.
-    </div>
-    <!-- Instrukcja awaryjna. Podajemy GEST NA UKRYTYM PRZYCISKU, a nie
-         "przytrzymaj przy RESECIE": RESET to fabryczny przycisk na samej
-         płytce, a pudełko jest docelowo zaklejone, więc dla Kuby ta droga
-         nie istnieje. Gest przy otwartym wieczku działa bez otwierania
-         obudowy i jest jedyną, która zawsze będzie dostępna.            -->
-    <div class="dim2" style="margin-top:8px;line-height:1.5">
-      Gdy pudełko nie łączy się z żadną znaną siecią: <b>otwórz je
-      i przytrzymaj ukryty przycisk przez 2 sekundy</b> — trzy piknięcia
-      znaczą, że włączyło własną sieć <b>PillBox-setup</b> (hasło
-      <b>pillbox123</b>). Połącz się z nią telefonem, a strona z wyborem
-      sieci otworzy się sama. Zamknięcie wieczka kończy parowanie.
+      Nową sieć pudełko odbierze <b>przy najbliższym połączeniu</b> — musi więc
+      mieć łączność przez którąś ze starych.
+      <button class="ghost" style="margin-top:var(--s3);width:100%"
+              onclick="showTab('help')">Hotspot, 2,4 GHz, tryb awaryjny → Instrukcja</button>
     </div>
 
     <div id="netSkan" style="margin-top:14px"></div>
@@ -1169,11 +1164,7 @@ nav button.act::before{content:"";position:absolute;top:0;left:50%;transform:tra
     <label>Hasło</label>
     <input id="netPass" type="password" maxlength="63" autocomplete="off"
            placeholder="puste, jeśli sieć otwarta">
-    <div class="dim2" style="margin-top:6px;font-size:12px">
-      Pudełko łączy się tylko z sieciami <b>2,4 GHz</b> — na 5 GHz się nie
-      połączy. W hotspocie iPhone’a <b>włącz „Maksymalizuj zgodność”</b>:
-      dopiero wtedy telefon nadaje na 2,4 GHz.
-    </div>
+    <div class="dim2" style="margin-top:6px;font-size:12px">Tylko sieci 2,4 GHz.</div>
     <button class="primary" style="width:100%;margin-top:12px" onclick="wyslijSiec()">
       Wyślij sieć do pudełka</button>
     <div id="netMsg" class="dim2" style="text-align:center;margin-top:8px;min-height:15px"></div>
@@ -1194,15 +1185,13 @@ nav button.act::before{content:"";position:absolute;top:0;left:50%;transform:tra
      dawek jadących do kalendarza — nie nowa.                            -->
 <section id="tab-tg" class="hide">
   <div class="card">
+    <!-- Granica działania zostaje na ekranie, bo jej nieznajomość prowadzi
+         do fałszywego poczucia bezpieczeństwa („skoro nic nie przyszło, to
+         wziąłem"). Reszta — kiedy pisze, dlaczego wysyła pudełko, co daje
+         wyciek tokenu — mieszka w Instrukcji (D75).                     -->
     <div class="muted">
-      Pudełko napisze Ci na Telegramie, gdy zadzwoni o porze przypomnienia
-      i nikt go nie otworzy. Osobno — raz — ostrzeże, gdy bateria będzie na
-      wyczerpaniu.
-    </div>
-    <div class="dim2" style="margin-top:8px;line-height:1.5">
-      <b>Wiadomość wysyła pudełko, nie ta aplikacja.</b> Dzięki temu przyjdzie
-      także wtedy, gdy telefon leży zablokowany w kieszeni — ale wymaga, żeby
-      pudełko miało w tej chwili internet.
+      Pisze <b>pudełko</b>, gdy zadzwoni i nikt go nie otworzy.
+      <b>Wymaga, żeby pudełko miało internet.</b>
     </div>
 
     <div id="tgStan" style="margin-top:14px"></div>
@@ -1222,9 +1211,14 @@ nav button.act::before{content:"";position:absolute;top:0;left:50%;transform:tra
          ma trzy tury i teraz każda jest wypisana osobno — razem z tym, co
          BotFather odpowie, żeby dało się sprawdzić, czy to jeszcze ta
          ścieżka.                                                          -->
-    <div class="card" style="margin-top:14px;background:var(--card2)">
-      <b>Jak to podłączyć</b>
-      <div class="dim2" style="margin-top:8px;line-height:1.6">
+    <!-- Kroki parowania przechodzi się RAZ. Zwinięte, gdy bot już działa:
+         wtedy ten ekran służy tylko do wysłania wiadomości próbnej albo
+         odłączenia bota, a sześciopunktowa instrukcja jest ścianą tekstu
+         nad dwoma przyciskami. Otwiera się sama, gdy bota nie ma. -->
+    <details class="card sek" id="tgKroki" style="margin-top:14px;background:var(--card2)">
+      <summary><h3>Jak to podłączyć</h3></summary>
+      <div class="sekcia">
+      <div class="dim2" style="line-height:1.6">
         <b>1.</b> W Telegramie znajdź <b>@BotFather</b> i napisz do niego
         <b>/newbot</b> — <i>nie</i> /start.<br>
         <b>2.</b> Zapyta o nazwę bota. Wpisz dowolną, np. <b>PillBox Kuby</b>.<br>
@@ -1237,14 +1231,10 @@ nav button.act::before{content:"";position:absolute;top:0;left:50%;transform:tra
         <b>6.</b> Wróć tutaj, wklej token i naciśnij <i>Znajdź mnie</i>.
       </div>
       <div class="dim2" style="margin-top:8px;line-height:1.5;font-size:12px">
-        Krok 5 jest obowiązkowy z dwóch powodów. Po pierwsze: dopóki nie
-        zaczepisz bota, Telegram nie pozwala mu nic do Ciebie wysłać.
-        Po drugie — <b>ten kod rozstrzyga, że to Ty</b>. Nazwa bota jest
-        publiczna, więc obcy może do niego napisać; bez kodu aplikacja
-        mogłaby wziąć jego czat zamiast Twojego i pudełko wysyłałoby
-        powiadomienia o Twoim leku komuś innemu.
+        Kroku 5 nie da się pominąć: <b>ten kod rozstrzyga, że to Ty</b>.
       </div>
-    </div>
+      </div>
+    </details>
 
     <label style="margin-top:14px">Token bota od BotFathera</label>
     <input id="tgToken" maxlength="64" autocapitalize="off" autocorrect="off"
@@ -1256,8 +1246,7 @@ nav button.act::before{content:"";position:absolute;top:0;left:50%;transform:tra
     <input id="tgChat" maxlength="24" inputmode="numeric" autocapitalize="off"
            autocorrect="off" spellcheck="false" placeholder="wypełni się sam">
     <div class="dim2" style="margin-top:6px;font-size:12px">
-      <i>Znajdź mnie</i> odczytuje go z wiadomości, którą napisałeś do bota.
-      Jeśli nie zadziała, wpisz go ręcznie — pokaże Ci go bot <b>@userinfobot</b>.
+      Nie zadziałało? Wpisz ręcznie — poda go bot <b>@userinfobot</b>.
     </div>
 
     <button class="primary" style="width:100%;margin-top:12px" onclick="tgPolacz()">
@@ -1267,24 +1256,13 @@ nav button.act::before{content:"";position:absolute;top:0;left:50%;transform:tra
     <button class="ghost" style="width:100%;margin-top:12px" onclick="tgProbna()">
       Wyślij wiadomość próbną</button>
     <div class="dim2" style="margin-top:6px;font-size:12px">
-      Pudełko napisze ją przy najbliższym połączeniu — czyli zwykle przy
-      następnym otwarciu wieczka. To jedyny sposób sprawdzenia bota bez
-      czekania na pominiętą dawkę.
+      Dojdzie przy najbliższym połączeniu pudełka.
     </div>
 
     <button class="danger" style="width:100%;margin-top:12px" onclick="tgOdlacz()">
       Odłącz bota</button>
 
-    <!-- Co token DAJE temu, kto go zdobędzie. Mówimy to wprost, bo to jest
-         sekret dotyczący leku przeciwzakrzepowego: fałszywe „dawka wzięta"
-         jest groźniejsze niż brak powiadomienia. -->
-    <div class="dim2" style="margin-top:14px;line-height:1.5;font-size:12px">
-      <b>Gdyby token gdzieś wyciekł:</b> ktoś mógłby pisać do Ciebie jako ten
-      bot — także rzeczy nieprawdziwe o Twoim leku. Nie dałoby mu to dostępu
-      do Twojego konta Telegram ani do innych rozmów. Naprawa jest szybka:
-      napisz BotFatherowi <b>/revoke</b>, dostaniesz nowy token i sparujesz
-      pudełko od nowa. Stary przestaje działać natychmiast.
-    </div>
+
   </div>
 </section>
 
@@ -1305,9 +1283,7 @@ nav button.act::before{content:"";position:absolute;top:0;left:50%;transform:tra
     <button class="ghost" style="margin-top:8px;width:100%" onclick="fbSignOut()">Wyloguj</button>
     <button class="ghost" style="margin-top:8px;width:100%" onclick="wyczyscCache()">
       Wyczyść pamięć i pobierz na nowo</button>
-    <div class="dim2" style="margin-top:6px;font-size:12px">
-      Użyj, jeśli aplikacja pokazuje starą wersję albo coś zupełnie nie tego.
-    </div>
+
     <div class="dim2" style="margin-top:14px;text-align:center">
       Wersja aplikacji: <span id="appVersion">—</span>
     </div>
@@ -1325,14 +1301,6 @@ nav button.act::before{content:"";position:absolute;top:0;left:50%;transform:tra
      tutaj — zostały w Ustawieniach, bo oznaczają utratę danych i schowane
      mogłyby wisieć niezauważone.                                        -->
 <section id="tab-diag" class="hide">
-  <div class="card">
-    <h3>Diagnostyka</h3>
-    <p class="muted" style="margin:6px 0 0">
-      Stan pudełka i to, co przysłało. Przydaje się, gdy dawki nie widać
-      w kalendarzu albo pudełko zachowuje się dziwnie.
-    </p>
-  </div>
-
   <!-- DIAGNOSTYKA: same przejscia i narzedzia, bez list.
 
        Listy zdarzen i historii wybudzen maja teraz wlasne ekrany. Powod jest
@@ -1341,10 +1309,6 @@ nav button.act::before{content:"";position:absolute;top:0;left:50%;transform:tra
        nieszukane, zeby dojsc do szukanej.                                -->
   <div class="card">
     <h3>Co przysłało pudełko</h3>
-    <p class="muted" style="margin:6px 0 10px">
-      Surowa lista zdarzeń z urządzenia i dzień, do którego aplikacja je
-      przypisała. Jeśli dawki nie widać w kalendarzu, tam widać dlaczego.
-    </p>
     <div id="diagPodsum" class="dim2" style="margin-bottom:10px"></div>
     <button class="btn" onclick="showTab('ev')" style="width:100%">
       Pokaż wszystkie zdarzenia
@@ -1369,12 +1333,11 @@ nav button.act::before{content:"";position:absolute;top:0;left:50%;transform:tra
       Otwórz wieczko i naciśnij ukryty przycisk <b>trzy razy</b>.
     </p>
 
+    <!-- Zostaje sam przebieg — tę listę czyta się Z PALCEM NA PRZYCISKU,
+         więc jest częścią czynności, nie opisem obok niej. Po co to jest
+         i co znaczy pulsowanie na końcu — w Instrukcji (D75).          -->
     <div style="background:var(--card2);border-radius:12px;padding:12px;
                 font-size:12.5px;line-height:1.55;margin-bottom:14px">
-      <b style="font-size:13px">Jak to przebiega</b>
-      <div class="dim2" style="margin:4px 0 10px">
-        Potrzebny jesteś tylko na początku. Reszta dzieje się sama.
-      </div>
       <div style="display:grid;grid-template-columns:auto 1fr;gap:5px 10px">
         <b>1×</b><span>start testu <span class="dim2">— to piknięcie jest zarazem
           dowodem, że buzzer działa</span></span>
@@ -1383,16 +1346,9 @@ nav button.act::before{content:"";position:absolute;top:0;left:50%;transform:tra
           pudełko, dalej radzi sobie samo</span></span>
         <b>·</b><span class="dim2">bateria, pamięć, WiFi, zegar, zapis do bazy — po cichu</span>
       </div>
-      <div class="dim2" style="margin-top:8px">
-        Przycisku nie sprawdzamy: skoro uruchomiłeś test trzema kliknięciami,
-        to on już się udowodnił.
-      </div>
       <div class="dim2" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--line)">
-        Na koniec krótka opadająca sygnatura — to nie jest numer etapu, tylko
-        koniec testu.<br>
-        <b style="color:var(--warn)">Łagodne pulsowanie przez 5 sekund</b> oznacza brak sieci:
-        wynik został w pamięci pudełka i <b>nie pojawi się poniżej</b>, dopóki
-        pudełko nie złapie WiFi.
+        <b style="color:var(--warn)">Pulsowanie przez 5 sekund</b> = brak sieci.
+        Wynik czeka w pudełku i pojawi się po złapaniu WiFi.
       </div>
     </div>
 
@@ -1402,10 +1358,7 @@ nav button.act::before{content:"";position:absolute;top:0;left:50%;transform:tra
   <!-- CZARNA SKRZYNKA - wejscie. Sama historia ma wlasny ekran. -->
   <div class="card">
     <h3>Historia pudełka</h3>
-    <p class="muted" style="margin:6px 0 12px">
-      Co pudełko robiło przy każdym wybudzeniu — także wtedy, gdy nie miało
-      zasięgu. Zapisuje to u siebie, więc przetrwa noc bez WiFi.
-    </p>
+    <p class="muted" style="margin:6px 0 12px">Co robiło przy każdym wybudzeniu.</p>
     <button class="btn" onclick="showTab('hist')" style="width:100%">
       Pokaż całą historię
     </button>
@@ -1414,11 +1367,8 @@ nav button.act::before{content:"";position:absolute;top:0;left:50%;transform:tra
   <!-- WEJSCIE DO TESTU WIECZKA -->
   <div class="card">
     <h3>Test wieczka</h3>
-    <p class="muted" style="margin:6px 0 12px">
-      Sprawdzamy, czy pudełko melduje otwarcia, których nikt nie zrobił —
-      na przykład gdy magnes przesunie się w plecaku. Zaznaczaj tam, które
-      otwarcia były Twoje.
-    </p>
+    <p class="muted" style="margin:6px 0 12px">Czy pudełko melduje otwarcia,
+      których nikt nie zrobił.</p>
     <button class="btn" onclick="showTab('lid')" style="width:100%">
       Otwórz dziennik wieczka
     </button>
@@ -1434,6 +1384,206 @@ nav button.act::before{content:"";position:absolute;top:0;left:50%;transform:tra
      tylko wycinek. Tutaj jest cala, za to z filtrami - bo przy kilkuset
      zdarzeniach "cala lista" bez zawezania jest tak samo bezuzyteczna jak
      wycinek bez wyboru.                                                 -->
+<!-- ─────────── INSTRUKCJA ───────────
+     Miejsce na wszystko, co TŁUMACZY. Powstało z jednego zdania Kuby:
+     „aplikacja ma strasznie dużo tekstu" — i miał rację. Wyjaśnienia
+     stały tam, gdzie się ich używa, więc czytał je codziennie ktoś, kto
+     zna je na pamięć, a ekran ustawienia dawki wyglądał jak ulotka.
+
+     Zasada podziału, jedna i konsekwentna:
+       • na ekranie zostaje to, czego brak prowadzi do ZŁEJ DECYZJI
+         o leku („zero znaczy tego dnia bez leku", „to godziny
+         przypomnień, nie pory brania");
+       • tutaj idzie wszystko, co tłumaczy, jak coś działa i dlaczego.
+     Nic nie zostało skasowane — zmieniło adres.                      -->
+<section id="tab-help" class="hide">
+
+  <details class="card sek" open>
+    <summary><h3>Jak to działa</h3></summary>
+    <div class="sekcia">
+      <p class="muted">Pudełko rejestruje otwarcie wieczka i wysyła je do bazy.
+        Aplikacja czyta z niej kalendarz — sama nie wie nic, czego pudełko
+        nie zgłosiło. Gdy pudełko nie ma zasięgu, odkłada zdarzenia u siebie
+        i dosyła je przy najbliższym połączeniu.</p>
+      <p class="muted">Wszystko, czego pudełko nie zdążyło zgłosić, możesz
+        wpisać sam: dotknij dnia w kalendarzu. <b>Wpis ręczny wygrywa zawsze</b> —
+        pudełko go nie nadpisze.</p>
+    </div>
+  </details>
+
+  <details class="card sek">
+    <summary><h3>Kalendarz i kolory</h3></summary>
+    <div class="sekcia">
+      <div class="fakt"><span><i class="kropka" style="background:var(--ok)"></i>zielony</span>
+        <b>pełna dawka</b></div>
+      <div class="fakt"><span><i class="kropka" style="background:var(--warn)"></i>żółty</span>
+        <b>mniejsza dawka</b></div>
+      <div class="fakt"><span><i class="kropka" style="background:var(--bad)"></i>czerwony</span>
+        <b>nie wzięte</b></div>
+      <div class="fakt"><span><i class="kropka" style="background:var(--dim2)"></i>szary</span>
+        <b>brak danych</b></div>
+      <div class="fakt"><span>obwódka kreskowana</span><b>termin pomiaru INR</b></div>
+      <div class="fakt"><span>fioletowa kropka</span><b>tego dnia był pomiar INR</b></div>
+      <p class="muted" style="margin-top:var(--s3)">Dzień robi się czerwony dopiero
+        po <b>zamknięciu doby lekowej</b>, czyli po 3:00 następnego dnia — nie
+        o 20:06, gdy pudełko przestanie dzwonić. Tabletkę bierzesz, kiedy chcesz,
+        także o 22:00.</p>
+      <p class="muted"><b>Skuteczność</b> nad kalendarzem liczy dni rozstrzygnięte
+        w tym miesiącu. Dni rozpisane bez leku nie wchodzą ani do licznika,
+        ani do mianownika.</p>
+    </div>
+  </details>
+
+  <details class="card sek">
+    <summary><h3>Dawki i przypomnienia</h3></summary>
+    <div class="sekcia">
+      <p class="muted"><b>Godziny w ustawieniach to przypomnienia, nie pory brania leku.</b>
+        Dawka jest jedna dziennie. Druga godzina znaczy „przypomnij jeszcze raz",
+        a nie „weź drugą tabletkę".</p>
+      <p class="muted">Ile tabletek danego dnia, decyduje kolejno: wyjątek wpisany
+        na tę datę → rozpisanie tygodniowe → dawka domyślna. <b>Zero znaczy „tego
+        dnia bez leku"</b>: pudełko nie zadzwoni, a dzień nie policzy się jako
+        pominięty.</p>
+      <p class="muted">Wyjątek na jeden dzień (np. odstawienie przed zabiegiem)
+        dodajesz <b>dotknięciem dnia w kalendarzu</b> — w Ustawieniach tylko je
+        przeglądasz i kasujesz.</p>
+      <p class="muted">Przycisk <b>„Wziąłem teraz"</b> na ekranie głównym zapisuje
+        dzisiejszą dawkę jednym dotknięciem. Pokazuje się tylko wtedy, gdy jest
+        co wziąć i nic jeszcze nie zapisano.</p>
+      <p class="muted"><b>Doba lekowa zaczyna się o 3:00</b>, nie o północy —
+        tabletka wzięta o 1:30 należy jeszcze do dnia poprzedniego.</p>
+    </div>
+  </details>
+
+  <details class="card sek">
+    <summary><h3>Zapas tabletek</h3></summary>
+    <div class="sekcia">
+      <p class="muted">Licznik odejmuje tabletki od stanu, który sam wpiszesz —
+        po każdym rozstrzygniętym dniu, także wtedy, gdy pudełko dośle go
+        z opóźnieniem. <b>Po otwarciu nowego opakowania ustaw dokładną liczbę</b>,
+        a nie „+30”.</p>
+      <p class="muted">Na siedem dni przed końcem liczba robi się czerwona
+        i dopisuje „czas po receptę".</p>
+    </div>
+  </details>
+
+  <details class="card sek">
+    <summary><h3>INR</h3></summary>
+    <div class="sekcia">
+      <p class="muted"><b>Zakres terapeutyczny ustala lekarz</b> — najczęściej 2,0–3,0.
+        Aplikacja tylko porównuje z nim wynik i odlicza dni do następnego pomiaru.</p>
+      <p class="muted">Termin liczy się <b>od ostatniego wyniku</b> i pojawia się
+        w kalendarzu jako pomarańczowy znak. Na wykresie zielone pasmo to Twój
+        zakres.</p>
+      <p class="muted">Karta „INR a regularność" pokazuje, co działo się w tygodniu
+        <i>przed</i> każdym pomiarem — warfaryna reaguje właśnie na to.</p>
+    </div>
+  </details>
+
+  <details class="card sek">
+    <summary><h3>Sieć WiFi pudełka</h3></summary>
+    <div class="sekcia">
+      <p class="muted">Pudełko pamięta kilka sieci. Nową odbiera <b>przy najbliższym
+        połączeniu</b> — żeby ją dostać, musi mieć łączność przez którąś ze starych.
+        Dlatego trzymaj tu swój hotspot: na wyjeździe włączasz hotspot w telefonie,
+        pudełko łączy się z nim i dopiero wtedy odbiera sieć hotelową.</p>
+      <p class="muted">Pudełko łączy się <b>tylko z sieciami 2,4 GHz</b>. W hotspocie
+        iPhone’a włącz „Maksymalizuj zgodność” — dopiero wtedy telefon nadaje
+        na 2,4 GHz.</p>
+      <p class="muted"><b>Gdy nie łączy się z żadną znaną siecią:</b> otwórz pudełko
+        i przytrzymaj ukryty przycisk przez 2 sekundy. Trzy piknięcia znaczą, że
+        włączyło własną sieć <b>PillBox-Setup</b> (hasło <b>pillbox123</b>).
+        Połącz się z nią telefonem i wpisz nową sieć w formularzu, który sam się
+        otworzy. Ta droga działa zawsze, także bez internetu.</p>
+      <p class="muted">Lista sieci widzianych przez pudełko przychodzi na jego
+        żądanie — liczy się to, co widzi ono, a nie telefon: sieć mocna z kanapy
+        potrafi nie docierać za ścianę. Sieci ukrytych żaden skan nie pokaże,
+        więc ręczne wpisywanie zostaje.</p>
+    </div>
+  </details>
+
+  <details class="card sek">
+    <summary><h3>Powiadomienia na telefon</h3></summary>
+    <div class="sekcia">
+      <p class="muted"><b>Wiadomość wysyła pudełko, nie ta aplikacja.</b> Dzięki temu
+        przyjdzie także wtedy, gdy telefon leży zablokowany w kieszeni — ale wymaga,
+        żeby <b>pudełko</b> miało internet. Bez sieci nie przyjdzie nic.</p>
+      <p class="muted">Pisze po każdym nieodebranym przypomnieniu oraz <b>raz</b>,
+        gdy bateria będzie na wyczerpaniu. Bez potwierdzeń wzięcia — powiadomienie,
+        które przychodzi codziennie, przestaje być powiadomieniem.</p>
+      <label>Jak podłączyć bota</label>
+      <p class="muted">1. W Telegramie znajdź <b>@BotFather</b> i napisz do niego
+        <b>/newbot</b> — nie /start.<br>
+        2. Zapyta o nazwę bota. Wpisz dowolną, np. „PillBox Kuby".<br>
+        3. Zapyta o adres. Musi kończyć się na <b>bot</b>, np. pillbox_kuby_bot.<br>
+        4. Dostaniesz token — długi ciąg z dwukropkiem. Wklej go w Ustawieniach →
+        Powiadomienia.<br>
+        5. Otwórz swojego bota i napisz do niego kod parowania, który pokaże
+        aplikacja.</p>
+      <p class="muted"><b>Krok 5 jest obowiązkowy</b> z dwóch powodów. Po pierwsze:
+        dopóki nie zaczepisz bota, Telegram nie pozwala mu nic do Ciebie wysłać.
+        Po drugie: ten kod rozstrzyga, do <i>którego</i> czatu pisać — bez niego
+        aplikacja mogłaby wziąć czat przypadkowej osoby, która też napisała
+        do bota.</p>
+      <p class="muted"><b>O tokenie:</b> gdyby wyciekł, ktoś mógłby pisać do Ciebie
+        jako ten bot — także rzeczy nieprawdziwe o Twoim leku. Nie dałoby mu to
+        dostępu do konta ani do kalendarza. Token wpisujesz raz; pudełko trzyma
+        go u siebie, a z bazy znika po potwierdzonym zapisie.</p>
+      <p class="muted"><b>Wiadomość próbną</b> pudełko wyśle przy najbliższym
+        połączeniu, czyli zwykle przy następnym otwarciu wieczka. To jedyny sposób
+        sprawdzenia, czy bot naprawdę działa.</p>
+    </div>
+  </details>
+
+  <details class="card sek">
+    <summary><h3>Program pudełka i aktualizacje</h3></summary>
+    <div class="sekcia">
+      <p class="muted">Nową wersję programu pudełko pobiera <b>samo, przez WiFi</b>,
+        po naciśnięciu przycisku w Ustawieniach → Urządzenie. Robi to przed
+        zaśnięciem: przy otwarciu wieczka, na ładowarce albo o 3:00 w nocy —
+        nigdy w trakcie zapisywania dawki.</p>
+      <p class="muted">Poznasz po dźwiękach: dwa piknięcia „zaczynam”, jedno
+        „zapisane, restartuję”, fanfara po starcie. Wersję sprawdzisz
+        w Ustawieniach → Urządzenie.</p>
+    </div>
+  </details>
+
+  <details class="card sek">
+    <summary><h3>Diagnostyka</h3></summary>
+    <div class="sekcia">
+      <p class="muted">Przydaje się, gdy dawki nie widać w kalendarzu albo pudełko
+        zachowuje się dziwnie.</p>
+      <p class="muted"><b>Zdarzenia z pudełka</b> — surowa lista tego, co przysłało,
+        i dzień, do którego aplikacja to przypisała. Jeśli dawki nie widać
+        w kalendarzu, tam widać dlaczego.</p>
+      <p class="muted"><b>Historia pudełka</b> — co robiło przy każdym wybudzeniu,
+        także bez zasięgu. Zapisuje to u siebie, więc przetrwa noc bez WiFi.</p>
+      <p class="muted"><b>Autotest</b> — trzy szybkie kliknięcia ukrytym przyciskiem.
+        Pudełko sprawdza po kolei zegar, pamięć, sieć i bazę. Krótka opadająca
+        sygnatura na końcu to koniec testu, a nie numer etapu; łagodne pulsowanie
+        przez 5 sekund oznacza brak sieci — wynik został wtedy zapisany u pudełka
+        i dojedzie później.</p>
+      <p class="muted"><b>Dziennik wieczka</b> — sprawdzamy nim, czy pudełko melduje
+        otwarcia, których nikt nie zrobił (np. gdy magnes przesunie się w plecaku).
+        Zaznaczaj „to ja" przy swoich otwarciach; po tygodniu porównamy.</p>
+    </div>
+  </details>
+
+  <details class="card sek">
+    <summary><h3>Gdy coś nie działa</h3></summary>
+    <div class="sekcia">
+      <div class="fakt"><span>Dawki nie widać w kalendarzu</span><b>Diagnostyka → Zdarzenia</b></div>
+      <div class="fakt"><span>Pudełko milczy od dłuższego czasu</span><b>sprawdź WiFi i baterię</b></div>
+      <div class="fakt"><span>Nie znam już sieci, w której stoi</span><b>przycisk 2 s → PillBox-Setup</b></div>
+      <div class="fakt"><span>Aplikacja pokazuje starą wersję</span><b>Urządzenie → Wyczyść pamięć</b></div>
+      <p class="muted" style="margin-top:var(--s3)">Czego brakuje, wpisz ręcznie —
+        dotknij dnia w kalendarzu. Wpis ręczny jest ostateczny i pudełko go
+        nie nadpisze.</p>
+    </div>
+  </details>
+
+</section>
+
 <section id="tab-ev" class="hide">
   <div class="card">
     <h3>Zdarzenia z pudełka</h3>
@@ -1458,13 +1608,6 @@ nav button.act::before{content:"";position:absolute;top:0;left:50%;transform:tra
 <!-- ═══════════════ HISTORIA PUDELKA (czarna skrzynka) ═══════════════ -->
 <section id="tab-hist" class="hide">
   <div class="card">
-    <h3>Historia pudełka</h3>
-    <p class="muted" style="margin:6px 0 0">
-      Każde wybudzenie: kiedy, z jakiego powodu, jak się skończyło. Pudełko
-      zapisuje to u siebie, więc historia przetrwa noc bez zasięgu.
-    </p>
-  </div>
-  <div class="card">
     <div id="boxLog" style="font-size:12.5px;line-height:1.55"></div>
   </div>
 
@@ -1474,11 +1617,8 @@ nav button.act::before{content:"";position:absolute;top:0;left:50%;transform:tra
        obok siebie, nie o dwa oddzielne ekrany do przelaczania.          -->
   <div class="card" id="nvsFailLogCard" style="display:none">
     <h3>Historia nieudanych zapisów</h3>
-    <p class="muted" style="margin:6px 0 12px">
-      Każdy zapis do pamięci pudełka, który się nie udał, z dokładnym czasem —
-      żeby dało się sprawdzić, czy powtarza się przy konkretnej porze albo
-      czynności (np. zaraz po alarmie).
-    </p>
+    <p class="muted" style="margin:6px 0 12px">Z dokładnym czasem — widać, czy
+      powtarza się przy konkretnej czynności.</p>
     <div id="nvsFailLog" style="font-size:12.5px;line-height:1.55"></div>
   </div>
 </section>
@@ -1487,10 +1627,7 @@ nav button.act::before{content:"";position:absolute;top:0;left:50%;transform:tra
   <div class="card">
     <h3>Dziennik wieczka</h3>
     <p class="muted" style="margin:6px 0 12px">
-      Każda zmiana stanu kontaktronu zapisana przez pudełko. Przy otwarciach,
-      które zrobiłeś Ty, dotknij <b>„to ja"</b>. Po tygodniu porównamy: jeśli
-      zostaną otwarcia bez Twojego znacznika, to znaczy, że pudełko wykrywa
-      ruchy, których nie było.
+      Przy otwarciach, które zrobiłeś Ty, dotknij <b>„to ja"</b>.
     </p>
     <div id="lidSummary" class="muted" style="margin-bottom:12px"></div>
     <div id="lidList" style="font-size:13px;line-height:1.5"></div>
@@ -1595,7 +1732,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-20.49";
+const APP_VERSION = "2026-08-21.50";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -4135,10 +4272,41 @@ function opisNvsFailKey(klucz){
   return { grozne:true, co:`klucz „${esc(klucz)}” — nierozpoznany, sprawdź ostrożnie` };
 }
 
+/* Czy zgłoszona strata w ogóle dotyczy leku.
+
+   Zgłoszenie Kuby: *„pudełko zgłasza utratę danych — to weź schowaj
+   w diagnostyce, żeby tak nie wyskakiwało"*. Miał rację, choć rzecz jest
+   subtelniejsza, niż wygląda: czerwone ostrzeżenie na wierzchu mówiło
+   w tej samej ramce dwie sprzeczne rzeczy — „UTRATA DANYCH" wielkimi
+   literami i „to nie dotyczy dawek ani kalendarza" małymi.
+
+   Siedem nieudanych zapisów tokenu logowania to dla pudełka rutyna: token
+   wygasa, zapisuje się nowy, czasem nie wejdzie za pierwszym razem i nic
+   z tego nie wynika. Ostrzeżenie, które krzyczy o czymś takim, uczy
+   przewijać ostrzeżenia — a wtedy przestanie działać to jedyne, które
+   naprawdę ma znaczenie: „kalendarz może nie mieć kompletu dawek".
+
+   Dlatego dzielimy je po SKUTKU, nie po nazwie:
+     • dotyka dawek → zostaje na wierzchu w Ustawieniach (D11);
+     • nie dotyka   → schodzi do Diagnostyki jako spokojny wiersz.
+   Nic nie znika — zmienia się głośność.                              */
+function stratyDotyczaLeku(){
+  const st = ostatniStatus || {};
+  const nvs = st.nvsFail || 0;
+  if ((st.dropped || 0) > 0) return true;     // baza odrzuciła zdarzenie o dawce
+  if (nvsMalo(st)) return true;               // za chwilę zacznie gubić wszystko
+  if (!nvs) return false;
+  const info = opisNvsFailKey(st.nvsFailKey);
+  /* Brak klucza (starszy firmware) to NIE jest dowód, że nic się nie stało —
+     wtedy ostrożnie zakładamy, że mogło dotyczyć dawki.               */
+  return !info || info.grozne;
+}
+
 function ostrzStraty(){
   const st = ostatniStatus || {};
   const dropped = st.dropped || 0, nvs = st.nvsFail || 0;
   if (!dropped && !nvs && !nvsMalo(st)) return "";
+  if (!stratyDotyczaLeku()) return "";        // ta wersja mieszka w Diagnostyce
   const info = nvs ? opisNvsFailKey(st.nvsFailKey) : null;
   /* Bez klucza (starszy firmware sprzed tej zmiany, albo pudełko jeszcze
      nie zdążyło zameldować) nie wiadomo nic więcej niż liczba — wtedy
@@ -4162,6 +4330,21 @@ function ostrzStraty(){
          : " To nie dotyczy dawek ani kalendarza."}
        Licznik zeruje się po odłączeniu zasilania.</span>
      </div>`;
+}
+
+/* Ta sama informacja, tyle że w Diagnostyce i bez alarmu: jedno zdanie
+   z liczbą, żeby dało się ją znaleźć, gdy ktoś (albo coś) będzie jej
+   szukał. Wersja głośna została w Ustawieniach dla strat, które dotykają
+   dawek — patrz stratyDotyczaLeku().                                  */
+function stratyCicho(){
+  const st = ostatniStatus || {};
+  const nvs = st.nvsFail || 0;
+  if (!nvs || stratyDotyczaLeku()) return "";
+  const info = opisNvsFailKey(st.nvsFailKey);
+  return `<div class="dim2" style="margin-top:var(--s2)">
+     Pudełko zgłasza <b>${nvs}</b> ${lm(nvs, "nieudany zapis", "nieudane zapisy", "nieudanych zapisów")}
+     do własnej pamięci — ${info ? esc(info.co) : "bez wpływu na dawki"}.
+     Nie dotyczy dawek ani kalendarza; licznik zeruje się po odłączeniu zasilania.</div>`;
 }
 
 /* ═══════════════ KOLEJKA, KTÓRA NIE SCHODZI ═══════════════
@@ -4285,7 +4468,7 @@ function renderDiag(){
 
   if (!events.length){
     el.innerHTML = rec + `<div class="dim2" style="margin-top:6px">
-      Pudełko nie przysłało jeszcze żadnych zdarzeń.</div>`;
+      Pudełko nie przysłało jeszcze żadnych zdarzeń.</div>` + stratyCicho();
     return;
   }
   const problemy = events.filter(bezPokrycia);
@@ -4295,7 +4478,7 @@ function renderDiag(){
          pokrycia w kalendarzu <span class="dim2">(z ${events.length})</span></div>`
     : `<div style="margin-top:6px;color:var(--ok)">✓ Wszystkie
          <b>${events.length}</b> ${lm(events.length, "zdarzenie ma", "zdarzenia mają", "zdarzeń ma")}
-         pokrycie w kalendarzu.</div>`);
+         pokrycie w kalendarzu.</div>`) + stratyCicho();
 }
 
 /* ═══════════════ EKRAN ZDARZEN ═══════════════
@@ -5146,6 +5329,11 @@ function renderTgStan(){
   const box = document.getElementById("tgStan");
   if (!box) return;
   const st = ostatniStatus || {};
+
+  /* Instrukcja parowania otwiera się sama, dopóki bot nie działa, i zwija,
+     gdy zacznie. Przechodzi się ją raz, a stała rozwinięta na zawsze. */
+  const kroki = document.getElementById("tgKroki");
+  if (kroki) kroki.open = st.tg !== true;
   const czeka = cfg.tgNowy?.token;
   const cmd = cfg.tgCmd?.akcja;
   let html = "";
@@ -6445,6 +6633,7 @@ const EKRANY = {
   tg:   { tytul:"Powiadomienia",       nav:"set", wraca:"set" },
   dev:  { tytul:"Urządzenie",          nav:"set", wraca:"set" },
   diag: { tytul:"Diagnostyka",         nav:"set", wraca:"set" },
+  help: { tytul:"Instrukcja",          nav:"set", wraca:"set" },
   ev:   { tytul:"Zdarzenia z pudełka", nav:"set", wraca:"diag" },
   hist: { tytul:"Historia pudełka",    nav:"set", wraca:"diag" },
   lid:  { tytul:"Dziennik wieczka",    nav:"set", wraca:"diag" },

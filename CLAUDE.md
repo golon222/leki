@@ -23,8 +23,8 @@ bash tests/run_all.sh
 ```
 
 Musi przejść przed zmianą i po zmianie. Stan wyjściowy:
-**526 + 51 firmware, 1008 (×6 pór doby) + 92 + 49 aplikacja, 48 zgodności,
-119 reguł bazy, 301 kontroli audytu, 22 kontrole statyczne — 0 błędów.**
+**526 + 51 firmware, 1037 (×6 pór doby) + 92 + 49 aplikacja, 48 zgodności,
+119 reguł bazy, 301 kontroli audytu, 24 kontrole statyczne — 0 błędów.**
 
 **Runner jest cichy przy sukcesie i głośny przy błędzie** (D66). Udany przebieg
 to 12 linii: jedna na krok, z liczbą zaliczonych kontroli. Krok, który zawiedzie,
@@ -172,6 +172,16 @@ Test to złapie, ale komunikat zrozumiesz szybciej, znając powód (D6, D13, D15
    o leku. Token nie trafia **ani do logu, ani do statusu**. Audyt pilnuje
    każdego z tych punktów.
 
+15. **Wyjaśnienia mieszkają w Instrukcji, nie na ekranach** (D75).
+   Na ekranie zostaje tylko to, czego brak prowadzi do **złej decyzji
+   o leku**; wszystko, co tłumaczy „jak to działa", idzie do ekranu
+   `tab-help`. Kontrola statyczna pilnuje progu 200 znaków na akapit
+   poza Instrukcją. Dwa świadome wyjątki: kroki parowania bota (zawierają
+   kod parowania generowany na żywo) i przebieg autotestu (czyta się go
+   z palcem na przycisku).
+   Ostrzeżenia dzielimy po **skutku**: dotyka dawek → na wierzchu
+   w Ustawieniach (D11); nie dotyka → cicho w Diagnostyce (D74a).
+
 14. **System wizualny ma reguły — nie zmieniaj ich „na oko"** (D74).
    Kolor niesie znaczenie: zielony/żółty/czerwony należą do stanu dawki
    i nigdzie indziej. Odstępy idą po skali `--s1..--s7` (4 px), promienie
@@ -206,7 +216,7 @@ tabletka.gif                 zapas dla przeglądarki bez WEBP (D72)
 tests/                           testy + audyt
 tests/statyczna.py               kontrola statyczna (krok 4/10)
 database.rules.json              reguły Firebase
-DECYZJE.md                       dziennik decyzji (D1–D74)
+DECYZJE.md                       dziennik decyzji (D1–D75)
 PROJEKT-PillBox-kontekst.md      pełny kontekst projektu
 WGRYWANIE.md                     instrukcja wgrywania kablem dla Kuby
 .github/workflows/firmware.yml   automat budujący binarkę do OTA

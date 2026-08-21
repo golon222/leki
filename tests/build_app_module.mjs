@@ -49,7 +49,7 @@ export { renderSkan, brakujePokrycia, doReconcile, reconcileDecyzja, opisLadowan
          zapiszPewnie, zapiszCfg, oczekWczytaj, oczekZapisz, oczekIle, oczekWyslij,
          magazyn, OCZEK_KEY, oczekOdmowy, bazaOdmowila,
          INR_ZAKRES_MIN, INR_ZAKRES_MAX, INR_ODSTEPY, inrKrokiZakresu, renderSettings,
-         ostrzMilczy, MILCZY_PROG_H,
+         ostrzMilczy, MILCZY_PROG_H, stratyDotyczaLeku, stratyCicho,
          ostrzZatkana, ZATKANA_SWIEZOSC_H, nvsMalo, NVS_MALO, lastRec,
          rysuj, rysujWszystkie, rysBledy, ostrzRysowanie, RYS_BLEDY_LIMIT,
          askConfirm,

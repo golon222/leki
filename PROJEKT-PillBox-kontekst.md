@@ -359,6 +359,11 @@ naprawy.
   Obowiązuje w trzech miejscach naraz: kalendarz, pierścień skuteczności, raport
   dla lekarza. Wpis **ręczny** wygrywa także dziś — skoro sam zaznaczyłeś, wiesz
   lepiej niż reguła.
+- **Ekran „Instrukcja"** w Ustawieniach (D75) trzyma wszystko, co tłumaczy:
+  jak działa pudełko, co znaczą kolory, parowanie bota, tryb awaryjny WiFi,
+  autotest, co robić gdy coś nie działa. Na ekranach roboczych zostaje tylko
+  to, czego brak prowadzi do złej decyzji o leku — widoczny tekst spadł
+  z 9772 do 6350 znaków (−35%).
 - **Wygląd stoi na systemie wizualnym** (D74): tokeny koloru, odstępów
   (skala 4 px), promieni i cieni; kolor zarezerwowany dla stanu dawki;
   krawędzie włosowe zamiast ramek. Ekran główny to karta dnia (data, stan,

@@ -170,6 +170,43 @@ if not _btn or 'min-height:44px' not in _btn.group(1):
 else:
     print('  OK   przyciski maja cel dotykowy 44 px')
 
+# ── ILE TEKSTU NA EKRANIE (D75) ─────────────────────────────────────────
+# Zgloszenie Kuby: "ta aplikacja ma strasznie duzo tekstu". Mial racje -
+# wyjasnienia staly tam, gdzie sie ich uzywa, wiec czytal je codziennie
+# ktos, kto zna je na pamiec. Od D75 tlumaczenia mieszkaja w Instrukcji,
+# a na ekranach zostaje to, czego brak prowadzi do ZLEJ DECYZJI o leku.
+#
+# Ta kontrola pilnuje, zeby nie wrocily po cichu. Zwiniete sekcje
+# (<details>) sa poza pomiarem - one z definicji nie zajmuja ekranu,
+# dopoki ktos ich sam nie otworzy.
+_PROG_TEKST = 200
+_body = html[html.index('<div id="app"'):html.index('<script type="module">')]
+_dlugie = []
+for _m in _re.finditer(r'<section id="(tab-[\w-]+)"', _body):
+    _a = _m.start(); _b = _body.index('</section>', _a)
+    if _m.group(1) == 'tab-help':      # Instrukcja to jedyne miejsce na wyjasnienia
+        continue
+    _sec = _re.sub(r'<details[\s\S]*?</details>', '', _body[_a:_b])
+    for _t in _re.finditer(r'<(p|div)\b[^>]*class="(?:muted|dim2)"[^>]*>(.*?)</\1>', _sec, _re.S):
+        _txt = ' '.join(_re.sub(r'<[^>]+>', '', _t.group(2)).split())
+        if len(_txt) > _PROG_TEKST:
+            _dlugie.append(f'{_m.group(1)}: {len(_txt)} zn. — „{_txt[:60]}…"')
+if _dlugie:
+    bad += 1
+    print(f'  BLAD akapit dluzszy niz {_PROG_TEKST} zn. poza Instrukcja:')
+    for _d in _dlugie: print('       ' + _d)
+else:
+    print(f'  OK   zadne wyjasnienie na ekranie nie przekracza {_PROG_TEKST} zn.')
+
+# Instrukcja musi istniec i byc osiagalna z Ustawien - inaczej przeniesione
+# tam wyjasnienia po prostu znikaja z aplikacji.
+if 'id="tab-help"' not in html:
+    bad += 1; print('  BLAD brak ekranu Instrukcji')
+elif "showTab('help')" not in html:
+    bad += 1; print('  BLAD do Instrukcji nie da sie wejsc z Ustawien')
+else:
+    print('  OK   Instrukcja istnieje i ma wejscie z Ustawien')
+
 handlers = set(re.findall(r'on(?:click|change)="(\w+)\(', html)) - {'if'}
 orphan = [h for h in handlers if f'window.{h}' not in js]
 if orphan: bad += 1; print('  BLAD handlery bez definicji:', orphan)

@@ -988,19 +988,34 @@ for (const k of ["sched", "dw", "dex", "tok", "lb3", "lbIdx", "llCnt", "llLost"]
 check(A.opisNvsFailKey("cosdziwnego").grozne,
       "nierozpoznany klucz jest OSTROZNIE traktowany jako grozny, nie olewany");
 
-A.renderStatus({ battery:80, nvsFail:1, nvsFailKey:"tok" });
+/* Strata, ktora NIE dotyczy leku, schodzi z Ustawien do Diagnostyki
+   (zgloszenie Kuby: "to wez schowaj w diagnostyce, zeby tak nie
+   wyskakiwalo"). Czerwona ramka mowiaca w jednym oddechu "UTRATA DANYCH"
+   i "to nie dotyczy dawek" uczy przewijac ostrzezenia - a wtedy przestaje
+   dzialac to jedyne, ktore ma znaczenie. Nic nie znika: zmienia sie
+   glosnosc.                                                            */
+A.renderStatus({ battery:80, nvsFail:7, nvsFailKey:"tok" });
 {
   const w = document.getElementById("setWarn").innerHTML;
-  check(/token logowania/.test(w), "niegrozny klucz opisany po imieniu");
-  check(!/Kalendarz może nie mieć kompletu/.test(w),
+  check(A.stratyDotyczaLeku() === false, "token logowania nie dotyka dawek");
+  check(!/utratę danych/.test(w), "wiec nie wyskakuje w Ustawieniach");
+  A.renderDiag();
+  const d = document.getElementById("diagPodsum").innerHTML;
+  check(/token logowania/.test(d), "ale w Diagnostyce jest, opisany po imieniu");
+  check(/7/.test(d), "razem z liczba");
+  check(!/Kalendarz może nie mieć kompletu/.test(d),
         "i NIE straszy kalendarzem, ktorego to nie dotyczy");
 }
 A.renderStatus({ battery:80, nvsFail:1, nvsFailKey:"q42" });
 {
   const w = document.getElementById("setWarn").innerHTML;
-  check(/wpis kolejki/.test(w), "grozny klucz tez opisany po imieniu");
+  check(A.stratyDotyczaLeku() === true, "wpis kolejki dotyka dawek");
+  check(/wpis kolejki/.test(w), "grozny klucz zostaje na wierzchu, opisany po imieniu");
   check(/Kalendarz może nie mieć kompletu/.test(w),
         "i straszy kalendarzem, bo tu naprawde moze brakowac dawki");
+  A.renderDiag();
+  check(A.stratyCicho() === "",
+        "i NIE dubluje sie cicha wersja w Diagnostyce");
 }
 A.renderStatus({ battery:80, nvsFail:1 });
 {
@@ -1046,12 +1061,17 @@ head("Legenda kalendarza");
 check(/czas na pomiar INR/.test(html), "legenda kalendarza tlumaczy nowa ikonke");
 check(/legend[\s\S]{0,900}circle cx="6" cy="6" r="4\.4"/.test(html),
       "legenda uzywa TEJ SAMEJ ikonki co znacznik w kalendarzu");
-/* Wyjasnienie stoi przy USTAWIENIU odstepu, nie pod kalendarzem - tam
-   zabieralo miejsce przy kazdym spojrzeniu, a potrzebne jest raz.        */
+/* Wyjasnienie nie stoi pod kalendarzem - tam zabieralo miejsce przy kazdym
+   spojrzeniu, a potrzebne jest raz. Od D75 mieszka w Instrukcji: ekran
+   zostawia sobie decyzje ("odstep ustala lekarz"), a to, co ta decyzja
+   znaczy na kalendarzu, tlumaczy jedno miejsce dla calej aplikacji.     */
 check(!/Pomarańczowy znak pokazuje dzień/.test(html),
       "pod kalendarzem NIE ma juz akapitu wyjasniajacego");
-check(/Termin liczy się od ostatniego wyniku[\s\S]{0,80}pomarańczowy znak/.test(html),
-      "wyjasnienie jest przy ustawieniu odstepu");
+{
+  const pomoc = html.slice(html.indexOf('id="tab-help"'), html.indexOf('id="tab-ev"'));
+  check(/pomarańczowy znak/.test(pomoc), "wyjasnienie znaku INR jest w Instrukcji");
+  check(/Odstęp ustala lekarz/.test(html), "a przy samym ustawieniu zostaje, kto o tym decyduje");
+}
 
 check(!/id="inrDate"[\s\S]{0,200}flex:1/.test(html), "stary uklad flex przy dacie usuniety");
 
@@ -1767,10 +1787,20 @@ for (const n of ["1×","2×"])
   check(html.includes(">" + n + "<"), "legenda wymienia sygnal " + n);
 check(/rusz wieczkiem/.test(html), "jedyny etap z Twoim udzialem jest opisany");
 check(/możesz odłożyć/.test(html), "i wiadomo, kiedy mozna odlozyc pudelko");
-check(/Potrzebny jesteś tylko na początku/.test(html), "zasada wyjasniona");
-check(/koniec testu/.test(html), "sygnatura konca opisana");
-check(/nie pojawi się poniżej/.test(html),
+/* Od D75 ekran zostawia sobie PRZEBIEG (czyta sie go z palcem na przycisku),
+   a wyjasnienia - po co ten test i co znaczy sygnatura na koncu - siedza
+   w Instrukcji. Jedna rzecz musi zostac przy tescie: dlaczego wyniku moze
+   nie byc widac. Bez niej udany test bez zasiegu wyglada jak nieudany.  */
+{
+  const pomoc = html.slice(html.indexOf('id="tab-help"'), html.indexOf('id="tab-ev"'));
+  check(/Potrzebny jesteś tylko na początku/.test(pomoc) === false, "zasada nie dubluje sie na ekranie");
+  check(/sygnatura/.test(pomoc), "sygnatura konca opisana w Instrukcji");
+  check(/Reszta dzieje się sama|dalej radzi sobie samo/.test(html),
+        "a na ekranie zostaje, ze dalej pudelko radzi sobie samo");
+}
+check(/Pulsowanie przez 5 sekund[\s\S]{0,120}brak sieci/.test(html),
       "brak sieci wprost tlumaczy, czemu wyniku nie widac");
+check(/czeka w pudełku/.test(html), "i ze wynik nie zginal");
 
 head("Historia pudelka (czarna skrzynka)");
 const bl = document.getElementById("boxLog");
@@ -3553,8 +3583,12 @@ head("Wyglad - system, nie upodobania");
 /* Te kontrole pilnuja rzeczy, ktore latwo cofnac przypadkiem przy nastepnej
    zmianie wygladu, a ktore powstaly z konkretnego powodu.              */
 check(/class="medalion"/.test(html), "tabletka ma oprawe, nie lezy na tle karty");
-check((html.match(/class="ikonka"/g) || []).length === 6,
-      "kazdy kafelek Ustawien ma swoja ikone");
+{
+  const kafelki = (html.match(/class="kafel"/g) || []).length;
+  const ikony   = (html.match(/class="ikonka"/g) || []).length;
+  check(kafelki === ikony && kafelki >= 7,
+        `kazdy kafelek Ustawien ma swoja ikone (${ikony} z ${kafelki})`);
+}
 check(/\.fakt\{/.test(html), "fakty o pudelku maja uklad etykieta-wartosc");
 check(/#todayCard\.st-ok/.test(html) && /#todayCard\.st-bad/.test(html),
       "karta dnia ma stany w kolorach znaczen");
@@ -3564,6 +3598,47 @@ check(/--s1:4px/.test(html) && /--r:20px/.test(html), "skale odstepow i promieni
 /* Pasek nawigacji jest zamrozony po pieciu nieudanych podejsciach (D48-D52). */
 check(!/nav\{[^}]*backdrop-filter/.test(html.replace(/\/\*[\s\S]*?\*\//g, "")),
       "pasek nawigacji nadal bez rozmycia tla (D49)");
+
+/* ═══════════ INSTRUKCJA (D75) ═══════════
+   Zgloszenie Kuby: "aplikacja ma strasznie duzo tekstu" + jego wlasna
+   propozycja rozwiazania: "tekst tlumaczacy co i jak powinien byc w nowej
+   zakladce w ustawieniach pod tytulem instrukcja". Testy pilnuja jednego:
+   ze przeniesione wyjasnienia NAPRAWDE gdzies sa - przeniesienie, ktore
+   gubi tresc, jest kasowaniem pod inna nazwa.                          */
+head("Instrukcja");
+{
+  const pomoc = html.slice(html.indexOf('id="tab-help"'), html.indexOf('id="tab-ev"'));
+  check(pomoc.length > 3000, "ekran Instrukcji ma tresc");
+  check(html.includes("showTab('help')"), "i wejscie z Ustawien");
+  check(/help:\s*\{ tytul:"Instrukcja"/.test(html), "jest w rejestrze ekranow");
+  check(/wraca:"set"/.test(html.slice(html.indexOf('help:'), html.indexOf('help:') + 120)),
+        "z powrotem do Ustawien");
+
+  /* Kazda rzecz zdjeta z ekranow musi byc TUTAJ. Lista wprost z tego,
+     co zostalo wyciete - gdyby ktos kiedys skrocil Instrukcje, test
+     powie, ktora wiedza znika z aplikacji.                            */
+  for (const [czego, wzor] of [
+      ["hotspot na wyjezdzie",        /hotspot/i],
+      ["2,4 GHz",                     /2,4 GHz/],
+      ["tryb awaryjny PillBox-Setup", /PillBox-Setup/],
+      ["kroki parowania bota",        /BotFather/],
+      ["po co kod parowania",         /rozstrzyga, do <i>którego<\/i> czatu/],
+      ["co daje wyciek tokenu",       /wyciekł/],
+      ["kolory w kalendarzu",         /pełna dawka/],
+      ["domykanie doby o 3:00",       /3:00/],
+      ["autotest i sygnatura",        /sygnatura/],
+      ["dziennik wieczka",            /magnes/],
+      ["zapas i recepta",             /recept/i]])
+    check(wzor.test(pomoc), `Instrukcja tlumaczy: ${czego}`);
+
+  /* A na ekranach tego juz NIE MA - inaczej przeniesienie bylo kopiowaniem
+     i tekstu przybylo zamiast ubyc.                                     */
+  const bezPomocy = html.slice(0, html.indexOf('id="tab-help"')) +
+                    html.slice(html.indexOf('id="tab-ev"'));
+  check(!/Maksymalizuj zgodność/.test(bezPomocy), "2,4 GHz zniknelo z ekranu WiFi");
+  check(!/pillbox123/.test(bezPomocy), "tryb awaryjny zniknal z ekranu WiFi");
+  check(!/Gdyby token gdzieś wyciekł/.test(bezPomocy), "akapit o tokenie zniknal z ekranu bota");
+}
 
 head("Tabletka - lekka wersja WEBP");
 D({ doses:{ [today]: { 0:{ status:"taken", dose:1, source:"device", ts: Math.floor(Date.now()/1000) } } } });
