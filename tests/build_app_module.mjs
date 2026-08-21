@@ -31,6 +31,7 @@ export { renderSkan, brakujePokrycia, doReconcile, reconcileDecyzja, opisLadowan
          cfg, doses, inr, events, tabletSVG, doseGraphic,
          dayDose, dayStatus, devKey, devHM, devDate, inrState,
          dawkaNaDzien, tydzienDawek, dzienBezLeku, wyjatekNaDzien, opisDawkowania,
+         planNaDzien, dosePlans, zapiszPlanDnia, renderPlanList,
          dniZapasu, ZAPAS_HORYZONT, renderNetStan,
          EKRANY, renderEvents, renderKafelki, bezPokrycia, evPasuje, opisNvsFailKey,
          nvsFailLog, renderNvsFailLog,
@@ -93,6 +94,7 @@ export function __setState(o){
   if (o.inr)    { for (const k of Object.keys(inr))   delete inr[k];   Object.assign(inr, o.inr); }
   if (o.events) { events.length = 0; events.push(...o.events); }
   if (o.boxLog) { boxLog = o.boxLog; }
+  if (o.dosePlans !== undefined) dosePlans = o.dosePlans || {};
   if (o.nvsFailLog) { nvsFailLog = o.nvsFailLog; }
 }
 /* Kalendarz domysla sie biezacego miesiaca, gdy viewYear/viewMonth nie sa

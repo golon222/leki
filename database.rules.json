@@ -285,6 +285,25 @@
               ".validate": false
             }
           }
+        },
+        "dosePlans": {
+          "$od": {
+            ".validate": "newData.hasChildren(['dd'])",
+            "dd": {
+              ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 10"
+            },
+            "dw": {
+              "$i": {
+                ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 10"
+              }
+            },
+            "ts": {
+              ".validate": "newData.isNumber()"
+            },
+            "$other": {
+              ".validate": false
+            }
+          }
         }
       }
     },

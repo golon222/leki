@@ -3676,6 +3676,100 @@ check(document.getElementById("navKropka").classList.contains("hide"),
   check(/id="anMean"/.test(ana), "srednia godzina zostaje jako obserwacja");
 }
 
+/* ═══════════ HISTORIA ROZPISANIA DAWKI (D79) ═══════════
+   Znalezione przy przegladzie, nie zgloszone - i wlasnie dlatego grozne:
+   zmiana dawki przepisywala CALA przeszlosc. Dzien, w ktorym wzieta byla
+   jedna tabletka przy planie jednej, po korekcie planu na 1,5 robil sie
+   wstecz "mniejsza dawka" - zolty w kalendarzu, gorszy w skutecznosci
+   i taki sam w raporcie dla lekarza.                                   */
+head("Historia rozpisania dawki");
+{
+  const wczoraj = shift(-1), dawno = shift(-30);
+
+  /* Bez historii - zachowanie jak dotad (plan biezacy dla wszystkich dni).
+     Zero regresji dla danych sprzed tej zmiany.                        */
+  D({ cfg:{ defaultDose:1.5 }, dosePlans:{} });
+  check(A.dawkaNaDzien(dawno) === 1.5, "bez historii liczy sie plan biezacy");
+  check(A.planNaDzien(dawno) === null, "i nie ma czego szukac w historii");
+
+  /* Z historia: 1 tabletka do wczoraj, 1,5 od dzis. */
+  D({ cfg:{ defaultDose:1.5 },
+      dosePlans:{ [shift(-60)]:{ dd:1 }, [today]:{ dd:1.5 } } });
+  check(A.dawkaNaDzien(dawno) === 1, "dzien sprzed korekty ma SWOJ plan (1 tabl.)");
+  check(A.dawkaNaDzien(wczoraj) === 1, "wczoraj tez");
+  check(A.dawkaNaDzien(today) === 1.5, "dzis obowiazuje plan nowy");
+  check(A.dawkaNaDzien(shift(3)) === 1.5, "i w przyszlosci tez");
+
+  /* To jest sedno: dzien z jedna wzieta tabletka NIE robi sie zolty
+     dlatego, ze pol roku pozniej lekarz podniosl dawke.                */
+  D({ cfg:{ defaultDose:1.5 },
+      dosePlans:{ [shift(-60)]:{ dd:1 }, [today]:{ dd:1.5 } },
+      doses:{ [wczoraj]: { 0:{ status:"taken", dose:1, source:"device", ts:at(1,20,0) } } } });
+  check(A.dayStatus(wczoraj) === "taken",
+        "pelna dawka wedlug planu Z TAMTEGO DNIA zostaje pelna: " + A.dayStatus(wczoraj));
+
+  /* Rozpisanie tygodniowe tez jest wersjonowane. */
+  D({ cfg:{ defaultDose:1 },
+      dosePlans:{ [shift(-60)]:{ dd:1, dw:[2,2,2,2,2,2,2] } } });
+  check(A.dawkaNaDzien(dawno) === 2, "historia z rozpisaniem tygodniowym dziala");
+  D({ cfg:{ defaultDose:1 }, dosePlans:{ [shift(-60)]:{ dd:1, dw:[0,1,2] } } });
+  check(A.dawkaNaDzien(dawno) === 1,
+        "niekompletne rozpisanie w historii odrzucamy w calosci (jak w cfg)");
+
+  /* Wyjatek na konkretna date bije wszystko - to on jest najswiezsza
+     wiedza o tym, co lekarz zalecil na TEN dzien.                      */
+  D({ cfg:{ defaultDose:1.5, doseDays:{ [dawno]: 0 } },
+      dosePlans:{ [shift(-60)]:{ dd:1 } } });
+  check(A.dawkaNaDzien(dawno) === 0, "wyjatek na date wygrywa z historia planu");
+
+  /* Zapis: nowa wersja tylko wtedy, gdy plan sie NAPRAWDE zmienil. */
+  A.__resetDb();
+  D({ cfg:{ defaultDose:1 }, dosePlans:{ [shift(-10)]:{ dd:1 } } });
+  await A.zapiszPlanDnia();
+  check(!A.__db.data?.users?.testuid?.dosePlans?.[today],
+        "ten sam plan nie dokłada wpisu do historii");
+  D({ cfg:{ defaultDose:2 }, dosePlans:{ [shift(-10)]:{ dd:1 } } });
+  await A.zapiszPlanDnia();
+  const wpisP = A.__db.data?.users?.testuid?.dosePlans?.[today];
+  check(wpisP?.dd === 2, "zmieniony plan zapisuje sie z data OD DZIS");
+  check(typeof wpisP?.ts === "number", "ze znacznikiem czasu");
+
+  /* Historia mieszka pod uzytkownikiem, NIE w konfiguracji urzadzenia:
+     pudelko pobiera config.json W CALOSCI i parsuje w RAM-ie ESP32,
+     wiec rosnaca lista wersji planu przewrocilaby mu odczyt ustawien. */
+  check(!A.__db.data?.devices?.pillbox01?.config?.dosePlans,
+        "historia NIE trafia do konfiguracji pudelka");
+  const zrodloPlan = html.slice(html.indexOf("async function zapiszPlanDnia"),
+                                html.indexOf("window.saveConfig"));
+  check(zrodloPlan.includes("zapiszPewnie("), "zapis idzie przez zapiszPewnie()");
+  check(zrodloPlan.includes("users/${uid}/dosePlans/"), "pod galaz uzytkownika");
+
+  /* Widac ja w Ustawieniach - inaczej dane sa, ale nikt nie wie o ich
+     istnieniu, a od nich zalezy, jak liczone sa dni sprzed korekty.   */
+  A.__setState({ cfg:{}, dosePlans:{ "2026-07-01":{ dd:1 },
+                                     "2026-08-01":{ dd:1.5, dw:[1.5,1.5,1,1.5,1.5,1.5,1.5] } } });
+  A.renderPlanList();
+  const lista = document.getElementById("planList").textContent;
+  check(lista.includes("1 lipca 2026") && lista.includes("1 sierpnia 2026"),
+        "lista pokazuje obie wersje planu");
+  check(lista.includes("obowiązuje"), "i zaznacza, ktora obowiazuje teraz");
+  check(/Wt 1(?!,)/.test(lista), "rozpisanie tygodniowe czytane od poniedzialku: " + lista.slice(0,90));
+  A.__setState({ dosePlans:{} });
+  A.renderPlanList();
+  check(document.getElementById("planList").textContent.includes("nie zmieniało się"),
+        "bez historii mowi wprost, ze zmian nie bylo");
+
+  /* Raport dla lekarza: dawka 1 w czerwcu i 1,5 w sierpniu to nie ta sama
+     terapia, choc obie sa "pelne". Bez tej tabeli kolumna tabletek myli. */
+  D({ cfg:{ defaultDose:1.5 }, dosePlans:{ [shift(-10)]:{ dd:1.5 } },
+      doses:{ [shift(-1)]: { 0:{ status:"taken", dose:1.5, source:"device", ts:at(1,20,0) } } } });
+  document.getElementById("repRange").value = "30";
+  window.makeReport();
+  const rap = document.getElementById("report").innerHTML;
+  check(/Zmiany rozpisania w tym okresie/.test(rap), "raport wymienia zmiany rozpisania");
+  check(rap.includes(shift(-10)), "z data obowiazywania");
+}
+
 head("Wykresy analizy");
 {
   /* Siatka rytmu liczy status TA SAMA funkcja co kalendarz. Gdyby liczyla

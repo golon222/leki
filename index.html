@@ -1168,6 +1168,16 @@ nav button .kropka-nav{position:absolute;top:6px;right:50%;margin-right:-16px;
       </div>
   </div>
 
+  <!-- Historia rozpisania. Zwinięta, bo zagląda się do niej rzadko — ale
+       musi być widoczna gdzieś, bo od niej zależy, jak liczone są dni
+       sprzed korekty dawki. -->
+  <details class="card sek">
+    <summary><h3>Historia rozpisania</h3></summary>
+    <div class="sekcia">
+      <div id="planList"></div>
+    </div>
+  </details>
+
   <!-- Wyjatki zostaja lista ROZWIJALNA, ale tutaj - przy dawkowaniu, ktorego
        dotycza. Zakłada sie je dotknieciem dnia w kalendarzu; to jest podglad. -->
   <details class="card sek">
@@ -1789,7 +1799,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-21.53";
+const APP_VERSION = "2026-08-21.54";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -2382,6 +2392,12 @@ async function boot(){
   onValue(ref(db, `users/${uid}/inr`), s => { inr = s.val() || {}; renderAll(); },
           onErr("odczyt wyników INR"));
 
+  /* Historia rozpisania dawki. Zmienia to, ile tabletek „należało się"
+     w przeszłych dniach, więc po jej dojściu kalendarz i skuteczność
+     trzeba przeliczyć od nowa.                                        */
+  onValue(ref(db, `users/${uid}/dosePlans`), s => { dosePlans = s.val() || {}; renderAll(); },
+          onErr("odczyt historii rozpisania"));
+
   onValue(ref(db, `devices/${DEVICE_ID}/log`), s => {
     boxLog = s.val() || [];
     rysujWszystkie([["historia pudełka", renderBoxLog], ["autotest", renderTesty]]);
@@ -2909,11 +2925,54 @@ function tydzienDawek(){
      3. `defaultDose`               — stara jedna liczba, zgodność wstecz.
    Trzeci poziom zostaje na zawsze: w bazie Kuby leży dziś tylko on, a nowa
    aplikacja musi działać, zanim cokolwiek ustawi. */
+/* ═══════════════ HISTORIA ROZPISANIA DAWKI ═══════════════
+
+   ZNALEZIONE, NIE ZGŁOSZONE — i dlatego groźne. `dawkaNaDzien()` liczyła
+   plan dla KAŻDEGO dnia z rozpisania obowiązującego w tej chwili. Przy
+   warfarynie lekarz koryguje dawkę po wynikach INR, więc pierwsza taka
+   korekta przepisywała całą przeszłość: dzień, w którym Kuba wziął jedną
+   tabletkę przy planie jednej, po zmianie planu na 1,5 robił się wstecz
+   „mniejszą dawką" — żółty w kalendarzu, gorszy w skuteczności i taki sam
+   w raporcie dla lekarza. Nikt by tego nie zauważył, dopóki nie spojrzałby
+   na kalendarz sprzed zmiany.
+
+   Historia mieszka POD UŻYTKOWNIKIEM (`users/<uid>/dosePlans`), a nie
+   w konfiguracji urządzenia — i to nie jest szczegół. Pudełko pobiera
+   `config.json` W CAŁOŚCI i parsuje go w RAM-ie ESP32; lista wersji planu
+   rosłaby tam bez końca i pewnego dnia przewróciłaby odczyt ustawień.
+   Pudełku wystarczy plan BIEŻĄCY, który dostaje jak dotąd.
+
+   Wpis: klucz to data, od której plan obowiązuje; `dd` to dawka domyślna,
+   `dw` to rozpisanie tygodniowe (albo brak, gdy tydzień równy).        */
+let dosePlans = {};
+
+/* Plan obowiązujący danego dnia: najpóźniejszy wpis o dacie <= key.
+   Brak historii (starsze dane, pierwsze uruchomienie) znaczy „nic nie wiemy
+   o przeszłości" — wtedy zostaje zachowanie sprzed tej zmiany, czyli plan
+   bieżący. Lepiej działać jak dotąd niż zgadywać wstecz.               */
+function planNaDzien(key){
+  const daty = Object.keys(dosePlans).filter(d => d <= key).sort();
+  if (!daty.length) return null;
+  const p = dosePlans[daty[daty.length - 1]];
+  if (!p || typeof p.dd !== "number") return null;
+  const dw = Array.isArray(p.dw) && p.dw.length === 7
+             && p.dw.every(v => typeof v === "number" && isFinite(v) && v >= 0 && v <= 10)
+             ? p.dw : null;
+  return { dd: p.dd, dw };
+}
+
 function dawkaNaDzien(key){
   const w = cfg.doseDays;
   if (w && typeof w === "object"){
     const v = w[key];
     if (typeof v === "number" && isFinite(v) && v >= 0 && v <= 10) return v;
+  }
+  /* Dzień zamknięty ma swój plan z przeszłości; dzisiaj i jutro liczą się
+     z planu bieżącego — bo ten właśnie obowiązuje i to on jest w pudełku. */
+  const hist = key < todayKey() ? planNaDzien(key) : null;
+  if (hist){
+    if (hist.dw) return hist.dw[new Date(key + "T12:00:00").getDay()];
+    return hist.dd;
   }
   const tydz = tydzienDawek();
   if (tydz) return tydz[new Date(key + "T12:00:00").getDay()];
@@ -5004,6 +5063,7 @@ function renderKafelki(){
 
 function renderSettings(){
   renderKafelki();
+  renderPlanList();
   document.getElementById("slotEditor").innerHTML = cfg.schedule.map((h,i)=>
     `<div class="row" style="margin-top:8px">
        <input type="time" value="${h}" onchange="cfgTime(${i},this.value)">
@@ -5099,6 +5159,36 @@ window.rownajTydzien = () => {
 };
 
 const EX_POKAZ = 6;
+/* Lista wersji planu, od najnowszej. Każdy wiersz mówi: od kiedy i ile.
+   „obowiązuje" przy pierwszym wierszu, bo to jedyna rzecz, której szuka
+   się tu najczęściej.                                                   */
+function renderPlanList(){
+  const el = document.getElementById("planList");
+  if (!el) return;
+  const daty = Object.keys(dosePlans).sort().reverse();
+  if (!daty.length){
+    el.innerHTML = `<div class="dim2">Rozpisanie nie zmieniało się, odkąd aplikacja
+      je pamięta. Pierwsza zmiana zapisze się tu sama.</div>`;
+    return;
+  }
+  el.innerHTML = daty.map((d, i) => {
+    const p = dosePlans[d];
+    const dw = Array.isArray(p.dw) && p.dw.length === 7 ? p.dw : null;
+    const opis = dw
+      /* Indeks w doseWeek to getDay(), czyli 0 = NIEDZIELA. Wyświetlamy
+         od poniedziałku, jak wszędzie indziej w tej aplikacji.        */
+      ? (dw.every(v => Math.abs(v - dw[0]) < 0.001)
+          ? `${nf(dw[0])} tabl. dziennie`
+          : DOW.map((nazwa, j) => `${nazwa} ${nf(dw[(j + 1) % 7])}`).join(" · "))
+      : `${nf(p.dd)} tabl. dziennie`;
+    const data = new Date(d + "T12:00:00").toLocaleDateString("pl-PL",
+                   { day:"numeric", month:"long", year:"numeric" });
+    return `<div class="fakt"><span>od ${data}${i === 0
+              ? ` <b style="color:var(--acc)">· obowiązuje</b>` : ""}</span>
+            <b>${esc(opis)}</b></div>`;
+  }).join("");
+}
+
 function renderExceptions(){
   const box = document.getElementById("exList");
   if (!box) return;
@@ -6058,6 +6148,28 @@ window.addSlot = () => {
 };
 window.delSlot = i => { cfg.schedule.splice(i,1); renderSettings(); };
 
+/* Zapisuje BIEŻĄCY plan jako obowiązujący od dziś — o ile różni się od
+   tego, co już obowiązuje. Bez tego warunku każde dotknięcie „Zapisz"
+   dokładałoby identyczny wpis i historia zrobiłaby się dziennikiem
+   klikania, a nie dziennikiem zmian dawki.                             */
+async function zapiszPlanDnia(){
+  if (!uid) return;
+  const dzis = todayKey();
+  const teraz = { dd: cfg.defaultDose ?? 1,
+                  dw: Array.isArray(cfg.doseWeek) && cfg.doseWeek.length === 7
+                      ? cfg.doseWeek.map(v => +v) : null };
+  const poprzedni = planNaDzien(dzis);
+  const takiSam = poprzedni
+    && Math.abs(poprzedni.dd - teraz.dd) < 0.001
+    && JSON.stringify(poprzedni.dw) === JSON.stringify(teraz.dw);
+  if (takiSam) return;
+
+  const wpis = { dd: teraz.dd, ts: Math.floor(Date.now() / 1000) };
+  if (teraz.dw) wpis.dw = teraz.dw;
+  dosePlans = { ...dosePlans, [dzis]: wpis };        // od razu na ekranie
+  await zapiszPewnie({ [`users/${uid}/dosePlans/${dzis}`]: wpis }, "Rozpisanie dawki");
+}
+
 window.saveConfig = async () => {
   /* Godziny muszą mieć format HH:MM. Puste pole czasu daje "", które
      przechodziło przez reguły bazy (widzą tylko „tablica ma dzieci"),
@@ -6096,6 +6208,12 @@ window.saveConfig = async () => {
     trackingSince: cfg.trackingSince, defaultDose: cfg.defaultDose,
     doseWeek: cfg.doseWeek,
     drugName: cfg.drugName, drugStrength: cfg.drugStrength }, "Ustawienia");
+
+  /* Zmiana planu obowiązuje OD DZIŚ. Wpis do historii idzie osobnym
+     zapisem, po tym pierwszym: gdyby poszły razem jedną aktualizacją
+     wielościeżkową, odrzucenie jednego pola zabrałoby ze sobą drugie —
+     a to są dwie różne rzeczy, z których pudełko potrzebuje tylko jednej. */
+  await zapiszPlanDnia();
   renderAll();
   toast("Zapisano · pudełko pobierze przy najbliższym połączeniu", "ok", 3200);
 };
@@ -6863,6 +6981,25 @@ window.makeReport = () => {
       pominiętych: <b>${missed}</b> | skuteczność: <b>${total?Math.round(taken/total*100):0}%</b> |
       łącznie tabletek: <b>${nf(sumDose)}</b>
     </div>
+
+    ${(() => {
+      /* Zmiany rozpisania w okresie raportu. Dla lekarza to kontekst bez
+         którego kolumna „tabletek" bywa myląca: dawka 1 w czerwcu i dawka
+         1,5 w sierpniu to nie jest ta sama terapia, choć obie są „pełne". */
+      const okres = Object.keys(dosePlans).filter(d => d >= rows[0].key).sort().reverse();
+      if (!okres.length) return "";
+      return `<h3>Zmiany rozpisania w tym okresie</h3>
+        <table><thead><tr><th style="width:30%">Obowiązuje od</th>
+          <th>Rozpisanie</th></tr></thead><tbody>` +
+        okres.map(d => {
+          const p = dosePlans[d];
+          const dw = Array.isArray(p.dw) && p.dw.length === 7 ? p.dw : null;
+          const opis = dw && !dw.every(v => Math.abs(v - dw[0]) < 0.001)
+            ? DOW.map((n,j) => `${n} ${nf(dw[(j+1)%7])}`).join(", ")
+            : `${nf(dw ? dw[0] : p.dd)} tabl. dziennie`;
+          return `<tr><td>${d}</td><td>${esc(opis)}</td></tr>`;
+        }).join("") + `</tbody></table>`;
+    })()}
 
     <h3>Analiza pór przyjmowania</h3>
     <div class="meta">Pory nie były zalecone — pacjent przyjmuje dawkę o dowolnej godzinie,
