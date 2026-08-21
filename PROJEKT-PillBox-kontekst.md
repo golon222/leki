@@ -373,9 +373,13 @@ naprawy.
   (skala 4 px), promieni i cieni; kolor zarezerwowany dla stanu dawki;
   krawędzie włosowe zamiast ramek. Ekran główny to karta dnia (data, stan,
   tabletka w medalionie, pas faktów, przycisk „Wziąłem teraz"), potem
-  skuteczność i kalendarz, potem zapas i pudełko. Pasek nawigacji jest
-  **zamrożony** po pięciu nieudanych podejściach (D48–D52) i pilnuje tego
-  kontrola statyczna.
+  skuteczność i kalendarz, potem zapas i pudełko.
+- **Pasek nawigacji wolno zmieniać** (D78 — zakaz zdjęty na prośbę Kuby).
+  Ma rozmyte, półprzezroczyste tło, pigułkę pod aktywną zakładką i kropkę
+  nad Kalendarzem, gdy dzisiejsza dawka nie jest jeszcze zapisana. Rezerwa
+  na wcięcie ekranu i prefiks `-webkit-` przy rozmyciu zostają sprawdzane
+  testem — to nie kwestia gustu, tylko klikalności i tego, że iOS bez
+  prefiksu nie rozmywa nic.
 - **Osłona rysowania** (D71): każdy ekran rysuje się przez `rysuj()`, więc
   wyjątek w jednym nie zabiera ze sobą pozostałych ani tego, co stoi za nimi
   w tej samej linijce (`settlePills()`). Nieudane rysowania są liczone i widać

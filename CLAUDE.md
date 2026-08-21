@@ -23,7 +23,7 @@ bash tests/run_all.sh
 ```
 
 Musi przejść przed zmianą i po zmianie. Stan wyjściowy:
-**526 + 51 firmware, 1068 (×6 pór doby) + 92 + 49 aplikacja, 48 zgodności,
+**526 + 51 firmware, 1075 (×6 pór doby) + 92 + 49 aplikacja, 48 zgodności,
 119 reguł bazy, 301 kontroli audytu, 24 kontrole statyczne — 0 błędów.**
 
 **Runner jest cichy przy sukcesie i głośny przy błędzie** (D66). Udany przebieg
@@ -186,9 +186,14 @@ Test to złapie, ale komunikat zrozumiesz szybciej, znając powód (D6, D13, D15
    Kolor niesie znaczenie: zielony/żółty/czerwony należą do stanu dawki
    i nigdzie indziej. Odstępy idą po skali `--s1..--s7` (4 px), promienie
    po `--r*`, krawędzie to półprzezroczysta biel (`--line`), nie pełny
-   kolor. Domyślny przycisk ma 44 px wysokości. **Pasek nawigacji jest
-   zamrożony** (D48–D52): ani rozmycia tła, ani zmian rezerwy na wcięcie
-   ekranu. Kontrola statyczna pilnuje każdego z tych punktów.
+   kolor. Domyślny przycisk ma 44 px wysokości. Kontrola statyczna pilnuje
+   każdego z tych punktów.
+   **Pasek nawigacji wolno zmieniać** — zakaz zdjęty na prośbę Kuby (D78).
+   Zostają dwa niezmienniki: rezerwa `env(safe-area-inset-bottom)` i to, że
+   półprzezroczyste tło idzie zawsze razem z rozmyciem (z prefiksem
+   `-webkit-`). Wiedza z D48–D52 zostaje jako ostrzeżenie, nie zakaz: gdyby
+   objaw „pasek ucieka przy przewijaniu" wrócił, **najpierw zmierz**, czym
+   różni się klatka, w której ucieka — pięć podejść po omacku nic nie dało.
    Wygląd sprawdzaj **na renderze**, nie w wyobraźni — podgląd z atrapą
    Firebase i Playwright w rozdzielczości iPhone'a wyłapał w jedną sesję
    cztery rzeczy niewidoczne w kodzie.
@@ -216,7 +221,7 @@ tabletka.gif                 zapas dla przeglądarki bez WEBP (D72)
 tests/                           testy + audyt
 tests/statyczna.py               kontrola statyczna (krok 4/10)
 database.rules.json              reguły Firebase
-DECYZJE.md                       dziennik decyzji (D1–D77)
+DECYZJE.md                       dziennik decyzji (D1–D78)
 PROJEKT-PillBox-kontekst.md      pełny kontekst projektu
 WGRYWANIE.md                     instrukcja wgrywania kablem dla Kuby
 .github/workflows/firmware.yml   automat budujący binarkę do OTA

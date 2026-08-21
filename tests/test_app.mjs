@@ -3622,9 +3622,37 @@ check(/#todayCard\.st-ok/.test(html) && /#todayCard\.st-bad/.test(html),
 /* 44 px to najmniejszy cel, w ktory palec trafia pewnie (wytyczne Apple). */
 check(/button\{[^}]*min-height:44px/.test(html), "przyciski maja cel dotykowy");
 check(/--s1:4px/.test(html) && /--r:20px/.test(html), "skale odstepow i promieni sa tokenami");
-/* Pasek nawigacji jest zamrozony po pieciu nieudanych podejsciach (D48-D52). */
-check(!/nav\{[^}]*backdrop-filter/.test(html.replace(/\/\*[\s\S]*?\*\//g, "")),
-      "pasek nawigacji nadal bez rozmycia tla (D49)");
+/* Zakaz dotykania paska ZDJETY (D78, prosba Kuby). Zostaja niezmienniki,
+   ktore nie sa kwestia gustu: rezerwa na wciecie ekranu (bez niej dolny rzad
+   przyciskow wchodzi pod pasek gestow iPhone'a) i prefiks -webkit- przy
+   rozmyciu (bez niego iOS Safari nie rozmywa NIC - B26).               */
+{
+  const css = html.replace(/\/\*[\s\S]*?\*\//g, "");
+  const nav = css.match(/\bnav\{([^}]*)\}/);
+  check(!!nav, "regula paska nawigacji istnieje");
+  check(/padding-bottom:env\(safe-area-inset-bottom\)/.test(nav[1]),
+        "pasek rezerwuje miejsce nad wcieciem ekranu");
+  check(!/background:rgba/.test(nav[1]) || /backdrop-filter/.test(nav[1]),
+        "polprzezroczyste tlo tylko razem z rozmyciem");
+  check(!/backdrop-filter/.test(nav[1]) || /-webkit-backdrop-filter/.test(nav[1]),
+        "rozmycie ma prefiks -webkit- (iOS Safari go wymaga)");
+  check(/@supports not/.test(css), "przegladarka bez rozmycia dostaje tlo nieprzezroczyste");
+}
+
+/* Kropka nad Kalendarzem gasnie i zapala sie razem z przyciskiem
+   „Wzialem teraz" - to ta sama informacja widziana z kazdego ekranu. */
+D();
+A.renderToday();
+check(!document.getElementById("navKropka").classList.contains("hide"),
+      "dawka niewzieta - kropka w pasku swieci");
+D({ doses:{ [today]: { 0:{ status:"taken", dose:1, source:"device", ts:Math.floor(Date.now()/1000) } } } });
+A.renderToday();
+check(document.getElementById("navKropka").classList.contains("hide"),
+      "po zapisaniu dawki kropka gasnie");
+D({ cfg:{ doseWeek:[0,0,0,0,0,0,0] } });
+A.renderToday();
+check(document.getElementById("navKropka").classList.contains("hide"),
+      "w dniu bez leku nie ma o czym przypominac");
 
 /* ═══════════ INSTRUKCJA (D75) ═══════════
    Zgloszenie Kuby: "aplikacja ma strasznie duzo tekstu" + jego wlasna

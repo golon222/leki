@@ -127,20 +127,25 @@ _css = re.search(r'<style>(.*?)</style>', html, re.S).group(1)
 # kontrola czytajaca opis kodu zamiast kodu mierzy nie to, co trzeba.
 _css = re.sub(r'/\*.*?\*/', '', _css, flags=re.S)
 
-# Pasek nawigacji jest ZAMROZONY po pieciu nieudanych podejsciach (D48-D52).
-# backdrop-filter zostal z niego USUNIETY swiadomie (D49) - to on jest
-# najkosztowniejsza czescia kompozycji przy przewijaniu na iOS. Gdyby wrocil
-# przy jakims odswiezaniu wygladu, objaw wrocilby razem z nim, a nikt nie
-# skojarzylby jednego z drugim.
-_nav = re.search(r'\bnav\{([^}]*)\}', _css)
+# Pasek nawigacji WOLNO zmieniac (zakaz zdjety 2026-08-21 na prosbe Kuby).
+# Zostaja dwa niezmienniki, ktore nie sa kwestia gustu:
+#   1. rezerwa na wciecie ekranu - bez niej pasek wchodzi pod pasek gestow
+#      iPhone'a i dolny rzad przyciskow przestaje byc klikalny;
+#   2. polprzezroczyste tlo TYLKO razem z rozmyciem - polprzezroczysty pasek
+#      bez blura to nieczytelna szyba z prleswitujacym kalendarzem.
+_nav = _re.search(r'\bnav\{([^}]*)\}', _css)
 if not _nav:
     bad += 1; print('  BLAD nie znaleziono regul paska nawigacji')
-elif 'backdrop-filter' in _nav.group(1):
-    bad += 1; print('  BLAD backdrop-filter wrocil do paska nawigacji (patrz D49)')
-elif 'padding-bottom:env(safe-area-inset-bottom)' not in _nav.group(1):
-    bad += 1; print('  BLAD pasek nawigacji przestal rezerwowac miejsce nad wcieciem')
 else:
-    print('  OK   pasek nawigacji nietkniety (D48-D52)')
+    _n = _nav.group(1)
+    if 'padding-bottom:env(safe-area-inset-bottom)' not in _n:
+        bad += 1; print('  BLAD pasek nawigacji nie rezerwuje miejsca nad wcieciem ekranu')
+    elif _re.search(r'background:rgba', _n) and 'backdrop-filter' not in _n:
+        bad += 1; print('  BLAD polprzezroczysty pasek bez rozmycia tla')
+    elif 'backdrop-filter' in _n and '-webkit-backdrop-filter' not in _n:
+        bad += 1; print('  BLAD brak prefiksu -webkit-backdrop-filter (iOS nie rozmyje, B26)')
+    else:
+        print('  OK   pasek nawigacji: rezerwa na wciecie i spojne tlo')
 
 # Kolor w tej aplikacji NIESIE ZNACZENIE: zielony/zolty/czerwony naleza do
 # stanu dawki. Wartosci szesnastkowe wpisane wprost w style omijaja ten

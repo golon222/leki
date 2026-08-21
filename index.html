@@ -44,8 +44,6 @@
      złożony z poprawek od projektu zaprojektowanego.
 
    Czego NIE WOLNO tu zmieniać, choćby wyglądało to kusząco:
-   • paska nawigacji — ani rozmycia tła, ani rezerwy na wcięcie ekranu
-     (D48–D52: pięć podejść, zero trafień; obowiązuje stan z D49);
    • znaczeń kolorów stanu dawki (zielony/żółty/czerwony/szary/„bez leku”);
    • wzorców, na których stoją testy: nav{…padding-bottom:env(...)},
      html,body{…overflow-x:hidden}, svg{max-width:100%}, main{overflow-x:hidden}.
@@ -542,27 +540,63 @@ button:focus-visible,.day:focus-visible{outline:2px solid var(--acc);outline-off
 .inrval{font-weight:750;font-size:16px;min-width:42px;font-variant-numeric:tabular-nums}
 
 /* ---------- nawigacja ----------
-   UWAGA: pozycjonowanie i rezerwa na wcięcie ekranu są ZAMROŻONE (D48–D52).
-   Pięć podejść do „rozjeżdżania się przy przewijaniu", zero trafień;
-   obowiązuje stan z D49 — bez backdrop-filter, tło nieprzezroczyste.
-   Wolno tu zmieniać kolor, pismo i wskaźnik aktywnej zakładki. Nic więcej. */
+   ZAKAZ ZDJĘTY 2026-08-21 na wyraźną prośbę Kuby: *„można go dotykać, jak
+   jest gdzieś taki wpis, to od razu go wyjeb"*. Wolno tu zmieniać wszystko.
+
+   Ale wiedza, dlaczego ten zakaz powstał, ZOSTAJE — bo kosztowała dzień:
+   D48–D52 to pięć podejść do objawu „pasek rozjeżdża się przy przewijaniu"
+   i zero trafień. Cztery z nich dotyczyły CSS-u paska albo jego otoczenia
+   (`backface-visibility`, rozciągnięty kafelek, mniejsza rezerwa na wcięcie,
+   `min-height:100vh`), objaw nie ustąpił ani razu, a naprawiło go dopiero
+   cofnięcie wszystkiego do stanu z D49.
+
+   Wniosek na przyszłość, nie zakaz: jeśli objaw kiedyś wróci, NIE dokładaj
+   szóstej próby po omacku — najpierw zmierz, czym różni się klatka, w której
+   pasek „ucieka", od tej, w której stoi. Zmiany poniżej są świadome i mają
+   swój powód; każdą da się cofnąć osobno.
+
+   Rezerwa na wcięcie ekranu (`padding-bottom:env(safe-area-inset-bottom)`)
+   zostaje nietknięta — to ona odpowiada za to, że pasek nie wchodzi pod
+   pasek gestów iPhone'a, i jest sprawdzana testem.                       */
 nav{position:fixed;bottom:0;left:0;right:0;display:flex;z-index:30;
-    background:var(--bg2);border-top:1px solid var(--line);
+    /* Półprzezroczyste tło z rozmyciem — treść przewijana pod paskiem
+       nie urywa się twardą krawędzią, tylko rozmywa. Prefiks -webkit-
+       jest obowiązkowy: bez niego iOS Safari nie rozmywa NIC (B26). */
+    background:rgba(11,15,24,.86);
+    -webkit-backdrop-filter:saturate(180%) blur(20px);
+    backdrop-filter:saturate(180%) blur(20px);
+    border-top:1px solid var(--line);
     padding-bottom:env(safe-area-inset-bottom);
     transform:translateZ(0);-webkit-transform:translateZ(0);
     will-change:transform}
-nav button{flex:1;background:none;border-radius:0;padding:10px 0 9px;font-size:10px;
-           color:var(--dim2);display:flex;flex-direction:column;align-items:center;gap:4px;
+/* Przeglądarka bez rozmycia (starsze iOS, tryb oszczędzania) dostaje tło
+   nieprzezroczyste — półprzezroczyste bez rozmycia to nieczytelny pasek
+   z prześwitującym przez niego kalendarzem.                            */
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
+  nav{background:var(--bg2)}
+}
+nav button{flex:1;background:none;border-radius:0;padding:9px 0 8px;font-size:10px;
+           color:var(--dim2);display:flex;flex-direction:column;align-items:center;gap:3px;
            font-weight:650;letter-spacing:.01em;min-height:0;position:relative;
            transition:color var(--ruch)}
-nav button svg{width:22px;height:22px;transition:transform var(--ruch-spr)}
+/* Ikona siedzi w „pigułce", która zapala się pod aktywną zakładką. Kreska
+   nad paskiem (poprzednia wersja) znaczyła to samo, ale stała w miejscu,
+   w którym palec jej nie zasłania — czyli tam, gdzie jej nie widać przy
+   dotknięciu. Pigułka jest pod palcem i zostaje po jego zdjęciu.      */
+nav button i{display:flex;align-items:center;justify-content:center;
+             width:52px;height:30px;border-radius:var(--r-pill);
+             transition:background var(--ruch), transform var(--ruch-spr)}
+nav button svg{width:21px;height:21px;transition:transform var(--ruch-spr)}
 nav button.act{color:var(--acc)}
-nav button.act svg{transform:translateY(-1px) scale(1.06)}
-/* Kreska nad aktywną zakładką — jedyny sposób, żeby wiedzieć, gdzie się
-   jest, bez czytania podpisów.                                        */
-nav button.act::before{content:"";position:absolute;top:0;left:50%;transform:translateX(-50%);
-    width:26px;height:2.5px;border-radius:0 0 3px 3px;background:var(--acc);
-    box-shadow:0 0 12px rgba(94,234,212,.8)}
+nav button.act i{background:var(--acc-soft)}
+nav button.act svg{transform:scale(1.04)}
+nav button:active i{transform:scale(.9)}
+/* Kropka nad Kalendarzem, gdy dzisiejsza dawka nie jest jeszcze zapisana.
+   Widać ją z KAŻDEGO ekranu — a to jedyna rzecz w tej aplikacji, o której
+   naprawdę warto przypomnieć, kiedy człowiek grzebie w ustawieniach.   */
+nav button .kropka-nav{position:absolute;top:6px;right:50%;margin-right:-16px;
+    width:7px;height:7px;border-radius:50%;background:var(--warn);
+    box-shadow:0 0 0 2px rgba(11,15,24,.9)}
 .hide{display:none!important}
 
 /* ---------- powrot z podekranu ----------
@@ -1676,18 +1710,19 @@ nav button.act::before{content:"";position:absolute;top:0;left:50%;transform:tra
 
 <nav>
   <button id="nav-cal" class="act" onclick="showTab('cal')">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round">
-      <rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18"/></svg>Kalendarz</button>
+    <span class="kropka-nav hide" id="navKropka"></span>
+    <i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round">
+      <rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18"/></svg></i>Kalendarz</button>
   <button id="nav-inr" onclick="showTab('inr')">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M3 14l4.5-5 3.5 4 3-7 4 8h3"/></svg>INR</button>
+    <i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 14l4.5-5 3.5 4 3-7 4 8h3"/></svg></i>INR</button>
   <button id="nav-ana" onclick="showTab('ana')">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round">
-      <path d="M4 20V11M9.5 20V5M15 20v-6M20.5 20V8"/></svg>Analiza</button>
+    <i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round">
+      <path d="M4 20V11M9.5 20V5M15 20v-6M20.5 20V8"/></svg></i>Analiza</button>
   <button id="nav-set" onclick="showTab('set')">
     <!-- Trybik, nie słońce. Poprzednia ikona (kółko z ośmioma promieniami)
          czytała się jako jasność ekranu, a nie jako ustawienia aplikacji. -->
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+    <i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
          stroke-linecap="round" stroke-linejoin="round">
       <circle cx="12" cy="12" r="3.1"/>
       <path d="M19.4 15a1.6 1.6 0 0 0 .33 1.77l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.6 1.6 0 0 0-1.77-.33
@@ -1696,7 +1731,7 @@ nav button.act::before{content:"";position:absolute;top:0;left:50%;transform:tra
                A1.6 1.6 0 0 0 4.6 8.9a1.6 1.6 0 0 0-.33-1.77l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06
                a1.6 1.6 0 0 0 1.77.33H9a1.6 1.6 0 0 0 1-1.46V3a2 2 0 1 1 4 0v.11a1.6 1.6 0 0 0 1 1.46
                1.6 1.6 0 0 0 1.77-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.6 1.6 0 0 0-.33 1.77V9
-               a1.6 1.6 0 0 0 1.46 1H21a2 2 0 1 1 0 4h-.11a1.6 1.6 0 0 0-1.46 1z"/></svg>Ustawienia</button>
+               a1.6 1.6 0 0 0 1.46 1H21a2 2 0 1 1 0 4h-.11a1.6 1.6 0 0 0-1.46 1z"/></svg></i>Ustawienia</button>
 </nav>
 </div>
 
@@ -1754,7 +1789,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-21.52";
+const APP_VERSION = "2026-08-21.53";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -3252,6 +3287,14 @@ function renderToday(){
     btn.classList.toggle("hide", !(target > 0 && sum <= 0));
     btn.textContent = `Wziąłem teraz — ${nf(target)} tabl.`;
   }
+
+  /* Ta sama informacja co przycisk wyżej, ale widoczna z KAŻDEGO ekranu:
+     kropka nad Kalendarzem w pasku nawigacji. Grzebiąc w ustawieniach albo
+     w analizie, nie ma się jak dowiedzieć, że dzisiejsza dawka wciąż czeka
+     — a to jedyna rzecz w tej aplikacji, o której naprawdę warto wtedy
+     przypomnieć. Znika w tej samej chwili co przycisk.                 */
+  const kropka = document.getElementById("navKropka");
+  if (kropka) kropka.classList.toggle("hide", !(target > 0 && sum <= 0));
 
   /* Po północy, a przed granicą doby, „dziś” to wciąż wczorajsza data.
      Bez tej informacji wyglądałoby to na błąd aplikacji.              */
