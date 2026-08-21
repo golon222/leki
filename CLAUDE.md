@@ -23,7 +23,7 @@ bash tests/run_all.sh
 ```
 
 Musi przejść przed zmianą i po zmianie. Stan wyjściowy:
-**539 + 51 firmware, 1150 (×6 pór doby) + 92 + 49 aplikacja, 48 zgodności,
+**553 + 51 firmware, 1150 (×6 pór doby) + 92 + 49 aplikacja, 48 zgodności,
 119 reguł bazy, 301 kontroli audytu, 24 kontrole statyczne — 0 błędów.**
 
 **Runner jest cichy przy sukcesie i głośny przy błędzie** (D66). Udany przebieg
@@ -221,7 +221,7 @@ tabletka.gif                 zapas dla przeglądarki bez WEBP (D72)
 tests/                           testy + audyt
 tests/statyczna.py               kontrola statyczna (krok 4/10)
 database.rules.json              reguły Firebase
-DECYZJE.md                       dziennik decyzji (D1–D83)
+DECYZJE.md                       dziennik decyzji (D1–D84)
 PROJEKT-PillBox-kontekst.md      pełny kontekst projektu
 WGRYWANIE.md                     instrukcja wgrywania kablem dla Kuby
 .github/workflows/firmware.yml   automat budujący binarkę do OTA
@@ -247,7 +247,7 @@ naprawdę wgrywa. Nie jest częścią `run_all.sh`: wymaga sieci i ~500 MB
 toolchainu (pierwsze uruchomienie kilka minut, kolejne szybkie).
 **Uruchom to po każdej zmianie w firmware.**
 
-Stan: `PillBox.ino` **64% flasha** (1 259 859 B z 1,875 MB), `PillBoxTest.ino` 20%.
+Stan: `PillBox.ino` **64% flasha** (1 260 791 B z 1,875 MB), `PillBoxTest.ino` 20%.
 Zapas ~718 kB.
 
 **Podział pamięci musi być `Minimal SPIFFS (1.9MB APP with OTA/190KB SPIFFS)`**,

@@ -223,10 +223,18 @@ RTC_DATA_ATTR bool     rtcTgStockZgloszony = false;
    wyniku) i podaje pudelku gotowa date w `config/inrDue`. Pudelko tylko
    porownuje ja z kalendarzem - tak samo jak przy stanie opakowania nie
    liczy dawek, tylko czyta gotowa liczbe. Jedno zrodlo prawdy.
-   `rtcTgInrZgloszony` pamieta, DLA KTOREGO terminu juz napisalo: kolejny
-   termin ma dostac swoja wiadomosc, ten sam - tylko jedna.            */
+   Przypomnienia sa cztery: jedno dzien wczesniej i trzy w dniu pomiaru
+   (D84). Maska pamieta, ktore juz poszly, a data - dla ktorego terminu
+   ta maska obowiazuje.                                                */
 RTC_DATA_ATTR char     rtcInrDue[11]       = "";
-RTC_DATA_ATTR char     rtcTgInrZgloszony[11] = "";
+/* Dla KTOREGO terminu liczy sie maska ponizej. Zmiana terminu (czyli
+   wpisanie wyniku w aplikacji) zeruje wszystko - i to jest cala odpowiedz
+   na "jak pomiar zostanie wykonany, to nie mam dostawac powiadomien". */
+RTC_DATA_ATTR char     rtcTgInrDzien[11]   = "";
+/* Ktore z czterech przypomnien juz poszly: bit 0 = dzien wczesniej,
+   bity 1..3 = trzy w dniu pomiaru.                                    */
+RTC_DATA_ATTR uint8_t  rtcTgInrMaska       = 0;
+RTC_DATA_ATTR int8_t   rtcTgInrIdx         = -1;   // ktore czeka na wyslanie
 RTC_DATA_ATTR bool     rtcTgInrCzeka       = false;
 /* Co sie stalo z ostatnia wiadomoscia. Idzie do statusu, bo inaczej
    "bot nie pisze" ma trzy nieodroznialne przyczyny: pudelko nie ma
@@ -4482,24 +4490,92 @@ int32_t dniDoDaty(const char* data, time_t teraz) {
        - dniOdEry((int)(dzis / 10000), (int)(dzis / 100 % 100), (int)(dzis % 100));
 }
 
-/* Zblizajacy sie termin pomiaru INR. Date liczy aplikacja (zna odstep
-   i ostatni wynik), pudelko tylko porownuje ja z kalendarzem.
+/* Godziny przypomnien o INR: [0] dzien wczesniej, [1..3] w dniu pomiaru.
+   Znaczniki @extract oddaja te tablice testom - inaczej sprawdzalyby
+   wlasna kopie godzin, czyli nie to, co naprawde robi pudelko.       */
+/* @extract-begin */
+const uint8_t TG_INR_GODZ[4] = { TG_INR_PRZED_H, TG_INR_H1, TG_INR_H2, TG_INR_H3 };
+/* @extract-end */
 
-   Bez waznego zegara NIE PISZEMY NIC. Pudelko po resecie bez sieci nie wie,
-   ktory jest dzien - a wiadomosc "jutro masz badanie" wyslana w losowym
-   momencie jest gorsza niz jej brak, bo uczy ignorowac wszystkie
-   nastepne. Ta sama zasada, co przy wyciszaniu alarmu bez zegara (4c). */
+/* Ktore przypomnienie o INR nalezy sie TERAZ (-1 = zadne).
+
+   Zakres wybral Kuba: *„o INR to ma mi przypomniec ze trzy razy w dzien
+   pomiaru i jeden raz dzien wczesniej, np. o 12 — tylko jak pomiar zostanie
+   wykonany, to nie mam dostawac tych powiadomien"*.
+
+   OSTATNIE ZDANIE ZALATWIA SIE SAMO i to jest najladniejsza czesc tej
+   konstrukcji: po wpisaniu wyniku aplikacja przesuwa `inrDue` na nastepny
+   termin (za miesiac), a pudelko przy najblizszym wybudzeniu widzi inna
+   date, zeruje maske i nie ma juz o czym pisac. Zaden dodatkowy sygnal
+   "juz zrobione" nie jest potrzebny - wystarczy jedno zrodlo prawdy.
+
+   Przypomnienie ZALEGLE tez sie nalezy: jesli o 8:00 nie bylo sieci, to
+   wiadomosc ma pojsc o 12:00, a nie przepasc. Ale wtedy idzie JEDNA,
+   nie dwie - `tgOznaczInrMiniete()` zbiera po drodze wszystkie minione
+   godziny, zeby czlowiek nie dostal serii pod rzad.                    */
+int inrPrzypomnienieTeraz(time_t teraz) {
+  if (!rtcTimeValid || strlen(rtcInrDue) != 10) return -1;
+
+  const int32_t dni = dniDoDaty(rtcInrDue, teraz);
+  if (dni != 0 && dni != 1) return -1;          // tylko dzien przed i dzien pomiaru
+
+  const int minuty = localMinutesOfDay(teraz);
+  if (dni == 1)
+    return (!(rtcTgInrMaska & 1) && minuty >= TG_INR_GODZ[0] * 60) ? 0 : -1;
+
+  /* W dniu pomiaru bierzemy NAJPOZNIEJSZA minieta godzine, ktora jeszcze
+     nie poszla - wtedy zalegle z rana nie mnoza wiadomosci.            */
+  for (int i = 3; i >= 1; i--)
+    if (!(rtcTgInrMaska & (1 << i)) && minuty >= TG_INR_GODZ[i] * 60) return i;
+  return -1;
+}
+
+/* Po udanej wysylce zamykamy nie tylko ta godzine, ale i wszystkie
+   wczesniejsze tego dnia - inaczej pudelko dosylaloby je jedna po drugiej
+   przy kolejnych wybudzeniach.                                         */
+void tgOznaczInrMiniete(int idx) {
+  rtcTgInrMaska |= (uint8_t)(1 << idx);
+  if (idx >= 1) for (int i = 1; i < idx; i++) rtcTgInrMaska |= (uint8_t)(1 << i);
+  strlcpy(rtcTgInrDzien, rtcInrDue, sizeof(rtcTgInrDzien));
+}
+
+/* Ile sekund do najblizszego NIEWYSLANEGO przypomnienia (UINT32_MAX = brak).
+   Uzywane przez planNextSleep(): bez tego pudelko spaloby az do dawki
+   i "o 12:00" nie mialoby jak sie wydarzyc.                            */
+uint32_t sekundyDoInrPrzypomnienia(time_t teraz) {
+  if (!rtcTimeValid || strlen(rtcInrDue) != 10) return UINT32_MAX;
+  const int32_t dni = dniDoDaty(rtcInrDue, teraz);
+  if (dni < 0 || dni > 1) return UINT32_MAX;
+
+  const int minuty = localMinutesOfDay(teraz);
+  int najblizsza = -1;
+  if (dni == 1) {
+    if (!(rtcTgInrMaska & 1) && minuty < TG_INR_GODZ[0] * 60) najblizsza = TG_INR_GODZ[0] * 60;
+  } else {
+    for (int i = 1; i <= 3; i++)
+      if (!(rtcTgInrMaska & (1 << i)) && minuty < TG_INR_GODZ[i] * 60) {
+        najblizsza = TG_INR_GODZ[i] * 60; break;
+      }
+  }
+  if (najblizsza < 0) return UINT32_MAX;
+  return (uint32_t)(najblizsza - minuty) * 60UL;
+}
+
+/* Sprawdzenie przed snem: czy jest o czym pisac. Zmiana terminu (czyli
+   wpisany wynik) zeruje maske - dlatego to jedno porownanie zastepuje
+   caly osobny mechanizm "juz zrobione".                               */
 void tgSprawdzInr() {
-  if (!rtcTimeValid || strlen(rtcInrDue) != 10) return;
-  if (strcmp(rtcTgInrZgloszony, rtcInrDue) == 0) return;   // ten termin juz zgloszony
-
-  const int32_t doTerminu = dniDoDaty(rtcInrDue, time(nullptr));
-  if (doTerminu == INT32_MIN) return;
-  if (doTerminu > TG_INR_UPRZEDZ_DNI) return;      // jeszcze za wczesnie
-  if (doTerminu < -30) return;                     // termin sprzed miesiaca: nieaktualny
-
+  if (strcmp(rtcTgInrDzien, rtcInrDue) != 0) {
+    rtcTgInrMaska = 0;
+    rtcTgInrCzeka = false;
+    rtcTgInrIdx   = -1;
+    strlcpy(rtcTgInrDzien, rtcInrDue, sizeof(rtcTgInrDzien));
+  }
+  const int idx = inrPrzypomnienieTeraz(time(nullptr));
+  if (idx < 0) return;
+  rtcTgInrIdx   = (int8_t)idx;
   rtcTgInrCzeka = true;
-  LOG("[TG ] termin INR %s za %ld dni - napisze przed snem\n", rtcInrDue, (long)doTerminu);
+  LOG("[TG ] przypomnienie o INR %s (%d) - napisze przed snem\n", rtcInrDue, idx);
 }
 
 String tgTekstZapas() {
@@ -4511,10 +4587,12 @@ String tgTekstZapas() {
   return s;
 }
 
-String tgTekstInr() {
-  String s = "🩸 PillBox: termin pomiaru INR\n\n";
-  s += "Wypada " + String(rtcInrDue) + ".";
-  s += "\n\nWynik wpisz w aplikacji — policzy z niego następny termin.";
+String tgTekstInr(int idx) {
+  String s = "🩸 PillBox: pomiar INR\n\n";
+  s += (idx == 0) ? ("Jutro (" + String(rtcInrDue) + ") wypada pomiar INR.")
+                  : ("Dziś (" + String(rtcInrDue) + ") wypada pomiar INR.");
+  s += "\n\nPo wpisaniu wyniku w aplikacji przestanę przypominać "
+       "i policzę z niego następny termin.";
   return s;
 }
 
@@ -4631,10 +4709,11 @@ void tgWyslijZalegle() {
     } else nieudane++;
   }
 
-  if (rtcTgInrCzeka) {
-    if (tgWyslijTekst(tgTekstInr())) {
+  if (rtcTgInrCzeka && rtcTgInrIdx >= 0) {
+    if (tgWyslijTekst(tgTekstInr(rtcTgInrIdx))) {
+      tgOznaczInrMiniete(rtcTgInrIdx);
       rtcTgInrCzeka = false;
-      strlcpy(rtcTgInrZgloszony, rtcInrDue, sizeof(rtcTgInrZgloszony));
+      rtcTgInrIdx   = -1;
       wyslane++;
     } else nieudane++;
   }
@@ -5184,6 +5263,25 @@ uint32_t planNextSleep() {
     if (r > RETRY_MAX_S) r = RETRY_MAX_S;
     LOG("[SLP] %u zdarzen w kolejce, ponowna proba za %lu s\n", q, (unsigned long)r);
     if (r < s) s = r;
+  }
+
+  /* 3a. Przypomnienie o pomiarze INR (D84).
+
+        Bez tego punktu cala reszta jest martwa: pudelko spi miedzy dawkami,
+        wiec "o 12:00" nie mialoby jak sie wydarzyc. Cztery wybudzenia na
+        cykl (jedno dzien wczesniej, trzy w dniu pomiaru) kosztuja okolo
+        0,6 mAh kazde - przy ogniwie 470 mAh to znika w szumie.
+
+        Wybudzenie planujemy TYLKO wtedy, gdy naprawde jest co wyslac:
+        maska pilnuje, ze godzina, ktora juz poszla, nie budzi pudelka po
+        raz drugi, a zmiana terminu (wpisany wynik) zeruje maske i wybudzen
+        po prostu nie ma.                                                */
+  {
+    const uint32_t doInr = sekundyDoInrPrzypomnienia(now);
+    if (doInr != UINT32_MAX && doInr < s) {
+      LOG("[SLP] przypomnienie o INR za %lu s\n", (unsigned long)doInr);
+      s = doInr;
+    }
   }
 
   /* 3b. Status nie dotarl do aplikacji - ponawiamy z tym samym backoffem.

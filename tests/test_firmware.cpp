@@ -43,7 +43,9 @@ int16_t rtcPillsLeft = -1;
 bool    rtcTgStockCzeka = false;
 bool    rtcTgStockZgloszony = false;
 char    rtcInrDue[11] = "";
-char    rtcTgInrZgloszony[11] = "";
+char    rtcTgInrDzien[11] = "";
+uint8_t rtcTgInrMaska = 0;
+int8_t  rtcTgInrIdx = -1;
 bool    rtcTgInrCzeka = false;
 uint32_t rtcTakenDay = 0;
 uint32_t rtcRolloverDay = 0;
@@ -2399,54 +2401,83 @@ head("Telegram: zapas i termin INR");
     rtcTgStockCzeka = false; rtcTgStockZgloszony = false; rtcPillsLeft = -1;
   }
 
-  // ── Powiadomienie o terminie pomiaru INR (D83) ─────────────────────
-  // Date liczy aplikacja, pudelko tylko porownuje ja z kalendarzem.
+  // ── Przypomnienia o pomiarze INR (D84) ─────────────────────────────
+  // Zakres wybral Kuba: JEDNO dzien wczesniej (o 12) i TRZY w dniu pomiaru,
+  // a po wpisaniu wyniku - cisza. To ostatnie zalatwia sie samo: aplikacja
+  // przesuwa termin, pudelko widzi inna date i zeruje maske.
   {
-    rtcTgInrCzeka = false; rtcTgInrZgloszony[0] = '\0';
-    // 2026-08-21 12:00 UTC jako "teraz"
-    const time_t teraz = utc(2026, 8, 21, 12, 0);
-    FAKE_NOW = teraz;
     rtcTimeValid = true;
+    rtcTgInrMaska = 0; rtcTgInrCzeka = false; rtcTgInrIdx = -1;
+    rtcTgInrDzien[0] = '\0';
 
-    strcpy(rtcInrDue, "2026-09-30");      // za ponad miesiac
-    tgSprawdzInr();
-    CHECK(!rtcTgInrCzeka, "termin odlegly - jeszcze nie piszemy");
+    // --- dzien wczesniej: jedno przypomnienie, i nie przed godzina ---
+    strcpy(rtcInrDue, "2026-08-22");                   // pomiar jutro
+    FAKE_NOW = utc(2026, 8, 21, 6, 0);                 // 8:00 PL
+    CHECK(inrPrzypomnienieTeraz(FAKE_NOW) == -1, "dzien wczesniej rano - jeszcze nie pora");
+    FAKE_NOW = utc(2026, 8, 21, 10, 0);                // 12:00 PL
+    CHECK(inrPrzypomnienieTeraz(FAKE_NOW) == 0, "dzien wczesniej o 12 - pora");
+    tgOznaczInrMiniete(0);
+    CHECK(inrPrzypomnienieTeraz(FAKE_NOW) == -1, "i tylko RAZ tego dnia");
+    FAKE_NOW = utc(2026, 8, 21, 17, 0);                // 19:00 PL
+    CHECK(inrPrzypomnienieTeraz(FAKE_NOW) == -1, "wieczorem dnia poprzedniego juz nie");
 
-    strcpy(rtcInrDue, "2026-08-22");      // jutro
-    tgSprawdzInr();
-    CHECK(rtcTgInrCzeka, "termin za dzien - wiadomosc czeka");
+    // --- dzien pomiaru: trzy razy ---
+    FAKE_NOW = utc(2026, 8, 22, 5, 0);                 // 7:00 PL
+    CHECK(inrPrzypomnienieTeraz(FAKE_NOW) == -1, "w dniu pomiaru przed 8:00 - cisza");
+    FAKE_NOW = utc(2026, 8, 22, 6, 5);                 // 8:05 PL
+    CHECK(inrPrzypomnienieTeraz(FAKE_NOW) == 1, "8:00 - pierwsze przypomnienie");
+    tgOznaczInrMiniete(1);
+    CHECK(inrPrzypomnienieTeraz(FAKE_NOW) == -1, "drugi raz o tej samej godzinie juz nie");
+    FAKE_NOW = utc(2026, 8, 22, 10, 1);                // 12:01 PL
+    CHECK(inrPrzypomnienieTeraz(FAKE_NOW) == 2, "12:00 - drugie przypomnienie");
+    tgOznaczInrMiniete(2);
+    FAKE_NOW = utc(2026, 8, 22, 15, 30);               // 17:30 PL
+    CHECK(inrPrzypomnienieTeraz(FAKE_NOW) == 3, "17:00 - trzecie przypomnienie");
+    tgOznaczInrMiniete(3);
+    CHECK(inrPrzypomnienieTeraz(FAKE_NOW) == -1, "i na tym koniec - cztery lacznie");
 
-    // Ten sam termin drugi raz: cisza. Kolejny termin: znowu piszemy.
-    rtcTgInrCzeka = false;
-    strcpy(rtcTgInrZgloszony, "2026-08-22");
-    tgSprawdzInr();
-    CHECK(!rtcTgInrCzeka, "ten sam termin zglaszamy tylko raz");
-    strcpy(rtcInrDue, "2026-09-19");
-    FAKE_NOW = teraz + 29L * 86400L;
-    tgSprawdzInr();
-    CHECK(rtcTgInrCzeka, "nastepny termin dostaje swoja wiadomosc");
+    // --- ZALEGLE nie mnoza wiadomosci ---
+    // Pudelko bez sieci przez cale rano: o 17:30 idzie JEDNA wiadomosc,
+    // nie trzy pod rzad.
+    rtcTgInrMaska = 0;
+    FAKE_NOW = utc(2026, 8, 22, 15, 30);
+    CHECK(inrPrzypomnienieTeraz(FAKE_NOW) == 3, "zalegle: idzie najpozniejsze");
+    tgOznaczInrMiniete(3);
+    CHECK(inrPrzypomnienieTeraz(FAKE_NOW) == -1, "a wczesniejsze NIE dosylaja sie osobno");
 
-    // BEZ WAZNEGO ZEGARA NIE PISZEMY NIC. Pudelko po resecie bez sieci nie
-    // wie, ktory jest dzien, a "jutro masz badanie" wyslane w losowym
-    // momencie uczy ignorowac wszystkie nastepne wiadomosci.
-    rtcTgInrCzeka = false; rtcTgInrZgloszony[0] = '\0';
+    // --- WPISANY WYNIK GASI PRZYPOMNIENIA ---
+    rtcTgInrMaska = 0b1110; strcpy(rtcTgInrDzien, "2026-08-22");
+    strcpy(rtcInrDue, "2026-09-19");                   // wynik wpisany, nowy termin
+    FAKE_NOW = utc(2026, 8, 22, 15, 30);
+    tgSprawdzInr();
+    CHECK(!rtcTgInrCzeka, "po wpisaniu wyniku pudelko milczy tego samego dnia");
+    CHECK(rtcTgInrMaska == 0, "i maska startuje od zera dla nowego terminu");
+
+    // --- PLANOWANIE WYBUDZENIA ---
+    // Bez tego cala reszta jest martwa: pudelko spi miedzy dawkami.
+    rtcTgInrMaska = 0; strcpy(rtcInrDue, "2026-08-22"); strcpy(rtcTgInrDzien, "2026-08-22");
+    FAKE_NOW = utc(2026, 8, 22, 5, 0);                 // 7:00 PL
+    CHECK(sekundyDoInrPrzypomnienia(FAKE_NOW) == 3600UL, "budzi sie na 8:00 (za godzine)");
+    rtcTgInrMaska = 0b0010;                            // 8:00 juz poszlo
+    CHECK(sekundyDoInrPrzypomnienia(FAKE_NOW) == 5UL * 3600UL, "po pierwszym celuje w 12:00");
+    rtcTgInrMaska = 0b1110;                            // wszystkie trzy poszly
+    CHECK(sekundyDoInrPrzypomnienia(FAKE_NOW) == UINT32_MAX, "gdy nie ma czego wyslac - nie budzi sie");
+    strcpy(rtcInrDue, "2026-10-01");                   // termin odlegly
+    rtcTgInrMaska = 0;
+    CHECK(sekundyDoInrPrzypomnienia(FAKE_NOW) == UINT32_MAX, "na odlegly termin tez nie");
+
+    // --- BEZ ZEGARA ANI SLOWA ---
     rtcTimeValid = false;
     strcpy(rtcInrDue, "2026-08-22");
-    tgSprawdzInr();
-    CHECK(!rtcTgInrCzeka, "bez zegara pudelko o terminie NIE pisze");
-
+    CHECK(inrPrzypomnienieTeraz(FAKE_NOW) == -1, "bez zegara pudelko o terminie NIE pisze");
+    CHECK(sekundyDoInrPrzypomnienia(FAKE_NOW) == UINT32_MAX, "i nie planuje wybudzen");
     rtcTimeValid = true;
-    rtcInrDue[0] = '\0';                  // aplikacja nie podala terminu
-    tgSprawdzInr();
-    CHECK(!rtcTgInrCzeka, "brak terminu to nie jest termin dzisiaj");
 
-    strcpy(rtcInrDue, "2026-01-01");      // termin sprzed pol roku
-    FAKE_NOW = teraz;
-    tgSprawdzInr();
-    CHECK(!rtcTgInrCzeka, "termin sprzed miesiaca jest nieaktualny, nie pilny");
-
-    rtcTgInrCzeka = false; rtcInrDue[0] = '\0'; rtcTgInrZgloszony[0] = '\0';
+    rtcInrDue[0] = '\0'; rtcTgInrDzien[0] = '\0';
+    rtcTgInrMaska = 0; rtcTgInrCzeka = false; rtcTgInrIdx = -1;
+    CHECK(inrPrzypomnienieTeraz(FAKE_NOW) == -1, "brak terminu to nie jest termin dzisiaj");
   }
+
 
 printf("\n──────────────────────────────────────\n");
 printf("  ZALICZONE: %d    BLEDY: %d\n", PASS, FAIL);

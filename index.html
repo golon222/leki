@@ -1597,10 +1597,13 @@ nav button .kropka-nav{position:absolute;top:6px;right:50%;margin-right:-16px;
         przyjdzie także wtedy, gdy telefon leży zablokowany w kieszeni — ale wymaga,
         żeby <b>pudełko</b> miało internet. Bez sieci nie przyjdzie nic.</p>
       <p class="muted">Pisze po każdym nieodebranym przypomnieniu, <b>raz</b> gdy
-        bateria będzie na wyczerpaniu, <b>raz</b> gdy zostanie mniej niż siedem
-        tabletek, i <b>raz</b> na dwa dni przed terminem pomiaru INR. Bez
-        potwierdzeń wzięcia — powiadomienie, które przychodzi codziennie,
-        przestaje być powiadomieniem.</p>
+        bateria będzie na wyczerpaniu i <b>raz</b> gdy zostanie mniej niż siedem
+        tabletek. Bez potwierdzeń wzięcia — powiadomienie, które przychodzi
+        codziennie, przestaje być powiadomieniem.</p>
+      <p class="muted"><b>O pomiarze INR przypomni cztery razy:</b> dzień
+        wcześniej o 12:00 oraz w dniu pomiaru o 8:00, 12:00 i 17:00.
+        <b>Po wpisaniu wyniku milknie od razu</b> — nawet w środku tego dnia,
+        bo wynik przesuwa termin na następny.</p>
       <p class="muted">Znacznik „już pisałem" kasuje się sam: po naładowaniu, po
         wpisaniu nowego opakowania i przy następnym terminie. Bez ważnego zegara
         pudełko o terminie nie pisze — data wysłana na chybił trafił byłaby
@@ -1868,7 +1871,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-21.58";
+const APP_VERSION = "2026-08-21.59";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
