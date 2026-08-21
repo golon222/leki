@@ -3682,6 +3682,51 @@ check(document.getElementById("navKropka").classList.contains("hide"),
    jedna tabletka przy planie jednej, po korekcie planu na 1,5 robil sie
    wstecz "mniejsza dawka" - zolty w kalendarzu, gorszy w skutecznosci
    i taki sam w raporcie dla lekarza.                                   */
+/* ═══════════ POMIAR INR: USUWANIE I POPRAWIANIE (D80) ═══════════
+   Znalezione przy przegladzie: delInr() bylo JEDYNYM miejscem w calej
+   aplikacji, ktore pisalo do bazy gołym remove(), z pominieciem
+   zapiszPewnie(). Lamalo zasade 5 i miało dokladnie ten tryb awarii,
+   przed ktorym ta zasada chroni (D1).                                  */
+head("Pomiar INR: usuwanie i poprawianie");
+{
+  A.__resetDb();
+  D({ inr:{ "2026-08-10":{ value:3.6, ts:1 }, "2026-08-01":{ value:2.4, ts:2 } } });
+  const pUsun = window.delInr("2026-08-10");
+  window.cfResolve(true);
+  await pUsun;
+  check(A.__db.data?.users?.testuid?.inr?.["2026-08-10"] === null ||
+        A.__db.data?.users?.testuid?.inr?.["2026-08-10"] === undefined,
+        "usuniety pomiar znika z bazy");
+  check(A.inr["2026-08-10"] === undefined, "i z lokalnej kopii, bez czekania na nasluch");
+  check(A.inr["2026-08-01"]?.value === 2.4, "a pozostale zostaja");
+
+  const zrodloDel = html.slice(html.indexOf("window.delInr"), html.indexOf("window.edytujInr"));
+  check(zrodloDel.includes("zapiszPewnie("), "usuwanie idzie przez kolejke zapisow");
+  check(!/\bremove\(ref\(/.test(zrodloDel), "i nie siega juz po gole remove()");
+
+  /* Zadne inne miejsce nie moze omijac kolejki. Test-straznik na przyszlosc. */
+  {
+    const js = html.slice(html.indexOf('<script type="module">'));
+    const bezKomentarzy = js.replace(/\/\*[\s\S]*?\*\//g, "");
+    const gole = [...bezKomentarzy.matchAll(/\b(set|remove)\(ref\(/g)];
+    check(gole.length === 0,
+          `zaden zapis nie omija zapiszPewnie() (znaleziono ${gole.length})`);
+  }
+
+  /* Poprawianie: literowka w wyniku przesuwa termin nastepnego pomiaru
+     i zmienia ocene "w zakresie / poza zakresem" - to nie jest drobiazg. */
+  D({ inr:{ "2026-08-10":{ value:3.6, ts:1, note:"po antybiotyku" } } });
+  window.edytujInr("2026-08-10");
+  check(document.getElementById("inrDate").value === "2026-08-10", "data trafia do formularza");
+  check(document.getElementById("inrVal").value === "3.6", "wartosc tez: " + document.getElementById("inrVal").value);
+  check(document.getElementById("inrNote").value === "po antybiotyku", "razem z notatka");
+  check(document.getElementById("inrAddMsg").textContent.includes("nadpisze"),
+        "i widac, ze zapis nadpisze poprzedni wpis");
+  window.edytujInr("2026-01-01");
+  check(document.getElementById("inrDate").value === "2026-08-10",
+        "poprawianie nieistniejacego pomiaru nic nie zmienia");
+}
+
 head("Historia rozpisania dawki");
 {
   const wczoraj = shift(-1), dawno = shift(-30);

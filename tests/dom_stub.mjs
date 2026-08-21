@@ -66,6 +66,10 @@ class El {
      wspolnego z tym, co ten test sprawdza. */
   focus(){}
   blur(){}
+  /* Przewijanie do elementu: w przegladarce zwykla metoda, w atrapie nic.
+     Musi ISTNIEC, bo kod ktory ja wola (poprawianie pomiaru INR) wywalilby
+     test bledem nie majacym nic wspolnego z tym, co ten test sprawdza. */
+  scrollIntoView(){}
 }
 
 const els = new Map();

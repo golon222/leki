@@ -1799,7 +1799,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-21.54";
+const APP_VERSION = "2026-08-21.55";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -3650,9 +3650,42 @@ window.addInr = async () => {
   setTimeout(()=>{ msg.textContent = ""; }, 3500);
 };
 
+/* ZNALEZIONE PRZY PRZEGLĄDZIE: to jedyne miejsce w całej aplikacji, które
+   pisało do bazy z pominięciem `zapiszPewnie()` — gołym `remove()`. Łamało
+   zasadę 5 i miało dokładnie ten tryb awarii, przed którym ta zasada
+   chroni (D1): Firebase offline nie odrzuca obietnicy, tylko trzyma ją
+   w nieskończoność. Kasujesz pomiar bez zasięgu, `await` nigdy nie wraca,
+   ekran nie mówi nic, a wpis zostaje w bazie. Po powrocie do domu wynik
+   wraca na wykres jak duch.
+
+   `null` w aktualizacji wielościeżkowej to sposób, w jaki Firebase kasuje
+   klucz — czyli to samo, co `remove()`, tylko przez kolejkę, która przeżyje
+   zamknięcie aplikacji. Tak samo robi lidMark().                       */
 window.delInr = async date => {
   const ok = await askConfirm("Usunąć pomiar?", `Wynik z dnia ${date} zniknie z historii i z wykresu.`);
-  if (ok) await remove(ref(db, `users/${uid}/inr/${date}`));
+  if (!ok) return;
+  delete inr[date];              // od razu na ekranie, bez czekania na nasłuch
+  renderAll();
+  await zapiszPewnie({ [`users/${uid}/inr/${date}`]: null }, "Usunięcie pomiaru INR");
+};
+
+/* Poprawienie pomiaru. Do tej pory literówka w wyniku („3,6" zamiast „2,6")
+   wymagała usunięcia wpisu i wpisania go od nowa — a przy INR to nie jest
+   drobiazg: zła wartość przesuwa termin następnego pomiaru i zmienia ocenę
+   „w zakresie / poza zakresem". Dotknięcie wiersza wypełnia formularz nad
+   listą; zapis nadpisze wpis z tą samą datą.                            */
+window.edytujInr = date => {
+  const w = inr[date];
+  if (!w) return;
+  document.getElementById("inrDate").value = date;
+  document.getElementById("inrVal").value  = nf(w.value).replace(",", ".");
+  document.getElementById("inrNote").value = w.note || "";
+  const msg = document.getElementById("inrAddMsg");
+  if (msg){
+    msg.textContent = `Poprawiasz pomiar z ${date} — zapis nadpisze poprzedni.`;
+    msg.style.color = "var(--acc)";
+  }
+  document.getElementById("inrAddCard")?.scrollIntoView({ behavior:"smooth", block:"center" });
 };
 
 /* Firebase potrafi oddać pusty węzeł (null) albo wpis bez wartości —
@@ -3765,7 +3798,10 @@ function renderInr(){
             {day:"numeric",month:"short",year:"numeric"})}</div>
         ${inr[k].note ? `<div class="dim2">${esc(inr[k].note)}</div>` : ""}
       </span>
-      <button class="danger" style="padding:7px 11px;font-size:13px" onclick="delInr('${k}')">Usuń</button>
+      <button class="ghost" style="padding:7px 11px;font-size:13px;min-height:36px"
+              onclick="edytujInr('${k}')">Popraw</button>
+      <button class="danger" style="padding:7px 11px;font-size:13px;min-height:36px"
+              onclick="delInr('${k}')">Usuń</button>
     </div>`;
   }).join("") || `<span class="muted">Brak pomiarów.</span>`;
 }
@@ -6786,7 +6822,7 @@ function dniRytmu(days){
     const key = dateKey(d);
     if (key > todayKey()) continue;
     const st = dayStatus(key), { sum } = dayDose(key);
-    const data = d.toLocaleDateString("pl-PL", { day:"numeric", month:"long" });
+    const data = FMT_DZIEN_MIES.format(d);
     const opis = st === "taken"   ? `${data}: ${nf(sum)} tabl.`
                : st === "partial" ? `${data}: ${nf(sum)} tabl. — mniej niż plan`
                : st === "missed"  ? `${data}: nie wzięte`
@@ -6812,6 +6848,18 @@ function skutecznoscTygodniami(dni){
   }
   return tyg;
 }
+
+/* ZMIERZONE, nie przypuszczone: `toLocaleDateString()` kosztuje ~0,13 ms
+   przy każdym wywołaniu, bo za każdym razem buduje formatter od nowa.
+   Siatka rytmu opisuje 365 dni — czyli 48 ms samego formatowania dat,
+   dwadzieścia pięć razy więcej niż cała reszta analizy razem wzięta
+   (collectRows: 1,7 ms, analyze: 1,8 ms, renderAll: 1,8 ms).
+
+   Formatter zbudowany RAZ i wołany przez `.format()` robi to samo za
+   ułamek tego czasu. Na telefonie Kuby, wolniejszym od tej maszyny
+   kilkukrotnie, to była różnica między „ekran się pojawia" a „ekran się
+   pojawia po chwili".                                                   */
+const FMT_DZIEN_MIES = new Intl.DateTimeFormat("pl-PL", { day:"numeric", month:"long" });
 
 const MIES_SKROT = ["sty","lut","mar","kwi","maj","cze",
                     "lip","sie","wrz","paź","lis","gru"];
