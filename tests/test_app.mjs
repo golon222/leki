@@ -3687,6 +3687,65 @@ check(document.getElementById("navKropka").classList.contains("hide"),
    aplikacji, ktore pisalo do bazy gołym remove(), z pominieciem
    zapiszPewnie(). Lamalo zasade 5 i miało dokladnie ten tryb awarii,
    przed ktorym ta zasada chroni (D1).                                  */
+/* ═══════════ KONTEKST DNIA — TAGI (D82) ═══════════
+   Warfaryna nie dziala w prozni: antybiotyk, infekcja, alkohol i nagla
+   zmiana ilosci zielonych warzyw potrafia ruszyc INR bardziej niz pominieta
+   dawka. Do tej pory dalo sie to zapisac tylko w wolnej notatce - czyli
+   w tekscie, ktorego nie da sie zestawic z wynikami.                     */
+head("Kontekst dnia (tagi)");
+{
+  const dzien = shift(-3);
+  D({ tags:{ [dzien]: { abx:true, alko:true } } });
+  check(A.tagiDnia(dzien).length === 2, "tagi dnia odczytane");
+  check(A.tagiDnia(shift(-9)).length === 0, "dzien bez tagow zwraca pusto");
+  check(A.tagiDnia("brak-takiego-dnia").length === 0, "i nie wywala sie na nieznanym dniu");
+  D({ tags:{ [dzien]: { abx:false } } });
+  check(A.tagiDnia(dzien).length === 0, "tag ustawiony na false nie liczy sie jako wlaczony");
+  D({ tags:{ [dzien]: "smieci" } });
+  check(A.tagiDnia(dzien).length === 0, "smieci w galezi nie wywalaja odczytu");
+
+  /* Okno PRZED pomiarem, bez dnia badania: krew pobiera sie rano, zwykle
+     przed wzieciem tabletki, wiec ten dzien opisuje juz stan PO wyniku. */
+  D({ tags:{ "2026-08-05":{ abx:true }, "2026-08-09":{ chory:true },
+             "2026-08-10":{ alko:true }, "2026-07-20":{ dieta:true } } });
+  const przed = A.tagiPrzed("2026-08-10", 7);
+  check(przed.includes("abx") && przed.includes("chory"), "tagi z tygodnia przed pomiarem: " + przed);
+  check(!przed.includes("alko"), "dzien badania NIE wchodzi do okna");
+  check(!przed.includes("dieta"), "ani dzien sprzed trzech tygodni");
+
+  /* Lista jest zamknieta - tag spoza niej nie ma prawa trafic do bazy. */
+  check(A.TAGI.length >= 4 && A.TAGI.length <= 8,
+        `lista tagow jest krotka (${A.TAGI.length}) - dwudziestu nikt nie zaznacza`);
+  A.__resetDb(); D({});
+  await window.tagPrzelacz(dzien, "cos-wymyslonego");
+  check(!A.__db.data?.users?.testuid?.tags, "nieznany tag nie trafia do bazy");
+
+  /* Zapis i kasowanie ta sama droga co reszta: przez kolejke. */
+  A.__resetDb(); D({});
+  await window.tagPrzelacz(dzien, "abx");
+  check(A.__db.data?.users?.testuid?.tags?.[dzien]?.abx === true, "wlaczony tag zapisany");
+  check(A.tagiDnia(dzien).includes("abx"), "i widoczny od razu, bez czekania na nasluch");
+  await window.tagPrzelacz(dzien, "abx");
+  check(!A.tagiDnia(dzien).includes("abx"), "drugie dotkniecie wylacza tag");
+  const zrodloTag = html.slice(html.indexOf("window.tagPrzelacz"), html.indexOf("window.tagPrzelacz") + 900);
+  check(zrodloTag.includes("zapiszPewnie("), "tag idzie przez kolejke zapisow");
+
+  /* Tagi NIE moga siedziec we wpisie dawki: ma on w regulach $other:false,
+     wiec doklada sie do niego pole = baza odrzuca CALY wpis o tabletce. */
+  A.__resetDb(); D({});
+  await window.tagPrzelacz(dzien, "chory");
+  const wpisDawki = A.__db.data?.users?.testuid?.doses?.[dzien];
+  check(!wpisDawki, "tag nie dotyka galezi z dawkami");
+
+  /* Raport i kopia zapasowa musza je znac - inaczej sa danymi, ktore
+     istnieja tylko na ekranie.                                        */
+  D({ tags:{ [shift(-1)]:{ abx:true } },
+      doses:{ [shift(-1)]:{ 0:{ status:"taken", dose:1, source:"device", ts:at(1,20,0) } } } });
+  const wiersz = A.collectRows(3).find(r => r.key === shift(-1));
+  check(wiersz.tagi.includes("Antybiotyk"), "raport zna okolicznosci dnia: " + wiersz.tagi);
+  check(Object.keys(A.zbierzKopie().tags || {}).length === 1, "kopia zapasowa zabiera tagi");
+}
+
 head("Kopia zapasowa");
 {
   D({ cfg:{ defaultDose:1.5, drugName:"Warfin", inrMin:2, inrMax:3 },

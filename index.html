@@ -641,6 +641,9 @@ nav button .kropka-nav{position:absolute;top:6px;right:50%;margin-right:-16px;
        background:rgba(255,255,255,.04);border:1px solid var(--line);color:var(--dim);
        min-height:0}
 .filtr.act{background:var(--acc-soft);border-color:var(--acc-edge);color:var(--acc)}
+/* Tag kontekstu nosi kolor INR, a nie stanu dawki: mówi o tym, co mogło
+   ruszyć wynik, a nie o tym, czy tabletka została wzięta.              */
+.filtr.tag-on{background:var(--inr-soft);border-color:var(--inr-edge);color:var(--inr)}
 
 /* ---------- sekcje zwijane ----------
    Ustawienia to ekran, na ktory wchodzi sie po JEDNA rzecz. Wszystko naraz
@@ -1655,6 +1658,21 @@ nav button .kropka-nav{position:absolute;top:6px;right:50%;margin-right:-16px;
   </details>
 
   <details class="card sek">
+    <summary><h3>Okoliczności przy INR</h3></summary>
+    <div class="sekcia">
+      <p class="muted">Warfaryna nie działa w próżni. Antybiotyk, infekcja
+        z gorączką, alkohol i nagła zmiana ilości zielonych warzyw potrafią
+        ruszyć INR mocniej niż jedna pominięta dawka.</p>
+      <p class="muted">Dotknij dnia w kalendarzu i zaznacz, co się działo.
+        Przy każdym pomiarze INR zobaczysz potem, co wydarzyło się
+        w <b>tygodniu przed nim</b> — a lekarz dostanie to w raporcie
+        w kolumnie „Okoliczności", zamiast się domyślać.</p>
+      <p class="muted">Dzień badania nie wchodzi do tego okna: krew pobiera
+        się rano, zwykle przed tabletką, więc opisuje już stan po wyniku.</p>
+    </div>
+  </details>
+
+  <details class="card sek">
     <summary><h3>Kopia zapasowa</h3></summary>
     <div class="sekcia">
       <p class="muted">Cała historia dawek żyje w jednej bazie. Kopia bierze
@@ -1844,7 +1862,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-21.56";
+const APP_VERSION = "2026-08-21.57";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -2442,6 +2460,9 @@ async function boot(){
      trzeba przeliczyć od nowa.                                        */
   onValue(ref(db, `users/${uid}/dosePlans`), s => { dosePlans = s.val() || {}; renderAll(); },
           onErr("odczyt historii rozpisania"));
+
+  onValue(ref(db, `users/${uid}/tags`), s => { tags = s.val() || {}; renderAll(); },
+          onErr("odczyt kontekstu dni"));
 
   onValue(ref(db, `devices/${DEVICE_ID}/log`), s => {
     boxLog = s.val() || [];
@@ -3494,6 +3515,13 @@ function renderSheet(){
       </div>
     </div>
 
+    <label>Co się działo tego dnia</label>
+    <div class="filtry">${TAGI.map(([id, nazwa]) => {
+      const wl = tagiDnia(sheetDate).includes(id);
+      return `<button class="filtr${wl ? " tag-on" : ""}"
+                onclick="tagPrzelacz('${sheetDate}','${id}')">${nazwa}</button>`;
+    }).join("")}</div>
+
     <label>Notatka</label>
     <input id="dayNote" placeholder="np. wzięte po kolacji" value="${esc(rec.note||"")}"
            onchange="saveNote(this.value)">
@@ -3848,6 +3876,9 @@ function renderInr(){
         <div style="font-size:14px">${new Date(k+"T12:00:00").toLocaleDateString("pl-PL",
             {day:"numeric",month:"short",year:"numeric"})}</div>
         ${inr[k].note ? `<div class="dim2">${esc(inr[k].note)}</div>` : ""}
+        ${(() => { const t = tagiPrzed(k, 7);
+           return t.length ? `<div class="dim2" style="color:var(--inr)">
+             ${t.map(x => esc(TAGI_PL[x])).join(" · ")}</div>` : ""; })()}
       </span>
       <button class="ghost" style="padding:7px 11px;font-size:13px;min-height:36px"
               onclick="edytujInr('${k}')">Popraw</button>
@@ -7028,6 +7059,9 @@ function renderAnalysis(){
             .toLocaleDateString("pl-PL",{day:"numeric",month:"short"})}</div>
           <div class="dim2">7 dni przed: ${c.adherence ?? "–"}% regularności${
             c.avgTime != null ? ` · średnio o ${hm(c.avgTime)}` : ""}</div>
+          ${(() => { const t = tagiPrzed(k, 7);
+             return t.length ? `<div class="dim2" style="color:var(--inr)">
+               ${t.map(x => esc(TAGI_PL[x])).join(" · ")}</div>` : ""; })()}
         </span></div>`;
     }).join("") + `<div class="dim2" style="margin-top:10px;line-height:1.5">
         Warfaryna reaguje na regularność z poprzedzającego tygodnia — jeśli wynik odstaje,
@@ -7065,7 +7099,10 @@ function collectRows(days){
       time: openTimeOf(rec) != null ? devHM(openTimeOf(rec)) : "",
       src:  rec ? (rec.source === "device" ? "pudełko" : "ręcznie") : "",
       note: rec?.note || "",
-      inr:  inr[key] ? nf(inr[key].value) : "" });
+      inr:  inr[key] ? nf(inr[key].value) : "",
+      /* Kontekst dnia trafia do raportu obok notatki: „3,4 przy antybiotyku"
+         to zupełnie inna informacja niż samo „3,4".                      */
+      tagi: tagiDnia(key).map(t => TAGI_PL[t]).join(", ") });
   }
   return rows;
 }
@@ -7177,12 +7214,75 @@ window.makeReport = () => {
 
     <h3>Dzienny rejestr przyjmowania</h3>
     <table><thead><tr><th>Data</th><th>Status</th><th>Tabletek</th><th>Godzina</th>
-      <th>Źródło</th><th>INR</th><th>Uwagi</th></tr></thead><tbody>
+      <th>Źródło</th><th>INR</th><th>Okoliczności</th><th>Uwagi</th></tr></thead><tbody>
       ${rows.map(r=>`<tr class="${r.status==="missed"?"miss":""}">
         <td>${r.key}</td><td>${ST_PL[r.status]??r.status}</td><td>${r.dose}</td>
-        <td>${r.time}</td><td>${r.src}</td><td>${r.inr}</td><td>${esc(r.note)}</td></tr>`).join("")}
+        <td>${r.time}</td><td>${r.src}</td><td>${r.inr}</td>
+        <td>${esc(r.tagi || "")}</td><td>${esc(r.note)}</td></tr>`).join("")}
     </tbody></table>`;
   setTimeout(()=>window.print(), 120);
+};
+
+/* ═══════════════ KONTEKST DNIA (TAGI) ═══════════════
+
+   Warfaryna nie działa w próżni: antybiotyk, infekcja z gorączką, alkohol
+   i nagła zmiana ilości zielonych warzyw potrafią ruszyć INR bardziej niż
+   pominięta dawka. Do tej pory dało się to zapisać tylko w wolnej notatce
+   przy dniu — czyli w tekście, którego nie da się zestawić z wynikami.
+
+   Tag to ta sama informacja, tylko policzalna: przy pomiarze INR widać
+   od razu, co działo się w tygodniu przed nim, a lekarz dostaje to
+   w raporcie zamiast domysłów.
+
+   MIESZKAJĄ W OSOBNEJ GAŁĘZI (`users/<uid>/tags/<data>`), nie w dawce.
+   Wpis dawki ma w regułach `$other: false` — dołożenie do niego pola
+   znaczyłoby, że baza odrzuca CAŁY wpis o wziętej tabletce, gdy tag
+   przyjdzie ze starszej wersji aplikacji. Tag dotyczy zresztą DNIA,
+   nie dawki: antybiotyk brało się cały dzień, nie o 20:00.
+
+   Lista jest zamknięta i krótka. Tagi, których jest dwadzieścia, nikt nie
+   zaznacza; te cztery-pięć wybrano tak, żeby każdy z nich naprawdę zmieniał
+   interpretację wyniku.                                                  */
+const TAGI = [
+  ["abx",    "Antybiotyk"],
+  ["chory",  "Infekcja, gorączka"],
+  ["alko",   "Alkohol"],
+  ["dieta",  "Zmiana diety"],
+  ["lek",    "Nowy lek"],
+  ["podroz", "Podróż"]
+];
+const TAGI_PL = Object.fromEntries(TAGI);
+
+let tags = {};
+
+function tagiDnia(key){
+  const t = tags[key];
+  return t && typeof t === "object" ? Object.keys(t).filter(k => t[k] === true) : [];
+}
+
+/* Tagi z okna N dni PRZED pomiarem — bez dnia badania. Krew pobiera się
+   rano, zwykle przed wzięciem tabletki, więc ten dzień opisuje już stan
+   PO wyniku, a nie przed nim (ta sama granica co w inrContext).        */
+function tagiPrzed(dateStr, okno = 7){
+  const zebrane = new Set();
+  for (let i = 1; i <= okno; i++){
+    const d = new Date(dateStr + "T12:00:00"); d.setDate(d.getDate() - i);
+    for (const t of tagiDnia(dateKey(d))) zebrane.add(t);
+  }
+  return [...zebrane];
+}
+
+window.tagPrzelacz = async (key, tag) => {
+  if (!uid || !TAGI_PL[tag]) return;
+  const byl = tagiDnia(key).includes(tag);
+  const kopia = { ...(tags[key] || {}) };
+  if (byl) delete kopia[tag]; else kopia[tag] = true;
+  tags = { ...tags, [key]: kopia };        // od razu na ekranie
+  renderSheet(); renderAll();
+  /* `null` kasuje klucz — ta sama droga co przy usuwaniu pomiaru INR
+     i przy znaczniku wieczka: przez kolejkę, nie gołym remove().      */
+  await zapiszPewnie({ [`users/${uid}/tags/${key}/${tag}`]: byl ? null : true },
+                     "Kontekst dnia");
 };
 
 /* ═══════════════ KOPIA ZAPASOWA ═══════════════
@@ -7210,7 +7310,7 @@ function zbierzKopie(){
   for (const k of KOPIA_CFG) if (cfg[k] !== undefined && cfg[k] !== null) ust[k] = cfg[k];
   return { wersja: KOPIA_WERSJA, utworzona: new Date().toISOString(),
            aplikacja: APP_VERSION, urzadzenie: DEVICE_ID,
-           doses, inr, dosePlans, cfg: ust };
+           doses, inr, dosePlans, tags, cfg: ust };
 }
 
 /* Ile czego jest w kopii — do podglądu przed odtworzeniem i do podpisu
@@ -7418,6 +7518,9 @@ function policzOdtworzenie(kopia){
   }
   for (const [key, wpis] of Object.entries(kopia.dosePlans || {}))
     if (!dosePlans[key]) doOdtworzenia[`users/${uid}/dosePlans/${key}`] = wpis;
+  for (const [key, wpis] of Object.entries(kopia.tags || {}))
+    if (!tags[key] && wpis && typeof wpis === "object")
+      doOdtworzenia[`users/${uid}/tags/${key}`] = wpis;
 
   return { sciezki: doOdtworzenia, dni: Object.keys(doOdtworzenia)
              .filter(p => p.includes("/doses/")).length,
@@ -7462,8 +7565,9 @@ window.kopiaWybrana = async (input) => {
 window.exportCsv = async () => {
   const days = +document.getElementById("repRange").value;
   const rows = collectRows(days);
-  const csv = "﻿" + ["Data;Status;Tabletek;Godzina;Zrodlo;INR;Uwagi"]
+  const csv = "﻿" + ["Data;Status;Tabletek;Godzina;Zrodlo;INR;Okolicznosci;Uwagi"]
     .concat(rows.map(r=>[r.key, ST_PL[r.status]??r.status, r.dose, r.time, r.src, r.inr,
+                         (r.tagi||"").replace(/;/g,","),
                          (r.note||"").replace(/;/g,",")].join(";"))).join("\n");
   const file = new File([csv], `leki_${todayKey()}.csv`, { type:"text/csv" });
   if (navigator.canShare && navigator.canShare({ files:[file] })){

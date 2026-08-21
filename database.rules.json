@@ -309,6 +309,13 @@
           "$data": {
             ".validate": "newData.hasChildren(['utworzona'])"
           }
+        },
+        "tags": {
+          "$data": {
+            "$tag": {
+              ".validate": "newData.isBoolean() && newData.val() == true && $tag.matches(/^(abx|alko|chory|dieta|lek|podroz)$/)"
+            }
+          }
         }
       }
     },

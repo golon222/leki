@@ -39,6 +39,7 @@ export { renderSkan, brakujePokrycia, doReconcile, reconcileDecyzja, opisLadowan
          inrOdstep, inrTerminKey, inrDoTerminu, dniTxt, renderOstrzezenia, ostrzStraty,
          collectRows, inrChart, nf, esc, renderCalendar, renderToday,
          zbierzKopie, opisKopii, policzOdtworzenie, KOPIA_WERSJA, KOPIA_CFG,
+         TAGI, TAGI_PL, tagiDnia, tagiPrzed, tags,
          kopiaAutomat, renderKopiaStan, KOPIE_W_BAZIE,
          tgKopiaUst, TG_KOPIA_KLUCZ,
          renderInr, renderPills, renderSheet, settlePills, relTime, slotMin,
@@ -98,6 +99,7 @@ export function __setState(o){
   if (o.events) { events.length = 0; events.push(...o.events); }
   if (o.boxLog) { boxLog = o.boxLog; }
   if (o.dosePlans !== undefined) dosePlans = o.dosePlans || {};
+  if (o.tags !== undefined) tags = o.tags || {};
   if (o.nvsFailLog) { nvsFailLog = o.nvsFailLog; }
 }
 /* Kalendarz domysla sie biezacego miesiaca, gdy viewYear/viewMonth nie sa
