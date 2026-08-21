@@ -28,6 +28,14 @@ int     batteryPercentage = 0;
 int     batteryRawPercentage = 0;
 float   realBatteryVoltage = 0.0f;
 bool    rtcTimeValid = true;
+/* Znaczniki powiadomien o zapasie i terminie INR (D83) - test odpornosci
+   ich nie uzywa, ale logic.inc wciaga funkcje, ktore je czytaja.      */
+int16_t rtcPillsLeft = -1;
+bool    rtcTgStockCzeka = false;
+bool    rtcTgStockZgloszony = false;
+char    rtcInrDue[11] = "";
+char    rtcTgInrZgloszony[11] = "";
+bool    rtcTgInrCzeka = false;
 int16_t rtcTzOffsetMin = 120;
 uint32_t rtcTakenDay = 0;
 uint32_t rtcRolloverDay = 0;

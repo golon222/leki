@@ -139,6 +139,9 @@
           },
           "trackingSince": {
             ".validate": "newData.isString() && newData.val().length <= 10"
+          },
+          "inrDue": {
+            ".validate": "newData.isString() && newData.val().matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/)"
           }
         },
         "status": {

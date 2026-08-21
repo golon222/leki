@@ -213,6 +213,21 @@ RTC_DATA_ATTR bool     rtcTgBattZgloszona = false;
 /* Prosba z aplikacji o wiadomosc probna. Zyje do najblizszego snu -
    po wykonaniu kasujemy zlecenie w bazie, tak samo jak `wifiCmd`.    */
 RTC_DATA_ATTR bool     rtcTgTestProsba  = false;
+/* Konczace sie opakowanie. Ta sama zasada co przy baterii: RAZ na
+   opakowanie, nie przy kazdym wybudzeniu ponizej progu. Znacznik kasuje
+   sie sam, gdy zapas wroci powyzej progu - czyli gdy Kuba kupi nowe
+   opakowanie i wpisze stan w aplikacji.                               */
+RTC_DATA_ATTR bool     rtcTgStockCzeka    = false;
+RTC_DATA_ATTR bool     rtcTgStockZgloszony = false;
+/* Termin pomiaru INR liczy APLIKACJA (zna odstep i date ostatniego
+   wyniku) i podaje pudelku gotowa date w `config/inrDue`. Pudelko tylko
+   porownuje ja z kalendarzem - tak samo jak przy stanie opakowania nie
+   liczy dawek, tylko czyta gotowa liczbe. Jedno zrodlo prawdy.
+   `rtcTgInrZgloszony` pamieta, DLA KTOREGO terminu juz napisalo: kolejny
+   termin ma dostac swoja wiadomosc, ten sam - tylko jedna.            */
+RTC_DATA_ATTR char     rtcInrDue[11]       = "";
+RTC_DATA_ATTR char     rtcTgInrZgloszony[11] = "";
+RTC_DATA_ATTR bool     rtcTgInrCzeka       = false;
 /* Co sie stalo z ostatnia wiadomoscia. Idzie do statusu, bo inaczej
    "bot nie pisze" ma trzy nieodroznialne przyczyny: pudelko nie ma
    tokenu, ma i Telegram odmowil, albo nie bylo jeszcze o czym pisac.  */
@@ -2460,6 +2475,18 @@ void fetchConfig() {
     LOG("[FB ] zostalo tabletek: %d\n", rtcPillsLeft);
   }
 
+  /* Termin najblizszego pomiaru INR - gotowa data z aplikacji. Pole moze
+     nie istniec (starsza aplikacja, brak pomiarow) i to jest poprawny
+     stan: wtedy pudelko po prostu o INR nie pisze.                    */
+  const char* due = doc["inrDue"] | "";
+  if (strlen(due) == 10) {
+    if (strncmp(rtcInrDue, due, sizeof(rtcInrDue) - 1) != 0)
+      LOG("[FB ] termin INR: %s\n", due);
+    strlcpy(rtcInrDue, due, sizeof(rtcInrDue));
+  } else if (doc["inrDue"].isNull()) {
+    rtcInrDue[0] = '\0';
+  }
+
   /* --- Nowa siec WiFi dodana z aplikacji ------------------------------
      `wifiNowa` to skrzynka nadawcza na JEDNA siec, nie lista. Pudelko
      pamieta swoja liste lokalnie, wiec aplikacja ma tylko powiedziec
@@ -4402,6 +4429,95 @@ void tgSprawdzBaterie() {
   LOG("[TG ] bateria %d%% - napisze przed snem\n", batteryPercentage);
 }
 
+/* Konczace sie opakowanie. Ta sama konstrukcja co przy baterii i z tego
+   samego powodu: wiadomosc ma przyjsc RAZ, gdy zapas spadnie ponizej progu,
+   a nie przy kazdym otwarciu wieczka przez nastepny tydzien.
+
+   Liczbe tabletek liczy APLIKACJA i podaje ja w `config/pillsLeft` -
+   pudelko nie liczy dawek, tylko czyta gotowa wartosc (tak jest od
+   poczatku, patrz fetchConfig). Znacznik kasuje sie sam, gdy zapas wroci
+   powyzej progu, czyli po kupieniu i wpisaniu nowego opakowania.      */
+void tgSprawdzZapas() {
+  if (rtcPillsLeft < 0) return;                 // aplikacja jeszcze nie podala
+  if (rtcPillsLeft >= LOW_STOCK_WARN) {
+    rtcTgStockZgloszony = false;
+    return;
+  }
+  if (rtcTgStockZgloszony || rtcTgStockCzeka) return;
+  rtcTgStockCzeka = true;
+  LOG("[TG ] zostalo %d tabletek - napisze przed snem\n", rtcPillsLeft);
+}
+
+/* Ile dni dzieli DZIS od podanej daty. Dodatnia liczba = termin w przod.
+
+   Liczymy na KALENDARZU, a nie przez mktime(): mktime interpretuje czas
+   lokalny procesu, wiec ten sam kod dawalby inny wynik na plytce (UTC)
+   i w tescie uruchomionym w losowej strefie - a `run_all.sh` puszcza testy
+   w szesciu strefach wlasnie po to, zeby takie rzeczy wychodzily. Doba
+   lekowa i strefa Kuby siedza juz w `localDayNumber()`; tu potrzeba tylko
+   odjac dwie daty od siebie.
+
+   Wzor na dni od ery jest standardowy (Howard Hinnant, "chrono-Compatible
+   Low-Level Date Algorithms") i nie ma w nim ani jednego warunku na lata
+   przestepne - one wychodza same z przesunietego poczatku roku na marzec. */
+int32_t dniOdEry(int y, int m, int d) {
+  y -= (m <= 2);
+  const int32_t era = (y >= 0 ? y : y - 399) / 400;
+  const uint32_t yoe = (uint32_t)(y - era * 400);
+  const uint32_t doy = (153 * (m + (m > 2 ? -3 : 9)) + 2) / 5 + d - 1;
+  const uint32_t doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+  return era * 146097 + (int32_t)doe - 719468;
+}
+
+/* Dni od dzisiejszej DOBY LEKOWEJ do daty "YYYY-MM-DD". INT32_MIN = nie da
+   sie policzyc (brak zegara, zly format).                              */
+int32_t dniDoDaty(const char* data, time_t teraz) {
+  if (!data || strlen(data) != 10) return INT32_MIN;
+  int y = 0, m = 0, d = 0;
+  if (sscanf(data, "%4d-%2d-%2d", &y, &m, &d) != 3) return INT32_MIN;
+  if (y < 2000 || y > 2100 || m < 1 || m > 12 || d < 1 || d > 31) return INT32_MIN;
+
+  const uint32_t dzis = localDayNumber(teraz);        // YYYYMMDD doby lekowej
+  return dniOdEry(y, m, d)
+       - dniOdEry((int)(dzis / 10000), (int)(dzis / 100 % 100), (int)(dzis % 100));
+}
+
+/* Zblizajacy sie termin pomiaru INR. Date liczy aplikacja (zna odstep
+   i ostatni wynik), pudelko tylko porownuje ja z kalendarzem.
+
+   Bez waznego zegara NIE PISZEMY NIC. Pudelko po resecie bez sieci nie wie,
+   ktory jest dzien - a wiadomosc "jutro masz badanie" wyslana w losowym
+   momencie jest gorsza niz jej brak, bo uczy ignorowac wszystkie
+   nastepne. Ta sama zasada, co przy wyciszaniu alarmu bez zegara (4c). */
+void tgSprawdzInr() {
+  if (!rtcTimeValid || strlen(rtcInrDue) != 10) return;
+  if (strcmp(rtcTgInrZgloszony, rtcInrDue) == 0) return;   // ten termin juz zgloszony
+
+  const int32_t doTerminu = dniDoDaty(rtcInrDue, time(nullptr));
+  if (doTerminu == INT32_MIN) return;
+  if (doTerminu > TG_INR_UPRZEDZ_DNI) return;      // jeszcze za wczesnie
+  if (doTerminu < -30) return;                     // termin sprzed miesiaca: nieaktualny
+
+  rtcTgInrCzeka = true;
+  LOG("[TG ] termin INR %s za %ld dni - napisze przed snem\n", rtcInrDue, (long)doTerminu);
+}
+
+String tgTekstZapas() {
+  String s = "💊 PillBox: kończy się opakowanie\n\n";
+  s += "Zostało " + String(rtcPillsLeft) + " ";
+  s += (rtcPillsLeft == 1 ? "tabletka" : (rtcPillsLeft < 5 ? "tabletki" : "tabletek"));
+  s += " — czas po receptę.";
+  s += "\n\nLiczbę poprawisz w aplikacji, w karcie „Zapas w opakowaniu”.";
+  return s;
+}
+
+String tgTekstInr() {
+  String s = "🩸 PillBox: termin pomiaru INR\n\n";
+  s += "Wypada " + String(rtcInrDue) + ".";
+  s += "\n\nWynik wpisz w aplikacji — policzy z niego następny termin.";
+  return s;
+}
+
 /* Zdanie, ktore czlowiek przeczyta na telefonie.
 
    Godzina bierze sie z harmonogramu, nie z zegara: `slots[]` to pora
@@ -4443,8 +4559,11 @@ String tgTekstBateria() {
    kosztuje tu nic - ani miliampera, ani sekundy czuwania.             */
 void tgWyslijZalegle() {
   tgSprawdzBaterie();
+  tgSprawdzZapas();
+  tgSprawdzInr();
 
-  const bool cosCzeka = (rtcTgSlot >= 0) || rtcTgBattCzeka || rtcTgTestProsba;
+  const bool cosCzeka = (rtcTgSlot >= 0) || rtcTgBattCzeka || rtcTgTestProsba
+                        || rtcTgStockCzeka || rtcTgInrCzeka;
   const uint32_t teraz = rtcTimeValid ? (uint32_t)time(nullptr) : 0;
   /* Wiek liczymy dla nieodebranego przypomnienia - ono jedno traci sens
      ze starosci. Ostrzezenie o baterii jest prawdziwe tak dlugo, jak
@@ -4497,6 +4616,25 @@ void tgWyslijZalegle() {
     if (tgWyslijTekst(tgTekstBateria())) {
       rtcTgBattCzeka     = false;
       rtcTgBattZgloszona = true;         // do naladowania juz o tym nie piszemy
+      wyslane++;
+    } else nieudane++;
+  }
+
+  /* Zapas i termin INR: kazde kasuje swoja flage po WLASNYM HTTP 200
+     (zasada 6). Wspolny warunek gubilby wiadomosc, ktora przeszla,
+     razem z ta, ktora nie przeszla.                                  */
+  if (rtcTgStockCzeka) {
+    if (tgWyslijTekst(tgTekstZapas())) {
+      rtcTgStockCzeka     = false;
+      rtcTgStockZgloszony = true;      // do kupienia opakowania juz nie piszemy
+      wyslane++;
+    } else nieudane++;
+  }
+
+  if (rtcTgInrCzeka) {
+    if (tgWyslijTekst(tgTekstInr())) {
+      rtcTgInrCzeka = false;
+      strlcpy(rtcTgInrZgloszony, rtcInrDue, sizeof(rtcTgInrZgloszony));
       wyslane++;
     } else nieudane++;
   }

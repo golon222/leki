@@ -20,7 +20,7 @@
  * 1. IDENTYFIKATOR URZADZENIA
  * ------------------------------------------------------------------ */
 #define DEVICE_ID           "pillbox01"     // klucz w /devices/<DEVICE_ID>
-#define FW_VERSION          "1.45.3"   // widoczna w aplikacji - po wgraniu sprawdz, czy sie zmienila
+#define FW_VERSION          "1.46.0"   // widoczna w aplikacji - po wgraniu sprawdz, czy sie zmienila
 
 /* ---------------------------------------------------------------------
  * 2. FIREBASE  (Realtime Database + Auth email/haslo)
@@ -141,6 +141,7 @@
    przesuwa, a falszywe ostrzezenie kosztuje tu jedno pikniecie.     */
 #define ONE_DOSE_WINDOW_S   72000
 #define LOW_STOCK_WARN      7               // ostrzegaj, gdy zostalo < X tabletek
+#define TG_INR_UPRZEDZ_DNI  2               // ile dni przed terminem INR napisac
 
 /* Ile zaleglych dob pudelko domyka po dluzszej przerwie (rozladowane
    ogniwo, wyjazd). Wiecej wypchneloby z 120-elementowej kolejki prawdziwe

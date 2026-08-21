@@ -39,6 +39,10 @@ WANTED = [
     # z enumem TgDecyzja, wiec trafia do testow tamta droga.
     "tgTokenZPamieci", "tgChatZPamieci", "tgSkonfigurowany", "tgUtrwal",
     "tgZapomnij",
+    # Powiadomienia o zapasie i o terminie INR (D83). Decyzja "czy pisac"
+    # jest tu osobna funkcja - tak samo jak przy baterii - wiec da sie ja
+    # sprawdzic bez sieci, bez bota i bez czekania na termin.
+    "dniOdEry", "dniDoDaty", "tgSprawdzZapas", "tgSprawdzInr",
     "przesunZnaczniki", "queuePush", "queueCount", "queuePeek", "queuePop", "queueDrop",
     "queueShiftTimestamps", "rekordKompletny", "trwaleOdrzucony", "flushQueue",
     "makeRecordAt", "makeRecord",

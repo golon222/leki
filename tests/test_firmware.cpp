@@ -36,6 +36,15 @@ uint32_t rtcChargeSinceTs = 0;
 uint8_t  rtcChargeFromPct = 255;
 bool    rtcTimeValid = true;
 int16_t rtcTzOffsetMin = 120;
+/* Powiadomienia o zapasie i o terminie INR (D83). Ten sam zestaw znacznikow
+   co na plytce - decyzja "czy pisac" jest osobna funkcja wlasnie po to,
+   zeby dalo sie ja sprawdzic bez sieci, bez bota i bez czekania na termin. */
+int16_t rtcPillsLeft = -1;
+bool    rtcTgStockCzeka = false;
+bool    rtcTgStockZgloszony = false;
+char    rtcInrDue[11] = "";
+char    rtcTgInrZgloszony[11] = "";
+bool    rtcTgInrCzeka = false;
 uint32_t rtcTakenDay = 0;
 uint32_t rtcRolloverDay = 0;
 uint32_t awakeDeadlineMs = AWAKE_LIMIT_MS;
@@ -2353,8 +2362,96 @@ head("Kolejka pod nieustajacym 401");
   prefs.wipe();
 }
 
+head("Telegram: zapas i termin INR");
+  // ── Powiadomienie o konczacym sie opakowaniu (D83) ─────────────────
+  // Ta sama zasada co przy baterii: RAZ na opakowanie, nie przy kazdym
+  // wybudzeniu ponizej progu. Inaczej przez ostatni tydzien opakowania
+  // przychodzi wiadomosc po kazdym otwarciu wieczka - a wtedy przestaje
+  // sie je czytac, razem z tymi o pominietej dawce.
+  {
+    rtcTgStockCzeka = false; rtcTgStockZgloszony = false;
+
+    rtcPillsLeft = -1;                    // aplikacja jeszcze nie podala
+    tgSprawdzZapas();
+    CHECK(!rtcTgStockCzeka, "bez danych o zapasie nie piszemy nic");
+
+    rtcPillsLeft = LOW_STOCK_WARN + 3;
+    tgSprawdzZapas();
+    CHECK(!rtcTgStockCzeka, "zapas powyzej progu - cisza");
+
+    rtcPillsLeft = LOW_STOCK_WARN - 1;
+    tgSprawdzZapas();
+    CHECK(rtcTgStockCzeka, "zapas ponizej progu - wiadomosc czeka");
+
+    // Wyslanie: tak samo jak w tgWyslijZalegle - flaga "czeka" gasnie,
+    // "zgloszony" zapala sie, zeby druga wiadomosc nie poszla.
+    rtcTgStockCzeka = false; rtcTgStockZgloszony = true;
+    tgSprawdzZapas();
+    CHECK(!rtcTgStockCzeka, "po wyslaniu nie powtarzamy przy kazdym wybudzeniu");
+
+    rtcPillsLeft = LOW_STOCK_WARN + 20;   // Kuba kupil nowe opakowanie
+    tgSprawdzZapas();
+    CHECK(!rtcTgStockZgloszony, "nowe opakowanie zeruje znacznik zgloszenia");
+    rtcPillsLeft = LOW_STOCK_WARN - 1;
+    tgSprawdzZapas();
+    CHECK(rtcTgStockCzeka, "i nastepnym razem wiadomosc przyjdzie znowu");
+
+    rtcTgStockCzeka = false; rtcTgStockZgloszony = false; rtcPillsLeft = -1;
+  }
+
+  // ── Powiadomienie o terminie pomiaru INR (D83) ─────────────────────
+  // Date liczy aplikacja, pudelko tylko porownuje ja z kalendarzem.
+  {
+    rtcTgInrCzeka = false; rtcTgInrZgloszony[0] = '\0';
+    // 2026-08-21 12:00 UTC jako "teraz"
+    const time_t teraz = utc(2026, 8, 21, 12, 0);
+    FAKE_NOW = teraz;
+    rtcTimeValid = true;
+
+    strcpy(rtcInrDue, "2026-09-30");      // za ponad miesiac
+    tgSprawdzInr();
+    CHECK(!rtcTgInrCzeka, "termin odlegly - jeszcze nie piszemy");
+
+    strcpy(rtcInrDue, "2026-08-22");      // jutro
+    tgSprawdzInr();
+    CHECK(rtcTgInrCzeka, "termin za dzien - wiadomosc czeka");
+
+    // Ten sam termin drugi raz: cisza. Kolejny termin: znowu piszemy.
+    rtcTgInrCzeka = false;
+    strcpy(rtcTgInrZgloszony, "2026-08-22");
+    tgSprawdzInr();
+    CHECK(!rtcTgInrCzeka, "ten sam termin zglaszamy tylko raz");
+    strcpy(rtcInrDue, "2026-09-19");
+    FAKE_NOW = teraz + 29L * 86400L;
+    tgSprawdzInr();
+    CHECK(rtcTgInrCzeka, "nastepny termin dostaje swoja wiadomosc");
+
+    // BEZ WAZNEGO ZEGARA NIE PISZEMY NIC. Pudelko po resecie bez sieci nie
+    // wie, ktory jest dzien, a "jutro masz badanie" wyslane w losowym
+    // momencie uczy ignorowac wszystkie nastepne wiadomosci.
+    rtcTgInrCzeka = false; rtcTgInrZgloszony[0] = '\0';
+    rtcTimeValid = false;
+    strcpy(rtcInrDue, "2026-08-22");
+    tgSprawdzInr();
+    CHECK(!rtcTgInrCzeka, "bez zegara pudelko o terminie NIE pisze");
+
+    rtcTimeValid = true;
+    rtcInrDue[0] = '\0';                  // aplikacja nie podala terminu
+    tgSprawdzInr();
+    CHECK(!rtcTgInrCzeka, "brak terminu to nie jest termin dzisiaj");
+
+    strcpy(rtcInrDue, "2026-01-01");      // termin sprzed pol roku
+    FAKE_NOW = teraz;
+    tgSprawdzInr();
+    CHECK(!rtcTgInrCzeka, "termin sprzed miesiaca jest nieaktualny, nie pilny");
+
+    rtcTgInrCzeka = false; rtcInrDue[0] = '\0'; rtcTgInrZgloszony[0] = '\0';
+  }
+
 printf("\n──────────────────────────────────────\n");
 printf("  ZALICZONE: %d    BLEDY: %d\n", PASS, FAIL);
 printf("──────────────────────────────────────\n");
 return FAIL ? 1 : 0;
 }
+
+

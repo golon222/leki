@@ -1596,9 +1596,15 @@ nav button .kropka-nav{position:absolute;top:6px;right:50%;margin-right:-16px;
       <p class="muted"><b>Wiadomość wysyła pudełko, nie ta aplikacja.</b> Dzięki temu
         przyjdzie także wtedy, gdy telefon leży zablokowany w kieszeni — ale wymaga,
         żeby <b>pudełko</b> miało internet. Bez sieci nie przyjdzie nic.</p>
-      <p class="muted">Pisze po każdym nieodebranym przypomnieniu oraz <b>raz</b>,
-        gdy bateria będzie na wyczerpaniu. Bez potwierdzeń wzięcia — powiadomienie,
-        które przychodzi codziennie, przestaje być powiadomieniem.</p>
+      <p class="muted">Pisze po każdym nieodebranym przypomnieniu, <b>raz</b> gdy
+        bateria będzie na wyczerpaniu, <b>raz</b> gdy zostanie mniej niż siedem
+        tabletek, i <b>raz</b> na dwa dni przed terminem pomiaru INR. Bez
+        potwierdzeń wzięcia — powiadomienie, które przychodzi codziennie,
+        przestaje być powiadomieniem.</p>
+      <p class="muted">Znacznik „już pisałem" kasuje się sam: po naładowaniu, po
+        wpisaniu nowego opakowania i przy następnym terminie. Bez ważnego zegara
+        pudełko o terminie nie pisze — data wysłana na chybił trafił byłaby
+        gorsza niż cisza.</p>
       <label>Jak podłączyć bota</label>
       <p class="muted">1. W Telegramie znajdź <b>@BotFather</b> i napisz do niego
         <b>/newbot</b> — nie /start.<br>
@@ -1862,7 +1868,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-21.57";
+const APP_VERSION = "2026-08-21.58";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -3701,6 +3707,22 @@ function inrState(v){
   return { txt:"w zakresie", cls:"on", col:"var(--ok)" };
 }
 
+/* Termin najbliższego pomiaru INR trafia do konfiguracji pudełka jako
+   gotowa data — pudełko ma go tylko porównać z kalendarzem, nie liczyć.
+   Ta sama zasada, co przy stanie opakowania: liczy aplikacja, bo to ona
+   zna odstęp, ostatni wynik i strefę czasową.
+
+   Zapisujemy TYLKO przy zmianie, bo `zapiszCfg` idzie przez kolejkę
+   i każdy zbędny wpis to jedna rzecz więcej, która może się nie udać. */
+async function odswiezTerminInr(){
+  if (!uid) return;
+  const termin = inrTerminKey();          // null, gdy nie ma z czego policzyć
+  const teraz = cfg.inrDue || null;
+  if ((termin || null) === teraz) return;
+  cfg.inrDue = termin || null;
+  await zapiszCfg({ inrDue: termin || null }, "Termin INR");
+}
+
 window.addInr = async () => {
   const date = document.getElementById("inrDate").value;
   const val  = parseFloat(String(document.getElementById("inrVal").value).replace(",","."));
@@ -3725,6 +3747,7 @@ window.addInr = async () => {
   }}, "Wynik INR");
   document.getElementById("inrVal").value = "";
   document.getElementById("inrNote").value = "";
+  await odswiezTerminInr();
   msg.textContent = `Zapisano ${nf(val)} na ${date}.`; msg.style.color = "var(--ok)";
   setTimeout(()=>{ msg.textContent = ""; }, 3500);
 };
@@ -3746,6 +3769,7 @@ window.delInr = async date => {
   delete inr[date];              // od razu na ekranie, bez czekania na nasłuch
   renderAll();
   await zapiszPewnie({ [`users/${uid}/inr/${date}`]: null }, "Usunięcie pomiaru INR");
+  await odswiezTerminInr();
 };
 
 /* Poprawienie pomiaru. Do tej pory literówka w wyniku („3,6" zamiast „2,6")
@@ -6462,6 +6486,7 @@ window.saveInrEvery = async () => {
   cfg.inrEveryDays = n;
   odswiezPodpowiedzInr();
   await zapiszCfg({ inrEveryDays: n }, "Odstęp pomiarów INR");
+  await odswiezTerminInr();      // zmiana odstępu przesuwa termin
   renderInr(); renderCalendar();
 };
 
