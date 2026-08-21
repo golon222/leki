@@ -679,16 +679,29 @@ try { A.renderAnalysis(); } catch(e){ threw = e; }
 check(!threw, "renderAnalysis bez wyjatku: " + (threw?.message||"ok"));
 check(document.getElementById("anMean").textContent.includes(":"), "srednia godzina wyswietlona: "
       + document.getElementById("anMean").textContent);
-check(document.getElementById("anHours").innerHTML.includes("<rect"), "histogram godzin narysowany");
+check(document.getElementById("anHours").innerHTML.includes("<circle"),
+      "wykres por narysowany (kropka na dawke)");
 check(document.getElementById("anDow").innerHTML.includes("<rect"), "wykres dni tygodnia narysowany");
 check(document.getElementById("anInr").innerHTML.includes("regularności"), "zestawienie INR obecne");
-check(/^\d+ z \d+$/.test(document.getElementById("anNear").textContent),
-      "dawki blisko sredniej: " + document.getElementById("anNear").textContent);
-/* Kafelek ma mowic, O KTOREJ Kuba bierze lek - a nie o ile "spoznil sie"
-   wzgledem 20:00 ani kiedy pudelko przypomina. Godzine przypomnienia mozna
-   zmienic, a przypomnien moze byc kilka (CLAUDE.md 4b, D53, D55).       */
+check(document.getElementById("anRytm").innerHTML.includes("rytm-k"), "siatka rytmu narysowana");
+
+/* ANALIZA NIE OCENIA PORY. Sprostowanie Kuby: "jaka pora brania w czasie,
+   jak ja moge wziasc o dowolnej godzinie - o 10, o 14, o 18, o 22, nawet
+   o 2". Nikt mu nie zapisal pory; ma brac raz dziennie. Miary ODCHYLENIA
+   od wlasnej sredniej ("rozrzut", "blisko sredniej", pasmo +-60 min na
+   wykresie) oceniaja cos, czego nikt nie wymagal - i przecza instrukcji
+   projektu (ograniczenie 4b), ktora mowi to samo od poczatku. D77.     */
 const poraTxt = document.getElementById("anPora").innerHTML;
-check(poraTxt.includes("Średnio bierzesz lek o"), "kafelek podaje srednia godzine: " + poraTxt);
+check(poraTxt === "", "przy danych nie ma juz zdania o sredniej porze");
+check(!document.getElementById("anHours").innerHTML.includes("stroke-dasharray"),
+      "wykres por nie ma linii sredniej");
+check(!/opacity="\.1?3"/.test(document.getElementById("anHours").innerHTML),
+      "ani pasma wokol niej");
+check(document.getElementById("anPoryLeg").textContent.includes("kropka"),
+      "podpis mowi, co znaczy kropka, a nie ktora pora jest dobra");
+for (const id of ["anSpread","anNear"])
+  check(document.getElementById(id).textContent === "",
+        `kafelek ${id} (ocena zgodnosci z pora) nie jest juz wypelniany`);
 check(!poraTxt.includes("zaplanowaną godziną") && !poraTxt.includes("przed zaplanowaną"),
       "kafelek nie ocenia juz odchylenia od planu");
 /* Cala karta analizy - nie tylko zdanie pod kafelkami - ma milczec
@@ -3625,6 +3638,16 @@ check(!/nav\{[^}]*backdrop-filter/.test(html.replace(/\/\*[\s\S]*?\*\//g, "")),
    Testy pilnuja tego, co wykres MOWI - nie tego, jak wyglada: czy kratka
    zgadza sie z kalendarzem, czy os idzie doba lekowa, czy da sie z wykresu
    wejsc w dzien i poprawic dawke.                                       */
+{
+  /* Kafelki oceniajace zgodnosc z wlasna srednia zniknely z HTML-a, nie
+     tylko przestaly byc wypelniane (D77).                              */
+  const ana = html.slice(html.indexOf('id="tab-ana"'), html.indexOf('id="tab-set"'));
+  check(!/id="anSpread"/.test(ana) && !/id="anNear"/.test(ana),
+        "kafelki rozrzutu i zgodnosci usuniete z ekranu analizy");
+  check(!/blisko średniej/i.test(ana), "i nie zostal po nich napis");
+  check(/id="anMean"/.test(ana), "srednia godzina zostaje jako obserwacja");
+}
+
 head("Wykresy analizy");
 {
   /* Siatka rytmu liczy status TA SAMA funkcja co kalendarz. Gdyby liczyla

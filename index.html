@@ -959,10 +959,7 @@ nav button.act::before{content:"";position:absolute;top:0;left:50%;transform:tra
         <div id="anIskra" style="margin-top:6px"></div></div>
       <div class="stat"><div class="sv" id="anMean">–</div><div class="sl">średnia godzina</div>
         <div class="dim2" id="anMeanSub"></div></div>
-      <div class="stat"><div class="sv" id="anSpread">–</div><div class="sl">rozrzut</div>
-        <div class="dim2" id="anSpreadSub"></div></div>
-      <div class="stat"><div class="sv" id="anNear">–</div><div class="sl">blisko średniej</div>
-        <div class="dim2" id="anNearSub"></div></div>
+
       <!-- Pełna szerokość: to jedyna liczba w tej karcie, która mówi o leku,
            a nie o zegarze — reszta opisuje pory, ta opisuje rytm. -->
       <div class="stat" style="grid-column:1/-1"><div class="sv" id="anGap">–</div>
@@ -1757,7 +1754,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-21.51";
+const APP_VERSION = "2026-08-21.52";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -6511,15 +6508,18 @@ function poryWCzasieSVG(punkty, srednia){
   const zakres = Math.max(60, hi - lo);
   const y = m => G + (m - lo) / zakres * (H - G - D);
 
-  const sredniaRama = srednia == null ? null : doRamyDoby(srednia);
-  let pasmo = "";
-  if (sredniaRama != null){
-    const gy = y(Math.min(hi, sredniaRama + 60)), dy = y(Math.max(lo, sredniaRama - 60));
-    pasmo = `<rect x="${L}" y="${gy}" width="${W-L-P}" height="${Math.max(2, dy-gy)}"
-               fill="var(--acc)" opacity=".13" rx="4"/>
-             <line x1="${L}" y1="${y(sredniaRama)}" x2="${W-P}" y2="${y(sredniaRama)}"
-               stroke="var(--acc)" stroke-width="1.5" stroke-dasharray="4 4" opacity=".55"/>`;
-  }
+  /* BEZ PASMA I BEZ LINII ŚREDNIEJ.
+
+     Sprostowanie Kuby: *„jaka pora brania w czasie, jak ja mogę wziąć
+     o dowolnej godzinie — o 10, o 14, o 18, o 22, nawet o 2"*. I ma rację:
+     nikt mu nie zapisał pory, ma brać raz dziennie. Pasmo ±60 min wokół
+     średniej mówiło „tu jest dobrze, poza tym gorzej" — czyli oceniało
+     coś, czego nikt od niego nie wymagał, i przeczyło instrukcji projektu
+     (ograniczenie 4b), która mówi to samo od początku.
+
+     Wykres zostaje, bo obraz „kiedy brałem" czasem coś mówi (np. że
+     w weekendy później). Ocena znika. D77.                            */
+  const pasmo = "";
   /* Siatka pozioma co pełną godzinę, ale nie gęściej niż pięć linii —
      siatka gęstsza od danych przestaje być tłem i zaczyna z nimi konkurować. */
   const krokH = Math.max(1, Math.ceil(zakres / 60 / 4));
@@ -6667,12 +6667,12 @@ function renderAnalysis(){
      być kilka, więc każde zdanie w rodzaju „przed 20:00" zestarzeje się bez
      ostrzeżenia. Zostają wyłącznie fakty o tym, co się STAŁO: średnia,
      rozrzut, przedział połowy dawek i zwartość wokół średniej. D53, D55. */
+  /* Średnia godzina zostaje jako obserwacja — „zwykle o tej porze" — a nie
+     jako wzorzec, do którego coś się porównuje. Miary ODCHYLENIA od niej
+     (rozrzut, „blisko średniej") wyleciały razem z pasmem na wykresie. */
   setTxt("anMean", hm(a.mean));
   setTxt("anMeanSub", a.n ? `z ${a.n} zarejestrowanych otwarć` : "brak danych z pudełka");
-  setTxt("anSpread", a.sd == null ? "–" : `± ${Math.round(a.sd)} min`);
-  setTxt("anSpreadSub", a.n ? `od ${hm(a.earliest)} do ${hm(a.latest)}` : "—");
-  setTxt("anNear", a.n ? `${a.withinMean60} z ${a.n}` : "–");
-  setTxt("anNearSub", a.n ? `dawek w ±60 min od ${hm(a.mean)}` : "—");
+
   /* Odstęp podajemy w godzinach i minutach, nie w „± min od doby" — 24 h
      to punkt odniesienia, który bierze się z leku, a nie z ustawień. */
   setTxt("anGap", a.gapN ? godzTxt(a.gapAvg) : "–");
@@ -6680,11 +6680,12 @@ function renderAnalysis(){
     ? `${a.gapN} ${a.gapN === 1 ? "para" : "par"} kolejnych dni · od ${godzTxt(a.gapMin)} do ${godzTxt(a.gapMax)}`
     : "potrzebne dwa dni z rzędu z godziną z pudełka");
 
+  /* Zdanie zostaje tylko wtedy, gdy nie ma jeszcze czego pokazać. Przy
+     danych powtarzałoby kafelek obok, a „połowa dawek między X a Y" to
+     znowu miara rozrzutu — czyli ocena pory, której nikt nie zapisał. */
   const pora = document.getElementById("anPora");
-  if (pora) pora.innerHTML = !a.n
-    ? `<span class="muted">Brak zarejestrowanych godzin — statystyka pojawi się po kilku dniach.</span>`
-    : `Średnio bierzesz lek o <b>${hm(a.mean)}</b>.` +
-      (a.n >= 4 ? ` Połowa dawek między ${hm(a.q1)} a ${hm(a.q3)}.` : "");
+  if (pora) pora.innerHTML = a.n ? ""
+    : `<span class="muted">Godziny pojawią się po kilku dawkach z pudełka.</span>`;
 
   /* SIATKA RYTMU */
   const dniR = dniRytmu(days);
@@ -6717,7 +6718,7 @@ function renderAnalysis(){
       el.onclick = () => openSheet(el.dataset.k));
     setTxt("anPorySub", a.n ? `${a.n} ${lm(a.n, "dawka", "dawki", "dawek")}` : "");
     setTxt("anPoryLeg", a.punkty && a.punkty.length >= 2
-      ? `Kreskowana linia to Twoja średnia (${hm(a.mean)}), pasmo to ±60 minut wokół niej.`
+      ? "Każda kropka to jedna dawka. Dotknij, żeby otworzyć ten dzień."
       : "");
   }
 
