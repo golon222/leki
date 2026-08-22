@@ -736,7 +736,7 @@ ok("BATT_CURVE" in ino and "battPercentFromCurve" in ino,
 ok("(realBatteryVoltage - 3.3) / (4.2 - 3.3)" not in ino,
    "stare liniowe przeliczanie usuniete")
 # Blok pomiaru napiecia: zakaz zmian ZNIESIONY przez Kube 2026-08-05
-# (patrz DECYZJE.md, sekcja "Cofniete"). Wolno go modyfikowac.
+# (patrz decyzje/cofniete.md). Wolno go modyfikowac.
 #
 # Zostaje jednak TRIPWIRE zamiast zakazu: zmiana nie wywala audytu, ale zglasza
 # sie jako uwaga. Powod - te liczby byly kalibrowane na sprzecie, wiec zmiana
@@ -745,7 +745,7 @@ ok("(realBatteryVoltage - 3.3) / (4.2 - 3.3)" not in ino,
 for frag in ["CALIBRATION_FACTOR = 0.921", "(rawValue / 4095.0) * 3.3",
              "pinVoltage * 2.0", "rawBatteryVoltage * CALIBRATION_FACTOR"]:
     warn(frag not in ino,
-         f"zmieniony blok pomiaru napiecia: {frag} - swiadomie? (wolno, patrz DECYZJE.md)")
+         f"zmieniony blok pomiaru napiecia: {frag} - swiadomie? (wolno, patrz decyzje/cofniete.md)")
 ok(val("BATT_STEP_DOWN") > val("BATT_STEP_UP"),
    "wskazanie schodzi szybciej niz rosnie")
 ok(val("BATT_STEP_UP") >= 1,

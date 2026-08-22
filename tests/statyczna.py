@@ -265,6 +265,27 @@ for pl in ['pillsLeft','inrMin','inrMax','drugName','drugStrength']:
         bad += 1; print(f'  BLAD reguly bazy nie znaja pola {pl}')
 print('  OK   reguly bazy pokrywaja pola konfiguracji')
 
+# Dziennik decyzji jest podzielony na indeks (DECYZJE.md) i pelne wpisy
+# w decyzje/*.md - zeby wejscie w zadanie kosztowalo 5 tys. tokenow zamiast
+# 60 tys.  Podzial dziala tylko dopoty, dopoki indeks nie klamie: wpis bez
+# linijki w indeksie jest niewidoczny, a linijka bez wpisu prowadzi donikad.
+ind = (root/'DECYZJE.md').read_text(encoding='utf-8')
+w_indeksie = dict(re.findall(r'^\| \*\*([DN]\d+[a-z]?)\*\* \|.*\| `(\w+)` \|$', ind, re.M))
+w_plikach = {}
+for f in sorted((root/'decyzje').glob('*.md')):
+    for nr in re.findall(r'^\| \*\*([DN]\d+[a-z]?)\*\* \|', f.read_text(encoding='utf-8'), re.M):
+        if nr in w_plikach:
+            bad += 1; print(f'  BLAD decyzja {nr} stoi w dwoch plikach: {w_plikach[nr]}, {f.stem}')
+        w_plikach[nr] = f.stem
+osierocone = sorted(set(w_indeksie) - set(w_plikach))
+nieznane = sorted(set(w_plikach) - set(w_indeksie))
+zlyplik = sorted(n for n in set(w_indeksie) & set(w_plikach) if w_indeksie[n] != w_plikach[n])
+if osierocone: bad += 1; print('  BLAD w indeksie, bez wpisu w decyzje/:', osierocone)
+if nieznane:   bad += 1; print('  BLAD wpis w decyzje/ bez linijki w indeksie:', nieznane)
+if zlyplik:    bad += 1; print('  BLAD indeks wskazuje zly plik dla:', zlyplik)
+if not (osierocone or nieznane or zlyplik):
+    print(f'  OK   indeks decyzji zgadza sie z decyzje/ ({len(w_plikach)} wpisow)')
+
 t = root/"firmware/PillBoxTest/PillBoxTest.ino"
 if t.exists():
     src = t.read_text(encoding="utf-8")

@@ -81,6 +81,12 @@ krok() {
   fi
 }
 
+# Mapa kodu (MAPA.md): spis tresci index.html i PillBox.ino z numerami linii.
+# Odtwarzana przy KAZDYM przebiegu, zeby nie moglo sie zdarzyc, ze mapa
+# pokazuje linie sprzed trzech zmian - nieaktualna mapa jest gorsza niz zadna.
+# Cicho, bo to nie jest test: zmiane widac w git diff MAPA.md.
+python3 mapa.py >/dev/null || { echo "✖  nie udalo sie zbudowac MAPA.md"; exit 1; }
+
 krok "1/10  logika firmware (C++)"        bash -c 'python3 extract.py && g++ -O0 -std=c++17 test_firmware.cpp -o /tmp/pillbox_tests && /tmp/pillbox_tests'
 krok "1b/10 odpornosc firmware (C++)"     bash -c 'g++ -O0 -std=c++17 test_firmware_stress.cpp -o /tmp/pillbox_stress && /tmp/pillbox_stress'
 krok "2/10  logika aplikacji (Node)"      bash -c 'node build_app_module.mjs && node test_app.mjs'

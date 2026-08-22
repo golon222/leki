@@ -44,100 +44,44 @@ database.rules.json                 reguły Firebase
 .github/workflows/firmware.yml      automat budujący binarkę do OTA
 WGRYWANIE.md                        instrukcja wgrywania kablem dla Kuby
 CLAUDE.md                           instrukcje dla Claude Code
-DECYZJE.md                          dziennik decyzji (D1–D65)
+DECYZJE.md                          indeks decyzji + bledy otwarte
+decyzje/                            pelne wpisy, po obszarach
+MAPA.md                             spis tresci duzych plikow (generowany)
 PROJEKT-PillBox-kontekst.md         ten plik
 ```
 
-**`DECYZJE.md` jest ważniejszy, niż wygląda.** Ten dokument opisuje stan;
+**Dziennik decyzji jest ważniejszy, niż wygląda.** Ten dokument opisuje stan;
 tamten opisuje **dlaczego** — co jest tymczasowe i kiedy to usunąć, co już raz
 **cofnięto** i czego nie próbować drugi raz. Przy sprzeczności między nimi
-rozstrzyga `DECYZJE.md`, bo jest prowadzony na bieżąco, wpis po wpisie.
+rozstrzyga dziennik (`DECYZJE.md` + `decyzje/`), bo jest prowadzony na
+bieżąco, wpis po wpisie.
 
 ---
 
-## 2. Twarde ograniczenia — NIE ŁAMAĆ
+## 2. Twarde ograniczenia — gdzie ich szukać
 
-1. **Firmware to dokładnie dwa pliki**: `PillBox.ino` + `config.h`.
-   Scalanie zostało wprost odrzucone: *„nie nie zostanimy przy dwoch plikach"*.
-2. **Żadnych zmian sprzętowych**: *„ja nie będę zmieniał ani dodawał rezystorów"*.
-   Każde rozwiązanie musi działać na powyższym schemacie.
-3. **`config.h` JEST w repo — celowo.** Trzyma wyłącznie placeholder
-   `TUTAJ_WPISZ_HASLO`; prawdziwe hasło nigdy tu nie wraca.
+**Obowiązująca lista stoi w `CLAUDE.md`** i to ona jest jedynym źródłem prawdy.
+Stała tu kiedyś jej druga kopia — krótsza o dwa punkty i inaczej sformułowana,
+czyli dokładnie taka, jaka po cichu zaczyna zaprzeczać oryginałowi. Zostaje
+tylko to, czego w `CLAUDE.md` nie ma: **czyje** to decyzje i skąd wzięte liczby.
 
-   **Od 1.38.0 placeholder przestał być kompromisem i stał się warunkiem, na
-   którym stoi aktualizacja przez WiFi.** Kuba ujął to jednym zdaniem: *„to
-   urządzenie trzyma hasło i dlatego też można robić aktualizacje przez WiFi"*.
-   Binarkę buduje automat z **tego** repo, publicznie. Gdyby hasło musiało być
-   wkompilowane, budowanie binarki byłoby jego wyciekiem — czyli automat nie
-   mógłby istnieć, a bez automatu nie ma OTA. Całą konstrukcję trzyma to, że
-   hasło żyje **w NVS pudełka** (D59), a `config.h` jest już tylko ziarnem przy
-   pierwszym wgraniu kablem. Ograniczenie to jest więc jedną decyzją opisaną
-   z dwóch stron: tu jako „plik zostaje w repo", w D59 jako „hasło czytamy
-   z pamięci trwałej".
+**Cytaty, na których stoją ograniczenia** — wszystkie od Kuby:
 
-   Była też próba wyjęcia go z repo na rzecz `config.example.h`. **Cofnięta na
-   wyraźną prośbę Kuby** — i to jest dobra lekcja o tym, czyj komfort się liczy.
-   On nie klonuje repo: pobiera folder `firmware/` i otwiera go wprost
-   w Arduino IDE. Bez `config.h` w komplecie szkic się nie otwiera, więc przed
-   każdym wgraniem musiałby zmieniać nazwy plików — raz na komputerze, raz na
-   MacBooku, raz w pośpiechu przed wyjazdem. Zabezpieczenie chroniło przed
-   ryzykiem, które **nigdy się nie zmaterializowało** (w historii repo hasło
-   zawsze było placeholderem), a kosztowało przy każdym pobraniu.
+- dwa pliki firmware: *„nie nie zostanimy przy dwoch plikach"*
+- brak zmian sprzętowych: *„ja nie będę zmieniał ani dodawał rezystorów"*
+- `config.h` w repo: *„to urządzenie trzyma hasło i dlatego też można robić
+  aktualizacje przez WiFi"* — patrz `decyzje/cofniete.md` (D5) po historię
+  próby zastąpienia go `config.example.h`, cofniętej na jego prośbę
+- pomiar napięcia: zakaz zdjęty 2026-08-05, `CALIBRATION_FACTOR = 0.921`
+  i przeliczenia **wolno** zmieniać. Liczby były kalibrowane na sprzęcie,
+  a w diffie zmiana przypadkowa wygląda identycznie jak świadoma — dlatego
+  audyt zgłasza uwagę zamiast blokować
 
-   `WEB_API_KEY` zostaje świadomie: ten sam klucz jest publiczny w `index.html`
-   na GitHub Pages, a barierą jest `database.rules.json`, nie jego tajność.
+**Skąd wiadomo, że `DAY_START_HOUR` zgadza się po obu stronach:** osobny test
+przepuszcza ~177 000 znaczników czasu przez prawdziwy kod firmware i aplikacji.
 
-   Jedyna realna zasada do pilnowania: **nie wrzucać `config.h` z wpisanym
-   hasłem**. `.gitignore` przed tym nie obroni przy wrzucaniu przez stronę
-   GitHuba, więc to kwestia uwagi, nie mechanizmu.
-4. **`DAY_START_HOUR = 3`** musi być identyczne w firmware i w aplikacji.
-   Osobny test przepuszcza ~177 000 znaczników czasu przez kod obu stron.
-5. **Każdy zapis użytkownika w aplikacji idzie przez `zapiszPewnie()`** —
-   nigdy gołe `set()`. Firebase offline nie odrzuca obietnicy, tylko wisi
-   w nieskończoność: ekran pokazuje sukces, a dane nie docierają.
-6. **Nic nie kasujemy z pamięci pudełka przed potwierdzonym 2xx.**
-   Kolejka, flagi statusu, dziennik wieczka — rodzina błędu 3.5.
-7. **Do gałęzi `events` nie dokładamy pól.** Reguła `$other: false` odrzuca
-   **cały** wpis, gdy trafi w nim nieznane pole, więc otwarcie pudełka
-   przepada w całości. Nowe dane idą do nowej gałęzi.
-8. **Narzędzie diagnostyczne nie może uszkodzić danych o leku.**
-9. **Dawka jest jedna dziennie, ale TABLETEK w niej zmienna liczba** (D36).
-   `dawkaNaDzien()`: wyjątek na datę → rozpisanie tygodniowe → `defaultDose`.
-   Indeks w `doseWeek` to `getDay()`/`tm_wday`, czyli **0 = niedziela** — tak
-   samo po obu stronach. Schemat niekompletny odrzucamy w całości i wracamy do
-   `defaultDose`: brakujące pole odczytane jako zero to cichy dzień bez leku
-   przeciwzakrzepowego. Dzień z zerem ma status `off` i **nie wchodzi ani do
-   licznika, ani do mianownika** skuteczności. Pudełko zna to samo rozpisanie
-   i w dniu rozpisanym na zero **nie dzwoni i nie zgłasza „missed"** — ale
-   wycisza się **wyłącznie przy pewnym zerze**: bez zegara albo bez rozpisania
-   dzwoni.
-10. **Hasło do WiFi kasujemy z bazy dopiero po potwierdzonym zapisie w NVS**
-    (D38). `wifiSiecDodaj()` zwraca wynik i ten wynik trzeba sprawdzić.
-    Odwrotna kolejność traci sieć, której nikt już nie zna — a z nią jedyną
-    drogę do pudełka poza portalem fizycznym.
-11. **Hasło do Firebase czytamy z NVS, nigdy wprost z `config.h`** (D59).
-    `config.h` jest już tylko **ziarnem** przy pierwszym wgraniu kablem. Powód
-    jest twardy: binarkę aktualizacji buduje automat z tego repo, a w repo stoi
-    placeholder. Dlatego `otaDecyzja()` odmawia aktualizacji bez hasła w pamięci,
-    a `hasloUtrwal()` potwierdza zapis **odczytem zwrotnym**. Nie upraszczaj
-    żadnego z tych trzech kroków.
-12. **Aktualizacja i skan sieci ruszają wyłącznie z `goToSleep()`.** To jedyne
-    miejsce, przez które przechodzi każda ścieżka wybudzenia, i jedyne, w którym
-    dawka jest już zapisana i potwierdzona. Wywołanie z `fetchConfig()` albo
-    z obsługi kontaktronu wcisnęłoby minutę radia między otwarcie wieczka
-    a zapis dawki Warfinu. Audyt to sprawdza.
-13. **`queueDrop()` to jedyny świadomy wyjątek od zasady 6.** Zdejmuje wpis,
-    którego baza nie przyjmie **nigdy** (HTTP 400/413 albo rekord uszkodzony) —
-    zostawiony blokował wszystkie dawki za sobą. Strata idzie na licznik
-    `dropped` w statusie, więc aplikacja o niej krzyczy (D13).
-
-**Zniesione ograniczenie:** blok pomiaru napięcia (`CALIBRATION_FACTOR = 0.921`
-i przeliczenia) **wolno** zmieniać — Kuba zniósł tę zasadę 2026-08-05. Audyt
-nie blokuje: zgłasza uwagę i przechodzi dalej. Te liczby były kalibrowane na
-sprzęcie, a w diffie zmiana przypadkowa wygląda identycznie jak świadoma.
-
----
-
+**Czego `.gitignore` nie załatwia:** nie obroni przed wrzuceniem `config.h`
+z prawdziwym hasłem przez stronę GitHuba. To kwestia uwagi, nie mechanizmu.
 ## 3. Błędy, które kosztowały najwięcej — i ich przyczyny
 
 To jest najcenniejsza część dokumentu. Każdy z tych błędów wyglądał z zewnątrz
