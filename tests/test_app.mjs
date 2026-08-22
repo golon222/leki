@@ -3813,6 +3813,67 @@ head("Kopia zapasowa");
                                html.indexOf("window.tgKopiaWylacz"));
   check(zrodloTgK.includes("askConfirm("), "wlaczenie pyta o zgode na token w telefonie");
   check(zrodloTgK.includes("tego telefonu"), "i mowi wprost, gdzie token zamieszka");
+
+  /* Cicha kopia (D85). Kuba: "zeby nie pokazywala sie wiadomosc czy cos
+     w powiadomieniach". Sprawdzamy OBIE polowy odpowiedzi - samo
+     disable_notification zdejmuje tylko dzwiek.                       */
+  const TOKEN = "1234567890:AAHtestowytokendlugimadwadziesciacos";
+  A.__setTelegram({});
+  A.magazyn.setItem(A.TG_KOPIA_KLUCZ, JSON.stringify({ token:TOKEN, chat:"111", dzien:"" }));
+  D({ doses:{ [shift(-1)]:{ 0:{ status:"taken", dose:1, source:"device", ts:at(1,20,0) } } } });
+  await window.kopiaNaTelegram(true);
+  check(A.__tgWyslane.length === 1, "kopia poszla na Telegram");
+  check(A.__tgWyslane[0].pola.disable_notification === "true",
+        "i poszla po cichu (disable_notification)");
+  check(A.__tgWyslane[0].pola.chat_id === "111",
+        "bez osobnego czatu ladauje tam, gdzie powiadomienia");
+
+  /* Osobny czat na kopie: to on daje cisze zupelna, bo wolno go wyciszyc. */
+  check(A.tgCzatKopii({ chat:"111" }) === "111", "puste chatKopii = czat powiadomien");
+  check(A.tgCzatKopii({ chat:"111", chatKopii:"-100222" }) === "-100222",
+        "ustawiony chatKopii wygrywa");
+  A.magazyn.setItem(A.TG_KOPIA_KLUCZ,
+    JSON.stringify({ token:TOKEN, chat:"111", chatKopii:"-100222", dzien:"" }));
+  A.__tgWyslane.length = 0;
+  await window.kopiaNaTelegram(true);
+  check(A.__tgWyslane[0]?.pola.chat_id === "-100222", "kopia idzie na osobny czat");
+  check(A.__tgWyslane[0]?.pola.disable_notification === "true",
+        "i tam tez po cichu");
+
+  /* Zapis czatu: smiec odrzucamy, puste pole wraca do czatu powiadomien. */
+  document.getElementById("tgKopiaChat").value = "abc";
+  window.tgKopiaCzatZapisz();
+  check(A.tgKopiaUst().chatKopii === "-100222", "smiec w polu nie nadpisuje czatu");
+  document.getElementById("tgKopiaChat").value = "";
+  window.tgKopiaCzatZapisz();
+  check(A.tgKopiaUst().chatKopii === "", "puste pole wraca na czat powiadomien");
+  check(A.tgKopiaUst().token === TOKEN, "i nie gubi tokenu przy okazji");
+  check(A.tgKopiaUst().dzien === "", "zmiana czatu kasuje znacznik ostatniej wysylki");
+
+  /* Szukanie grupy: czat PRYWATNY odrzucamy, bo jego wyciszenie zabraloby
+     ostrzezenia o dawce - czyli to, czego ta funkcja ma nie ruszyc.     */
+  const kod = A.tgKodParowania();
+  A.__setTelegram({ getUpdates:{ ok:true, result:[
+    { message:{ text:"kopie " + kod, chat:{ id:999, type:"private", first_name:"Kuba" } } } ] } });
+  await window.tgKopiaCzatZnajdz();
+  check(document.getElementById("tgKopiaChat").value === "",
+        "czat prywatny nie zostaje czatem na kopie");
+  A.__setTelegram({ getUpdates:{ ok:true, result:[
+    { message:{ text:"/kopia " + kod, chat:{ id:-100333, type:"supergroup", title:"PillBox kopie" } } } ] } });
+  await window.tgKopiaCzatZnajdz();
+  check(document.getElementById("tgKopiaChat").value === "-100333", "grupa z kodem zostaje znaleziona");
+  check(document.getElementById("tgKopiaCzatMsg").textContent.includes("PillBox kopie"),
+        "i widac, ktora to grupa");
+
+  /* Bez kodu nie ma czatu - ta sama zasada co przy parowaniu bota. */
+  document.getElementById("tgKopiaChat").value = "";
+  A.__setTelegram({ getUpdates:{ ok:true, result:[
+    { message:{ text:"czesc", chat:{ id:-100444, type:"supergroup", title:"Obca grupa" } } } ] } });
+  await window.tgKopiaCzatZnajdz();
+  check(document.getElementById("tgKopiaChat").value === "",
+        "grupa bez kodu parowania nie przechodzi");
+
+  A.magazyn.removeItem(A.TG_KOPIA_KLUCZ);
 }
 
 head("Pomiar INR: usuwanie i poprawianie");

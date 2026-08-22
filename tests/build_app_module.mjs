@@ -41,7 +41,7 @@ export { renderSkan, brakujePokrycia, doReconcile, reconcileDecyzja, opisLadowan
          zbierzKopie, opisKopii, policzOdtworzenie, KOPIA_WERSJA, KOPIA_CFG,
          TAGI, TAGI_PL, tagiDnia, tagiPrzed, tags,
          kopiaAutomat, renderKopiaStan, KOPIE_W_BAZIE,
-         tgKopiaUst, TG_KOPIA_KLUCZ,
+         tgKopiaUst, TG_KOPIA_KLUCZ, tgCzatKopii,
          renderInr, renderPills, renderSheet, settlePills, relTime, slotMin,
          yesterdayKey, pillColors, todayKey, dateKey, DAY_START_HOUR, medDate,
          inNightWindow, renderOpenWarn, renderDiag, devDayMon, renderBoxLog, renderTesty, TEST_PL, WAKE_PL,
@@ -67,8 +67,10 @@ export { renderSkan, brakujePokrycia, doReconcile, reconcileDecyzja, opisLadowan
    PAROWANIE - w tym przypadek, w ktorym do bota pisze ktos obcy.
    Bez tego jedyna obrona przed wyslaniem powiadomien o leku obcej osobie
    nie mialaby ani jednego testu.                                       */
+export const __tgWyslane = [];
 export function __setTelegram(odp){
-  globalThis.fetch = async (url) => {
+  __tgWyslane.length = 0;
+  globalThis.fetch = async (url, opcje) => {
     const u = String(url);
     if (u.includes("/getMe"))
       return { ok:true, status:200, json: async () => odp.getMe
@@ -76,6 +78,16 @@ export function __setTelegram(odp){
     if (u.includes("/getUpdates"))
       return { ok:true, status:200, json: async () => odp.getUpdates
                ?? ({ ok:true, result:[] }) };
+    /* Wysylke ZAPAMIETUJEMY zamiast tylko potwierdzac: cala stawka
+       cichej kopii siedzi w POLACH tego zapytania (chat_id i
+       disable_notification), a nie w tym, ze wyszlo.              */
+    if (u.includes("/sendDocument")){
+      const pola = {};
+      for (const [k, v] of (opcje?.body ?? [])) pola[k] = v;
+      __tgWyslane.push({ url:u, pola });
+      return { ok:true, status:200, json: async () => odp.sendDocument
+               ?? ({ ok:true, result:{} }) };
+    }
     return { ok:false, status:404, json: async () => ({ ok:false, description:"brak" }) };
   };
 }

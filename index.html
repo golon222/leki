@@ -1332,6 +1332,20 @@ nav button .kropka-nav{position:absolute;top:6px;right:50%;margin-right:-16px;
          wymaga zapisania tokenu w pamięci telefonu (D81). -->
     <div id="tgKopiaBox" style="margin-top:14px;padding-top:14px;border-top:1px solid var(--line)"></div>
 
+    <!-- Osobny czat na kopie, w statycznym HTML-u celowo: gdyby siedzial
+         w innerHTML pudelka wyzej, kazdy odswiez ekranu kasowalby to, co
+         Kuba wlasnie wpisuje. -->
+    <div id="tgKopiaCzatBox" hidden style="margin-top:12px">
+      <label>Czat na kopie</label>
+      <input id="tgKopiaChat" maxlength="24" inputmode="numeric" autocapitalize="off"
+             autocorrect="off" spellcheck="false" placeholder="pusty = czat powiadomień">
+      <div class="row" style="margin-top:8px;gap:8px">
+        <button class="ghost" style="flex:1" onclick="tgKopiaCzatZnajdz()">Znajdź grupę</button>
+        <button class="ghost" style="flex:1" onclick="tgKopiaCzatZapisz()">Zapisz</button>
+      </div>
+      <div id="tgKopiaCzatMsg" class="dim2" style="text-align:center;margin-top:6px;min-height:15px"></div>
+    </div>
+
     <button class="danger" style="width:100%;margin-top:12px" onclick="tgOdlacz()">
       Odłącz bota</button>
 
@@ -1698,6 +1712,23 @@ nav button .kropka-nav{position:absolute;top:6px;right:50%;margin-right:-16px;
         z Twoim botem. Jedyny automat, który przeżyje utratę konta. Wymaga
         zapisania tokenu w pamięci telefonu i wysyła dane o leku na serwery
         Telegrama, więc włącza się to świadomie.</p>
+      <p class="muted"><b>Kopia idzie po cichu</b> — bez dźwięku i bez wibracji.
+        Telegram mimo to pokaże baner, bo „ciche" znaczy u niego tylko „bez
+        dźwięku”. Żeby nie widzieć jej wcale, potrzebne są dwie rzeczy naraz:
+        własny czat na kopie i wyciszenie go w Telegramie.</p>
+      <p class="muted"><b>Głównego czatu nie wyciszaj.</b> To tam pudełko pisze
+        o pominiętej dawce, kończącym się opakowaniu i terminie INR — wyciszenie
+        zabrałoby razem z kopią także te wiadomości. Dlatego kopia dostaje
+        osobny czat, a nie osobny przełącznik.</p>
+      <p class="muted"><b>Jak zrobić ten czat:</b> w Telegramie załóż grupę (np.
+        „PillBox kopie”), dodaj do niej swojego bota, napisz w niej
+        <b>/kopia</b> ze spacją i kodem parowania z kroku 5, wróć tutaj
+        i naciśnij <i>Znajdź grupę</i>, potem <i>Zapisz</i>. Na koniec wycisz
+        tę grupę w Telegramie.</p>
+      <p class="muted">Kod musi iść po ukośniku, bo bot w grupie domyślnie widzi
+        wyłącznie polecenia. Gdyby <i>Znajdź grupę</i> nie znalazło nic, dodaj
+        do grupy <b>@userinfobot</b> — poda jej identyfikator, który wpiszesz
+        ręcznie. Zaczyna się od minusa.</p>
       <p class="muted"><b>Odtwarzanie dokłada, nie zastępuje.</b> Dzień, którego
         kopia nie zna, zostaje nietknięty, a Twoje ręczne wpisy wygrywają
         z plikiem. Przed zapisem zobaczysz, ile dni dojdzie.</p>
@@ -1871,7 +1902,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-21.59";
+const APP_VERSION = "2026-08-22.60";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -5639,11 +5670,21 @@ function renderTgStan(){
   const kb = document.getElementById("tgKopiaBox");
   if (kb){
     const ust = tgKopiaUst();
+    const kcz = document.getElementById("tgKopiaCzatBox");
+    if (kcz){
+      kcz.hidden = !ust;
+      const pole = document.getElementById("tgKopiaChat");
+      /* Nie nadpisujemy tego, co Kuba wlasnie wpisuje - tylko puste pole
+         dostaje wartosc z pamieci.                                     */
+      if (pole && !pole.value) pole.value = ust?.chatKopii || "";
+    }
     kb.innerHTML = ust
       ? `<div class="fakt"><span>Kopia zapasowa na Telegram</span>
            <b style="color:var(--ok)">włączona</b></div>
-         <div class="dim2" style="margin:6px 0 10px">Raz na tydzień, przy otwarciu
-           aplikacji. Ostatnia: ${ust.dzien ? esc(ust.dzien) : "jeszcze nie poszła"}.</div>
+         <div class="fakt"><span>Idzie na czat</span>
+           <b>${ust.chatKopii ? "osobny, wyciszalny" : "ten sam co powiadomienia"}</b></div>
+         <div class="dim2" style="margin:6px 0 10px">Raz na tydzień, bez dźwięku.
+           Ostatnia: ${ust.dzien ? esc(ust.dzien) : "jeszcze nie poszła"}.</div>
          <button class="ghost" style="width:100%" onclick="kopiaNaTelegram(true)">Wyślij kopię teraz</button>
          <button class="ghost" style="width:100%;margin-top:8px" onclick="tgKopiaWylacz()">
            Wyłącz i usuń token z telefonu</button>`
@@ -7365,13 +7406,88 @@ function opisKopii(k){
       jest szyfrowany end-to-end.
 
    Dlatego to jest WYBÓR, nie domyślne zachowanie: przełącznik domyślnie
-   wyłączony, a włączenie prosi o token osobno.                          */
-const TG_KOPIA_KLUCZ = "pillbox-tg-kopia";      // { token, chat, dzien }
+   wyłączony, a włączenie prosi o token osobno.
+
+   PO CICHU — prośba Kuby: „żeby nie pokazywała się wiadomość w
+   powiadomieniach". Robią to DWIE rzeczy naraz i żadna sama nie wystarczy:
+
+   1. `disable_notification` przy wysyłce. To zdejmuje dźwięk i wibrację,
+      ale Telegram i tak pokaże baner — sam tego nie załatwi.
+   2. WŁASNY czat na kopie (`chatKopii`), który Kuba wycisza w Telegramie.
+      Wyciszenie jest jedyną rzeczą, która baner zabiera całkowicie, a
+      wyciszyć główny czat NIE WOLNO — tam pudełko pisze o dawce i o INR.
+      Rozdzielenie czatów jest więc warunkiem, nie ozdobą.
+
+   Puste `chatKopii` znaczy „ten sam czat co powiadomienia" — wtedy kopia
+   jest cicha, ale widoczna. Świadomie zostawiam to jako stan domyślny:
+   działa bez żadnej konfiguracji, a kto chce ciszy zupełnej, wskazuje
+   grupę.                                                                */
+const TG_KOPIA_KLUCZ = "pillbox-tg-kopia";      // { token, chat, chatKopii, dzien }
 
 function tgKopiaUst(){
   try { return JSON.parse(magazyn.getItem(TG_KOPIA_KLUCZ) || "null"); }
   catch { return null; }
 }
+
+/* Dokąd naprawdę idzie kopia. Jedno miejsce, bo trzy (wysyłka, ekran,
+   zapis ustawienia) rozjechałyby się przy pierwszej zmianie.        */
+function tgCzatKopii(ust){ return (ust?.chatKopii || ust?.chat || ""); }
+
+/* Zapis czatu na kopie. Puste pole = wracamy do czatu powiadomień; to
+   jest wyjście awaryjne, nie błąd, więc nie krzyczy.
+
+   `dzien:""` kasuje znacznik ostatniej wysyłki — bez tego zmiana czatu
+   nie dałaby żadnego znaku życia przez tydzień i nie dałoby się
+   sprawdzić, czy trafia tam, gdzie trzeba.                          */
+window.tgKopiaCzatZapisz = () => {
+  const ust = tgKopiaUst();
+  if (!ust) return;
+  const msg = document.getElementById("tgKopiaCzatMsg");
+  const pokaz = (t, k) => { if (msg){ msg.textContent = t; msg.style.color = `var(--${k})`; } };
+  const v = (document.getElementById("tgKopiaChat")?.value || "").trim();
+  if (v && !/^-?\d{3,}$/.test(v)){
+    pokaz("Identyfikator czatu to same cyfry, dla grupy ze znakiem minus.", "bad");
+    return;
+  }
+  try { magazyn.setItem(TG_KOPIA_KLUCZ, JSON.stringify({ ...ust, chatKopii: v, dzien: "" })); }
+  catch { pokaz("Nie udało się zapisać w pamięci telefonu.", "bad"); return; }
+  pokaz(v ? "Zapisane. Wyślij kopię teraz i wycisz tę grupę." : "Kopie wracają na czat powiadomień.", "ok");
+  renderKopiaStan();
+};
+
+/* Szukanie grupy tym samym kodem parowania co bot. Czaty PRYWATNE
+   odrzucamy celowo: gdyby kopie szły na ten sam czat co powiadomienia,
+   wyciszenie zabrałoby też ostrzeżenie o pominiętej dawce — czyli
+   dokładnie to, czego ta funkcja ma nie ruszyć.                     */
+window.tgKopiaCzatZnajdz = async () => {
+  const ust = tgKopiaUst();
+  const token = ust?.token || document.getElementById("tgToken")?.value.trim() || "";
+  const msg = document.getElementById("tgKopiaCzatMsg");
+  const pokaz = (t, k) => { if (msg){ msg.textContent = t; msg.style.color = `var(--${k})`; } };
+  if (!tgTokenPoprawny(token)){ pokaz("Najpierw wklej token bota powyżej.", "bad"); return; }
+  const kod = tgKodParowania();
+  pokaz("Pytam Telegrama…", "warn");
+  try {
+    const updates = await tgZapytaj(token, "getUpdates");
+    let chat = null, nazwa = "";
+    for (const u of (updates || [])){
+      const m = u?.message ?? u?.channel_post;
+      const c = m?.chat ?? u?.my_chat_member?.chat;
+      if (c?.id == null || c.type === "private") continue;
+      if (!String(m?.text ?? m?.caption ?? "").includes(kod)) continue;
+      chat = String(c.id); nazwa = c.title || "";
+    }
+    if (!chat){
+      pokaz(`Nie widzę grupy z kodem ${kod}. Wyślij w niej: /kopia ${kod}`, "warn");
+      return;
+    }
+    const pole = document.getElementById("tgKopiaChat");
+    if (pole) pole.value = chat;
+    pokaz(`Znalazłem: ${nazwa || chat}. Naciśnij Zapisz.`, "ok");
+  } catch (e){
+    pokaz("Nie mogę zapytać Telegrama — wpisz identyfikator ręcznie.", "bad");
+  }
+};
 
 window.tgKopiaWlacz = async () => {
   const token = document.getElementById("tgToken")?.value.trim() || "";
@@ -7413,7 +7529,10 @@ window.kopiaNaTelegram = async function kopiaNaTelegram(teraz = false){
   try {
     const tekst = JSON.stringify(zbierzKopie(), null, 1);
     const dane = new FormData();
-    dane.append("chat_id", ust.chat);
+    dane.append("chat_id", tgCzatKopii(ust));
+    /* Bez dzwieku i bez wibracji. Baner zdejmuje dopiero wyciszenie
+       czatu w Telegramie - dlatego istnieje `chatKopii`.            */
+    dane.append("disable_notification", "true");
     dane.append("caption", `Kopia PillBox · ${opisKopii(zbierzKopie())}`);
     dane.append("document", new File([tekst], `pillbox-kopia-${dzis}.json`,
                                      { type:"application/json" }));
