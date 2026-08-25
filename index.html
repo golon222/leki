@@ -1720,15 +1720,25 @@ nav button .kropka-nav{position:absolute;top:6px;right:50%;margin-right:-16px;
         o pominiętej dawce, kończącym się opakowaniu i terminie INR — wyciszenie
         zabrałoby razem z kopią także te wiadomości. Dlatego kopia dostaje
         osobny czat, a nie osobny przełącznik.</p>
-      <p class="muted"><b>Jak zrobić ten czat:</b> w Telegramie załóż grupę (np.
-        „PillBox kopie”), dodaj do niej swojego bota, napisz w niej
-        <b>/kopia</b> ze spacją i kodem parowania z kroku 5, wróć tutaj
-        i naciśnij <i>Znajdź grupę</i>, potem <i>Zapisz</i>. Na koniec wycisz
-        tę grupę w Telegramie.</p>
-      <p class="muted">Kod musi iść po ukośniku, bo bot w grupie domyślnie widzi
-        wyłącznie polecenia. Gdyby <i>Znajdź grupę</i> nie znalazło nic, dodaj
-        do grupy <b>@userinfobot</b> — poda jej identyfikator, który wpiszesz
-        ręcznie. Zaczyna się od minusa.</p>
+      <p class="muted"><b>Nowego bota NIE zakładasz.</b> Zostaje ten sam, który
+        już pisze do Ciebie o dawkach. Nowa jest tylko <b>grupa</b> — czyli
+        osobny czat, w którym siedzicie Ty i on. Grupę wolno wyciszyć, bo nic
+        pilnego tam nie przychodzi.</p>
+      <p class="muted"><b>Jak ją zrobić — pięć kroków w Telegramie:</b></p>
+      <div class="fakt"><span>1. Menu ☰ → <b>Nowa grupa</b></span><b>nazwij np. „PillBox kopie”</b></div>
+      <div class="fakt"><span>2. Dodaj uczestnika</span><b>wpisz nazwę swojego bota</b></div>
+      <div class="fakt"><span>3. Napisz w grupie</span><b>/kopia i kod z aplikacji</b></div>
+      <div class="fakt"><span>4. W aplikacji, przy polu „Czat na kopie”</span><b>Znajdź grupę → Zapisz</b></div>
+      <div class="fakt"><span>5. W grupie: nazwa u góry → dzwonek</span><b>Wycisz</b></div>
+      <p class="muted">Kod stoi pod polem „Czat na kopie” i zmienia się przy każdym
+        otwarciu aplikacji — wyślij go i wróć, nie zamykając aplikacji po drodze.
+        Musi iść po ukośniku, bo bot w grupie widzi domyślnie wyłącznie
+        polecenia.</p>
+      <p class="muted">Gdyby Telegram nie pozwolił dodać bota do świeżej grupy,
+        dodaj najpierw kogokolwiek innego — grupa jednoosobowa bywa kapryśna.
+        A gdyby <i>Znajdź grupę</i> nie znalazło nic, dodaj do niej
+        <b>@userinfobot</b>: poda identyfikator, który wpiszesz ręcznie. Zaczyna
+        się od minusa.</p>
       <p class="muted"><b>Odtwarzanie dokłada, nie zastępuje.</b> Dzień, którego
         kopia nie zna, zostaje nietknięty, a Twoje ręczne wpisy wygrywają
         z plikiem. Przed zapisem zobaczysz, ile dni dojdzie.</p>
@@ -1902,7 +1912,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-22.60";
+const APP_VERSION = "2026-08-22.61";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -5677,6 +5687,13 @@ function renderTgStan(){
       /* Nie nadpisujemy tego, co Kuba wlasnie wpisuje - tylko puste pole
          dostaje wartosc z pamieci.                                     */
       if (pole && !pole.value) pole.value = ust?.chatKopii || "";
+      /* Kod parowania STOI przy tym polu, a nie tylko w zwinietej
+         instrukcji nad nim. Bez niego "Znajdz grupe" nie ma czego szukac,
+         a kod jest generowany na zywo - to ten sam wyjatek od D75, ktory
+         dopuszcza kroki parowania bota na ekranie.                     */
+      const kmsg = document.getElementById("tgKopiaCzatMsg");
+      if (kmsg && !kmsg.textContent)
+        kmsg.textContent = `W grupie z botem napisz: /kopia ${tgKodParowania()}`;
     }
     kb.innerHTML = ust
       ? `<div class="fakt"><span>Kopia zapasowa na Telegram</span>
@@ -7433,6 +7450,13 @@ function tgKopiaUst(){
    zapis ustawienia) rozjechałyby się przy pierwszej zmianie.        */
 function tgCzatKopii(ust){ return (ust?.chatKopii || ust?.chat || ""); }
 
+/* Stan kopii stoi na DWOCH ekranach: linijka w Diagnostyce
+   (`renderKopiaStan`) i karta w Powiadomieniach (`renderTgStan`).
+   Do D85 przelaczniki odswiezaly tylko pierwszy - wlaczenie kopii
+   zostawialo na karcie napis "wylaczona" az do nastepnej zmiany statusu
+   pudelka. Jedno wywolanie, zeby nie dalo sie znowu pomylic ekranow. */
+function odswiezKopie(){ renderKopiaStan(); renderTgStan(); }
+
 /* Zapis czatu na kopie. Puste pole = wracamy do czatu powiadomień; to
    jest wyjście awaryjne, nie błąd, więc nie krzyczy.
 
@@ -7452,7 +7476,7 @@ window.tgKopiaCzatZapisz = () => {
   try { magazyn.setItem(TG_KOPIA_KLUCZ, JSON.stringify({ ...ust, chatKopii: v, dzien: "" })); }
   catch { pokaz("Nie udało się zapisać w pamięci telefonu.", "bad"); return; }
   pokaz(v ? "Zapisane. Wyślij kopię teraz i wycisz tę grupę." : "Kopie wracają na czat powiadomień.", "ok");
-  renderKopiaStan();
+  odswiezKopie();
 };
 
 /* Szukanie grupy tym samym kodem parowania co bot. Czaty PRYWATNE
@@ -7504,14 +7528,14 @@ window.tgKopiaWlacz = async () => {
   try { magazyn.setItem(TG_KOPIA_KLUCZ, JSON.stringify({ token, chat, dzien:"" })); }
   catch { toast("Nie udało się zapisać w pamięci telefonu.", "err"); return; }
   toast("Kopia na Telegram włączona — pierwsza pójdzie za chwilę.", "ok");
-  renderKopiaStan();
+  odswiezKopie();
   kopiaNaTelegram(true);
 };
 
 window.tgKopiaWylacz = () => {
   try { magazyn.removeItem(TG_KOPIA_KLUCZ); } catch {}
   toast("Kopia na Telegram wyłączona, token usunięty z telefonu.", "ok");
-  renderKopiaStan();
+  odswiezKopie();
 };
 
 /* Wysyłka. Raz na tydzień, bo kopia na zewnątrz nie musi być codzienna —
@@ -7542,7 +7566,7 @@ window.kopiaNaTelegram = async function kopiaNaTelegram(teraz = false){
     if (!wynik.ok) throw new Error(wynik.description || "Telegram odmówił");
     magazyn.setItem(TG_KOPIA_KLUCZ, JSON.stringify({ ...ust, dzien: dzis }));
     if (teraz) toast("Kopia wysłana na Telegram", "ok");
-    renderKopiaStan();
+    odswiezKopie();
   } catch (e){
     console.error("kopia na Telegram:", e);
     /* Głośno TYLKO wtedy, gdy Kuba właśnie o nią poprosił. Automat, który

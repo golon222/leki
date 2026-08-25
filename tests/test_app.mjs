@@ -3873,7 +3873,44 @@ head("Kopia zapasowa");
   check(document.getElementById("tgKopiaChat").value === "",
         "grupa bez kodu parowania nie przechodzi");
 
+  /* Kod parowania musi stac PRZY polu na czat. Bez niego "Znajdz grupe"
+     nie ma czego szukac, a kod jest w zwinietej instrukcji nad spodem
+     ekranu - Kuba: "ja nie rozumiem tej instrukcji".                  */
+  A.magazyn.setItem(A.TG_KOPIA_KLUCZ, JSON.stringify({ token:TOKEN, chat:"111", dzien:"" }));
+  document.getElementById("tgKopiaCzatMsg").textContent = "";
+  A.renderTgStan();
+  const pod = document.getElementById("tgKopiaCzatMsg").textContent;
+  check(pod.includes(A.tgKodParowania()), "kod parowania stoi przy polu na czat");
+  check(pod.includes("/kopia"), "razem z poleceniem, ktore ma wyslac");
+  check(document.getElementById("tgKopiaCzatBox").hidden === false,
+        "pole na czat widac, gdy kopia wlaczona");
   A.magazyn.removeItem(A.TG_KOPIA_KLUCZ);
+  A.renderTgStan();
+  check(document.getElementById("tgKopiaCzatBox").hidden === true,
+        "i znika, gdy kopia wylaczona");
+
+  /* Wlaczenie kopii MUSI odswiezyc karte w Powiadomieniach, nie tylko
+     linijke w Diagnostyce - to sa dwa rozne ekrany i do D85 przelaczniki
+     rysowaly tylko ten drugi.                                          */
+  {
+    const js = html.slice(html.indexOf('<script type="module">'));
+    const bezKom = js.replace(/\/\*[\s\S]*?\*\//g, "");
+    /* Poza samym helperem renderKopiaStan() wolno wolac JEDNEMU miejscu -
+       ekranowi Diagnostyki, ktory rysuje wlasnie te linijke. Kazde inne
+       wywolanie to znowu pomylka dwoch ekranow.                        */
+    const bezHelpera = bezKom.replace(
+      "function odswiezKopie(){ renderKopiaStan(); renderTgStan(); }", "");
+    check((bezHelpera.match(/\brenderKopiaStan\(\);/g) || []).length === 1,
+          "renderKopiaStan() wola juz tylko Diagnostyka");
+    check((bezKom.match(/\bodswiezKopie\(\);/g) || []).length === 4,
+          "cztery przelaczniki kopii odswiezaja oba ekrany naraz");
+  }
+
+  /* Instrukcja mowi wprost, ze bot zostaje ten sam. To bylo pierwsze
+     pytanie Kuby po przeczytaniu poprzedniej wersji.                  */
+  const pomoc = html.slice(html.indexOf('id="tab-help"'), html.indexOf('id="tab-ev"'));
+  check(/Nowego bota NIE zakładasz/.test(pomoc), "Instrukcja mowi, ze nowy bot nie jest potrzebny");
+  check(pomoc.includes("Wycisz"), "i konczy sie wyciszeniem grupy");
 }
 
 head("Pomiar INR: usuwanie i poprawianie");
