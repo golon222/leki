@@ -86,6 +86,12 @@ globalThis.window   = globalThis;
 globalThis.alert    = () => {};
 globalThis.addEventListener = () => {};
 globalThis.prompt   = () => null;
+/* Raport dla lekarza wola window.print() z opoznieniem. Dopoki zaden test
+   nie oddawal sterowania petli zdarzen, ten timer nigdy nie zdazyl wystrzelic
+   - pierwszy test z prawdziwym czekaniem wywracal caly przebieg bledem
+   z zupelnie innego miejsca. Atrapa niewierna oryginalowi mierzy nie to,
+   co trzeba (D39).                                                      */
+globalThis.print    = () => {};
 /* navigator w Node ma tylko getter - podmieniamy przez defineProperty */
 const fakeReg = {
   update: async () => {},

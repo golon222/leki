@@ -3807,6 +3807,70 @@ head("Kopia zapasowa");
   check(A.__db.writes.length === ile, "druga proba tego samego dnia nic nie zapisuje");
   check(A.KOPIE_W_BAZIE === 3, "trzymamy trzy ostatnie kopie");
 
+  /* ODTWARZANIE Z BAZY (D85). Kuba: "a jak uzyskac ta kopie z bazy?".
+     Do .63 nie bylo jak - kopia dobowa istniala, ale jedyna droga do niej
+     szla przez konsole Firebase. Kopia, ktorej nie da sie odtworzyc, nie
+     jest kopia.                                                        */
+  check(A.kopiaCzytelna({ doses:{}, wersja:A.KOPIA_WERSJA }) === true, "kopia z ta wersja przechodzi");
+  check(A.kopiaCzytelna({ doses:{}, wersja:A.KOPIA_WERSJA + 1 }) === false,
+        "kopia z NOWSZEJ wersji aplikacji odrzucona");
+  check(A.kopiaCzytelna({ wersja:A.KOPIA_WERSJA }) === false, "kopia bez dawek odrzucona");
+  check(A.kopiaCzytelna(null) === false && A.kopiaCzytelna("smiec") === false,
+        "smiec odrzucony");
+
+  A.__resetDb();
+  D({ doses:{ [shift(-1)]:{ 0:{ status:"taken", dose:1, source:"device", ts:at(1,20,0) } } } });
+  A.magazyn.removeItem("pillbox-kopia-dzien");
+  await A.kopiaAutomat();
+  await window.kopieZBazy();
+  const lista = document.getElementById("kopieBazaLista").innerHTML;
+  check(lista.includes("odtworzZBazy("), "lista kopii z bazy daje sie kliknac");
+  check(lista.includes("dzisiaj"), "z wiekiem kopii, nie sama data");
+  check(lista.includes("1 dzień"), "i z tym, co w niej jest");
+
+  /* Kopia uszkodzona ma byc WIDOCZNA. "Mam trzy kopie" i "mam trzy pliki,
+     z ktorych dwa sa smieciem" nie moga wygladac tak samo.             */
+  A.__db.sprawdzajReguly = false;
+  A.__db.data.users.testuid.backup["2026-01-01"] = { wersja:99 };
+  await window.kopieZBazy();
+  const zeSmieciem = document.getElementById("kopieBazaLista").innerHTML;
+  check(zeSmieciem.includes("nieczytelna"), "uszkodzona kopia jest widoczna, nie ukryta");
+  check(!zeSmieciem.includes('odtworzZBazy(\'2026-01-01\')'), "i nie da sie jej kliknac");
+  delete A.__db.data.users.testuid.backup["2026-01-01"];
+  A.__db.sprawdzajReguly = true;
+
+  /* Odtworzenie: kalendarz czysczymy, kopia w bazie zostaje - powinna
+     dolozyc z powrotem ten jeden dzien.                                */
+  D({ doses:{} });
+  const pOdt = window.odtworzZBazy(today);
+  /* odtworzZBazy() pyta baze ZANIM pokaze pytanie, wiec cfResolve musi
+     poczekac, az pytanie w ogole wstanie - inaczej rozstrzygamy obietnice,
+     ktorej jeszcze nie ma.                                             */
+  for (let i = 0; i < 50 &&
+       !document.getElementById("confirm").classList.contains("show"); i++)
+    await new Promise(r => setTimeout(r, 0));
+  window.cfResolve(true);
+  await pOdt;
+  check(A.__db.data?.users?.testuid?.doses?.[shift(-1)]?.["0"]?.status === "taken",
+        "dzien z kopii w bazie wraca do kalendarza");
+
+  /* Pytanie MUSI mowic, skad kopia - "z bazy" i "z pliku" to inne ryzyko. */
+  const zrodloOdt = html.slice(html.indexOf("async function odtworzKopie"),
+                               html.indexOf("window.kopiaWybrana"));
+  check(zrodloOdt.includes("zapiszPewnie("), "odtwarzanie idzie przez kolejke zapisow");
+  check(zrodloOdt.includes("${skad}"), "pytanie mowi, z ktorej kopii odtwarzamy");
+
+  /* Jedno odtwarzanie na obie drogi. Druga kopia tego kodu zgubilaby
+     ktorys z warunkow D81, a kazdy broni przed innym sposobem utraty. */
+  {
+    const js = html.slice(html.indexOf('<script type="module">'))
+                   .replace(/\/\*[\s\S]*?\*\//g, "");
+    check((js.match(/policzOdtworzenie\(/g) || []).length === 2,
+          "policzOdtworzenie() wolane z jednego miejsca (plus definicja)");
+    check((js.match(/kopiaCzytelna\(/g) || []).length === 4,
+          "kontrola czytelnosci wspolna dla pliku i bazy");
+  }
+
   /* Telegram: dopoki nie wlaczony, token nigdzie nie lezy. */
   check(A.tgKopiaUst() === null, "kopia na Telegram domyslnie wylaczona");
   const zrodloTgK = html.slice(html.indexOf("window.tgKopiaWlacz"),

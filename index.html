@@ -1460,6 +1460,9 @@ nav button .kropka-nav{position:absolute;top:6px;right:50%;margin-right:-16px;
     <button class="primary" style="width:100%" onclick="zapiszKopie()">Zapisz kopię</button>
     <button class="ghost" style="width:100%;margin-top:8px" onclick="wczytajKopie()">
       Odtwórz z pliku</button>
+    <button class="ghost" style="width:100%;margin-top:8px" onclick="kopieZBazy()">
+      Odtwórz z bazy</button>
+    <div id="kopieBazaLista"></div>
     <!-- Pole pliku ukryte: na iPhonie natywny „Wybierz plik" wygląda obco,
          a przycisk obok robi dokładnie to samo. -->
     <input type="file" id="kopiaPlik" accept="application/json,.json"
@@ -1739,9 +1742,14 @@ nav button .kropka-nav{position:absolute;top:6px;right:50%;margin-right:-16px;
         A gdyby <i>Znajdź grupę</i> nie znalazło nic, dodaj do niej
         <b>@userinfobot</b>: poda identyfikator, który wpiszesz ręcznie. Zaczyna
         się od minusa.</p>
+      <p class="muted"><b>Skąd wziąć kopię z bazy:</b> Diagnostyka →
+        <i>Odtwórz z bazy</i>. Pokaże trzy ostatnie z ich wiekiem i zawartością;
+        wybierasz jedną i idzie tą samą drogą co plik. Konsola Firebase nie
+        jest do niczego potrzebna.</p>
       <p class="muted"><b>Odtwarzanie dokłada, nie zastępuje.</b> Dzień, którego
         kopia nie zna, zostaje nietknięty, a Twoje ręczne wpisy wygrywają
-        z plikiem. Przed zapisem zobaczysz, ile dni dojdzie.</p>
+        z kopią. Przed zapisem zobaczysz, ile dni dojdzie — i z której kopii,
+        bo „z pliku” i „z bazy” to nie to samo.</p>
       <p class="muted">Wszystko to dzieje się <b>przy otwarciu aplikacji</b> —
         strona na ekranie głównym iPhone'a nie dostaje czasu, kiedy na nią
         nie patrzysz. Nie otwierasz przez trzy tygodnie? Kopia będzie sprzed
@@ -1921,7 +1929,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-22.62";
+const APP_VERSION = "2026-08-22.63";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -7746,6 +7754,42 @@ function policzOdtworzenie(kopia){
 
 window.wczytajKopie = () => document.getElementById("kopiaPlik")?.click();
 
+/* Czy to w ogóle jest kopia z tej aplikacji. Osobno, bo sprawdzają to teraz
+   DWIE drogi (plik i baza) i rozjechanie się ich znaczyłoby, że jedna
+   przepuszcza śmieci, których druga nie przepuszcza.                    */
+function kopiaCzytelna(k){
+  return !!k && typeof k === "object" && !!k.doses && !(k.wersja > KOPIA_WERSJA);
+}
+
+/* ODTWARZANIE — jedno miejsce dla pliku i dla bazy.
+
+   To jest najbardziej ryzykowna funkcja w aplikacji: jedyna, która rusza
+   dane o leku hurtem. Dlatego ma istnieć w JEDNYM egzemplarzu. Druga
+   kopia tego kodu dla bazy prędzej czy później zgubiłaby któryś z warunków
+   z D81 — a każdy z nich broni przed innym sposobem utraty historii.  */
+async function odtworzKopie(kopia, skad){
+  const plan = policzOdtworzenie(kopia);
+  if (!Object.keys(plan.sciezki).length){
+    toast("Wszystko z tej kopii już jest w aplikacji — nic do odtworzenia.", "info", 4000);
+    return false;
+  }
+  const kiedy = kopia.utworzona ? new Date(kopia.utworzona).toLocaleDateString("pl-PL",
+                  { day:"numeric", month:"long", year:"numeric" }) : "nieznana data";
+  const ok = await askConfirm("Odtworzyć z kopii?",
+    `Kopia ${skad} z ${kiedy}. Dojdzie ${plan.dni} ${lm(plan.dni, "dzień", "dni", "dni")} ` +
+    `i ${plan.noweInr} ${lm(plan.noweInr, "pomiar", "pomiary", "pomiarów")} INR. ` +
+    `Pominięte zostaną dni, które już masz (${plan.pominiete}) — ręcznych wpisów ` +
+    `w telefonie kopia nie nadpisze.`);
+  if (!ok) return false;
+
+  busy(true);
+  const ile = Object.keys(plan.sciezki).length;
+  const udane = await zapiszPewnie(plan.sciezki, "Odtworzenie z kopii");
+  busy(false);
+  if (udane) toast(`Odtworzono ${ile} ${lm(ile, "wpis", "wpisy", "wpisów")} z kopii`, "ok", 4000);
+  return udane;
+}
+
 window.kopiaWybrana = async (input) => {
   const plik = input.files?.[0];
   input.value = "";                       // ten sam plik da się wybrać ponownie
@@ -7755,28 +7799,63 @@ window.kopiaWybrana = async (input) => {
     kopia = JSON.parse(await plik.text());
   } catch { toast("To nie jest plik kopii — nie da się go odczytać.", "err", 4000); return; }
 
-  if (!kopia || typeof kopia !== "object" || !kopia.doses || kopia.wersja > KOPIA_WERSJA){
+  if (!kopiaCzytelna(kopia)){
     toast("Plik nie wygląda na kopię z tej aplikacji.", "err", 4000); return;
   }
-  const plan = policzOdtworzenie(kopia);
-  if (!Object.keys(plan.sciezki).length){
-    toast("Wszystko z tej kopii już jest w aplikacji — nic do odtworzenia.", "info", 4000);
+  await odtworzKopie(kopia, "z pliku");
+};
+
+/* ═══ KOPIE Z BAZY ═══
+
+   Kopia dobowa istniała od D81, ale nie było jak jej WYJĄĆ — jedyną drogą
+   była konsola Firebase. Kopia, której nie da się odtworzyć, nie jest
+   kopią; to była najczęstsza z trzech i zarazem jedyna bez wyjścia.
+
+   Lista pobierana jest na żądanie, nie przy każdym wejściu w Diagnostykę:
+   to trzy pełne kopie historii, czyli ~100 kB odczytu, po które nie ma
+   powodu sięgać za każdym razem, gdy Kuba sprawdza napięcie baterii.   */
+window.kopieZBazy = async () => {
+  const box = document.getElementById("kopieBazaLista");
+  if (!box || !uid) return;
+  box.innerHTML = `<div class="dim2" style="margin-top:10px">Pytam bazę…</div>`;
+  let snap;
+  try { snap = await get(ref(db, `users/${uid}/backup`)); }
+  catch (e){
+    box.innerHTML = `<div class="dim2" style="margin-top:10px;color:var(--bad)">Nie udało
+      się odczytać kopii z bazy (${esc(e.message || "brak połączenia")}).</div>`;
     return;
   }
-  const kiedy = kopia.utworzona ? new Date(kopia.utworzona).toLocaleDateString("pl-PL",
-                  { day:"numeric", month:"long", year:"numeric" }) : "nieznana data";
-  const ok = await askConfirm("Odtworzyć z kopii?",
-    `Kopia z ${kiedy}. Dojdzie ${plan.dni} ${lm(plan.dni, "dzień", "dni", "dni")} ` +
-    `i ${plan.noweInr} ${lm(plan.noweInr, "pomiar", "pomiary", "pomiarów")} INR. ` +
-    `Pominięte zostaną dni, które już masz (${plan.pominiete}) — ręcznych wpisów ` +
-    `w telefonie kopia nie nadpisze.`);
-  if (!ok) return;
+  const kopie = snap?.val() || {};
+  const daty = Object.keys(kopie).sort().reverse();
+  if (!daty.length){
+    box.innerHTML = `<div class="dim2" style="margin-top:10px">W bazie nie ma jeszcze
+      żadnej kopii. Pierwsza powstanie przy najbliższym pełnym odświeżeniu.</div>`;
+    return;
+  }
+  box.innerHTML = daty.map(d => {
+    const k = kopie[d];
+    /* Kopia uszkodzona ma byc WIDOCZNA, a nie ukryta - inaczej "mam trzy
+       kopie" i "mam trzy pliki, z ktorych dwa sa smieciem" wygladaja tak
+       samo az do dnia, w ktorym to ma znaczenie.                       */
+    return kopiaCzytelna(k)
+      ? `<button class="ghost" style="width:100%;margin-top:8px;text-align:left"
+                 onclick="odtworzZBazy('${esc(d)}')">
+           <b>${esc(wiekKopiiTxt(d))}</b> · ${esc(opisKopii(k))}</button>`
+      : `<div class="dim2" style="margin-top:8px;color:var(--warn)">${esc(d)} —
+           kopia nieczytelna, pomijam.</div>`;
+  }).join("");
+};
 
-  busy(true);
-  const ile = Object.keys(plan.sciezki).length;
-  const udane = await zapiszPewnie(plan.sciezki, "Odtworzenie z kopii");
-  busy(false);
-  if (udane) toast(`Odtworzono ${ile} ${lm(ile, "wpis", "wpisy", "wpisów")} z kopii`, "ok", 4000);
+window.odtworzZBazy = async (data) => {
+  if (!uid) return;
+  let snap;
+  try { snap = await get(ref(db, `users/${uid}/backup/${data}`)); }
+  catch { toast("Nie udało się pobrać kopii z bazy.", "err", 4000); return; }
+  const kopia = snap?.val();
+  if (!kopiaCzytelna(kopia)){
+    toast("Ta kopia w bazie jest nieczytelna.", "err", 4000); return;
+  }
+  if (await odtworzKopie(kopia, "z bazy")) kopieZBazy();
 };
 
 window.exportCsv = async () => {

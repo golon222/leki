@@ -43,6 +43,7 @@ export { renderSkan, brakujePokrycia, doReconcile, reconcileDecyzja, opisLadowan
          kopiaAutomat, renderKopiaStan, KOPIE_W_BAZIE,
          tgKopiaUst, TG_KOPIA_KLUCZ, tgCzatKopii,
          dniOdDaty, wiekKopiiTxt, KOPIA_STARA_BAZA, KOPIA_STARA_TG,
+         kopiaCzytelna, odtworzKopie,
          renderInr, renderPills, renderSheet, settlePills, relTime, slotMin,
          yesterdayKey, pillColors, todayKey, dateKey, DAY_START_HOUR, medDate,
          inNightWindow, renderOpenWarn, renderDiag, devDayMon, renderBoxLog, renderTesty, TEST_PL, WAKE_PL,

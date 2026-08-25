@@ -118,11 +118,21 @@ export const query = (r) => r;
 export const orderByChild = () => ({});
 export const limitToLast = () => ({});
 
+/* Firebase SERIALIZUJE wartosc w chwili zapisu. Atrapa trzymala referencje,
+   wiec pozniejsza zmiana obiektu w aplikacji po cichu zmieniala to, co
+   "lezy w bazie" - a to znaczy, ze test mogl sprawdzac zupelnie co innego,
+   niz mysli. Zlapane na kopii zapasowej: `zbierzKopie()` oddaje zywy obiekt
+   `doses`, wiec wyczyszczenie kalendarza w tescie oproznialo TAKZE kopie
+   zapisana wczesniej w bazie. Ta sama rodzina co Preferences.begin() i
+   forEach w D39: atrapa niewierna oryginalowi mierzy nie to, co trzeba. */
+const migawka = v => (v === undefined || v === null || typeof v !== "object")
+  ? v : structuredClone(v);
+
 export const set = async (r, val) => {
   waliduj(r.path, val);
   await wedlugTrybu();
   __db.writes.push({ op:"set", path:r.path, val });
-  setPath(__db.data, r.path, val);
+  setPath(__db.data, r.path, migawka(val));
 };
 export const remove = async (r) => {
   await wedlugTrybu();
@@ -138,7 +148,7 @@ export const update = async (r, val) => {
   await wedlugTrybu();
   __db.writes.push({ op:"update", path:r.path, val });
   for (const [k, v] of Object.entries(val)){
-    setPath(__db.data, r.path ? `${r.path}/${k}` : k, v);
+    setPath(__db.data, r.path ? `${r.path}/${k}` : k, migawka(v));
   }
 };
 
@@ -166,6 +176,6 @@ export const runTransaction = async (r, aktualizuj) => {
   waliduj(r.path, nowa);
   await wedlugTrybu();
   __db.writes.push({ op:"transaction", path:r.path, val:nowa });
-  setPath(__db.data, r.path, nowa);
+  setPath(__db.data, r.path, migawka(nowa));
   return { committed: true, snapshot: { val: () => nowa } };
 };
