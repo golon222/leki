@@ -3906,10 +3906,51 @@ head("Kopia zapasowa");
           "cztery przelaczniki kopii odswiezaja oba ekrany naraz");
   }
 
+  /* Wiek kopii zamiast surowej daty (D85). Kuba: "a jak nie otwieram apki
+     codziennie" - odpowiedz musi byc WIDOCZNA na ekranie, nie tylko
+     w rozmowie. Data "2026-07-30" wyglada identycznie jak dzisiejsza.  */
+  check(A.wiekKopiiTxt(today) === "dzisiaj", "dzisiejsza kopia: 'dzisiaj'");
+  check(A.wiekKopiiTxt(shift(-1)) === "wczoraj", "wczorajsza: 'wczoraj'");
+  check(A.wiekKopiiTxt(shift(-19)) === "19 dni temu", "starsza: liczba dni");
+  check(A.wiekKopiiTxt("") === "" && A.wiekKopiiTxt("smiec") === "",
+        "brak daty nie udaje wieku");
+  check(A.dniOdDaty(shift(-5)) === 5, "liczenie dni bez pomylki o jeden");
+  check(A.dniOdDaty(shift(1)) === -1, "data z przyszlosci nie wywraca licznika");
+  check(A.KOPIA_STARA_BAZA === 3 && A.KOPIA_STARA_TG === 14,
+        "progi: doba x3 dla bazy, tydzien x2 dla Telegrama");
+
+  /* Zolty kolor pojawia sie DOPIERO po progu - inaczej uczy przewijac. */
+  A.magazyn.setItem("pillbox-kopia-dzien", shift(-1));
+  A.renderKopiaStan();
+  const swieza = document.getElementById("kopiaStan").innerHTML;
+  check(swieza.includes("wczoraj"), "Diagnostyka podaje wiek kopii w bazie");
+  check(!swieza.includes("--warn"), "swieza kopia nie krzyczy");
+  A.magazyn.setItem("pillbox-kopia-dzien", shift(-A.KOPIA_STARA_BAZA));
+  A.renderKopiaStan();
+  const stara = document.getElementById("kopiaStan").innerHTML;
+  check(stara.includes("--warn"), "kopia starsza niz prog robi sie zolta");
+  check(stara.includes("przy otwarciu aplikacji"),
+        "i mowi, co zrobic, zeby przestala");
+  A.magazyn.removeItem("pillbox-kopia-dzien");
+
+  /* To samo na karcie Telegrama, ale z wlasnym progiem. */
+  A.magazyn.setItem(A.TG_KOPIA_KLUCZ,
+    JSON.stringify({ token:TOKEN, chat:"111", dzien:shift(-A.KOPIA_STARA_TG) }));
+  A.renderTgStan();
+  check(document.getElementById("tgKopiaBox").innerHTML.includes("--warn"),
+        "zalegla kopia na Telegram tez robi sie zolta");
+  A.magazyn.setItem(A.TG_KOPIA_KLUCZ,
+    JSON.stringify({ token:TOKEN, chat:"111", dzien:shift(-(A.KOPIA_STARA_TG - 1)) }));
+  A.renderTgStan();
+  check(!document.getElementById("tgKopiaBox").innerHTML.includes("--warn"),
+        "dzien przed progiem jeszcze nie");
+
   /* Instrukcja mowi wprost, ze bot zostaje ten sam. To bylo pierwsze
      pytanie Kuby po przeczytaniu poprzedniej wersji.                  */
   const pomoc = html.slice(html.indexOf('id="tab-help"'), html.indexOf('id="tab-ev"'));
   check(/Nowego bota NIE zakładasz/.test(pomoc), "Instrukcja mowi, ze nowy bot nie jest potrzebny");
+  check(/Same dawki są bezpieczne/.test(pomoc),
+        "Instrukcja mowi, ze nieotwieranie apki nie gubi dawek");
   check(pomoc.includes("Wycisz"), "i konczy sie wyciszeniem grupy");
 }
 

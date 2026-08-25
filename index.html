@@ -1744,7 +1744,16 @@ nav button .kropka-nav{position:absolute;top:6px;right:50%;margin-right:-16px;
         z plikiem. Przed zapisem zobaczysz, ile dni dojdzie.</p>
       <p class="muted">Wszystko to dzieje się <b>przy otwarciu aplikacji</b> —
         strona na ekranie głównym iPhone'a nie dostaje czasu, kiedy na nią
-        nie patrzysz.</p>
+        nie patrzysz. Nie otwierasz przez trzy tygodnie? Kopia będzie sprzed
+        trzech tygodni — i nie zrobi się „na zapas”, gdy w końcu wejdziesz,
+        tylko jedna, aktualna.</p>
+      <p class="muted"><b>Same dawki są bezpieczne niezależnie od tego.</b>
+        Pudełko zapisuje je do bazy samo, bez telefonu. Nieotwieranie aplikacji
+        nie gubi historii — postarza tylko jej <i>kopię</i>.</p>
+      <p class="muted">Dlatego oba ekrany podają <b>wiek</b> kopii, nie datę:
+        „dzisiaj”, „wczoraj”, „19 dni temu”. Po trzech dobach (baza) i po
+        dwóch tygodniach (Telegram) liczba robi się żółta. Żółta znaczy
+        „otwórz aplikację”, nic więcej się nie zepsuło.</p>
     </div>
   </details>
 
@@ -1912,7 +1921,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-22.61";
+const APP_VERSION = "2026-08-22.62";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -5700,8 +5709,11 @@ function renderTgStan(){
            <b style="color:var(--ok)">włączona</b></div>
          <div class="fakt"><span>Idzie na czat</span>
            <b>${ust.chatKopii ? "osobny, wyciszalny" : "ten sam co powiadomienia"}</b></div>
-         <div class="dim2" style="margin:6px 0 10px">Raz na tydzień, bez dźwięku.
-           Ostatnia: ${ust.dzien ? esc(ust.dzien) : "jeszcze nie poszła"}.</div>
+         <div class="fakt"><span>Ostatnia kopia</span>
+           <b${(dniOdDaty(ust.dzien) ?? 0) >= KOPIA_STARA_TG ? ' style="color:var(--warn)"' : ""}>${
+             ust.dzien ? esc(wiekKopiiTxt(ust.dzien)) : "jeszcze nie poszła"}</b></div>
+         <div class="dim2" style="margin:6px 0 10px">Raz na tydzień, bez dźwięku,
+           przy otwarciu aplikacji.</div>
          <button class="ghost" style="width:100%" onclick="kopiaNaTelegram(true)">Wyślij kopię teraz</button>
          <button class="ghost" style="width:100%;margin-top:8px" onclick="tgKopiaWylacz()">
            Wyłącz i usuń token z telefonu</button>`
@@ -7621,6 +7633,36 @@ async function kopiaAutomat(){
   }
 }
 
+/* ═══ WIEK KOPII ═══
+
+   Obie kopie automatyczne powstają WYŁĄCZNIE przy otwarciu aplikacji —
+   inaczej się nie da (D81). Kto otwiera aplikację co drugi tydzień, ma
+   kopie co drugi tydzień, i to jest w porządku dopóki o tym WIE.
+
+   Surowa data tego nie mówi. „Kopia w bazie z dnia 2026-07-30" wygląda
+   identycznie jak „kopia z dzisiaj" — trzeba odjąć w głowie. Dlatego
+   ekran podaje WIEK, a nie datę, i po przekroczeniu progu zmienia kolor.
+
+   Progi wynikają z rytmu każdej z kopii, nie z przeczucia: baza powstaje
+   raz na dobę, więc trzy doby to już cisza; Telegram raz na tydzień,
+   więc alarmuje dopiero po dwóch pominiętych cyklach.                  */
+const KOPIA_STARA_BAZA = 3;
+const KOPIA_STARA_TG   = 14;
+
+/* Obie daty jako "RRRR-MM-DD" idą na północ UTC, więc różnica jest
+   całkowita i nie zależy od strefy — a testy biegają w sześciu. */
+function dniOdDaty(key){
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(key || "")) return null;
+  const d = Math.round((new Date(todayKey()) - new Date(key)) / 86400000);
+  return Number.isFinite(d) ? d : null;
+}
+
+function wiekKopiiTxt(key){
+  const d = dniOdDaty(key);
+  if (d === null) return "";
+  return d <= 0 ? "dzisiaj" : d === 1 ? "wczoraj" : `${d} dni temu`;
+}
+
 /* Kiedy ostatnio powstała kopia — do podpisu w Diagnostyce. Bez tego
    „automat działa" i „automat milczy od miesiąca" wyglądają identycznie. */
 function renderKopiaStan(){
@@ -7628,8 +7670,12 @@ function renderKopiaStan(){
   if (!el) return;
   const dzien = magazyn.getItem("pillbox-kopia-dzien");
   const k = zbierzKopie();
+  const d = dniOdDaty(dzien);
+  const stara = d !== null && d >= KOPIA_STARA_BAZA;
   el.innerHTML = dzien
-    ? `W aplikacji: <b>${esc(opisKopii(k))}</b>. Kopia w bazie z dnia <b>${esc(dzien)}</b>.`
+    ? `W aplikacji: <b>${esc(opisKopii(k))}</b>. Kopia w bazie:
+       <b${stara ? ' style="color:var(--warn)"' : ""}>${esc(wiekKopiiTxt(dzien))}</b>${
+         stara ? " — powstaje przy otwarciu aplikacji." : "."}`
     : `W aplikacji: <b>${esc(opisKopii(k))}</b>. Automatyczna kopia powstanie
        przy najbliższym pełnym odświeżeniu.`;
 }
