@@ -164,7 +164,7 @@ pozycjom w pasku nawigacji i podekranom Ustawien.
 
 ---
 
-## `firmware/PillBox/PillBox.ino` — 6046 linii
+## `firmware/PillBox/PillBox.ino` — 6211 linii
 
 | od | do | blok |
 |---|---|---|
@@ -178,20 +178,20 @@ pozycjom w pasku nawigacji i podekranom Ustawien.
 | 979 | 1104 | 4a.  DNI BEZ LEKU |
 | 1105 | 1125 | 4b.  PUDELKO ZOSTAWIONE OTWARTE |
 | 1126 | 1349 | 4c.  DZIENNIK WIECZKA  -  narzedzie do testu terenowego |
-| 1350 | 1478 | 5.  KOLEJKA OFFLINE  (Preferences / NVS - pierscien) |
-| 1479 | 1820 | 6.  WiFi |
-| 1821 | 2814 | 7.  FIREBASE  (REST: Auth email/haslo + Realtime Database) |
-| 2815 | 3137 | 8.  ZDARZENIA |
-| 3138 | 3193 | 9.  ALARM |
-| 3194 | 3412 | 10.  PORTAL KONFIGURACJI WiFi  (zamiast Bluetooth) |
-| 3413 | 3904 | 10a2. AKTUALIZACJA PROGRAMU PRZEZ WIFI  (OTA)   -  D59 |
-| 3905 | 4024 | 10b. CZARNA SKRZYNKA |
-| 4025 | 4327 | 10c. GESTY SERWISOWE I AUTOTEST |
-| 4328 | 4750 | 10b. POWIADOMIENIA NA TELEFON  (bot Telegram, D67) |
-| 4751 | 5321 | 11.  DEEP SLEEP |
-| 5322 | 6046 | 12.  SETUP  =  cala logika (loop() nigdy nie jest osiagany) |
+| 1350 | 1601 | 5.  KOLEJKA OFFLINE  (Preferences / NVS - pierscien) |
+| 1602 | 1950 | 6.  WiFi |
+| 1951 | 2953 | 7.  FIREBASE  (REST: Auth email/haslo + Realtime Database) |
+| 2954 | 3293 | 8.  ZDARZENIA |
+| 3294 | 3349 | 9.  ALARM |
+| 3350 | 3568 | 10.  PORTAL KONFIGURACJI WiFi  (zamiast Bluetooth) |
+| 3569 | 4060 | 10a2. AKTUALIZACJA PROGRAMU PRZEZ WIFI  (OTA)   -  D59 |
+| 4061 | 4180 | 10b. CZARNA SKRZYNKA |
+| 4181 | 4483 | 10c. GESTY SERWISOWE I AUTOTEST |
+| 4484 | 4906 | 10b. POWIADOMIENIA NA TELEFON  (bot Telegram, D67) |
+| 4907 | 5477 | 11.  DEEP SLEEP |
+| 5478 | 6211 | 12.  SETUP  =  cala logika (loop() nigdy nie jest osiagany) |
 
-**Funkcje** (167):
+**Funkcje** (172):
 
 *STAN GLOBALNY* — `zanotujNvsFail`&nbsp;322, `nvsPutStr`&nbsp;341, `nvsPutU16`&nbsp;364, `nvsWolneWpisy`&nbsp;379, `syncTimeNTP`&nbsp;422, `logbookJson`&nbsp;423, `setTakenDay`&nbsp;424, `note`&nbsp;426, `awakeTooLong`&nbsp;440, `extendAwake`&nbsp;442
 
@@ -209,29 +209,29 @@ pozycjom w pasku nawigacji i podekranom Ustawien.
 
 *4c.  DZIENNIK WIECZKA  -  narzedzie do testu terenowego* — `lidLogAdd`&nbsp;1159, `lidLogCount`&nbsp;1183, `jsonEscape`&nbsp;1193, `lidLogJson`&nbsp;1209, `lidLogClear`&nbsp;1239, `nvsFailLogDoWyslania`&nbsp;1254, `nvsFailLogJson`&nbsp;1264, `nvsFailLogOznaczWyslany`&nbsp;1282, `trackBoxOpen`&nbsp;1286, `secondsToNextSlot`&nbsp;1335
 
-*5.  KOLEJKA OFFLINE  (Preferences / NVS - pierscien)* — `queuePush`&nbsp;1354, `queueCount`&nbsp;1377, `queuePeek`&nbsp;1384, `queuePop`&nbsp;1399, `queueDrop`&nbsp;1418, `przesunZnaczniki`&nbsp;1442, `queueShiftTimestamps`&nbsp;1457
+*5.  KOLEJKA OFFLINE  (Preferences / NVS - pierscien)* — `rekordTs`&nbsp;1366, `rekordBezDaty`&nbsp;1373, `tsDoBazy`&nbsp;1382, `queuePush`&nbsp;1386, `queueCount`&nbsp;1409, `queuePeek`&nbsp;1416, `queuePop`&nbsp;1431, `queueDrop`&nbsp;1450, `przesunZnaczniki`&nbsp;1474, `queueShiftTimestamps`&nbsp;1489, `queueNadajCzas`&nbsp;1537, `queueEpokaSkasuj`&nbsp;1580
 
-*6.  WiFi* — `netKlucz`&nbsp;1496, `wifiSieciCount`&nbsp;1500, `wifiSiecSsid`&nbsp;1507, `wifiSiecPass`&nbsp;1516, `wifiListeZapisz`&nbsp;1543, `wifiListeCzytaj`&nbsp;1567, `wifiSiecDodaj`&nbsp;1580, `wifiSiecUsun`&nbsp;1611, `wifiSiecPriorytet`&nbsp;1644, `wifiSprobuj`&nbsp;1672, `wifiConnect`&nbsp;1690, `wifiOff`&nbsp;1759, `wifiUspij`&nbsp;1773, `syncTimeNTP`&nbsp;1778
+*6.  WiFi* — `netKlucz`&nbsp;1619, `wifiSieciCount`&nbsp;1623, `wifiSiecSsid`&nbsp;1630, `wifiSiecPass`&nbsp;1639, `wifiListeZapisz`&nbsp;1666, `wifiListeCzytaj`&nbsp;1690, `wifiSiecDodaj`&nbsp;1703, `wifiSiecUsun`&nbsp;1734, `wifiSiecPriorytet`&nbsp;1767, `wifiSprobuj`&nbsp;1795, `wifiConnect`&nbsp;1813, `wifiOff`&nbsp;1882, `wifiUspij`&nbsp;1896, `syncTimeNTP`&nbsp;1901
 
-*7.  FIREBASE  (REST: Auth email/haslo + Realtime Database)* — `tokenZPamieci`&nbsp;1838, `zapomnijToken`&nbsp;1847, `hasloJestPrawdziwe`&nbsp;1892, `hasloZPamieci`&nbsp;1897, `hasloWPamieci`&nbsp;1906, `hasloUtrwal`&nbsp;1910, `hasloDoLogowania`&nbsp;1923, `tgTokenZPamieci`&nbsp;1943, `tgChatZPamieci`&nbsp;1950, `tgSkonfigurowany`&nbsp;1959, `tgUtrwal`&nbsp;1966, `tgZapomnij`&nbsp;1978, `firebaseSignIn`&nbsp;2012, `rtdbUrl`&nbsp;2107, `rtdbSend`&nbsp;2129, `rekordKompletny`&nbsp;2156, `pushEventRecord`&nbsp;2165, `pushLidState`&nbsp;2213, `otaSumaZPamieci`&nbsp;2234, `otaSumaWgranej`&nbsp;2256, `pushStatus`&nbsp;2262, `fetchConfig`&nbsp;2457, `trwaleOdrzucony`&nbsp;2772, `flushQueue`&nbsp;2776
+*7.  FIREBASE  (REST: Auth email/haslo + Realtime Database)* — `tokenZPamieci`&nbsp;1968, `zapomnijToken`&nbsp;1977, `hasloJestPrawdziwe`&nbsp;2022, `hasloZPamieci`&nbsp;2027, `hasloWPamieci`&nbsp;2036, `hasloUtrwal`&nbsp;2040, `hasloDoLogowania`&nbsp;2053, `tgTokenZPamieci`&nbsp;2073, `tgChatZPamieci`&nbsp;2080, `tgSkonfigurowany`&nbsp;2089, `tgUtrwal`&nbsp;2096, `tgZapomnij`&nbsp;2108, `firebaseSignIn`&nbsp;2142, `rtdbUrl`&nbsp;2237, `rtdbSend`&nbsp;2259, `rekordKompletny`&nbsp;2286, `pushEventRecord`&nbsp;2295, `pushLidState`&nbsp;2352, `otaSumaZPamieci`&nbsp;2373, `otaSumaWgranej`&nbsp;2395, `pushStatus`&nbsp;2401, `fetchConfig`&nbsp;2596, `trwaleOdrzucony`&nbsp;2911, `flushQueue`&nbsp;2915
 
-*8.  ZDARZENIA* — `makeRecordAt`&nbsp;2818, `makeRecord`&nbsp;2825, `loadDayMarkers`&nbsp;2835, `clearDayMarkers`&nbsp;2854, `setTakenDay`&nbsp;2868, `setRolloverDay`&nbsp;2876, `zapiszDawke`&nbsp;2906, `oznaczAlarmObsluzony`&nbsp;2949, `alarmJuzObsluzony`&nbsp;2966, `ostatniSlotDoby`&nbsp;2992, `juzDzisBrane`&nbsp;3002, `checkDayRollover`&nbsp;3009, `reportEvent`&nbsp;3066
+*8.  ZDARZENIA* — `makeRecordAt`&nbsp;2957, `makeRecord`&nbsp;2979, `loadDayMarkers`&nbsp;2989, `clearDayMarkers`&nbsp;3008, `setTakenDay`&nbsp;3022, `setRolloverDay`&nbsp;3030, `zapiszDawke`&nbsp;3060, `oznaczAlarmObsluzony`&nbsp;3103, `alarmJuzObsluzony`&nbsp;3120, `ostatniSlotDoby`&nbsp;3146, `juzDzisBrane`&nbsp;3156, `checkDayRollover`&nbsp;3163, `reportEvent`&nbsp;3220
 
-*9.  ALARM* — `alarmPotwierdzony`&nbsp;3161, `runAlarmWindow`&nbsp;3166
+*9.  ALARM* — `alarmPotwierdzony`&nbsp;3317, `runAlarmWindow`&nbsp;3322
 
-*10.  PORTAL KONFIGURACJI WiFi  (zamiast Bluetooth)* — `htmlEscape`&nbsp;3207, `portalPage`&nbsp;3221, `startWifiPortal`&nbsp;3265
+*10.  PORTAL KONFIGURACJI WiFi  (zamiast Bluetooth)* — `htmlEscape`&nbsp;3363, `portalPage`&nbsp;3377, `startWifiPortal`&nbsp;3421
 
-*10a2. AKTUALIZACJA PROGRAMU PRZEZ WIFI  (OTA)   -  D59* — `otaOpisDecyzji`&nbsp;3537, `otaZanotujProbe`&nbsp;3563, `otaWyzerujLicznik`&nbsp;3571, `otaZlecenieWBazie`&nbsp;3601, `otaPobierzOpis`&nbsp;3616, `otaWgraj`&nbsp;3660, `otaSprawdzPoStarcie`&nbsp;3818, `otaPotwierdzDzialanie`&nbsp;3851
+*10a2. AKTUALIZACJA PROGRAMU PRZEZ WIFI  (OTA)   -  D59* — `otaOpisDecyzji`&nbsp;3693, `otaZanotujProbe`&nbsp;3719, `otaWyzerujLicznik`&nbsp;3727, `otaZlecenieWBazie`&nbsp;3757, `otaPobierzOpis`&nbsp;3772, `otaWgraj`&nbsp;3816, `otaSprawdzPoStarcie`&nbsp;3974, `otaPotwierdzDzialanie`&nbsp;4007
 
-*10b. CZARNA SKRZYNKA* — `note`&nbsp;3925, `wartoZapisac`&nbsp;3932, `logbookAdd`&nbsp;3944, `logbookPrint`&nbsp;3983, `logbookJson`&nbsp;4007
+*10b. CZARNA SKRZYNKA* — `note`&nbsp;4081, `wartoZapisac`&nbsp;4088, `logbookAdd`&nbsp;4100, `logbookPrint`&nbsp;4139, `logbookJson`&nbsp;4163
 
-*10c. GESTY SERWISOWE I AUTOTEST* — `pikNumer`&nbsp;4157, `pikKoniecTestu`&nbsp;4169, `pikBrakSieci`&nbsp;4180, `wynikEtapu`&nbsp;4192, `etapTestu`&nbsp;4211, `autoTest`&nbsp;4216
+*10c. GESTY SERWISOWE I AUTOTEST* — `pikNumer`&nbsp;4313, `pikKoniecTestu`&nbsp;4325, `pikBrakSieci`&nbsp;4336, `wynikEtapu`&nbsp;4348, `etapTestu`&nbsp;4367, `autoTest`&nbsp;4372
 
-*10b. POWIADOMIENIA NA TELEFON  (bot Telegram, D67)* — `tgWyslijTekst`&nbsp;4363, `tgZglosNieodebrane`&nbsp;4409, `tgSprawdzBaterie`&nbsp;4429, `tgSprawdzZapas`&nbsp;4448, `dniOdEry`&nbsp;4471, `dniDoDaty`&nbsp;4482, `inrPrzypomnienieTeraz`&nbsp;4516, `tgOznaczInrMiniete`&nbsp;4536, `sekundyDoInrPrzypomnienia`&nbsp;4545, `tgSprawdzInr`&nbsp;4567, `tgTekstZapas`&nbsp;4581, `tgTekstInr`&nbsp;4590, `tgTekstNieodebrane`&nbsp;4610, `tgTekstBateria`&nbsp;4619, `tgWyslijZalegle`&nbsp;4638
+*10b. POWIADOMIENIA NA TELEFON  (bot Telegram, D67)* — `tgWyslijTekst`&nbsp;4519, `tgZglosNieodebrane`&nbsp;4565, `tgSprawdzBaterie`&nbsp;4585, `tgSprawdzZapas`&nbsp;4604, `dniOdEry`&nbsp;4627, `dniDoDaty`&nbsp;4638, `inrPrzypomnienieTeraz`&nbsp;4672, `tgOznaczInrMiniete`&nbsp;4692, `sekundyDoInrPrzypomnienia`&nbsp;4701, `tgSprawdzInr`&nbsp;4723, `tgTekstZapas`&nbsp;4737, `tgTekstInr`&nbsp;4746, `tgTekstNieodebrane`&nbsp;4766, `tgTekstBateria`&nbsp;4775, `tgWyslijZalegle`&nbsp;4794
 
-*11.  DEEP SLEEP* — `otaZglos`&nbsp;4769, `skanujSieci`&nbsp;4797, `otaSprobuj`&nbsp;4846, `kolejnePrzesuniecie`&nbsp;5045, `goToSleep`&nbsp;5050, `planNextSleep`&nbsp;5246
+*11.  DEEP SLEEP* — `otaZglos`&nbsp;4925, `skanujSieci`&nbsp;4953, `otaSprobuj`&nbsp;5002, `kolejnePrzesuniecie`&nbsp;5201, `goToSleep`&nbsp;5206, `planNextSleep`&nbsp;5402
 
-*12.  SETUP  =  cala logika (loop() nigdy nie jest osiagany)* — `petlaLadowania`&nbsp;5334, `setup`&nbsp;5432, `loop`&nbsp;6043
+*12.  SETUP  =  cala logika (loop() nigdy nie jest osiagany)* — `petlaLadowania`&nbsp;5490, `setup`&nbsp;5588, `loop`&nbsp;6208
 
 
 ---

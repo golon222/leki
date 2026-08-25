@@ -46,7 +46,11 @@ WANTED = [
     "inrPrzypomnienieTeraz", "tgOznaczInrMiniete", "sekundyDoInrPrzypomnienia",
     "tgSprawdzInr",
     "przesunZnaczniki", "queuePush", "queueCount", "queuePeek", "queuePop", "queueDrop",
-    "queueShiftTimestamps", "rekordKompletny", "trwaleOdrzucony", "flushQueue",
+    "queueShiftTimestamps",
+    # Ratunek dla znacznika zapisanego bez zegara (D87). rekordTs jest
+    # pierwszy - rekordBezDaty go wola.
+    "rekordTs", "rekordBezDaty", "tsDoBazy", "queueNadajCzas", "queueEpokaSkasuj",
+    "rekordKompletny", "trwaleOdrzucony", "flushQueue",
     "makeRecordAt", "makeRecord",
     "loadDayMarkers", "setTakenDay", "setRolloverDay",
     "zapiszDawke", "oznaczAlarmObsluzony", "alarmJuzObsluzony", "juzDzisBrane",

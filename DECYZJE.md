@@ -13,7 +13,7 @@ zamiast 60 tys. tokenów wchodzi 2,5 tys. plus jeden obszar.
 | `decyzje/ota.md` | Aktualizacja przez WiFi i skan sieci | 8 |
 | `decyzje/telegram.md` | Powiadomienia Telegram | 5 |
 | `decyzje/aplikacja.md` | Aplikacja — ekrany i wygląd | 29 |
-| `decyzje/dane.md` | Dane, kolejka, dawkowanie | 15 |
+| `decyzje/dane.md` | Dane, kolejka, dawkowanie | 16 |
 | `decyzje/testy.md` | Testy, audyt, kompilacja | 12 |
 | `decyzje/bugi.md` | Błędy **zamknięte** — historia objawów | 25 |
 | `decyzje/cofniete.md` | Cofnięte — **nie próbować drugi raz** | 5 |
@@ -65,6 +65,7 @@ Od najnowszej. Kolumna „gdzie" mówi, który plik w `decyzje/` trzymać otwart
 
 | # | O co chodziło | gdzie |
 |---|---|---|
+| **D87** | Dawka zapisana bez zegara odzyskuje datę, gdy zegar wróci — znacznik względny zamiast twardego zera (firmware `1.47.0`) | `dane` |
 | **D86** | Dziennik rozbity na indeks + obszary, duże pliki dostają generowaną `MAPA.md` — wejście w zadanie 5,7 tys. zamiast 60 tys. tokenów | `testy` |
 | **D85** | Cicha kopia na Telegram: `disable_notification` PLUS własny czat, który wolno wyciszyć (aplikacja… | `telegram` |
 | **D84** | Przypomnienia o INR: cztery razy, i cisza od chwili wpisania wyniku (firmware `1.46.1`, aplikacja… | `telegram` |

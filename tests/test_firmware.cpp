@@ -480,6 +480,105 @@ queueShiftTimestamps(+600);
 queuePeek(r);
 CHECK(r.startsWith(String("0;")), "wpis bez czasu nietkniety: %s", r.c_str());
 
+/* ================= 6b. ZNACZNIK ZAPISANY BEZ ZEGARA (D87) ================= */
+head("Dawka zapisana bez zegara odzyskuje date, gdy zegar wroci");
+
+/* Bez wiarygodnego zegara time() zwraca sekundy od startu plytki. Wlasnie
+   ta liczba ma trafic do kolejki - z twardego zera nie da sie juz nic
+   odzyskac, a z licznika owszem.                                       */
+prefs.wipe();
+rtcTimeValid = false;
+FAKE_NOW = 3600;                                   /* godzina od startu */
+CHECK(makeRecord("open", 0).startsWith(String("3600;open")),
+      "bez zegara zapisujemy licznik od startu: %s", makeRecord("open", 0).c_str());
+CHECK(rekordBezDaty(makeRecord("open", 0)), "i wiadomo, ze to jeszcze nie data");
+CHECK(!rekordBezDaty(makeRecordAt("open", 0, 1750000000u)), "prawdziwa data rozpoznana");
+CHECK(rekordTs(makeRecordAt("open", 0, 1750000000u))==1750000000u, "rekordTs czyta znacznik");
+CHECK(rekordTs(String("smiec"))==0u, "rekord bez separatora nie udaje daty");
+
+/* Do bazy znacznik wzgledny idzie jako zero. Inaczej dawka Warfinu
+   wyladowalaby w kalendarzu w roku 1970 - gorzej niz nigdzie.          */
+CHECK(tsDoBazy(3600u)==0u, "znacznik wzgledny nie idzie do bazy jako data");
+CHECK(tsDoBazy(1750000000u)==1750000000u, "prawdziwa data idzie bez zmian");
+CHECK(tsDoBazy((uint32_t)CZAS_PRAWDZIWY)==(uint32_t)CZAS_PRAWDZIWY, "prog liczy sie jako data");
+CHECK(tsDoBazy((uint32_t)CZAS_PRAWDZIWY - 1u)==0u, "tuz pod progiem to jeszcze nie data");
+
+/* Zegar wraca. 3600 na starej skali, 7200 to "teraz" na tej samej skali,
+   1750007200 na prawdziwej -> zdarzenie sprzed godziny dostaje 1750003600. */
+prefs.wipe();
+queuePush(makeRecordAt("open", 0, 3600u));
+CHECK(queueNadajCzas(7200u, 1750007200u)==1, "jeden wpis odzyskal date");
+queuePeek(r);
+CHECK(r.startsWith(String("1750003600;")), "i to WLASCIWA date: %s", r.c_str());
+CHECK(r.indexOf(String(";open;"))>0, "reszta rekordu nietknieta: %s", r.c_str());
+
+/* Wpis, ktory date juz ma, nie jest ruszany - nie ma czego ratowac. */
+prefs.wipe();
+queuePush(makeRecordAt("open", 0, 1750000000u));
+CHECK(queueNadajCzas(7200u, 1750007200u)==0, "prawdziwa data nietknieta");
+
+/* Zero znaczy "nie wiem kiedy" i ma takie zostac. */
+prefs.wipe();
+queuePush(makeRecordAt("open", 0, 0));
+CHECK(queueNadajCzas(7200u, 1750007200u)==0, "zera nie zgadujemy");
+queuePeek(r);
+CHECK(r.startsWith(String("0;")), "zero zostaje zerem: %s", r.c_str());
+
+/* Znacznik wiekszy niz "teraz" na tej samej skali nie moze pochodzic
+   z tego startu - przeliczenie byloby zgadywaniem.                     */
+prefs.wipe();
+queuePush(makeRecordAt("open", 0, 9000u));
+CHECK(queueNadajCzas(7200u, 1750007200u)==0, "znacznik z przyszlosci pominiety");
+
+/* NTP sie nie udalo: nie ma prawdziwego "teraz", wiec nie ma na czym oprzec. */
+prefs.wipe();
+queuePush(makeRecordAt("open", 0, 3600u));
+CHECK(queueNadajCzas(7200u, 7300u)==0, "bez prawdziwego 'teraz' nic nie ruszamy");
+queuePeek(r);
+CHECK(r.startsWith(String("3600;")), "znacznik czeka dalej: %s", r.c_str());
+
+/* Zegar byl juz wiarygodny - od dryfu jest queueShiftTimestamps. */
+prefs.wipe();
+queuePush(makeRecordAt("open", 0, 3600u));
+CHECK(queueNadajCzas(1750000000u, 1750007200u)==0, "od dryfu jest inna funkcja");
+
+head("Twardy reset uniewaznia znaczniki wzgledne, ale nie kasuje zdarzen");
+prefs.wipe();
+queuePush(makeRecordAt("open",   0, 3600u));          /* znacznik wzgledny */
+queuePush(makeRecordAt("missed", 0, 1750000000u));    /* prawdziwa data    */
+queuePush(makeRecordAt("boot",  -1, 0));              /* bez czasu         */
+CHECK(queueEpokaSkasuj()==1, "wyzerowany dokladnie jeden znacznik");
+CHECK(queueCount()==3, "zadne zdarzenie nie znika (%u)", queueCount());
+queuePeek(r);
+CHECK(r.startsWith(String("0;open")), "znacznik wzgledny wyzerowany: %s", r.c_str());
+queuePop(); queuePeek(r);
+CHECK(r.startsWith(String("1750000000;missed")), "prawdziwa data nietknieta: %s", r.c_str());
+
+/* Po resecie nie ma juz czego falszywie przeliczyc - i o to chodzi.
+   Falszywa data jest gorsza niz jej brak.                              */
+prefs.wipe();
+queuePush(makeRecordAt("open", 0, 3600u));
+queueEpokaSkasuj();
+CHECK(queueNadajCzas(7200u, 1750007200u)==0, "po resecie nie zgadujemy daty");
+
+head("Pelny przebieg: dawka bez zasiegu -> powrot sieci -> data w kalendarzu");
+prefs.wipe(); FAKE_SENT.clear(); FAKE_HTTP = 200;
+rtcTimeValid = false;
+FAKE_NOW = 4200;                                   /* 70 min od startu, brak sieci */
+CHECK(queuePush(makeRecord("open", 0)), "dawka zapisana mimo braku sieci");
+CHECK(queueCount()==1, "i czeka w kolejce (%u)", queueCount());
+FAKE_NOW = 5400;                                   /* 20 min pozniej wraca WiFi */
+CHECK(queueNadajCzas(5400u, 1750005400u)==1, "synchronizacja nadaje date");
+rtcTimeValid = true; FAKE_NOW = 1750005400;
+queuePeek(r);
+CHECK(r.startsWith(String("1750004200;")),
+      "dawka trafia na godzine, o ktorej naprawde byla: %s", r.c_str());
+CHECK(flushQueue(), "i schodzi z kolejki");
+CHECK(queueCount()==0, "kolejka pusta (%u)", queueCount());
+CHECK(FAKE_SENT.size()==1, "poszla dokladnie jedna (%d)", (int)FAKE_SENT.size());
+
+prefs.wipe(); FAKE_SENT.clear(); FAKE_HTTP = 200; rtcTimeValid = true;
+
 /* ================= 7. FORMAT REKORDU ================= */
 head("Format rekordu zdarzenia");
 batteryPercentage = 73; realBatteryVoltage = 3.957f;
@@ -494,8 +593,12 @@ CHECK(rec.substring(p2+1, p3).toInt()==73, "bateria=%ld", rec.substring(p2+1,p3)
 CHECK(fabs(rec.substring(p3+1, p4).toFloat() - 3.957f) < 0.001, "napiecie odczytane poprawnie");
 CHECK(rec.substring(p4+1).toInt()==0, "slot=%ld", rec.substring(p4+1).toInt());
 
+/* Bez zegara NIE zero, tylko licznik od startu - z niego da sie jeszcze
+   odzyskac prawdziwa date (D87). Zero zostaje na "naprawde nie wiem".  */
 rtcTimeValid = false;
-CHECK(makeRecord("boot", -1).startsWith(String("0;boot")), "bez zegara ts=0");
+FAKE_NOW = 900;
+CHECK(makeRecord("boot", -1).startsWith(String("900;boot")), "bez zegara licznik od startu");
+CHECK(makeRecordAt("boot", -1, 0).startsWith(String("0;boot")), "zero nadal mozliwe wprost");
 rtcTimeValid = true;
 
 /* ================= 8. ROLOWANIE DOBY ================= */

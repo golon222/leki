@@ -1351,6 +1351,38 @@ uint32_t secondsToNextSlot(time_t utc) {
  *  5.  KOLEJKA OFFLINE  (Preferences / NVS - pierscien)
  *      Rekord: "ts;type;batt;volt;slot"
  * ===================================================================== */
+/* Prog "czy ten znacznik to prawdziwa data".
+
+   Ponizej niego time(nullptr) nie zwraca daty, tylko sekundy od startu
+   plytki - tyle bowiem pokazuje zegar ESP32, dopoki NTP go nie ustawi.
+   Ta sama liczba stala dotad w czterech miejscach jako goly literal.  */
+/* @extract-begin */
+#ifndef CZAS_PRAWDZIWY
+  #define CZAS_PRAWDZIWY 1700000000UL
+#endif
+/* @extract-end */
+
+/* Znacznik czasu z rekordu kolejki. 0 = rekord uszkodzony albo bez czasu. */
+uint32_t rekordTs(const String& rec) {
+  int p = rec.indexOf(';');
+  if (p <= 0) return 0;
+  return (uint32_t)rec.substring(0, p).toInt();
+}
+
+/* Czy ten rekord czeka jeszcze na prawdziwa date. */
+bool rekordBezDaty(const String& rec) {
+  return rekordTs(rec) < (uint32_t)CZAS_PRAWDZIWY;
+}
+
+/* Znacznik w postaci, w jakiej wolno go podac bazie.
+
+   Osobna funkcja, a nie warunek w miejscu wysylki, zeby dalo sie ja
+   sprawdzic testem bez atrapy sieci - a jest czego pilnowac: pomylka
+   w te strone wpisuje dawke Warfinu w rok 1970.                      */
+uint32_t tsDoBazy(uint32_t ts) {
+  return ts < (uint32_t)CZAS_PRAWDZIWY ? 0u : ts;
+}
+
 bool queuePush(const String& rec) {
   prefs.begin(NVS_NAMESPACE, false);
   uint16_t head  = prefs.getUShort("qh", 0);
@@ -1468,12 +1500,103 @@ void queueShiftTimestamps(int32_t delta) {
     int p = rec.indexOf(';');
     if (p <= 0) continue;
     uint32_t ts = (uint32_t)rec.substring(0, p).toInt();
-    if (ts < 1700000000UL) continue;                 // brak czasu - nie ruszamy
+    if (ts < (uint32_t)CZAS_PRAWDZIWY) continue;     // znacznik wzgledny - nie ta droga
     nvsPutStr(key, String((unsigned long)(ts + delta)) + rec.substring(p));
     fixed++;
   }
   prefs.end();
   if (fixed) LOG("[QUE] skorygowano czas %d zdarzen o %ld s\n", fixed, (long)delta);
+}
+
+/* --- Znacznik wzgledny -> prawdziwa data --------------------------------
+
+   Pudelko bez NTP nie zna daty, ale ZNA UPLYW CZASU: zegar RC tyka takze
+   w deep sleepie, a time(nullptr) zwraca wtedy sekundy od startu plytki.
+   Dlatego makeRecord() zapisuje w kolejce ten wlasnie odczyt zamiast
+   twardego zera - z zera nie da sie juz nic odzyskac, z licznika owszem.
+
+   Przy pierwszej udanej synchronizacji mamy jedno i drugie: `before` to
+   odczyt na starej, falszywej skali, `teraz` - na prawdziwej. Roznica
+   `before - ts` mowi, ile czasu temu bylo zdarzenie, i ta roznica jest
+   POPRAWNA. Odejmujemy ja od prawdziwego "teraz" i dawka trafia na
+   wlasciwa godzine zamiast wyladowac w 1970 albo przepasc bez daty.
+
+   To dokladnie ta sama arytmetyka, ktora w syncTimeNTP() ratuje
+   rtcTakenTs - tylko zastosowana do kolejki, a nie do jednego znacznika.
+
+   CZEGO NIE RUSZAMY:
+     - wpisow z prawdziwa data: te sa juz w porzadku,
+     - wpisow z ts > before: nie leza na tej samej skali co `before`
+       (patrz queueEpokaSkasuj), wiec przeliczenie byloby zgadywaniem,
+     - zera: znaczy "nie wiem kiedy" i ma takie zostac.
+
+   Wieku wpisu NIE ograniczamy. Im starszy, tym wiekszy dryf oscylatora RC
+   - ale to bledy rzedu minut na dobe, a doba lekowa ma 24 godziny i
+   granice o 3:00. Data przesunieta o kwadrans prawie zawsze trafia w ten
+   sam dzien; brak daty nie trafia w zaden.                             */
+uint16_t queueNadajCzas(uint32_t before, uint32_t teraz) {
+  if (teraz < (uint32_t)CZAS_PRAWDZIWY) return 0;   // nie ma na czym oprzec
+  if (before >= (uint32_t)CZAS_PRAWDZIWY) return 0; // zegar juz byl - nie ta droga
+
+  prefs.begin(NVS_NAMESPACE, false);
+  uint16_t head  = prefs.getUShort("qh", 0);
+  uint16_t count = prefs.getUShort("qc", 0);
+  uint16_t naprawione = 0;
+  for (uint16_t i = 0; i < count; i++) {
+    char key[8];
+    snprintf(key, sizeof(key), "q%u", (unsigned)((head + i) % QUEUE_CAPACITY));
+    String rec = prefs.getString(key, "");
+    int p = rec.indexOf(';');
+    if (p <= 0) continue;
+    uint32_t ts = (uint32_t)rec.substring(0, p).toInt();
+    if (ts == 0 || ts >= (uint32_t)CZAS_PRAWDZIWY) continue;
+    if (ts > before) continue;
+    const uint32_t temu = before - ts;
+    nvsPutStr(key, String((unsigned long)(teraz - temu)) + rec.substring(p));
+    naprawione++;
+  }
+  prefs.end();
+  if (naprawione) LOG("[QUE] %u zdarzen dostalo prawdziwa date\n", (unsigned)naprawione);
+  return naprawione;
+}
+
+/* --- Twardy reset uniewaznia skale czasu wzglednego ---------------------
+
+   Sekundy od startu maja sens wylacznie w obrebie JEDNEGO startu. Po
+   resecie licznik rusza od zera, wiec wpis "3600" sprzed resetu i wpis
+   "3600" po nim znacza dwa zupelnie rozne momenty - a z samej liczby nie
+   da sie ich odroznic.
+
+   Gdyby taki stary wpis dozyl do synchronizacji zegara, queueNadajCzas()
+   przeliczylby go jak swiezy i wpisal dawke o kilka godzin za pozno.
+   FALSZYWA DATA JEST GORSZA NIZ JEJ BRAK: kalendarz pokazywalby wtedy
+   nieprawde z pelnym przekonaniem, a przy leku przeciwzakrzepowym to nie
+   jest drobiazg. Dlatego przy twardym resecie zerujemy te znaczniki -
+   "nie wiem kiedy" zostaje uczciwie "nie wiem kiedy".
+
+   Wpisow z prawdziwa data to NIE dotyczy: zegar ustawiony przed resetem
+   zdazyl im nadac wlasciwy moment i on jest nadal prawdziwy. Sam wpis
+   zostaje w kolejce w calosci - kasujemy date, nigdy zdarzenie.       */
+uint16_t queueEpokaSkasuj() {
+  prefs.begin(NVS_NAMESPACE, false);
+  uint16_t head  = prefs.getUShort("qh", 0);
+  uint16_t count = prefs.getUShort("qc", 0);
+  uint16_t wyczyszczone = 0;
+  for (uint16_t i = 0; i < count; i++) {
+    char key[8];
+    snprintf(key, sizeof(key), "q%u", (unsigned)((head + i) % QUEUE_CAPACITY));
+    String rec = prefs.getString(key, "");
+    int p = rec.indexOf(';');
+    if (p <= 0) continue;
+    uint32_t ts = (uint32_t)rec.substring(0, p).toInt();
+    if (ts == 0 || ts >= (uint32_t)CZAS_PRAWDZIWY) continue;
+    nvsPutStr(key, String("0") + rec.substring(p));
+    wyczyszczone++;
+  }
+  prefs.end();
+  if (wyczyszczone)
+    LOG("[QUE] reset: %u zdarzen stracilo znacznik wzgledny\n", (unsigned)wyczyszczone);
+  return wyczyszczone;
 }
 
 /* =====================================================================
@@ -1777,13 +1900,13 @@ void wifiUspij() {
 
 bool syncTimeNTP() {
   time_t before = time(nullptr);
-  bool hadTime = rtcTimeValid && before > 1700000000;
+  bool hadTime = rtcTimeValid && before > (time_t)CZAS_PRAWDZIWY;
 
   configTime(0, 0, "pool.ntp.org", "time.google.com", "time.cloudflare.com");
   uint32_t t0 = millis();
-  while (time(nullptr) < 1700000000 && millis() - t0 < 8000 && !awakeTooLong()) delay(200);
+  while (time(nullptr) < (time_t)CZAS_PRAWDZIWY && millis() - t0 < 8000 && !awakeTooLong()) delay(200);
   const bool bylZegar = hadTime;
-  rtcTimeValid = time(nullptr) > 1700000000;
+  rtcTimeValid = time(nullptr) > (time_t)CZAS_PRAWDZIWY;
   LOG("[NTP] %s (epoch=%lu)\n", rtcTimeValid ? "OK" : "FAIL", (unsigned long)time(nullptr));
 
   /* Zegar wlasnie stal sie wiarygodny, a dawka zostala zapisana WCZESNIEJ,
@@ -1806,6 +1929,13 @@ bool syncTimeNTP() {
       rtcTakenTs = 0;                        // za dawno, nie ma czego ratowac
     }
   }
+
+  /* Ten sam ratunek, ale dla KOLEJKI (D87). Znacznik dawki mowi tylko
+     "czy brales dzis"; tu chodzi o date zdarzenia, ktore poleci do bazy
+     i wyladuje w kalendarzu. Bez tego dawka zapisana bez zasiegu docierala
+     do aplikacji bez daty, czyli praktycznie jako dzien pominiety.     */
+  if (rtcTimeValid && !bylZegar && before > 0)
+    queueNadajCzas((uint32_t)before, (uint32_t)time(nullptr));
 
   /* Zegar sie przesunal w trakcie dlugiego offline'u? Popraw zaleglosci. */
   if (rtcTimeValid && hadTime) {
@@ -2170,8 +2300,17 @@ int pushEventRecord(const String& rec) {
   int p3 = rec.indexOf(';', p2 + 1);
   int p4 = rec.indexOf(';', p3 + 1);
 
+  /* Znacznik na skali "sekundy od startu" NIE jest data i nie wolno go
+     podac bazie jako data - w kalendarzu wyladowalby w roku 1970, czyli
+     gorzej niz nigdzie. Do bazy idzie wtedy zero, czyli "czas nieznany",
+     a to aplikacja juz rozumie (evPasuje() w index.html).
+
+     Sam wpis w kolejce zostaje nietkniety: gdy zegar wroci, queueNadajCzas()
+     nada mu prawdziwy moment i dopiero wtedy pojdzie z data (D87).     */
+  const uint32_t ts = (uint32_t)rec.substring(0, p1).toInt();
+
   JsonDocument doc;
-  doc["ts"]      = (uint32_t)rec.substring(0, p1).toInt();
+  doc["ts"]      = tsDoBazy(ts);
   doc["type"]    = rec.substring(p1 + 1, p2);
   doc["battery"] = rec.substring(p2 + 1, p3).toInt();
   doc["volt"]    = rec.substring(p3 + 1, p4).toFloat();
@@ -2822,8 +2961,23 @@ String makeRecordAt(const char* type, int slot, uint32_t ts) {
   return String(buf);
 }
 
+/* Bez wiarygodnego zegara zapisujemy SUROWY odczyt, nie zero.
+
+   TU BYLA CICHA STRATA. `rtcTimeValid ? time(nullptr) : 0` wyrzucalo
+   jedyna informacje, jaka pudelko o tym momencie mialo: ile sekund minelo
+   od startu plytki. Zdarzenie szlo do kolejki z twardym zerem i takie tez
+   docieralo do bazy - dawka bez daty, ktorej kalendarz nie ma gdzie
+   umiescic, czyli w praktyce dzien wygladajacy na pominiety.
+
+   Uplyw czasu znamy zawsze, bo zegar RC tyka takze w deep sleepie.
+   Wystarczy go zapisac i poczekac: przy pierwszej synchronizacji
+   queueNadajCzas() zamieni go na prawdziwa date (D87). Zero zostaje
+   wylacznie tam, gdzie naprawde nic nie wiadomo.
+
+   Do bazy taki znacznik NIE trafia jako data - pushEventRecord() zamienia
+   go z powrotem na zero, dopoki prawdziwej daty nie ma.               */
 String makeRecord(const char* type, int slot) {
-  return makeRecordAt(type, slot, rtcTimeValid ? (uint32_t)time(nullptr) : 0);
+  return makeRecordAt(type, slot, (uint32_t)time(nullptr));
 }
 
 /* --- Znaczniki dobowe przezywajace RESET --------------------------------
@@ -3068,8 +3222,10 @@ void reportEvent(const char* type, int slot) {
 
   if (wifiConnect()) {
     /* wifiConnect() sam synchronizuje zegar. Jesli zdarzenie powstalo, zanim
-       znalismy czas (ts=0), odtwarzamy je teraz z prawidlowym znacznikiem. */
-    if (rtcTimeValid && rec.startsWith("0;")) rec = makeRecord(type, slot);
+       znalismy czas, odtwarzamy je teraz z prawidlowym znacznikiem.
+       Rekordu bez daty NIE poznajemy juz po literalnym "0;": od D87 stoi
+       tam licznik od startu plytki, wiec rozstrzyga prog CZAS_PRAWDZIWY. */
+    if (rtcTimeValid && rekordBezDaty(rec)) rec = makeRecord(type, slot);
 
     if (firebaseSignIn()) {
       /* Najpierw sam stan wieczka - to jedno male zapytanie, ktore
@@ -5441,6 +5597,10 @@ void setup() {
   gpio_deep_sleep_hold_dis();
   gpio_hold_dis((gpio_num_t)GPIO_REED);
 
+  /* Pamiec RTC przezywa deep sleep, ale nie reset, brownout ani odlaczenie
+     ogniwa. Zerowy licznik startow to wiec jedyny pewny znak, ze wlasnie
+     zaczela sie NOWA epoka czasu wzglednego - czytamy go PRZED podniesieniem. */
+  const bool twardyReset = (rtcBootCount == 0);
   rtcBootCount++;
   configureInputs();          // MUSI byc przed oknem testowym ponizej
   buzzerOff();
@@ -5484,6 +5644,11 @@ void setup() {
      wczesny sygnal czytal ZERO i milczal dokladnie wtedy, gdy ostrzezenie
      przed druga dawka jest najbardziej potrzebne.                     */
   loadDayMarkers();
+
+  /* Znaczniki wzgledne w kolejce naleza do POPRZEDNIEGO startu i nie da
+     sie ich juz z niczym zestawic. Zerujemy je, zanim cokolwiek zdazy je
+     przeliczyc - falszywa data byloby gorsza niz jej brak (D87).       */
+  if (twardyReset) queueEpokaSkasuj();
 
   bool juzOstrzezono = false;
 #if ONE_DOSE_PER_DAY

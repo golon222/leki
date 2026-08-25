@@ -402,6 +402,45 @@ prz = code[code.find("void przesunZnaczniki("):]
 prz = prz[:prz.find("\n}")]
 for zn in ["rtcNextWarnTs", "rtcOpenSinceTs", "rtcTokenExp", "rtcLastPushTs", "rtcLastOpenTs"]:
     ok(zn in prz, f"korekta zegara obejmuje {zn}")
+
+# ── Znacznik zapisany bez zegara (D87) ──
+# TESTY SPRAWDZAJA ARYTMETYKE, TE KONTROLE SPRAWDZAJA OKABLOWANIE.
+# Dokladnie ta roznica kosztowala nas B19: przesuniecie backoffu bylo
+# obliczane poprawnie i miala je kto sprawdzic, tylko nikt nie zapytal,
+# czy licznik w ogole ma jak urosnac. Tu jest tak samo - queueNadajCzas()
+# moze byc bez zarzutu i bezuzyteczna, jesli nikt jej nie wola.
+ok("uint16_t queueNadajCzas(" in code, "ratunek dla znacznika ma wlasna funkcje")
+ok("uint16_t queueEpokaSkasuj(" in code, "uniewaznienie epoki ma wlasna funkcje")
+ok("queueNadajCzas(" in ntp,
+   "synchronizacja zegara nadaje date zdarzeniom czekajacym w kolejce")
+_war = "if (rtcTimeValid && !bylZegar && before > 0)"
+ok(_war in ntp and ntp.split(_war, 1)[1].lstrip().startswith("queueNadajCzas("),
+   "i robi to tylko wtedy, gdy zegar wlasnie sie pojawil")
+
+setup_c = cialo("void setup()")
+ok("queueEpokaSkasuj();" in setup_c,
+   "twardy reset uniewaznia znaczniki wzgledne w kolejce")
+ok("twardyReset" in setup_c and
+   setup_c.find("const bool twardyReset") < setup_c.find("rtcBootCount++"),
+   "znak twardego resetu czytany PRZED podniesieniem licznika startow")
+
+# Znacznik wzgledny nie moze wyjsc do bazy jako data - w kalendarzu
+# wyladowalby w 1970, czyli gorzej niz nigdzie.
+ok("uint32_t tsDoBazy(" in code, "decyzja 'co wolno podac bazie' jest osobna funkcja")
+push_ev = cialo("int pushEventRecord(const String& rec)")
+ok("tsDoBazy(" in push_ev, "wysylka przepuszcza znacznik przez tsDoBazy()")
+
+# makeRecord ma zapisywac licznik od startu, nie twarde zero - inaczej
+# nie ma czego pozniej ratowac.
+mk = cialo("String makeRecord(const char* type, int slot)")
+ok("rtcTimeValid ?" not in mk,
+   "makeRecord nie wyrzuca licznika od startu do kosza")
+ok("time(nullptr)" in mk, "tylko zapisuje to, co zegar naprawde pokazuje")
+
+# reportEvent nie moze rozpoznawac rekordu bez daty po literalnym "0;".
+rep_ev = cialo("void reportEvent(const char* type, int slot)")
+ok("rekordBezDaty(rec)" in rep_ev,
+   "odtworzenie rekordu po zegarze rozstrzyga prog, nie literalne zero")
 ok("fetchConfig();" in petla,
    "na ladowarce zmiany ustawien z telefonu wchodza od razu")
 ok("flushQueue();" in petla, "i zaleglosci z kolejki tez sie doslaja")
