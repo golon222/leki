@@ -92,6 +92,13 @@ globalThis.prompt   = () => null;
    z zupelnie innego miejsca. Atrapa niewierna oryginalowi mierzy nie to,
    co trzeba (D39).                                                      */
 globalThis.print    = () => {};
+/* Przewijanie. Nawigacja miedzy ekranami wola window.scrollTo(0, 0) -
+   bez tego kazde przejscie miedzy zakladkami wywracalo sie w tescie
+   wyjatkiem z zupelnie innego miejsca niz sprawdzana rzecz. Ta sama
+   lekcja co przy window.print() wyzej.                                */
+globalThis.scrollTo = () => {};
+globalThis.scrollY  = 0;
+globalThis.scrollX  = 0;
 /* navigator w Node ma tylko getter - podmieniamy przez defineProperty */
 const fakeReg = {
   update: async () => {},

@@ -4067,6 +4067,76 @@ head("Kopia zapasowa");
   check(pomoc.includes("Wycisz"), "i konczy sie wyciszeniem grupy");
 }
 
+/* ═══ ZADNA AKCJA NIE MOZE WYWALIC SIE NA PUSTYM STANIE ═══
+
+   Kontrola klasy, nie pojedynczego przypadku. Akcje uzytkownika NIE ida
+   przez oslone rysowania (i slusznie - zapis, ktory sie nie udal, ma
+   krzyczec), wiec wyjatek w takiej funkcji konczy sie tak: czlowiek
+   naciska przycisk i NIE DZIEJE SIE NIC, bez slowa wyjasnienia. Slad
+   zostaje wylacznie w konsoli przegladarki, do ktorej nikt nie zaglada.
+
+   Tak wyszedl raport dla lekarza: `+select.value` przy pustej liscie daje
+   zero dni, `collectRows(0)` zwraca zero wierszy, a `rows[0].key` leci
+   wyjatkiem. `renderAnalysis()` dwie funkcje obok miala na to zapas od
+   dawna - a raport i CSV nie.
+
+   Bierzemy funkcje BEZARGUMENTOWE, czyli te, ktore przycisk woła wprost. */
+head("Zadna akcja uzytkownika nie wywala sie na pustym stanie");
+{
+  const bezArgumentow = [...html.matchAll(/window\.([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?\(\s*\)\s*=>/g)]
+                          .map(m => m[1]);
+  /* Te trzy wychodza poza aplikacje: przeladowanie strony, wylogowanie
+     i czyszczenie pamieci podrecznej. W tescie nie ma czego przeladowac. */
+  const pomijamy = new Set(["wyczyscCache", "fbSignOut", "odswiez"]);
+  const doSprawdzenia = bezArgumentow.filter(n => !pomijamy.has(n));
+  check(doSprawdzenia.length >= 15,
+        `jest co sprawdzac: ${doSprawdzenia.length} akcji bezargumentowych`);
+
+  /* DWA STANY, nie jeden. Pusty lapie „nie ma czego pokazac", ale wlasnie
+     na PELNYM wychodzil raport dla lekarza: `rows[0].key` w `.filter()`
+     po PUSTEJ liscie nigdy sie nie wykonuje, wiec przy zerze pomiarow
+     i zerze wersji rozpisania blad byl niewidzialny. Wychodzil dopiero
+     wtedy, gdy bylo co filtrowac - czyli u kogos, kto uzywa aplikacji. */
+  const stany = {
+    /* PUSTY znaczy TEZ puste listy wyboru. Element `<select>` w atrapie
+       nie ma opcji dopoki ktos ich nie wstawi, a w przegladarce moze byc
+       pusty po nieudanym renderze - i wtedy `+select.value` daje ZERO.
+       Wlasnie tak wywracal sie raport dla lekarza. Bez wyzerowania tych
+       pol test mierzylby wartosc zostawiona przez wczesniejszy blok.   */
+    "pusty": () => { A.__resetDb(); D({ doses:{}, inr:{}, events:[] });
+                     A.__setState({ dosePlans:{}, tags:{} });
+                     for (const id of ["repRange", "anRange", "inrEvery"])
+                       document.getElementById(id).value = ""; },
+    "z danymi": () => {
+      A.__resetDb();
+      D({ doses:{ [shift(-1)]:{ 0:{ status:"taken", dose:1, source:"device",
+                                    ts:at(1,20,0), openTs:at(1,20,0) } } },
+          inr:{ "2026-08-01":{ value:2.4, ts:1 } },
+          events:[{ id:"e1", type:"open", ts:at(1,20,0), battery:80, volt:3.9, slot:0 }] });
+      A.__setState({ dosePlans:{ "2026-07-01":{ dd:1 } }, tags:{ [shift(-1)]:{ abx:true } } });
+    }
+  };
+
+  for (const [opis, ustaw] of Object.entries(stany)){
+    ustaw();
+    const wywalone = [];
+    for (const n of doSprawdzenia){
+      const f = globalThis.window[n];
+      if (typeof f !== "function"){ wywalone.push(`${n}: nie jest funkcja`); continue; }
+      try {
+        const w = f();
+        /* Obietnicy nie czekamy do konca - askConfirm() czeka na czlowieka.
+           Chodzi o wyjatek RZUCONY OD RAZU, przy pierwszym przebiegu.     */
+        if (w && typeof w.catch === "function") w.catch(() => {});
+      } catch (e){ wywalone.push(`${n}: ${e.message}`); }
+    }
+    check(wywalone.length === 0,
+          `stan "${opis}": zadna akcja nie rzuca wyjatku ` +
+          `(${wywalone.join("; ") || "czysto"})`);
+  }
+  document.getElementById("repRange").value = "30";   // dla dalszych blokow
+}
+
 head("Pomiar INR: usuwanie i poprawianie");
 {
   A.__resetDb();

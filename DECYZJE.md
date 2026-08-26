@@ -12,7 +12,7 @@ zamiast 60 tys. tokenów wchodzi 2,5 tys. plus jeden obszar.
 | `decyzje/pudelko.md` | Pudełko — sen, alarm, NVS, WiFi | 21 |
 | `decyzje/ota.md` | Aktualizacja przez WiFi i skan sieci | 8 |
 | `decyzje/telegram.md` | Powiadomienia Telegram | 5 |
-| `decyzje/aplikacja.md` | Aplikacja — ekrany i wygląd | 33 |
+| `decyzje/aplikacja.md` | Aplikacja — ekrany i wygląd | 34 |
 | `decyzje/dane.md` | Dane, kolejka, dawkowanie | 17 |
 | `decyzje/testy.md` | Testy, audyt, kompilacja | 12 |
 | `decyzje/bugi.md` | Błędy **zamknięte** — historia objawów | 25 |
@@ -65,6 +65,7 @@ Od najnowszej. Kolumna „gdzie" mówi, który plik w `decyzje/` trzymać otwart
 
 | # | O co chodziło | gdzie |
 |---|---|---|
+| **D94** | Żadna akcja użytkownika nie może wywalić się bez słowa — przycisk „Drukuj” przy pustej liście zakresu nie robił nic (aplikacja `2026-08-22.68`) | `aplikacja` |
 | **D93** | Wpisany wynik INR przesuwa termin przez lokalną kopię, nie przez wyścig z nasłuchem — i dopiero teraz ma to test po stronie aplikacji (aplikacja `2026-08-22.67`) | `aplikacja` |
 | **D92** | Powrót do aplikacji był traktowany jak ręczne odświeżenie — handler dostawał obiekt zdarzenia w miejsce flagi `recznie` (aplikacja `2026-08-22.66`) | `aplikacja` |
 | **D91** | Godzina przypomnienia musi być godziną — „25:00” robiło z pół doby „porę leku”; przy okazji silnik reguł w testach nauczył się `matches()` (firmware `1.47.2`) | `pudelko` |

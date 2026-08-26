@@ -1929,7 +1929,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-22.67";
+const APP_VERSION = "2026-08-22.68";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -7269,7 +7269,12 @@ const ST_PL = { taken:"wzięte", missed:"nie wzięte", nodata:"brak danych",
                 off:"bez leku (wg rozpisania)", "":"—" };
 
 window.makeReport = () => {
-  const days = +document.getElementById("repRange").value;
+  /* Zapas jak w `renderAnalysis()`: pusta albo nieoczekiwana wartosc listy
+     daje zero dni, a wtedy raport nie ma ani jednego wiersza i leci
+     wyjatkiem na `rows[0].key` - czyli przycisk "Drukuj" nie robi NIC
+     i nie mowi dlaczego. Trzy miejsca czytaja te sama liste, wiec
+     czytaja ja tak samo.                                            */
+  const days = +(document.getElementById("repRange")?.value || 90);
   const rows = collectRows(days);
   const taken  = rows.filter(r=>r.status==="taken").length;
   const missed = rows.filter(r=>r.status==="missed").length;
@@ -7922,7 +7927,12 @@ window.odtworzZBazy = async (data) => {
 };
 
 window.exportCsv = async () => {
-  const days = +document.getElementById("repRange").value;
+  /* Zapas jak w `renderAnalysis()`: pusta albo nieoczekiwana wartosc listy
+     daje zero dni, a wtedy raport nie ma ani jednego wiersza i leci
+     wyjatkiem na `rows[0].key` - czyli przycisk "Drukuj" nie robi NIC
+     i nie mowi dlaczego. Trzy miejsca czytaja te sama liste, wiec
+     czytaja ja tak samo.                                            */
+  const days = +(document.getElementById("repRange")?.value || 90);
   const rows = collectRows(days);
   const csv = "﻿" + ["Data;Status;Tabletek;Godzina;Zrodlo;INR;Okolicznosci;Uwagi"]
     .concat(rows.map(r=>[r.key, ST_PL[r.status]??r.status, r.dose, r.time, r.src, r.inr,
