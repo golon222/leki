@@ -65,6 +65,7 @@ Od najnowszej. Kolumna „gdzie" mówi, który plik w `decyzje/` trzymać otwart
 
 | # | O co chodziło | gdzie |
 |---|---|---|
+| **D90** | Podpowiedź przy każdej kropce wykresu pór mówiła „undefined” — `analyze()` nie zwracało pola, które wykres rysował (aplikacja `2026-08-22.65`) | `aplikacja` |
 | **D89** | Kopia zapasowa wymieniała pole, którego nie ma — `inrInterval` zamiast `inrEveryDays`, czyli odstęp pomiarów INR nie był kopiowany (aplikacja `2026-08-22.64`) | `aplikacja` |
 | **D88** | Domykanie doby liczone od północy DOBY LEKOWEJ, nie zegara; znaczniki doby w NVS zapisywane sprawdzanym `nvsPutU32()` (firmware `1.47.1`) | `dane` |
 | **D87** | Dawka zapisana bez zegara odzyskuje datę, gdy zegar wróci — znacznik względny zamiast twardego zera (firmware `1.47.0`) | `dane` |

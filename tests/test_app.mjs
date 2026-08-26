@@ -4222,6 +4222,43 @@ head("Wykresy analizy");
   check(A.iskraSVG([50, 80]).includes("<polyline"), "iskra rysuje linie");
   check(A.iskraSVG([50]) === "", "z jednego punktu nie ma czego rysowac");
 
+  /* PODPOWIEDZI POD PALCEM MUSZA MIEC TRESC.
+
+     Wykres por brania rysowal `<title>${p.opis}</title>`, a `analyze()`
+     w ogole nie zwracalo pola `opis` - kazda kropka miala wiec podpowiedz
+     o tresci "undefined" od dnia, w ktorym ten wykres powstal (D77).
+     Na iPhonie nie bylo tego widac: Safari nie pokazuje `<title>` przy
+     dotknieciu, a dotkniecie otwiera dzien. Kontrola jest wiec ogolna -
+     ZADEN wykres nie ma prawa wypisac "undefined" ani "NaN".          */
+  D({ doses:{
+    [shift(-1)]: { 0:{ status:"taken", dose:1,   source:"device", ts:at(1,20,0), openTs:at(1,20,0) } },
+    [shift(-2)]: { 0:{ status:"taken", dose:1.5, source:"device", ts:at(2,21,30), openTs:at(2,21,30) } },
+    [shift(-3)]: { 0:{ status:"taken", dose:1,   source:"device", ts:at(3,19,5),  openTs:at(3,19,5) } } } });
+  {
+    const a = A.analyze(30);
+    check(a.punkty.length === 3, "trzy dawki daja trzy punkty: " + a.punkty.length);
+    check(a.punkty.every(p => typeof p.opis === "string" && p.opis.length > 0),
+          "kazdy punkt wykresu por ma opis pod palec");
+    /* String() zamiast golego `.opis` - brakujace pole ma dac czytelne
+       FAIL, a nie wyjatek, ktory wywraca caly przebieg i zasłania to,
+       co naprawde nie zagralo.                                        */
+    check(String(a.punkty[0].opis).includes("tabl."),
+          "opis mowi date, godzine i ile tabletek: " + a.punkty[0].opis);
+    const wykresy = {
+      "pory w czasie": A.poryWCzasieSVG(a.punkty, a.mean),
+      "siatka rytmu":  A.rytmSVG(A.dniRytmu(30)),
+      "iskra":         A.iskraSVG(A.skutecznoscTygodniami(A.dniRytmu(30))),
+      "dni tygodnia":  A.dowSVG(a.byDow.map(d => d.total ? Math.round(d.taken/d.total*100) : 0),
+                                a.byDow.map(d => d.total > 0),
+                                ["Pn","Wt","Śr","Cz","Pt","So","Nd"]),
+    };
+    for (const [nazwa, svg] of Object.entries(wykresy))
+      check(!/undefined|NaN/.test(svg),
+            `wykres "${nazwa}" nie wypisuje undefined ani NaN`);
+    check(/<title>[^<]{3,}<\/title>/.test(wykresy["pory w czasie"]),
+          "kropka na wykresie por ma niepusta podpowiedz");
+  }
+
   /* Dni tygodnia: emfaza (jeden odcien, wyrozniony najslabszy dzien),
      a nie siedem kolorow. Kolor stanu dawki nie jest tu na sprzedaz.   */
   const dow = A.dowSVG([100, 90, 40, 100, 100, 100, 100],

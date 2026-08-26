@@ -12,7 +12,7 @@ sed -n '2800,2960p' index.html          # jeden obszar
 grep -n "nazwaFunkcji" index.html       # gdy znasz nazwe
 ```
 
-## `index.html` — 8025 linii, ~130 tys. tokenow
+## `index.html` — 8036 linii, ~130 tys. tokenow
 
 Ekrany (`<section>`) i dwa duze bloki. Zakladki `tab-*` odpowiadaja
 pozycjom w pasku nawigacji i podekranom Ustawien.
@@ -69,17 +69,17 @@ pozycjom w pasku nawigacji i podekranom Ustawien.
 | 5480 | 5787 | POWIADOMIENIA NA TELEFON — BOT TELEGRAM (D67) |
 | 5788 | 6244 | AKTUALIZACJA PROGRAMU PUDEŁKA (D59) |
 | 6245 | 6606 | SIECI WIDZIANE PRZEZ PUDEŁKO |
-| 6607 | 6806 | ANALIZA |
-| 6807 | 7192 | WYKRESY ANALIZY |
-| 7193 | 7344 | RAPORT |
-| 7345 | 7406 | KONTEKST DNIA (TAGI) |
-| 7407 | 7452 | KOPIA ZAPASOWA |
-| 7453 | 7666 | KOPIA NA TELEGRAM |
-| 7667 | 7732 | WIEK KOPII |
-| 7733 | 7830 | ODTWARZANIE Z KOPII |
-| 7831 | 7900 | KOPIE Z BAZY |
-| 7901 | 7983 | NAWIGACJA |
-| 7984 | 8025 | AUTOMATYCZNA AKTUALIZACJA |
+| 6607 | 6817 | ANALIZA |
+| 6818 | 7203 | WYKRESY ANALIZY |
+| 7204 | 7355 | RAPORT |
+| 7356 | 7417 | KONTEKST DNIA (TAGI) |
+| 7418 | 7463 | KOPIA ZAPASOWA |
+| 7464 | 7677 | KOPIA NA TELEGRAM |
+| 7678 | 7743 | WIEK KOPII |
+| 7744 | 7841 | ODTWARZANIE Z KOPII |
+| 7842 | 7911 | KOPIE Z BAZY |
+| 7912 | 7994 | NAWIGACJA |
+| 7995 | 8036 | AUTOMATYCZNA AKTUALIZACJA |
 
 **Funkcje** (209) — nazwa i linia deklaracji:
 
@@ -141,25 +141,25 @@ pozycjom w pasku nawigacji i podekranom Ustawien.
 
 *SIECI WIDZIANE PRZEZ PUDEŁKO* — `opisSygnalu`&nbsp;6256, `renderSkan`&nbsp;6262, `szukajSieci`&nbsp;6314, `wybierzSiec`&nbsp;6322, `wyslijPolecenieSieci`&nbsp;6340, `siecZIndeksu`&nbsp;6350, `tzChanged`&nbsp;6384, `cfgTime`&nbsp;6389, `addSlot`&nbsp;6397, `zapiszPlanDnia`&nbsp;6410, `saveConfig`&nbsp;6428, `inrKrokiZakresu`&nbsp;6489, `opcjeInr`&nbsp;6496, `inrZakresZmieniony`&nbsp;6507, `wypelnijListyZakresu`&nbsp;6520, `saveInrRange`&nbsp;6531, `wypelnijListeOdstepu`&nbsp;6565, `saveInrEvery`&nbsp;6578, `odswiezPodpowiedzInr`&nbsp;6588
 
-*ANALIZA* — `openTimeOf`&nbsp;6613, `openMinutes`&nbsp;6619, `sredniaPora`&nbsp;6643, `kwantyl`&nbsp;6651, `dniMiedzy`&nbsp;6659, `odstepyZPunktow`&nbsp;6673, `analyze`&nbsp;6682, `inrContext`&nbsp;6773
+*ANALIZA* — `openTimeOf`&nbsp;6613, `openMinutes`&nbsp;6619, `sredniaPora`&nbsp;6643, `kwantyl`&nbsp;6651, `dniMiedzy`&nbsp;6659, `odstepyZPunktow`&nbsp;6673, `analyze`&nbsp;6682, `inrContext`&nbsp;6784
 
-*WYKRESY ANALIZY* — `komorkaRytmu`&nbsp;6832, `rytmSVG`&nbsp;6844, `poryWCzasieSVG`&nbsp;6906, `iskraSVG`&nbsp;6974, `dowSVG`&nbsp;7002, `dniRytmu`&nbsp;7038, `skutecznoscTygodniami`&nbsp;7059, `renderAnalysis`&nbsp;7087
+*WYKRESY ANALIZY* — `komorkaRytmu`&nbsp;6843, `rytmSVG`&nbsp;6855, `poryWCzasieSVG`&nbsp;6917, `iskraSVG`&nbsp;6985, `dowSVG`&nbsp;7013, `dniRytmu`&nbsp;7049, `skutecznoscTygodniami`&nbsp;7070, `renderAnalysis`&nbsp;7098
 
-*RAPORT* — `collectRows`&nbsp;7194, `makeReport`&nbsp;7231
+*RAPORT* — `collectRows`&nbsp;7205, `makeReport`&nbsp;7242
 
-*KONTEKST DNIA (TAGI)* — `tagiDnia`&nbsp;7377, `tagiPrzed`&nbsp;7385, `tagPrzelacz`&nbsp;7394
+*KONTEKST DNIA (TAGI)* — `tagiDnia`&nbsp;7388, `tagiPrzed`&nbsp;7396, `tagPrzelacz`&nbsp;7405
 
-*KOPIA ZAPASOWA* — `zbierzKopie`&nbsp;7437, `opisKopii`&nbsp;7447
+*KOPIA ZAPASOWA* — `zbierzKopie`&nbsp;7448, `opisKopii`&nbsp;7458
 
-*KOPIA NA TELEGRAM* — `tgKopiaUst`&nbsp;7487, `tgCzatKopii`&nbsp;7494, `odswiezKopie`&nbsp;7501, `tgKopiaCzatZapisz`&nbsp;7509, `tgKopiaCzatZnajdz`&nbsp;7529, `tgKopiaWlacz`&nbsp;7559, `tgKopiaWylacz`&nbsp;7578, `kopiaNaTelegram`&nbsp;7587, `kopiaAutomat`&nbsp;7638
+*KOPIA NA TELEGRAM* — `tgKopiaUst`&nbsp;7498, `tgCzatKopii`&nbsp;7505, `odswiezKopie`&nbsp;7512, `tgKopiaCzatZapisz`&nbsp;7520, `tgKopiaCzatZnajdz`&nbsp;7540, `tgKopiaWlacz`&nbsp;7570, `tgKopiaWylacz`&nbsp;7589, `kopiaNaTelegram`&nbsp;7598, `kopiaAutomat`&nbsp;7649
 
-*WIEK KOPII* — `dniOdDaty`&nbsp;7685, `wiekKopiiTxt`&nbsp;7691, `renderKopiaStan`&nbsp;7699, `zapiszKopie`&nbsp;7714
+*WIEK KOPII* — `dniOdDaty`&nbsp;7696, `wiekKopiiTxt`&nbsp;7702, `renderKopiaStan`&nbsp;7710, `zapiszKopie`&nbsp;7725
 
-*ODTWARZANIE Z KOPII* — `policzOdtworzenie`&nbsp;7748, `wczytajKopie`&nbsp;7778, `kopiaCzytelna`&nbsp;7783, `odtworzKopie`&nbsp;7793, `kopiaWybrana`&nbsp;7816
+*ODTWARZANIE Z KOPII* — `policzOdtworzenie`&nbsp;7759, `wczytajKopie`&nbsp;7789, `kopiaCzytelna`&nbsp;7794, `odtworzKopie`&nbsp;7804, `kopiaWybrana`&nbsp;7827
 
-*KOPIE Z BAZY* — `kopieZBazy`&nbsp;7840, `odtworzZBazy`&nbsp;7872, `exportCsv`&nbsp;7884
+*KOPIE Z BAZY* — `kopieZBazy`&nbsp;7851, `odtworzZBazy`&nbsp;7883, `exportCsv`&nbsp;7895
 
-*NAWIGACJA* — `wrocZEkranu`&nbsp;7982
+*NAWIGACJA* — `wrocZEkranu`&nbsp;7993
 
 
 ---

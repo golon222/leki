@@ -1929,7 +1929,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-22.64";
+const APP_VERSION = "2026-08-22.65";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -6754,8 +6754,19 @@ function analyze(days){
   return { days, taken, missed, total: taken+missed, doseSum,
     /* Punkty z kluczem dnia — wykres pór rysuje każdą dawkę osobno, więc
        potrzebuje nie tylko minuty, ale i tego, KTÓRY to był dzień.     */
+    /* `opis` to podpowiedź pod palcem na wykresie pór — i BRAKOWAŁO GO
+       od chwili, gdy ten wykres powstał (D77). `poryWCzasieSVG()` rysuje
+       `<title>${p.opis}</title>`, więc każda kropka miała podpowiedź
+       o treści „undefined". Na iPhonie nie było tego widać — Safari nie
+       pokazuje `<title>` przy dotknięciu, a dotknięcie i tak otwiera dzień
+       — ale w DOM-ie siedziało, na myszy wyskakiwało. Siatka rytmu obok
+       ma `opis` od początku (`dniRytmu`); tu przepadł przy przepisywaniu
+       punktów na `{key, ts, rama}`. Ta sama treść i ten sam format co
+       tam — data, godzina i ile tabletek. */
     punkty: punkty.map(p => ({ key:p.key, ts:p.t, rama:doRamyDoby(devHM(p.t)
-              .slice(0,2)*60 + +devHM(p.t).slice(3,5)) })),
+              .slice(0,2)*60 + +devHM(p.t).slice(3,5)),
+              opis:`${FMT_DZIEN_MIES.format(new Date(p.key + "T12:00:00"))}, `
+                 + `${devHM(p.t)} — ${nf(dayDose(p.key).sum)} tabl.` })),
     times: ramy.map(zRamyDoby), n, median, mean, sd, hist, byDow,
     q1: n ? zRamyDoby(kwantyl(ramy, 0.25)) : null,
     q3: n ? zRamyDoby(kwantyl(ramy, 0.75)) : null,
