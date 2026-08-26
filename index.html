@@ -1929,7 +1929,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-22.65";
+const APP_VERSION = "2026-08-22.66";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -2656,9 +2656,23 @@ async function boot(){
       if (recznie) busy(false);
     }
   };
-  document.addEventListener("visibilitychange", wakeUp);
-  window.addEventListener("focus", wakeUp);
-  window.addEventListener("pageshow", wakeUp);
+  /* HANDLER DOSTAJE OD PRZEGLADARKI OBIEKT ZDARZENIA, a `wakeUp` bierze
+     w pierwszym argumencie `recznie`. Podpiete wprost — `addEventListener
+     ("focus", wakeUp)` — kazdy powrot do aplikacji wchodzil wiec jako
+     odswiezenie RECZNE: kreciolek w naglowku i toast „Dane aktualne · 12:34"
+     przy KAZDYM przelaczeniu sie na aplikacje. Obiekt zdarzenia jest
+     prawdziwy, wiec `if (recznie)` bralo go za `true`.
+
+     Recznie znaczy „czlowiek o to poprosil" — przycisk albo gest
+     pociagniecia w dol. Powrot z tla to odswiezenie w tle i ma byc CICHE:
+     komunikat pokazywany przy kazdym otwarciu aplikacji uczy przewijac
+     komunikaty, a wtedy przestaje dzialac ten jeden, ktory ma znaczenie
+     (D11, D74a). Ekran i tak sie przerysowuje — to jest cala informacja
+     zwrotna, jakiej ten powrot potrzebuje.                            */
+  const wakeUpWTle = () => wakeUp();
+  document.addEventListener("visibilitychange", wakeUpWTle);
+  window.addEventListener("focus", wakeUpWTle);
+  window.addEventListener("pageshow", wakeUpWTle);
   /* ───────── Stałe połączenie z bazą ─────────
 
      iOS potrafi uśpić gniazdo aplikacji schowanej w tle i nie zawsze je

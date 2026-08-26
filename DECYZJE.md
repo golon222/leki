@@ -12,7 +12,7 @@ zamiast 60 tys. tokenów wchodzi 2,5 tys. plus jeden obszar.
 | `decyzje/pudelko.md` | Pudełko — sen, alarm, NVS, WiFi | 21 |
 | `decyzje/ota.md` | Aktualizacja przez WiFi i skan sieci | 8 |
 | `decyzje/telegram.md` | Powiadomienia Telegram | 5 |
-| `decyzje/aplikacja.md` | Aplikacja — ekrany i wygląd | 31 |
+| `decyzje/aplikacja.md` | Aplikacja — ekrany i wygląd | 32 |
 | `decyzje/dane.md` | Dane, kolejka, dawkowanie | 17 |
 | `decyzje/testy.md` | Testy, audyt, kompilacja | 12 |
 | `decyzje/bugi.md` | Błędy **zamknięte** — historia objawów | 25 |
@@ -65,6 +65,7 @@ Od najnowszej. Kolumna „gdzie" mówi, który plik w `decyzje/` trzymać otwart
 
 | # | O co chodziło | gdzie |
 |---|---|---|
+| **D92** | Powrót do aplikacji był traktowany jak ręczne odświeżenie — handler dostawał obiekt zdarzenia w miejsce flagi `recznie` (aplikacja `2026-08-22.66`) | `aplikacja` |
 | **D91** | Godzina przypomnienia musi być godziną — „25:00” robiło z pół doby „porę leku”; przy okazji silnik reguł w testach nauczył się `matches()` (firmware `1.47.2`) | `pudelko` |
 | **D90** | Podpowiedź przy każdej kropce wykresu pór mówiła „undefined” — `analyze()` nie zwracało pola, które wykres rysował (aplikacja `2026-08-22.65`) | `aplikacja` |
 | **D89** | Kopia zapasowa wymieniała pole, którego nie ma — `inrInterval` zamiast `inrEveryDays`, czyli odstęp pomiarów INR nie był kopiowany (aplikacja `2026-08-22.64`) | `aplikacja` |

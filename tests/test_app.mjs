@@ -826,10 +826,26 @@ check(/main\{overflow-x:hidden\}/.test(css), "tresc glowna przycieta do szerokos
 
 head("Odswiezanie w czasie rzeczywistym");
 check(html.includes("goOnline(db)"), "polaczenie wznawiane po powrocie do aplikacji");
-check(html.includes('addEventListener("visibilitychange", wakeUp)'),
+check(html.includes('addEventListener("visibilitychange", wakeUpWTle)'),
       "reakcja na powrot z tla");
-check(html.includes('window.addEventListener("focus", wakeUp)'), "reakcja na focus");
-check(html.includes('window.addEventListener("pageshow", wakeUp)'), "reakcja na pageshow");
+check(html.includes('window.addEventListener("focus", wakeUpWTle)'), "reakcja na focus");
+check(html.includes('window.addEventListener("pageshow", wakeUpWTle)'), "reakcja na pageshow");
+
+/* POWROT DO APLIKACJI TO ODSWIEZENIE W TLE, NIE RECZNE.
+
+   Podpiete wprost (`addEventListener("focus", wakeUp)`) handler dostawal
+   od przegladarki OBIEKT ZDARZENIA jako pierwszy argument - czyli jako
+   `recznie`. Obiekt jest prawdziwy, wiec kazde przelaczenie sie na
+   aplikacje konczylo sie kreciolkiem i toastem „Dane aktualne · 12:34".
+   Komunikat przy kazdym otwarciu uczy przewijac komunikaty, a wtedy
+   przestaje dzialac ten jeden, ktory ma znaczenie (D11, D74a).       */
+check(/const wakeUpWTle = \(\) => wakeUp\(\);/.test(html),
+      "powrot z tla idzie przez opakowanie, ktore NIE przekazuje zdarzenia");
+for (const zdarzenie of ["visibilitychange", "focus", "pageshow"])
+  check(!new RegExp(`addEventListener\\("${zdarzenie}", wakeUp\\)`).test(html),
+        `"${zdarzenie}" nie podaje obiektu zdarzenia jako "recznie"`);
+check(/window\.odswiez = \(\) => wakeUp\(true\)/.test(html),
+      "a przycisk nadal odswieza w trybie recznym");
 check(html.includes("setInterval(wakeUp"), "okresowa siatka bezpieczenstwa");
 check(html.includes('id="refreshBtn"') && html.includes('onclick="odswiez()"'),
       "reczny przycisk odswiezania w naglowku");
