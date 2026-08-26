@@ -12,7 +12,7 @@ WANTED = [
     "zanotujNvsFail", "nvsPutStr", "nvsPutU16", "nvsPutU32",
     "readBatteryRaw", "battPercentFromCurve", "resetBatteryFilter",
     "battSmooth", "readBattery", "zapiszKoniecLadowania", "trackCharging",
-    "parseSchedule", "slotMinutes", "localDayNumber", "localMinutesOfDay",
+    "godzinaPoprawna", "parseSchedule", "loadSchedule", "slotMinutes", "localDayNumber", "localMinutesOfDay",
     # Dni bez leku - musza byc przed checkDayRollover, ktore je wola.
     "localWeekday", "dateKeyToNum", "dawkaNaDobe", "dzisBezLeku",
     "parseDoseWeek", "parseDoseEx", "saveDosing",

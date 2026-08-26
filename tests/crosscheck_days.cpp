@@ -24,6 +24,7 @@ FakeSerial Serial;
 
 Preferences prefs;
 String  slots[12];
+char    rtcSchedule[96] = {0};   /* jak w firmware - pamiec RTC na harmonogram */
 String  idToken;          /* token Firebase - potrzebny przez tokenZPamieci() */
 int     slotCount = 0;
 int     batteryPercentage = 0;

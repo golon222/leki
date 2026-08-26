@@ -22,6 +22,7 @@ FakeSerial Serial;
 
 Preferences prefs;
 String  slots[12];
+char    rtcSchedule[96] = {0};   /* jak w firmware - pamiec RTC na harmonogram */
 String  idToken;          /* token Firebase - potrzebny przez tokenZPamieci() */
 int     slotCount = 0;
 int     batteryPercentage = 0;
@@ -327,8 +328,14 @@ head("Harmonogram z bledami");
   struct { const char* wej; int oczek; } proby[] = {
     { "",                 0 },
     { "|||",              0 },
-    { "aa:bb",            1 },   // dlugosc i dwukropek sie zgadzaja
-    { "25:99",            1 },   // format ok, wartosc absurdalna
+    /* DO 1.47.2 OBIE TE POZYCJE WCHODZILY. Wystarczala dlugosc 5
+       i dwukropek w srodku, a `slotMinutes()` liczy godzine przez
+       toInt(): "aa:bb" dawalo polnoc, "25:99" - minute 1539. Takiej
+       pozycji nie da sie zadzwonic o wlasciwej porze, a `matchSlot()`
+       liczy dla niej roznice przez polnoc na MINUS, wiec bije kazda
+       poprawna godzine. Teraz obie wypadaja.                        */
+    { "aa:bb",            0 },   // to nie sa cyfry
+    { "25:99",            0 },   // taka godzina nie istnieje
     { "8:00",             0 },   // za krotkie
     { "08:00",            1 },
     { "08:00|20:00",      2 },
@@ -348,9 +355,14 @@ head("Harmonogram z bledami");
   parseSchedule(duzo);
   CHECK(slotCount <= 12, "nie wiecej niz 12 godzin (%d)", slotCount);
 
-  /* Godziny absurdalne nie moga dac ujemnych minut. */
+  /* Godzina absurdalna nie ma prawa wejsc W OGOLE - a gdyby kiedys
+     wrocila, minuty i tak musza zostac w granicach doby. Kontrola
+     bezwarunkowa, bo warunkowa znikala razem z bledem, ktorego pilnuje. */
   parseSchedule(String("25:99"));
-  if (slotCount > 0) CHECK(slotMinutes(0) >= 0, "minuty nieujemne (%d)", slotMinutes(0));
+  CHECK(slotCount == 0, "godzina spoza doby nie wchodzi (%d slotow)", slotCount);
+  parseSchedule(String("23:59"));
+  CHECK(slotCount == 1 && slotMinutes(0) >= 0 && slotMinutes(0) < 1440,
+        "ostatnia minuta doby miesci sie w dobie (%d)", slotMinutes(0));
 }
 
 /* ================= 7. PRACA BEZ ZEGARA ================= */

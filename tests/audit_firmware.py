@@ -730,6 +730,23 @@ else:
     ok(not re.search(r"=\s*now\s*-\s*\(time_t\)localMinutesOfDay\(now\)", _ciało),
        "i NIE od polnocy zegara (miedzy 00:00 a DAY_START_HOUR to inna doba)")
 
+# Harmonogram sklada sie WYLACZNIE z prawdziwych godzin - i to musi byc
+# sprawdzone w DWOCH miejscach, bo sa dwie drogi do slotow: `parseSchedule()`
+# (pamiec pudelka) i `fetchConfig()` (baza). Pozycja typu "25:00" daje minute
+# 1500, a `matchSlot()` liczy wtedy roznice przez polnoc na minus - i taka
+# pozycja bije kazda poprawna godzine. Testy sprawdzaja arytmetyke; tu
+# sprawdzamy okablowanie, bo `fetchConfig()` nie da sie uruchomic bez sieci
+# (lekcja B19: mechanizm mial test, a licznik nie mial jak urosnac).
+ok("godzinaPoprawna(item)" in ino,
+   "parseSchedule() przepuszcza tylko prawdziwe godziny")
+_m_fc = re.search(r"void fetchConfig\(\)\s*\{(.*?)\n  /\* --- Nowa siec", ino, re.S)
+ok(_m_fc is not None and "godzinaPoprawna" in _m_fc.group(1),
+   "fetchConfig() odsiewa z bazy pozycje, ktore nie sa godzina")
+_m_ls = re.search(r"void loadSchedule\(\)\s*\{(.*?)\n\}", ino, re.S)
+ok(_m_ls is not None and "slotCount == 0" in _m_ls.group(1)
+   and "DEFAULT_SCHEDULE" in _m_ls.group(1),
+   "loadSchedule() przy zerze slotow wraca do DEFAULT_SCHEDULE, nie do ciszy")
+
 # ---------- 8. Makra z config.h faktycznie uzywane ----------
 declared = set(re.findall(r"#\s*define\s+(\w+)", cfg))
 ignore = {"LOG", "LOGLN", "REED_MODE", "BUTTON_MODE", "PILLBOX_CONFIG_VERSION"}

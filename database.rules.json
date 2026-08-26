@@ -13,7 +13,10 @@
         "config": {
           ".validate": "newData.hasChildren(['schedule'])",
           "schedule": {
-            ".validate": "newData.hasChildren()"
+            ".validate": "newData.hasChildren()",
+            "$i": {
+              ".validate": "newData.isString() && newData.val().matches(/^([01][0-9]|2[0-3]):[0-5][0-9]$/)"
+            }
           },
           "tzOffsetMin": {
             ".validate": "newData.isNumber() && newData.val() >= -720 && newData.val() <= 840"

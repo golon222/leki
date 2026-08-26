@@ -916,6 +916,25 @@ WakeReason detectWakeReason() {
 /* =====================================================================
  *  4.  HARMONOGRAM
  * ===================================================================== */
+/* Czy to naprawde godzina "HH:MM" z prawdziwej doby.
+
+   Sam ksztalt "cos:cos" nie wystarcza. `slotMinutes()` liczy godzine przez
+   `toInt()`, ktore ze smieci robi zero, a z "25:00" - minute 1500. Takiej
+   pozycji nie da sie zadzwonic o wlasciwej porze: przy harmonogramie
+   "20:00|35:00" `matchSlot()` uznawalo za pore leku POL DOBY, bo roznica
+   liczona przez polnoc wychodzila ujemna i bila kazda poprawna godzine.
+   Aplikacja czegos takiego nie zapisze (`saveConfig()` filtruje po tym
+   samym wzorcu), a od 1.47.2 nie przepuszcza tego takze `database.rules.json`
+   - ale pudelko ma bronic sie samo takze przed tym, co juz lezy w pamieci. */
+static bool godzinaPoprawna(const String& it) {
+  if (it.length() != 5 || it.charAt(2) != ':') return false;
+  for (int i = 0; i < 5; i++)
+    if (i != 2 && (it.charAt(i) < '0' || it.charAt(i) > '9')) return false;
+  const int h = (it.charAt(0) - '0') * 10 + (it.charAt(1) - '0');
+  const int m = (it.charAt(3) - '0') * 10 + (it.charAt(4) - '0');
+  return h <= 23 && m <= 59;
+}
+
 void parseSchedule(const String& s) {
   slotCount = 0;
   int start = 0;
@@ -924,7 +943,7 @@ void parseSchedule(const String& s) {
     if (sep < 0) sep = s.length();
     String item = s.substring(start, sep);
     item.trim();
-    if (item.length() == 5 && item.charAt(2) == ':') slots[slotCount++] = item;
+    if (godzinaPoprawna(item)) slots[slotCount++] = item;
     start = sep + 1;
   }
 }
@@ -939,6 +958,16 @@ void loadSchedule() {
     strncpy(rtcSchedule, s.c_str(), sizeof(rtcSchedule) - 1);
   }
   parseSchedule(s);
+  /* ZERO SLOTOW TO CISZA, a cisza jest gorsza niz przypomnienie o zlej
+     porze: pudelko nie odezwaloby sie ani razu i nie byloby tego po czym
+     poznac. Zdarzyc sie to moze tylko wtedy, gdy w pamieci lezy napis,
+     ktory nie zawiera ani jednej prawdziwej godziny - wracamy wtedy do
+     DEFAULT_SCHEDULE i mowimy o tym glosno w logu.                     */
+  if (slotCount == 0) {
+    LOG("[SCH] '%s' nie zawiera ani jednej godziny - wracam do %s\n",
+        s.c_str(), DEFAULT_SCHEDULE);
+    parseSchedule(String(DEFAULT_SCHEDULE));
+  }
   LOG("[SCH] %s  (tz=%d min, %d slotow)\n", s.c_str(), rtcTzOffsetMin, slotCount);
 }
 
@@ -2626,11 +2655,20 @@ void fetchConfig() {
   JsonDocument doc;
   if (deserializeJson(doc, resp) != DeserializationError::Ok) return;
 
+  /* Do harmonogramu wchodza WYLACZNIE prawdziwe godziny. Pozycja, ktorej
+     nie da sie zadzwonic o wlasciwej porze, nie ma prawa go zastapic -
+     a `s.length() >= 5` nizej znaczy wtedy dokladnie "jest przynajmniej
+     jedna godzina", wiec smieci nie nadpisza dzialajacego harmonogramu. */
   String s = "";
   JsonArray arr = doc["schedule"].as<JsonArray>();
   for (JsonVariant v : arr) {
+    const String g = v.as<String>();
+    if (!godzinaPoprawna(g)) {
+      LOG("[SCH] pomijam '%s' - to nie jest godzina\n", g.c_str());
+      continue;
+    }
     if (s.length()) s += "|";
-    s += v.as<String>();
+    s += g;
   }
   int16_t tz = doc["tzOffsetMin"] | DEFAULT_TZ_OFFSET;
   if (s.length() >= 5 && (s != String(rtcSchedule) || tz != rtcTzOffsetMin)) {

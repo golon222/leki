@@ -9,11 +9,11 @@ zamiast 60 tys. tokenów wchodzi 2,5 tys. plus jeden obszar.
 
 | plik | o czym | ile |
 |---|---|---|
-| `decyzje/pudelko.md` | Pudełko — sen, alarm, NVS, WiFi | 20 |
+| `decyzje/pudelko.md` | Pudełko — sen, alarm, NVS, WiFi | 21 |
 | `decyzje/ota.md` | Aktualizacja przez WiFi i skan sieci | 8 |
 | `decyzje/telegram.md` | Powiadomienia Telegram | 5 |
-| `decyzje/aplikacja.md` | Aplikacja — ekrany i wygląd | 29 |
-| `decyzje/dane.md` | Dane, kolejka, dawkowanie | 16 |
+| `decyzje/aplikacja.md` | Aplikacja — ekrany i wygląd | 31 |
+| `decyzje/dane.md` | Dane, kolejka, dawkowanie | 17 |
 | `decyzje/testy.md` | Testy, audyt, kompilacja | 12 |
 | `decyzje/bugi.md` | Błędy **zamknięte** — historia objawów | 25 |
 | `decyzje/cofniete.md` | Cofnięte — **nie próbować drugi raz** | 5 |
@@ -65,6 +65,7 @@ Od najnowszej. Kolumna „gdzie" mówi, który plik w `decyzje/` trzymać otwart
 
 | # | O co chodziło | gdzie |
 |---|---|---|
+| **D91** | Godzina przypomnienia musi być godziną — „25:00” robiło z pół doby „porę leku”; przy okazji silnik reguł w testach nauczył się `matches()` (firmware `1.47.2`) | `pudelko` |
 | **D90** | Podpowiedź przy każdej kropce wykresu pór mówiła „undefined” — `analyze()` nie zwracało pola, które wykres rysował (aplikacja `2026-08-22.65`) | `aplikacja` |
 | **D89** | Kopia zapasowa wymieniała pole, którego nie ma — `inrInterval` zamiast `inrEveryDays`, czyli odstęp pomiarów INR nie był kopiowany (aplikacja `2026-08-22.64`) | `aplikacja` |
 | **D88** | Domykanie doby liczone od północy DOBY LEKOWEJ, nie zegara; znaczniki doby w NVS zapisywane sprawdzanym `nvsPutU32()` (firmware `1.47.1`) | `dane` |

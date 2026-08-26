@@ -48,12 +48,53 @@ function newDataZ(val) {
   };
 }
 
+/* `matches()` NIE ISTNIEJE W JS - i to nie byl szczegol.
+
+   Firebase daje napisom metode `matches(/wzorzec/)`; JavaScript nie.
+   Wywolanie leci wiec wyjatkiem, a `ocen()` lapie kazdy wyjatek i
+   PRZEPUSZCZA zapis. Skutek: kazda regula z wyrazeniem regularnym byla
+   dla testow niewidzialna - przechodzilo przez nia wszystko. Dotyczylo
+   to `inrDue` (data pomiaru INR), a od 1.47.2 takze godzin w harmonogramie.
+
+   Ta sama rodzina co atrapa Preferences i `structuredClone` w atrapie
+   Firebase (D30, D39, D85): narzedzie lagodniejsze od oryginalu mierzy
+   nie to, co trzeba - tyle ze tutaj nie mierzylo NIC.
+
+   Podmieniamy wywolanie na funkcje pomocnicza zamiast opakowywac napis
+   w obiekt String: reguly porownuja wartosci przez `===` z literalem
+   (`newData.val() === 'usun'`), a obiekt String nigdy nie jest `===`
+   napisowi. Lekarstwo bylo by wtedy gorsze od choroby.               */
+const WYWOLANIE_MATCHES =
+  /((?:newData(?:\.child\((?:'[^']*'|"[^"]*")\))?\.val\(\))|__klucz)\.matches\(\s*(\/(?:\\.|[^\/])+\/[a-z]*)\s*\)/g;
+
+/* `$tag`, `$i`, `$date` - nazwa klucza, pod ktory wlasnie piszemy. Firebase
+   udostepnia ja w wyrazeniu pod nazwa wildcardu; my podstawiamy pod nia
+   jedna zmienna. Wystarcza, bo `.validate` w tym pliku odwoluje sie zawsze
+   do wildcardu WLASNEGO poziomu (wyrazenia siegajace wyzej i tak zawieraja
+   auth/root, wiec sa oznaczone jako nieobslugiwane).                    */
+const WILDCARD = /\$[A-Za-z_]\w*/g;
+
+function __matches(v, re) { return typeof v === "string" && re.test(v); }
+
+/* Czy po podstawieniach zostalo cos, czego nie umiemy policzyc. Regula
+   niepoliczalna PRZEPUSZCZA zapis (patrz `ocen`), wiec cicha luka w tym
+   miejscu znaczy "test nie sprawdza tej reguly w ogole" - a dokladnie tak
+   przez caly czas dzialalo `matches()`. Lepiej wiedziec.               */
+export function zostawiaMatches(wyr) {
+  if (typeof wyr !== "string" || !wyr.includes(".matches(")) return false;
+  return wyr.replace(WILDCARD, "__klucz").replace(WYWOLANIE_MATCHES, "OK")
+            .includes(".matches(");
+}
+
 const pamiec = new Map();
 function skompiluj(wyr) {
   if (!pamiec.has(wyr)) {
     /* Wyrazenia z naszego pliku sa podzbiorem skladni JS, wiec zamiast
        pisac wlasny parser podstawiamy newData i liczymy wprost.       */
-    pamiec.set(wyr, new Function("newData", `"use strict"; return (${wyr});`));
+    const js = wyr.replace(WILDCARD, "__klucz")
+                  .replace(WYWOLANIE_MATCHES, "__matches($1, $2)");
+    pamiec.set(wyr, new Function("newData", "__matches", "__klucz",
+                                 `"use strict"; return (${js});`));
   }
   return pamiec.get(wyr);
 }
@@ -64,7 +105,7 @@ function skompiluj(wyr) {
 const NIEOBSLUGIWANE = /\b(auth|data|root|now)\b/;
 export const nieobslugiwane = wyr => typeof wyr === "string" && NIEOBSLUGIWANE.test(wyr);
 
-function ocen(wyr, val) {
+function ocen(wyr, val, klucz = "") {
   if (wyr === true || wyr === false) return wyr;
   if (typeof wyr !== "string") return true;
   /* PRZEPUSZCZAMY, czego nie umiemy policzyc - zamiast zglaszac blad.
@@ -77,7 +118,7 @@ function ocen(wyr, val) {
      osobno pilnuje, czy w pliku nie pojawilo sie cos, czego nie
      obsluguje - i mowi to wprost.                                    */
   if (nieobslugiwane(wyr)) return true;
-  try { return !!skompiluj(wyr)(newDataZ(val)); }
+  try { return !!skompiluj(wyr)(newDataZ(val), __matches, klucz); }
   catch { return true; }
 }
 
@@ -109,11 +150,11 @@ function wolnoPisac(reguly, czesci) {
 }
 
 /* Rekurencyjne sprawdzenie .validate na wezle i wszystkich dzieciach. */
-function sprawdzWezel(wezel, val, sciezka, bledy) {
+function sprawdzWezel(wezel, val, sciezka, bledy, klucz = "") {
   if (val === null || val === undefined) return;      // kasowanie nie jest walidowane
 
   if (wezel && wezel[".validate"] !== undefined) {
-    if (!ocen(wezel[".validate"], val)) {
+    if (!ocen(wezel[".validate"], val, klucz)) {
       bledy.push({
         sciezka,
         powod: wezel[".validate"] === false
@@ -127,7 +168,7 @@ function sprawdzWezel(wezel, val, sciezka, bledy) {
 
   if (val !== null && typeof val === "object") {
     for (const [k, v] of Object.entries(val)) {
-      sprawdzWezel(wezelDla(wezel, k), v, `${sciezka}/${k}`, bledy);
+      sprawdzWezel(wezelDla(wezel, k), v, `${sciezka}/${k}`, bledy, k);
     }
   }
 }
@@ -152,7 +193,8 @@ export function sprawdzZapis(reguly, sciezka, wartosc) {
     if (!wezel) break;
   }
 
-  sprawdzWezel(wezel, wartosc, "/" + czesci.join("/"), bledy);
+  sprawdzWezel(wezel, wartosc, "/" + czesci.join("/"), bledy,
+               czesci[czesci.length - 1] || "");
   return { ok: bledy.length === 0, bledy };
 }
 

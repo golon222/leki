@@ -13,7 +13,8 @@
  *
  *      node test_rules.mjs
  * ===================================================================== */
-import { wczytajReguly, sprawdzZapis, opiszBledy, nieobslugiwane } from "./rules_engine.mjs";
+import { wczytajReguly, sprawdzZapis, opiszBledy, nieobslugiwane,
+         zostawiaMatches } from "./rules_engine.mjs";
 import { readFileSync } from "node:fs";
 
 const R = wczytajReguly();
@@ -92,6 +93,23 @@ odrzuc("tzOffsetMin poza zakresem",      "devices/pillbox1/config/tzOffsetMin", 
 odrzuc("INR poza skala pomiaru",         "users/u1/inr/2026-08-01", { value: 99 });
 odrzuc("INR jako napis",                 "users/u1/inr/2026-08-01", { value: "2.5" });
 odrzuc("pusty harmonogram",              "devices/pillbox1/config/schedule", []);
+
+/* GODZINA PRZYPOMNIENIA MUSI BYC GODZINA. Regula widziala dotad tylko
+   "tablica ma dzieci", wiec "25:00" albo "aa:bb" przechodzilo. Pudelko
+   liczy godzine przez toInt(): "25:00" to minuta 1500, a `matchSlot()`
+   liczy wtedy roznice przez polnoc na MINUS i taka pozycja bije kazda
+   poprawna godzine - przy "20:00|35:00" pol doby bylo "pora leku".
+   Aplikacja czegos takiego nie zapisze, ale regula jest drzwiami, przez
+   ktore wchodzi tez konsola Firebase i kazdy inny klient.            */
+ok("harmonogram z jedna godzina",        "devices/pillbox1/config/schedule", ["08:00"]);
+ok("harmonogram z dwiema",               "devices/pillbox1/config/schedule", ["08:00","20:00"]);
+ok("polnoc i ostatnia minuta doby",      "devices/pillbox1/config/schedule", ["00:00","23:59"]);
+odrzuc("godzina spoza doby",             "devices/pillbox1/config/schedule", ["25:00"]);
+odrzuc("minuta spoza godziny",           "devices/pillbox1/config/schedule", ["08:99"]);
+odrzuc("napis, ktory nie jest godzina",  "devices/pillbox1/config/schedule", ["aa:bb"]);
+odrzuc("godzina bez zera wiodacego",     "devices/pillbox1/config/schedule", ["8:00"]);
+odrzuc("pusta pozycja w harmonogramie",  "devices/pillbox1/config/schedule", ["20:00",""]);
+odrzuc("liczba zamiast godziny",         "devices/pillbox1/config/schedule", [800]);
 odrzuc("zapis poza drzewem regul",       "cokolwiek/tam", { a: 1 });
 odrzuc("notatka dluzsza niz limit",
        "users/u1/doses/2026-08-01/0", { status: "taken", note: "x".repeat(301) });
@@ -401,7 +419,27 @@ head("Granice silnika sa jawne, a nie zamieniaja sie w falszywy alarm");
   const udawana = { ".validate": "root.child('x').val() === true" };
   check(nieobslugiwane(udawana[".validate"]),
         "wyrazenie z root jest rozpoznawane jako nieobslugiwane");
+
+  /* `matches()` NIE ISTNIEJE W JS - wywolanie leci wyjatkiem, a `ocen()`
+     lapie kazdy wyjatek i PRZEPUSZCZA zapis. Przez to kazda regula
+     z wyrazeniem regularnym byla dla testow niewidzialna: przechodzilo
+     przez nia wszystko. Silnik podmienia je teraz na wlasna funkcje;
+     ta kontrola pilnuje, ze zadna nie zostala niepodmieniona.        */
+  const zRegexem = walidacje.filter(w => typeof w === "string" && w.includes(".matches("));
+  check(zRegexem.length >= 3,
+        `w regulach sa wyrazenia regularne (${zRegexem.length}) - jest czego pilnowac`);
+  const nieprzelozone = zRegexem.filter(zostawiaMatches);
+  check(nieprzelozone.length === 0,
+        `silnik umie policzyc kazde matches() w regulach; nieprzelozone: ` +
+        JSON.stringify(nieprzelozone));
 }
+
+/* I dowod, ze silnik naprawde LICZY te wyrazenia, a nie tylko przepuszcza. */
+head("Wyrazenia regularne w regulach dzialaja");
+ok("tag z listy",                    "users/u1/tags/2026-08-01", { abx: true });
+odrzuc("tag spoza listy",            "users/u1/tags/2026-08-01", { cokolwiek: true });
+odrzuc("termin INR w zlym formacie", "devices/pillbox1/config/inrDue", "26-08-2026");
+ok("termin INR poprawny",            "devices/pillbox1/config/inrDue", "2026-08-26");
 
 console.log("\n──────────────────────────────────────");
 console.log(`  ZALICZONE: ${PASS}    BLEDY: ${FAIL}`);

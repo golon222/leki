@@ -20,6 +20,7 @@ FakeSerial Serial;
 /* globalne, ktorych uzywa wycieta logika */
 Preferences prefs;
 String  slots[12];
+char    rtcSchedule[96] = {0};   /* jak w firmware - pamiec RTC na harmonogram */
 String  idToken;          /* token Firebase - potrzebny przez tokenZPamieci() */
 int     slotCount = 0;
 int     batteryPercentage = 0;
@@ -638,6 +639,57 @@ FAKE_NOW = 900;
 CHECK(makeRecord("boot", -1).startsWith(String("900;boot")), "bez zegara licznik od startu");
 CHECK(makeRecordAt("boot", -1, 0).startsWith(String("0;boot")), "zero nadal mozliwe wprost");
 rtcTimeValid = true;
+
+/* ================= 7c. HARMONOGRAM: TYLKO PRAWDZIWE GODZINY =========
+   `slotMinutes()` liczy godzine przez toInt(), ktore ze smieci robi zero,
+   a z "25:00" - minute 1500. Takiej pozycji nie da sie zadzwonic o
+   wlasciwej porze: roznica liczona przez polnoc wychodzi UJEMNA i bije
+   kazda poprawna godzine, wiec przy "20:00|35:00" pudelko uznawalo za pore
+   leku pol doby. Aplikacja tego nie zapisze, reguly bazy od 1.47.2 tez nie
+   przepuszcza - ale pudelko ma bronic sie samo takze przed tym, co juz
+   lezy w jego wlasnej pamieci.                                          */
+head("Harmonogram przyjmuje wylacznie prawdziwe godziny");
+for (const char* dobra : {"00:00", "08:00", "20:00", "23:59", "09:05"}) {
+  parseSchedule(String(dobra));
+  CHECK(slotCount == 1, "\"%s\" to godzina - wchodzi (%d slotow)", dobra, slotCount);
+}
+for (const char* zla : {"aa:bb", "25:00", "08:99", "99:99", "-1:00", "24:00", "0800",
+                        "8:00", "08-00", " 8:00", "08:0 "}) {
+  parseSchedule(String(zla));
+  CHECK(slotCount == 0, "\"%s\" NIE jest godzina - odrzucone (%d slotow)", zla, slotCount);
+}
+parseSchedule(String("20:00|35:00"));
+CHECK(slotCount == 1 && slots[0] == String("20:00"),
+      "zla pozycja wypada, dobra zostaje (%d slotow)", slotCount);
+
+/* NAJWAZNIEJSZE: zla godzina nie moze zrobic z polowy doby "pory leku". */
+{
+  rtcTimeValid = true;
+  parseSchedule(String("20:00|35:00"));
+  int trafienPozaOknem = 0;
+  for (int m = 0; m < 1440; m++) {
+    FAKE_NOW = local(2026, 8, 26, m/60, m%60);
+    if (matchSlot(FAKE_NOW) < 0) continue;
+    int d = abs(m - 1200);                       // odleglosc od 20:00
+    if (d > 720) d = 1440 - d;
+    if (d > MATCH_WINDOW_MIN) trafienPozaOknem++;
+  }
+  CHECK(trafienPozaOknem == 0,
+        "pora leku wypada WYLACZNIE w oknie wokol 20:00 (%d minut poza)", trafienPozaOknem);
+}
+
+/* Harmonogram bez ani jednej prawdziwej godziny nie moze dac CISZY -
+   pudelko nie odezwaloby sie ani razu i nie byloby tego po czym poznac. */
+prefs.wipe();
+prefs.begin(NVS_NAMESPACE, false);
+nvsPutStr("sched", String("aa:bb|25:00"));
+prefs.end();
+rtcSchedule[0] = 0;
+loadSchedule();
+CHECK(slotCount >= 1, "smiecie w pamieci wracaja do domyslnego, nie do ciszy (%d slotow)", slotCount);
+CHECK(slots[0] == String(DEFAULT_SCHEDULE),
+      "i jest to DEFAULT_SCHEDULE: %s", slots[0].c_str());
+prefs.wipe(); rtcSchedule[0] = 0;
 
 /* ================= 8. ROLOWANIE DOBY ================= */
 head("Rolowanie doby lekowej (o DAY_START_HOUR, nie o polnocy)");
