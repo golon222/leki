@@ -4107,6 +4107,61 @@ head("Pomiar INR: usuwanie i poprawianie");
         "poprawianie nieistniejacego pomiaru nic nie zmienia");
 }
 
+/* ═══ WPISANY WYNIK MUSI WYCISZYC PUDELKO (D84) ═══
+
+   Cala konstrukcja przypomnien o INR stoi na jednym zdaniu: "po wpisaniu
+   wyniku aplikacja przesuwa `inrDue` na nastepny termin, pudelko widzi
+   inna date, zeruje maske i nie ma o czym pisac". Firmware mial na to
+   23 kontrole. Aplikacja - czyli ta strona, ktora ma date PRZESUNAC -
+   nie miala ani jednej; `addInr()` nie bylo dotkniete zadnym testem.
+   Dokladnie lekcja B19: mechanizm sprawdzony, okablowanie nie.        */
+head("Wpisany wynik INR przesuwa termin - i wycisza pudelko");
+{
+  A.__resetDb();
+  const dzis = A.todayKey();
+  const przes = (n) => { const d = new Date(dzis + "T12:00:00");
+                         d.setDate(d.getDate() + n); return A.dateKey(d); };
+  A.__setState({ cfg:{ inrEveryDays:21, inrMin:2, inrMax:3 },
+                 inr:{ [przes(-21)]: { value:2.5, ts:1 } } });
+  check(A.inrTerminKey() === dzis, "termin wypada dzis: " + A.inrTerminKey());
+
+  document.getElementById("inrDate").value = dzis;
+  document.getElementById("inrVal").value  = "2,6";
+  document.getElementById("inrNote").value = "";
+  await window.addInr();
+
+  check(A.inr[dzis]?.value === 2.6,
+        "wynik ODRAZU w lokalnej kopii, bez czekania na nasluch");
+  check(A.inrTerminKey() === przes(21),
+        "termin przesuniety o odstep: " + A.inrTerminKey() + " (oczekiwane " + przes(21) + ")");
+  check(A.cfg.inrDue === przes(21), "cfg.inrDue zna nowy termin: " + A.cfg.inrDue);
+  check(A.__db.data?.devices?.pillbox01?.config?.inrDue === przes(21),
+        "I TRAFIL DO BAZY - bez tego pudelko pisze dalej: " +
+        A.__db.data?.devices?.pillbox01?.config?.inrDue);
+
+  /* Przecinek zamiast kropki, bo tak wpisuje sie na polskiej klawiaturze. */
+  check(A.inr[dzis].ts > 0, "wpis ma znacznik czasu");
+
+  /* Data z przyszlosci cicho wylaczalaby przypominanie: inrTerminKey()
+     bierze NAJPOZNIEJSZY wpis, wiec literowka w roku przesuwa termin
+     o rok i nikt sie o tym nie dowiaduje.                             */
+  const ileByloPrzed = Object.keys(A.inr).length;
+  document.getElementById("inrDate").value = przes(3);
+  document.getElementById("inrVal").value  = "2,2";
+  await window.addInr();
+  check(Object.keys(A.inr).length === ileByloPrzed, "pomiar z przyszlosci nie wchodzi");
+  check(document.getElementById("inrAddMsg").textContent.includes("przyszłości"),
+        "i widac dlaczego: " + document.getElementById("inrAddMsg").textContent);
+
+  /* Usuniecie ostatniego pomiaru musi termin COFNAC - inaczej po skasowaniu
+     literowki pudelko milczaloby az do nastepnego wpisu.               */
+  const pUsun2 = window.delInr(dzis);
+  window.cfResolve(true);
+  await pUsun2;
+  check(A.cfg.inrDue === dzis,
+        "po skasowaniu wyniku termin wraca na poprzedni: " + A.cfg.inrDue);
+}
+
 head("Historia rozpisania dawki");
 {
   const wczoraj = shift(-1), dawno = shift(-30);

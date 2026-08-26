@@ -1929,7 +1929,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-22.66";
+const APP_VERSION = "2026-08-22.67";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -3815,11 +3815,26 @@ window.addInr = async () => {
     msg.style.color = "var(--bad)"; return;
   }
   const note = document.getElementById("inrNote").value.trim();
-  await zapiszPewnie({ [`users/${uid}/inr/${date}`]: {
+  const wpis = {
     value: Math.round(val*100)/100,
     ts: Math.floor(new Date(date+"T12:00:00").getTime()/1000),
     ...(note ? { note } : {})
-  }}, "Wynik INR");
+  };
+  await zapiszPewnie({ [`users/${uid}/inr/${date}`]: wpis }, "Wynik INR");
+  /* NOWY POMIAR OD RAZU W LOKALNEJ KOPII — tak samo jak `delInr()` kasuje
+     go od razu, i z tego samego powodu.
+
+     `odswiezTerminInr()` niżej liczy termin z `inr`, a `inr` aktualizuje
+     nasłuch. SDK Firebase odpala go dla własnego zapisu od ręki, więc
+     zwykle zdąży — ale „zwykle zdąży" to jest dokładnie ten wyścig, na
+     którym przejechaliśmy się przy B27: *ochrona oparta na tym, że lokalna
+     kopia jest świeża, nie jest ochroną*. Tu stawką jest cisza po pomiarze:
+     jeśli termin się nie przesunie, pudełko dalej pisze „dziś wypada pomiar
+     INR" trzy razy w ciągu dnia, choć wynik jest już wpisany (D84).
+
+     Jedna linijka zamienia wyścig w pewność — i dopiero z nią da się to
+     w ogóle sprawdzić testem.                                          */
+  inr[date] = wpis;
   document.getElementById("inrVal").value = "";
   document.getElementById("inrNote").value = "";
   await odswiezTerminInr();
