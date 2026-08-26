@@ -702,7 +702,33 @@ ok(not stray, f"rtcTakenDay zmieniany wylacznie przez setTakenDay() ({len(stray)
 stray2 = [m.start() for m in re.finditer(r"\brtcRolloverDay\s*=[^=]", code)
           if not in_allowed(m.start()) and "RTC_DATA_ATTR" not in code[max(0,m.start()-45):m.start()]]
 ok(not stray2, f"rtcRolloverDay zmieniany wylacznie przez setRolloverDay() ({len(stray2)} obejsc)")
-ok("putULong(\"takenDay\"" in ino, "znacznik dawki zapisywany w pamieci nieulotnej")
+# Znacznik dawki nie tylko MA byc zapisany w pamieci nieulotnej - zapis
+# musi jeszcze umiec zawiesc GLOSNO. Do 1.47.1 szly tedy gole
+# `prefs.putULong()`, ktorych wyniku nikt nie sprawdzal: nieudany zapis
+# `takenDay` znaczy brak ostrzezenia przed druga dawka Warfinu po
+# restarcie, a licznik `nvsFail` nawet nie drgal. Trzy klucze, jedna
+# droga - `nvsPutU32()` liczy awarie i zapamietuje klucz (D46).
+for _kl in ("takenDay", "rollDay", "almDay"):
+    ok(f'nvsPutU32("{_kl}"' in ino and f'putULong("{_kl}"' not in ino,
+       f"znacznik {_kl} zapisywany sprawdzanym nvsPutU32(), nie golym putULong()")
+ok(re.search(r"bool nvsPutU32\(.*?zanotujNvsFail", ino, re.S) is not None,
+   "nvsPutU32() melduje nieudany zapis licznikowi awarii")
+
+# Domykanie dob liczy sie od polnocy DOBY LEKOWEJ, nie od polnocy zegara.
+# Miedzy polnoca a DAY_START_HOUR te dwie chwile naleza do roznych dob, a
+# punkt odniesienia wziety z zegara wskazywal wtedy na dobe, ktora WLASNIE
+# TRWA - pudelko zglaszalo "missed" za dzien, w ktorym tabletke wolno bylo
+# jeszcze wziac (a po granicy: drugi raz za ten sam dzien). Testy
+# sprawdzaja arytmetyke, ten audyt - ze odjecie w ogole tam stoi (B19).
+_m_roll = re.search(r"void checkDayRollover\(\)\s*\{(.*?)\n\}", ino, re.S)
+if not _m_roll:
+    ok(False, "znaleziono checkDayRollover()")
+else:
+    _ciało = _m_roll.group(1)
+    ok("DAY_START_HOUR" in _ciało and "localMinutesOfDay" in _ciało,
+       "checkDayRollover() liczy punkt odniesienia od granicy doby lekowej")
+    ok(not re.search(r"=\s*now\s*-\s*\(time_t\)localMinutesOfDay\(now\)", _ciało),
+       "i NIE od polnocy zegara (miedzy 00:00 a DAY_START_HOUR to inna doba)")
 
 # ---------- 8. Makra z config.h faktycznie uzywane ----------
 declared = set(re.findall(r"#\s*define\s+(\w+)", cfg))

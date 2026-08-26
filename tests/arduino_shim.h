@@ -166,10 +166,25 @@ public:
   unsigned int getUInt(const char* k, unsigned int d = 0) {
     auto it = ui.find(k); return it == ui.end() ? d : it->second;
   }
-  void putUInt(const char* k, unsigned int v) { ui[k] = v; }
+  /* TE DWA ZWRACALY `void`, i to bylo lagodniejsze od oryginalu.
+
+     Prawdziwe `Preferences::putUInt/putULong` zwracaja liczbe zapisanych
+     bajtow, a ZERO przy niepowodzeniu - dokladnie jak putString wyzej.
+     Atrapa, ktora nie umie zawiesc, sprawia, ze cala galaz "zapis sie nie
+     udal" jest dla testow NIEWIDZIALNA: na `takenDay` i `rollDay` opiera
+     sie ostrzezenie "juz dzis brales", wiec ich cicha strata to ryzyko
+     drugiej dawki Warfinu. Piaty raz ta sama lekcja co w D30.          */
+  size_t putUInt(const char* k, unsigned int v) {
+    if (failKeys.count(k)) return 0;
+    if (strict && !_started) return 0;
+    ui[k] = v; return sizeof(unsigned int); }
   unsigned long getULong(const char* k, unsigned long d = 0) {
     auto it = ul.find(k); return it == ul.end() ? d : it->second; }
-  void putULong(const char* k, unsigned long v) { ul[k] = v; }
+  size_t putULong(const char* k, unsigned long v) {
+    if (failKeys.count(k)) return 0;
+    if (strict && !_started) return 0;
+    if (cichoGubKlucze.count(k)) return sizeof(unsigned long);
+    ul[k] = v; return sizeof(unsigned long); }
   short getShort(const char* k, short d = 0) {
     auto it = sh.find(k); return it == sh.end() ? d : it->second; }
   void putShort(const char* k, short v) { sh[k] = v; }

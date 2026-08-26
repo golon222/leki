@@ -65,6 +65,8 @@ Od najnowszej. Kolumna „gdzie" mówi, który plik w `decyzje/` trzymać otwart
 
 | # | O co chodziło | gdzie |
 |---|---|---|
+| **D89** | Kopia zapasowa wymieniała pole, którego nie ma — `inrInterval` zamiast `inrEveryDays`, czyli odstęp pomiarów INR nie był kopiowany (aplikacja `2026-08-22.64`) | `aplikacja` |
+| **D88** | Domykanie doby liczone od północy DOBY LEKOWEJ, nie zegara; znaczniki doby w NVS zapisywane sprawdzanym `nvsPutU32()` (firmware `1.47.1`) | `dane` |
 | **D87** | Dawka zapisana bez zegara odzyskuje datę, gdy zegar wróci — znacznik względny zamiast twardego zera (firmware `1.47.0`) | `dane` |
 | **D86** | Dziennik rozbity na indeks + obszary, duże pliki dostają generowaną `MAPA.md` — wejście w zadanie 5,7 tys. zamiast 60 tys. tokenów | `testy` |
 | **D85** | Cicha kopia na Telegram: `disable_notification` PLUS własny czat, który wolno wyciszyć (aplikacja… | `telegram` |

@@ -77,6 +77,26 @@ if _zle_rys:
 else:
     print('  OK   oslona rysowania nie owija zadnego zapisu do bazy')
 
+# KAZDA NAZWA Z `KOPIA_CFG` MUSI ISTNIEC W `cfg`.
+#
+# Whitelist kopii zapasowej nie ma jak zglosic literowki: nazwa spoza `cfg`
+# po prostu nic nie kopiuje i milczy. Tak przepadl odstep miedzy pomiarami
+# INR - lista wolala go `inrInterval`, a pole nazywa sie `inrEveryDays`.
+# Kopia wygladala na kompletna az do dnia, w ktorym trzeba bylo z niej
+# odtworzyc; wtedy odstep wracal do domyslnych 21 dni.
+_m_kopia = re.search(r'const KOPIA_CFG = \[(.*?)\];', js, re.S)
+if not _m_kopia:
+    bad += 1; print('  BLAD nie znaleziono listy KOPIA_CFG')
+else:
+    _pola = re.findall(r'"([\w]+)"', _m_kopia.group(1))
+    _uzywane = set(re.findall(r'cfg\.(\w+)', js)) | set(re.findall(r'cfg\[\"(\w+)\"\]', js))
+    _widma = [p for p in _pola if p not in _uzywane]
+    if _widma:
+        bad += 1
+        print('  BLAD KOPIA_CFG wymienia pola, ktorych nie ma w cfg:', _widma)
+    else:
+        print(f'  OK   wszystkie {len(_pola)} pola z KOPIA_CFG istnieja w cfg')
+
 # Kazdy render wolany z renderAll() ma miec WLASNA oslone - inaczej jeden
 # wysypany ekran znow zabiera ze soba pozostale.
 _all = js[js.index('function renderAll(){') + len('function renderAll(){'):]

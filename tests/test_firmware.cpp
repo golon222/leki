@@ -355,6 +355,44 @@ prefs.begin(NVS_NAMESPACE, false);
 CHECK(!nvsPutU16("qc", 5), "nvsPutU16 tez melduje niepowodzenie");
 prefs.end();
 CHECK(String(rtcNvsFailKey)=="qc", "i tez zapamietuje klucz: '%s'", rtcNvsFailKey);
+
+/* ZNACZNIK DAWKI TEZ MUSI ZAWIESC GLOSNO.
+
+   `takenDay` to jedyny slad wzietej dawki, ktory przezywa RESET: po
+   wgraniu programu albo zaniku zasilania pamiec RTC jest pusta i
+   `juzDzisBrane()` czyta wylacznie ten wpis. Do 1.47.1 szedl prosto
+   przez `prefs.putULong()`, ktorego wyniku nikt nie sprawdzal - wiec
+   nieudany zapis znaczyl: brak ostrzezenia przed druga dawka Warfinu
+   i licznik `nvsFail` na zerze. Cisza w miejscu, w ktorym ma byc krzyk. */
+prefs.wipe(); rtcNvsFail = 0; rtcNvsFailKey[0] = 0;
+rtcTakenDay = 0;
+prefs.failKeys.insert("takenDay");
+setTakenDay(20260826u);
+CHECK(rtcNvsFail==1, "nieudany zapis znacznika dawki jest POLICZONY (%u)", rtcNvsFail);
+CHECK(String(rtcNvsFailKey)=="takenDay",
+      "i wiadomo, ktory klucz przepadl: '%s'", rtcNvsFailKey);
+prefs.failKeys.clear();
+
+prefs.wipe(); rtcNvsFail = 0; rtcNvsFailKey[0] = 0;
+rtcRolloverDay = 0;
+prefs.failKeys.insert("rollDay");
+setRolloverDay(20260826u);
+CHECK(rtcNvsFail==1 && String(rtcNvsFailKey)=="rollDay",
+      "to samo dla znacznika rozliczonej doby: '%s'", rtcNvsFailKey);
+prefs.failKeys.clear();
+
+/* A gdy pamiec dziala - wartosc naprawde tam jest i przezywa reset.
+   Odczyt zwrotny, nie sam wynik zapisu: to jest ta roznica, ktora
+   `hasloUtrwal()` kosztowala osobna kontrole (D46, D47).             */
+prefs.wipe(); rtcNvsFail = 0;
+rtcTakenDay = 0;
+setTakenDay(20260826u);
+prefs.begin(NVS_NAMESPACE, true);
+CHECK(prefs.getULong("takenDay", 0)==20260826u,
+      "przy sprawnej pamieci znacznik naprawde w niej lezy");
+prefs.end();
+CHECK(rtcNvsFail==0, "i nic nie jest liczone jako awaria (%u)", rtcNvsFail);
+rtcTakenDay = 0; rtcRolloverDay = 0; prefs.wipe();
 prefs.failKeys.clear();
 
 /* Kolejny nieudany zapis NADPISUJE poprzedni klucz - trzymamy tylko
@@ -634,6 +672,124 @@ CHECK(r.indexOf(String("missed")) > 0, "typ zdarzenia: %s", r.c_str());
 /* powtorne wywolanie tego samego dnia nie duplikuje */
 checkDayRollover();
 CHECK(queueCount()==1, "brak duplikatu przy ponownym wybudzeniu (%u)", queueCount());
+
+/* --- OKNO NOCNE: miedzy polnoca a DAY_START_HOUR ---------------------
+   Doba lekowa konczy sie o 3:00, wiec o 1:30 WCIAZ TRWA doba wczorajsza
+   i tabletke wolno jeszcze wziac. Punkt odniesienia liczony od polnocy
+   ZEGARA przeskakiwal juz wtedy na dzis i pierwszy krok petli trafial
+   w dobe biezaca: pudelko zglaszalo "missed" za dzien, ktory sie nie
+   skonczyl, a po granicy o 3:00 - drugi raz za ten sam dzien.
+   Wybudzenie o tej porze nie jest teoria: na ladowarce pudelko melduje
+   sie co minute (CHARGE_POLL_S), a po rozladowanym ogniwie wraca do
+   zycia o dowolnej godzinie.                                          */
+head("Rolowanie doby w oknie nocnym (00:00 - DAY_START_HOUR)");
+prefs.wipe(); resetDosing();
+rtcTimeValid = true; rtcTakenDay = 0;
+rtcRolloverDay = 20260824u;                 // ostatnia zamknieta doba
+
+FAKE_NOW = local(2026,8,26,1,30);           // 1:30 - doba 20260825 TRWA
+CHECK(localDayNumber(FAKE_NOW)==20260825u,
+      "o 1:30 biezaca doba lekowa to 25 sierpnia (%u)", localDayNumber(FAKE_NOW));
+checkDayRollover();
+CHECK(queueCount()==1, "zamykamy TYLKO dobe naprawde zamknieta (%u wpisow)", queueCount());
+{
+  String rn; queuePeek(rn);
+  unsigned long tsn = (unsigned long)rn.substring(0, rn.indexOf(';')).toInt();
+  CHECK(localDayNumber((time_t)tsn)==20260824u,
+        "i jest to 24 sierpnia, nie trwajacy 25 (%u)", localDayNumber((time_t)tsn));
+}
+CHECK(rtcRolloverDay==20260825u,
+      "znacznik staje na dobie TRWAJACEJ - ona dopiero czeka (%u)", rtcRolloverDay);
+
+/* Po granicy doby ta sama doba domyka sie DOKLADNIE RAZ. */
+FAKE_NOW = local(2026,8,26,3,1);
+checkDayRollover();
+CHECK(queueCount()==2, "po 3:00 dochodzi dokladnie jeden wpis (%u)", queueCount());
+{
+  queuePop();                                // zdejmujemy 24 sierpnia
+  String rn; queuePeek(rn);
+  unsigned long tsn = (unsigned long)rn.substring(0, rn.indexOf(';')).toInt();
+  CHECK(localDayNumber((time_t)tsn)==20260825u,
+        "drugi wpis to 25 sierpnia (%u)", localDayNumber((time_t)tsn));
+}
+CHECK(rtcRolloverDay==20260826u, "znacznik przesuniety na dzis (%u)", rtcRolloverDay);
+
+/* A gdy dawka poszla o 1:45 - czyli jeszcze w tamtej dobie - to samo
+   wybudzenie o 3:01 nie ma juz czego zglaszac.                        */
+prefs.wipe();
+rtcRolloverDay = 20260824u; rtcTakenDay = 20260825u;
+FAKE_NOW = local(2026,8,26,1,30);
+checkDayRollover();                          // zamyka tylko 24 sierpnia
+FAKE_NOW = local(2026,8,26,3,1);
+checkDayRollover();
+{
+  uint16_t ile = queueCount(); int z25 = 0;
+  for (uint16_t i = 0; i < ile; i++) {
+    String rn; queuePeek(rn); queuePop();
+    unsigned long tsn = (unsigned long)rn.substring(0, rn.indexOf(';')).toInt();
+    if (localDayNumber((time_t)tsn)==20260825u) z25++;
+  }
+  CHECK(z25==0, "dawka wzieta o 1:45 zamyka dobe - zero wpisow 'missed' (%d)", z25);
+}
+
+/* Godzina tuz PRZED polnoca dziala jak dotad - ta sama doba, ten sam wynik. */
+prefs.wipe(); rtcTakenDay = 0; rtcRolloverDay = 20260824u;
+FAKE_NOW = local(2026,8,25,23,50);            // doba 20260825 tez trwa
+checkDayRollover();
+CHECK(queueCount()==1, "o 23:50 tak samo: tylko doba zamknieta (%u)", queueCount());
+{
+  String rn; queuePeek(rn);
+  unsigned long tsn = (unsigned long)rn.substring(0, rn.indexOf(';')).toInt();
+  CHECK(localDayNumber((time_t)tsn)==20260824u,
+        "i znowu 24 sierpnia (%u)", localDayNumber((time_t)tsn));
+}
+prefs.wipe(); rtcTakenDay = 0; rtcRolloverDay = 0;
+
+/* --- WLASNOSC, NIE POJEDYNCZA GODZINA -------------------------------
+   Pojedyncze przypadki nie wystarczaja: pomylka o JEDNA GODZINE w punkcie
+   odniesienia przechodzila przez nie bez sladu (sprawdzone mutacja).
+   Dlatego dwie wlasnosci sprawdzane o KAZDEJ porze doby.
+
+   1. Pudelko nigdy nie zglasza jako pominietej doby, ktora WLASNIE TRWA -
+      tabletke wolno wziac do samej granicy o DAY_START_HOUR.
+   2. Przy niezamknietej poprzedniej dobie zglasza ja, gdy tylko sie
+      skonczy - i to dokladnie raz.                                     */
+head("Rolowanie doby - wlasnosci o kazdej porze doby");
+{
+  int zleTrwajaca = 0, zleZamknieta = 0;
+  for (int h = 0; h < 24; h++) {
+    for (int mi = 0; mi < 60; mi += 17) {
+      prefs.wipe(); rtcTakenDay = 0;
+      FAKE_NOW = local(2026, 8, 26, h, mi);
+      const uint32_t biezaca = localDayNumber(FAKE_NOW);
+
+      /* Znacznik dwie doby wstecz - jest wiec co domykac. */
+      rtcRolloverDay = 20260824u;
+      checkDayRollover();
+
+      bool trafionoTrwajaca = false;
+      int  ileZamknietej = 0;
+      const uint32_t poprzednia = localDayNumber((time_t)(FAKE_NOW - 86400));
+      uint16_t ile = queueCount();
+      for (uint16_t i = 0; i < ile; i++) {
+        String rq; queuePeek(rq); queuePop();
+        unsigned long tq = (unsigned long)rq.substring(0, rq.indexOf(';')).toInt();
+        uint32_t doba = localDayNumber((time_t)tq);
+        if (doba == biezaca)    trafionoTrwajaca = true;
+        if (doba == poprzednia) ileZamknietej++;
+      }
+      if (trafionoTrwajaca) zleTrwajaca++;
+      /* Doba poprzednia jest juz zamknieta o kazdej porze - ma byc zgloszona
+         raz, ani zero (przeoczona), ani dwa (duplikat).                  */
+      if (ileZamknietej != 1) zleZamknieta++;
+    }
+  }
+  CHECK(zleTrwajaca == 0,
+        "NIGDY nie zglaszamy jako pominietej doby, ktora trwa (%d godzin zle)", zleTrwajaca);
+  CHECK(zleZamknieta == 0,
+        "doba juz zamknieta jest zgloszona dokladnie raz (%d godzin zle)", zleZamknieta);
+}
+prefs.wipe(); rtcTakenDay = 0; rtcRolloverDay = 0;
 
 /* ================= 9a2. DNI BEZ LEKU ================= */
 head("Rozpisanie tygodniowe - czytanie i odrzucanie");

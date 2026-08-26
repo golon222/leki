@@ -368,6 +368,29 @@ bool nvsPutU16(const char* key, uint16_t val) {
   return false;
 }
 
+/* --- Znaczniki doby tez musza umiec zawiesc GLOSNO --------------------
+
+   TU BYLA CICHA DZIURA, znaleziona przy przegladzie kodu. `setTakenDay()`,
+   `setRolloverDay()` i maska odzwonionych alarmow szly prosto przez
+   `prefs.putULong()`, ktorego wyniku NIKT nie sprawdzal - a to jedyne
+   miejsce, w ktorym NVS mowi, ze zapis nie przeszedl.
+
+   Stawka nie jest diagnostyczna. `takenDay` to jedyny slad dawki, ktory
+   przezywa RESET: po wgraniu programu albo zaniku zasilania pamiec RTC
+   jest pusta i `juzDzisBrane()` czyta wylacznie ten wpis. Zapis, ktory
+   przepadl po cichu, znaczy wiec: pudelko otwarte drugi raz tego samego
+   dnia NIE ostrzega przed powtorna dawka leku przeciwzakrzepowego - i nikt
+   sie o tym nie dowiaduje, bo licznik `nvsFail` nawet nie drgnal.
+
+   Ta sama droga co nvsPutStr/nvsPutU16: wynik do licznika, klucz do
+   historii, aplikacja krzyczy (D46).                                    */
+bool nvsPutU32(const char* key, uint32_t val) {
+  if (prefs.putULong(key, val) > 0) return true;
+  zanotujNvsFail(key);
+  LOG("[NVS] ZAPIS NIEUDANY: %s\n", key);
+  return false;
+}
+
 /* --- Ile miejsca zostalo w pamieci trwalej ----------------------------
    nvsPutStr() mowi, ze zapis PRZEPADL. Nie mowi, ile jeszcze zostalo -
    a to jest roznica miedzy "wlasnie zaczely ginac dane" a "za dwa dni
@@ -3023,7 +3046,7 @@ void setTakenDay(uint32_t day) {
   if (rtcTakenDay == day) return;
   rtcTakenDay = day;
   prefs.begin(NVS_NAMESPACE, false);
-  prefs.putULong("takenDay", day);
+  nvsPutU32("takenDay", day);
   prefs.end();
 }
 
@@ -3031,7 +3054,7 @@ void setRolloverDay(uint32_t day) {
   if (rtcRolloverDay == day) return;
   rtcRolloverDay = day;
   prefs.begin(NVS_NAMESPACE, false);
-  prefs.putULong("rollDay", day);
+  nvsPutU32("rollDay", day);
   prefs.end();
 }
 
@@ -3111,7 +3134,7 @@ void oznaczAlarmObsluzony(int slot) {
     if (slot >= 0 && slot < 16) rtcAlarmDoneMask |= (uint16_t)(1u << slot);
     else                        rtcAlarmDoneMask = 0xFFFF;   // slot nieznany: cisza na cala dobe
     prefs.begin(NVS_NAMESPACE, false);
-    prefs.putULong("almDay", rtcAlarmDoneDay);   // jak setTakenDay obok
+    nvsPutU32("almDay", rtcAlarmDoneDay);   // jak setTakenDay obok
     prefs.end();
     nvsPutU16("almMask", rtcAlarmDoneMask);
   }
@@ -3184,18 +3207,43 @@ void checkDayRollover() {
      wypychajac z niej prawdziwe dawki. Dluzsza przerwa i tak znaczy, ze
      urzadzenie bylo martwe, a nie ze ktos nie wzial leku.            */
   time_t now = time(nullptr);
-  time_t polnocDzis = now - (time_t)localMinutesOfDay(now) * 60;
+
+  /* PUNKT ODNIESIENIA TO POLNOC DOBY LEKOWEJ, NIE POLNOC ZEGARA.
+
+     TU BYL BLAD, znaleziony przy przegladzie kodu, nie zgloszony z terenu.
+     Stalo tu `now - localMinutesOfDay(now) * 60`, czyli polnoc biezacego
+     dnia KALENDARZOWEGO. Miedzy DAY_START_HOUR a polnoca te dwie polnoce
+     to ta sama chwila i wszystko sie zgadzalo. Ale miedzy polnoca a 3:00
+     doba lekowa jest jeszcze WCZORAJSZA - a punkt odniesienia przeskakiwal
+     juz na dzis. Pierwszy krok petli (23:59 poprzedniego dnia) trafial
+     wtedy w dobe, ktora WLASNIE TRWA.
+
+     Skutek: pudelko wybudzone o 1:30 - na ladowarce melduje sie co minute,
+     a po rozladowanym ogniwie wraca do zycia o dowolnej porze - zglaszalo
+     "missed" za dobe, w ktorej tabletke wolno bylo wziac jeszcze przez
+     poltorej godziny. A potem, po granicy o 3:00, zglaszalo ja DRUGI RAZ,
+     bo `setRolloverDay(today)` przesuwal znacznik na dobe juz zamknieta.
+     Aplikacja obu wpisow nie pokazywala jako czerwony dzien (dzien lekowy
+     rozstrzyga sie z koncem doby - D64), wiec objaw nie mial jak wyjsc na
+     ekran; w bazie zostawaly dwa zdarzenia o tym samym.
+
+     Odejmujemy wiec DAY_START_HOUR PRZED policzeniem polnocy. Data lokalna
+     tak przesunietej chwili to dokladnie numer biezacej doby lekowej, wiec
+     pierwszy krok petli zawsze trafia w dobe POPRZEDNIA - czyli pierwsza,
+     ktora naprawde jest juz zamknieta.                                  */
+  const time_t nowDoby   = now - (time_t)DAY_START_HOUR * 3600;
+  const time_t polnocDoby = nowDoby - (time_t)localMinutesOfDay(nowDoby) * 60;
 
   int doZamkniecia = 0;
   for (int wstecz = 1; wstecz <= MAX_ROLLOVER_DNI; wstecz++) {
-    uint32_t ts = (uint32_t)(polnocDzis - (time_t)(wstecz - 1) * 86400 - 60);
+    uint32_t ts = (uint32_t)(polnocDoby - (time_t)(wstecz - 1) * 86400 - 60);
     if (localDayNumber((time_t)ts) < rtcRolloverDay) break;
     doZamkniecia = wstecz;
     if (localDayNumber((time_t)ts) == rtcRolloverDay) break;
   }
 
   for (int wstecz = doZamkniecia; wstecz >= 1; wstecz--) {
-    uint32_t ts = (uint32_t)(polnocDzis - (time_t)(wstecz - 1) * 86400 - 60);
+    uint32_t ts = (uint32_t)(polnocDoby - (time_t)(wstecz - 1) * 86400 - 60);
     uint32_t doba = localDayNumber((time_t)ts);
     if (doba < rtcRolloverDay) continue;
     if (doba == rtcTakenDay) {

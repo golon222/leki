@@ -9,7 +9,7 @@ DEST = pathlib.Path(__file__).parent / "logic.inc"
 WANTED = [
     # Pomocniki NVS musza byc PRZED wszystkim, co z nich korzysta.
     # zanotujNvsFail przed nvsPutStr/nvsPutU16 - to one je woluja.
-    "zanotujNvsFail", "nvsPutStr", "nvsPutU16",
+    "zanotujNvsFail", "nvsPutStr", "nvsPutU16", "nvsPutU32",
     "readBatteryRaw", "battPercentFromCurve", "resetBatteryFilter",
     "battSmooth", "readBattery", "zapiszKoniecLadowania", "trackCharging",
     "parseSchedule", "slotMinutes", "localDayNumber", "localMinutesOfDay",

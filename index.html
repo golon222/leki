@@ -1929,7 +1929,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-22.63";
+const APP_VERSION = "2026-08-22.64";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -4586,6 +4586,19 @@ function opisNvsFailKey(klucz){
     return { grozne:true, co:"wpis kolejki — mogła przepaść dawka albo otwarcie pudełka" };
   if (/^n\d[sp]$/.test(klucz) || klucz === "netN")
     return { grozne:true, co:"sieć WiFi — wyślij ją z aplikacji jeszcze raz" };
+  /* ZNACZNIKI DOBY. `takenDay` to jedyny ślad wziętej dawki, który przeżywa
+     reset pudełka — bez niego przy drugim otwarciu tego samego dnia nie ma
+     ostrzeżenia przed powtórną tabletką. Pozostałe dwa dotyczą tego, czy
+     coś zostanie zgłoszone albo odegrane dwa razy: kłopotliwe, nie groźne. */
+  if (klucz === "takenDay")
+    return { grozne:true, co:"znacznik wziętej dawki — po restarcie pudełko może " +
+                             "nie ostrzec przed drugą tabletką; sprawdź dzisiejszy dzień" };
+  if (klucz === "rollDay")
+    return { grozne:false, co:"znacznik rozliczonej doby — dzień może zostać zgłoszony " +
+                              "jako pominięty drugi raz, dawek to nie dotyczy" };
+  if (klucz === "almDay" || klucz === "almMask")
+    return { grozne:false, co:"znacznik odegranego przypomnienia — pudełko może zadzwonić " +
+                              "jeszcze raz o tej samej porze" };
   if (klucz === "sched")
     return { grozne:false, co:"harmonogram przypomnień — pudełko zapisze go ponownie samo" };
   if (klucz === "dw" || klucz === "dex")
@@ -7406,8 +7419,18 @@ const KOPIA_WERSJA = 1;
 /* Pola ustawień, które mają sens po odtworzeniu. Whitelist, nie „wszystko
    poza" — przy „wszystko poza" pierwsze dołożone pole z sekretem trafia do
    pliku automatycznie i nikt tego nie zauważa.                          */
+/* NAZWY MUSZA ISTNIEC NAPRAWDE. Do 2026-08-22.64 stalo tu `inrInterval`,
+   pola, ktorego w tej aplikacji nie ma ani jednego: odstep miedzy pomiarami
+   INR nazywa sie `inrEveryDays`. Whitelist nie ma jak tego zglosic - nazwa
+   spoza `cfg` po prostu nic nie kopiuje i milczy. Kopia wygladala na
+   kompletna, a odtworzona z niej aplikacja wracala do domyslnych 21 dni.
+   Przy odstepie ustawionym przez lekarza na 42 dni to termin INR obok
+   o trzy tygodnie, a przy `0` (przypominanie swiadomie wylaczone) -
+   powiadomienia z pudelka, ktorych nikt nie zamawial (D84).
+   Kontrola statyczna pilnuje teraz, ze kazda nazwa z tej listy jest
+   uzywana jako `cfg.<nazwa>` w kodzie aplikacji.                        */
 const KOPIA_CFG = ["schedule","tz","tzOffsetMin","defaultDose","doseWeek","doseDays",
-                   "drugName","drugStrength","inrMin","inrMax","inrInterval",
+                   "drugName","drugStrength","inrMin","inrMax","inrEveryDays",
                    "trackingSince","pillsLeft","pillsBase","pillsBaseFrom",
                    "pillsCountedUntil"];
 

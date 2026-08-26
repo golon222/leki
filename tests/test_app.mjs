@@ -1015,6 +1015,18 @@ for (const k of ["sched", "dw", "dex", "tok", "lb3", "lbIdx", "llCnt", "llLost"]
 check(A.opisNvsFailKey("cosdziwnego").grozne,
       "nierozpoznany klucz jest OSTROZNIE traktowany jako grozny, nie olewany");
 
+/* ZNACZNIKI DOBY (1.47.1). Do tej wersji szly do NVS bez sprawdzania
+   wyniku, wiec nie mialy jak sie tu pojawic. `takenDay` jest jedynym
+   sladem wzietej dawki, ktory przezywa reset pudelka: bez niego drugie
+   otwarcie tego samego dnia nie ostrzega przed powtorna tabletka -
+   i to jest strata dotyczaca leku, nie diagnostyki.                   */
+check(A.opisNvsFailKey("takenDay").grozne,
+      '"takenDay" (znacznik wzietej dawki) jest grozny');
+check(A.opisNvsFailKey("takenDay").co.includes("drug"),
+      "i mowi wprost, czym to grozi: " + A.opisNvsFailKey("takenDay").co);
+for (const k of ["rollDay", "almDay", "almMask"])
+  check(!A.opisNvsFailKey(k).grozne, `"${k}" nie dotyczy dawek - nie jest grozny`);
+
 /* Strata, ktora NIE dotyczy leku, schodzi z Ustawien do Diagnostyki
    (zgloszenie Kuby: "to wez schowaj w diagnostyce, zeby tak nie
    wyskakiwalo"). Czerwona ramka mowiaca w jednym oddechu "UTRATA DANYCH"
@@ -3770,6 +3782,27 @@ head("Kopia zapasowa");
   check(!kt.includes("wifiNowa") && !kt.includes("tgNowy"), "ani same pola sekretow");
   for (const pole of ["schedule","defaultDose","drugName","inrMin"])
     check(A.KOPIA_CFG.includes(pole), `ustawienie "${pole}" jest na liscie do kopii`);
+
+  /* KAZDA NAZWA Z LISTY MUSI ISTNIEC W `cfg` - inaczej whitelist milczy.
+     Tak przepadl `inrEveryDays`: lista wolala go "inrInterval", czyli
+     polem, ktorego w aplikacji nie ma, wiec kopia po prostu nie brala
+     odstepu miedzy pomiarami INR. Nic nie krzyczalo - plik wygladal na
+     kompletny az do odtworzenia.                                       */
+  A.__setState({ cfg:{ inrEveryDays:42 } });
+  check(A.inrOdstep() === 42, "odstep INR ustawiony na 42 dni");
+  const kInr = A.zbierzKopie();
+  check(kInr.cfg.inrEveryDays === 42,
+        "ODSTEP MIEDZY POMIARAMI INR TRAFIA DO KOPII: " + kInr.cfg.inrEveryDays);
+  /* Odtworzenie na czystej aplikacji ma dac te sama liczbe, nie domyslne 21. */
+  A.__setState({ cfg:{ inrEveryDays: undefined } });
+  Object.assign(A.cfg, kInr.cfg);
+  check(A.inrOdstep() === 42, "i wraca z niej po odtworzeniu: " + A.inrOdstep());
+  /* Zero znaczy "przypominanie wylaczone" i tez musi przezyc - inaczej
+     pudelko zaczeloby pisac o INR po odtworzeniu kopii (D84).          */
+  A.__setState({ cfg:{ inrEveryDays:0 } });
+  check(A.zbierzKopie().cfg.inrEveryDays === 0,
+        "swiadome wylaczenie przypominania o INR tez jest w kopii");
+  A.__setState({ cfg:{ inrEveryDays: undefined } });
 
   /* ODTWARZANIE DOKLADA, NIE ZASTEPUJE - to jest ten scenariusz, w ktorym
      ludzie traca dane: "przywrocilem stara kopie i wszystko zniknelo".  */
