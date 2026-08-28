@@ -36,6 +36,7 @@ export { renderSkan, brakujePokrycia, doReconcile, reconcileDecyzja, opisLadowan
          EKRANY, renderEvents, renderKafelki, bezPokrycia, evPasuje, opisNvsFailKey,
          nvsFailLog, renderNvsFailLog,
          EV_STANY, EV_CZASY, EV_LIMIT,
+         REED_DRGANIA_DUZO,
          inrOdstep, inrTerminKey, inrDoTerminu, dniTxt, renderOstrzezenia, ostrzStraty,
          collectRows, inrChart, nf, esc, renderCalendar, renderToday,
          zbierzKopie, opisKopii, policzOdtworzenie, KOPIA_WERSJA, KOPIA_CFG,

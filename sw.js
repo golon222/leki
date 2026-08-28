@@ -3,7 +3,7 @@
 /* WAŻNE: ta wartość musi zgadzać się z APP_VERSION w index.html.
    Jej zmiana to sygnał dla iPhone'a, że jest nowa wersja aplikacji —
    stary cache zostaje wtedy skasowany, a strona sama się przeładuje. */
-const CACHE = "pillbox-2026-08-22.68";
+const CACHE = "pillbox-2026-08-22.69";
 /* Tabletka jest tu w wersji WEBP (135 kB), a nie GIF (407 kB). Instalacja
    workera pobiera CALA te liste przy kazdej nowej wersji aplikacji, wiec
    roznica idzie nie raz, tylko przy kazdej aktualizacji.

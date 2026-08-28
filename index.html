@@ -1929,7 +1929,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-22.68";
+const APP_VERSION = "2026-08-22.69";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -4597,6 +4597,16 @@ function ostrzMilczy(){
    dwa zapasu — dość, żeby zdążyć zareagować, za mało, żeby zwlekać.    */
 const NVS_MALO = 40;
 
+/* Ile drgnięć styku to już „coś jest nie tak z magnesem".
+
+   Pudełko liczy każdą zmianę poziomu, jaką zobaczy podczas jednego odczytu
+   kontaktronu. Przy sprawnym zatrzasku to zero albo pojedyncze sztuki na
+   otwarcie. Setki znaczą, że styk drga sam z siebie — a wtedy żadna
+   poprawka w kodzie nic nie da. Licznik żyje w pamięci RTC, więc zeruje
+   się przy każdym odłączeniu ogniwa; to liczba „od ostatniego resetu",
+   nie „od zawsze".                                                     */
+const REED_DRGANIA_DUZO = 200;
+
 function nvsMalo(st){
   return typeof st?.nvsFree === "number" && st.nvsFree >= 0 && st.nvsFree < NVS_MALO;
 }
@@ -5153,6 +5163,21 @@ function renderStatus(st){
     (typeof st.nvsFree === "number" && st.nvsFree >= 0
        ? wiersz("Wolnej pamięci", `${st.nvsFree}` +
            (st.nvsFree < NVS_MALO ? ` <span style="color:var(--bad)">mało</span>` : "")) : "") +
+    /* DRGANIA STYKU — to jest POMIAR, nie ozdoba.
+
+       Kontaktron to styk mechaniczny; przy zakręcaniu wieczka magnes
+       przechodzi przez próg czułości powoli i styk potrafi przeskoczyć
+       kilka razy. Pudełko odfiltrowuje to od 1.47.3 (D95), ale LICZY —
+       bo tylko ta liczba rozstrzyga, czy zostało jeszcze coś sprzętowego.
+
+       Zero albo kilka: normalne. Rosnące setki: drga sam styk, czyli
+       magnes się przesunął — i wtedy szuka się śrubokręta, a nie błędu
+       w kodzie. Stoi w Diagnostyce, nie na wierzchu: nie dotyczy dawek
+       bezpośrednio (D74a).                                             */
+    (Number.isFinite(+st.reedBounce) && +st.reedBounce > 0
+       ? wiersz("Drgnięć styku", `${+st.reedBounce}` +
+           (+st.reedBounce > REED_DRGANIA_DUZO
+              ? ` <span style="color:var(--warn)">dużo — sprawdź magnes</span>` : "")) : "") +
     (rawTxt ? `<div class="dim2" style="margin-top:var(--s2)">${rawTxt}</div>` : "") +
     (opisLadowan(st) ? `<div class="dim2" style="margin-top:var(--s2)">${opisLadowan(st)}</div>` : "");
 }

@@ -14,6 +14,8 @@
 
 time_t FAKE_NOW = 0;
 int    FAKE_ADC = 0;
+uint16_t rtcReedDrgania = 0;
+std::map<int, FakePinPlan> FAKE_PINY;   /* kontaktron i przycisk - stan zmienny w czasie */
 unsigned long FAKE_MILLIS = 0;
 FakeSerial Serial;
 
@@ -97,9 +99,22 @@ uint8_t  rtcRetryCount   = 0;
 enum WakeReason { WAKE_BOOT, WAKE_REED, WAKE_BUTTON, WAKE_TIMER, WAKE_CLOSED };
 WakeReason wakeReason = WAKE_TIMER;
 
-bool FAKE_BOX_OPEN = false;
+/* FAKE_BOX_OPEN zostaje jako WYGODA, ale nie jest juz wlasna prawda.
+
+   Byla nia do 1.47.3 - i wlasnie dlatego odbicia styku byly dla testow
+   niewidzialne: atrapa oddawala jedna liczbe, a prawdziwe `boxIsOpen()`
+   czyta PIN, ktory przy zakrecaniu wieczka przelacza sie wiele razy.
+   Teraz przypisanie ustawia stan pinu, a `boxIsOpen()` przychodzi
+   z logic.inc, czyli jest tym samym kodem, ktory siedzi w pudelku.   */
+struct BoxOpenProxy {
+  operator bool() const { return digitalRead(PIN_REED) == REED_OPEN_LEVEL; }
+  BoxOpenProxy& operator=(bool v) {
+    ustawPin(PIN_REED, v ? REED_OPEN_LEVEL : !REED_OPEN_LEVEL);
+    return *this;
+  }
+};
+BoxOpenProxy FAKE_BOX_OPEN;
 int  FAKE_BEEPS    = 0;
-bool boxIsOpen()   { return FAKE_BOX_OPEN; }
 void beepBoxOpen() { FAKE_BEEPS++; }
 
 /* Ustawia stan wyjsciowy dla testow otwartego pudelka. */
@@ -639,6 +654,92 @@ FAKE_NOW = 900;
 CHECK(makeRecord("boot", -1).startsWith(String("900;boot")), "bez zegara licznik od startu");
 CHECK(makeRecordAt("boot", -1, 0).startsWith(String("0;boot")), "zero nadal mozliwe wprost");
 rtcTimeValid = true;
+
+/* ================= 7b2. ODBICIA STYKU KONTAKTRONU ==================
+   Zgloszenie Kuby: "jak zakrece, to pudelko pokazuje sie jako zamkniete,
+   a pozniej sie otwiera i dostaje zwiechy".
+
+   Zakrecanie to ruch POWOLNY - magnes przechodzi przez prog czulosci
+   jezyczkow w ciagu setek milisekund, wiec styk przelacza sie po drodze
+   wiele razy. Odtwarzamy typowy przebieg i sprawdzamy DWIE rzeczy naraz:
+   ze stan wieczka nie klamie, i ze uzbrojenie przed snem nie trafia na
+   poziom, ktory juz jest na pinie (bo to budzi uklad natychmiast). */
+head("Kontaktron: odbicia styku przy zakrecaniu wieczka");
+{
+  const int OTW = REED_OPEN_LEVEL;
+  const int ZAM = !REED_OPEN_LEVEL;
+  /* wieczko zamkniete od chwili 0, odbicia do 181 ms */
+  const std::vector<std::pair<unsigned long,int>> zakrecanie = {
+    {  0, ZAM}, { 12, OTW}, { 18, ZAM}, { 41, OTW}, { 47, ZAM},
+    { 75, OTW}, { 79, ZAM}, {118, OTW}, {123, ZAM}, {181, ZAM}
+  };
+
+  int zleStany = 0, petle = 0, prob = 0;
+  for (unsigned long start = 0; start <= 200; start += 10) {
+    ustawPinPrzebieg(PIN_REED, OTW, zakrecanie);
+    FAKE_MILLIS = start;
+    if (boxIsOpen()) zleStany++;              // wieczko JEST zamkniete
+    prob++;
+
+    ustawPinPrzebieg(PIN_REED, OTW, zakrecanie);
+    FAKE_MILLIS = start;
+    bool spokojny = false;
+    const bool otwarte =
+        reedPoziomStabilny(REED_SPOKOJ_MS, REED_SPOKOJ_MAX_MS, &spokojny) == REED_OPEN_LEVEL;
+    /* dokladnie ta sama decyzja co w goToSleep() */
+    if ((otwarte ? ZAM : OTW) == digitalRead(PIN_REED)) petle++;
+  }
+  CHECK(zleStany == 0,
+        "podczas zakrecania NIGDY nie melduje 'otwarte' (%d z %d odczytow klamalo)",
+        zleStany, prob);
+  CHECK(petle == 0,
+        "i nigdy nie uzbraja sie na poziom, ktory juz jest na pinie (%d z %d)",
+        petle, prob);
+
+  /* Prawdziwe otwarcie musi przejsc - odbicie ma byc odfiltrowane,
+     a nie zagluszone razem z sygnalem.                              */
+  ustawPin(PIN_REED, OTW);
+  FAKE_MILLIS = 5000;
+  CHECK(boxIsOpen(), "otwarte wieczko nadal czyta sie jako otwarte");
+  ustawPin(PIN_REED, ZAM);
+  CHECK(!boxIsOpen(), "zamkniete jako zamkniete");
+
+  /* Spokojny styk nie moze kosztowac wiecej niz jedno okno stabilnosci -
+     `boxIsOpen()` wola sie w petli alarmu i przy czekaniu na zamkniecie. */
+  ustawPin(PIN_REED, ZAM);
+  FAKE_MILLIS = 10000;
+  const unsigned long tPrzed = FAKE_MILLIS;
+  boxIsOpen();
+  CHECK(FAKE_MILLIS - tPrzed <= REED_STABIL_MS + REED_PROBKA_MS * 2,
+        "spokojny odczyt kosztuje %lu ms (sufit %d)",
+        FAKE_MILLIS - tPrzed, REED_STABIL_MS + REED_PROBKA_MS * 2);
+
+  /* Styk drgajacy BEZ KONCA nie moze zawiesic funkcji - po suficie
+     oddajemy ostatni poziom. Lepszy odczyt niepewny niz brak odpowiedzi. */
+  std::vector<std::pair<unsigned long,int>> bezKonca;
+  for (unsigned long t = 0; t < 40000; t += 4)
+    bezKonca.push_back({t, (t / 4) % 2 ? OTW : ZAM});
+  ustawPinPrzebieg(PIN_REED, ZAM, bezKonca);
+  FAKE_MILLIS = 0;
+  bool spok = true;
+  reedPoziomStabilny(REED_STABIL_MS, REED_STABIL_MAX_MS, &spok);
+  CHECK(FAKE_MILLIS <= REED_STABIL_MAX_MS + REED_PROBKA_MS * 2,
+        "drgajacy bez konca styk nie zawiesza odczytu (%lu ms)", FAKE_MILLIS);
+  CHECK(!spok, "i uczciwie melduje, ze styk NIE byl spokojny");
+
+  /* Licznik drgan to POMIAR: jesli po naprawie nadal rosnie, drga sam
+     styk i sprawa jest sprzetowa, a nie programowa.                  */
+  ustawPinPrzebieg(PIN_REED, OTW, zakrecanie);
+  FAKE_MILLIS = 0; rtcReedDrgania = 0;
+  boxIsOpen();
+  CHECK(rtcReedDrgania > 0, "drgania sa policzone (%u)", (unsigned)rtcReedDrgania);
+  ustawPin(PIN_REED, ZAM);
+  FAKE_MILLIS = 20000; rtcReedDrgania = 0;
+  boxIsOpen();
+  CHECK(rtcReedDrgania == 0, "a spokojny styk nie podnosi licznika (%u)",
+        (unsigned)rtcReedDrgania);
+}
+ustawPin(PIN_REED, !REED_OPEN_LEVEL);   // stan wyjsciowy dla dalszych blokow
 
 /* ================= 7c. HARMONOGRAM: TYLKO PRAWDZIWE GODZINY =========
    `slotMinutes()` liczy godzine przez toInt(), ktore ze smieci robi zero,

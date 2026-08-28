@@ -13,6 +13,8 @@
 #include <ctime>
 #include <string>
 #include <map>
+#include <vector>
+#include <utility>
 #include <set>
 #include <algorithm>
 
@@ -205,10 +207,62 @@ inline int  analogRead(int) { return FAKE_ADC; }
 inline void analogReadResolution(int) {}
 inline void analogSetPinAttenuation(int, int) {}
 inline void pinMode(int, int) {}
-inline void delay(unsigned long) {}
 extern unsigned long FAKE_MILLIS;
+
+/* DELAY MUSI PRZESUWAC CZAS.
+
+   Do 1.47.3 byl pusta zaslepka, a `millis()` stal w miejscu - wiec kazda
+   petla postaci "czytaj pin, odczekaj, czytaj znowu" wykonywala sie
+   w tescie w ZEROWYM czasie. Odbicie styku, ktore trwa milisekundy, nie
+   mialo jak sie w takim swiecie wydarzyc: atrapa nie umiala odtworzyc
+   zjawiska, wiec cala klasa bledow byla niewidzialna. Ta sama lekcja co
+   przy putString (D39), putULong (D88) i matches() (D91).             */
+inline void delay(unsigned long ms) { FAKE_MILLIS += ms; }
+inline void delayMicroseconds(unsigned long us) { FAKE_MILLIS += us / 1000; }
 inline unsigned long millis() { return FAKE_MILLIS; }
+
+/* ---------- KONTAKTRON I PRZYCISK: STAN ZMIENNY W CZASIE ----------
+
+   Kontaktron to styk MECHANICZNY - jezyczki sprezynuja, a przy powolnym
+   ruchu magnesu (zakrecanie wieczka!) przelaczaja sie wielokrotnie, przez
+   setki milisekund. Zaslepka oddajaca jedna stala liczbe nie umie tego
+   pokazac, a to wlasnie w tym oknie zapadaja w pudelku decyzje: jaki stan
+   wyslac do aplikacji i na ktory poziom uzbroic wybudzanie.
+
+   Dlatego pin ma tu HARMONOGRAM: pary (od ktorej milisekundy, jaki
+   poziom). `digitalRead()` oddaje wartosc obowiazujaca dla biezacego
+   `FAKE_MILLIS`, wiec test moze odtworzyc prawdziwy przebieg odbic.   */
+struct FakePinPlan {
+  int domyslny = 0;
+  std::vector<std::pair<unsigned long,int>> zmiany;   // posortowane po czasie
+};
+extern std::map<int, FakePinPlan> FAKE_PINY;
+
+inline void ustawPin(int pin, int poziom) {
+  FakePinPlan p; p.domyslny = poziom; FAKE_PINY[pin] = p;
+}
+/* Przebieg odbic: lista (od ktorej ms, jaki poziom). */
+inline void ustawPinPrzebieg(int pin, int domyslny,
+                             std::vector<std::pair<unsigned long,int>> zmiany) {
+  FakePinPlan p; p.domyslny = domyslny; p.zmiany = std::move(zmiany);
+  FAKE_PINY[pin] = p;
+}
+inline int digitalRead(int pin) {
+  auto it = FAKE_PINY.find(pin);
+  if (it == FAKE_PINY.end()) return 0;
+  int v = it->second.domyslny;
+  for (const auto& z : it->second.zmiany) {
+    if (FAKE_MILLIS >= z.first) v = z.second; else break;
+  }
+  return v;
+}
 #define INPUT 0
+/* Poziomy i tryby pinow - bez nich config.h nie da sie policzyc w tescie.
+   Wartosci jak w rdzeniu Arduino.                                      */
+#define LOW  0
+#define HIGH 1
+#define INPUT_PULLUP  0x05
+#define INPUT_PULLDOWN 0x09
 #define ADC_11db 3
 
 /* ---------- nazwy pinow plytki XIAO ESP32-C3 ---------- */

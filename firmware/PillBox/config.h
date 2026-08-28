@@ -20,7 +20,7 @@
  * 1. IDENTYFIKATOR URZADZENIA
  * ------------------------------------------------------------------ */
 #define DEVICE_ID           "pillbox01"     // klucz w /devices/<DEVICE_ID>
-#define FW_VERSION          "1.47.2"   // widoczna w aplikacji - po wgraniu sprawdz, czy sie zmienila
+#define FW_VERSION          "1.47.3"   // widoczna w aplikacji - po wgraniu sprawdz, czy sie zmienila
 
 /* ---------------------------------------------------------------------
  * 2. FIREBASE  (Realtime Database + Auth email/haslo)
@@ -105,6 +105,32 @@
   #define REED_MODE         INPUT           // rezystory 1M zewnetrzne
   #define BUTTON_MODE       INPUT_PULLUP    // przycisk moze zostac wewnetrzny:
 #endif                                      // rozwarty w spoczynku = 0 uA
+
+/* --- ODBICIA STYKU KONTAKTRONU ---------------------------------------
+
+   Kontaktron to styk MECHANICZNY: jezyczki sprezynuja i przy przelaczaniu
+   drgaja. Przy ZAKRECANIU wieczka jest najgorzej, bo magnes przechodzi
+   przez prog czulosci powoli - stan potrafi skakac przez kilkaset ms.
+
+   Do 1.47.3 `boxIsOpen()` bylo jednym golym `digitalRead()`. Jeden odczyt
+   trafiony w drgniecie klamal, a na tym odczycie stoja decyzje:
+     - jaki stan wieczka wyslac do aplikacji (stad "zakrecam, a pokazuje
+       sie otwarte"),
+     - na KTORY POZIOM uzbroic wybudzanie przed snem. Ten drugi jest
+       grozniejszy: uzbrojenie na poziom, ktory juz jest na pinie, budzi
+       uklad NATYCHMIAST po zasnieciu - i tak w kolko.
+
+   PROBKA - co ile czytamy pin.
+   STABIL - ile ms bez zmiany znaczy "styk sie uspokoil" (zwykly odczyt).
+   STABIL_MAX - sufit na zwykly odczyt; po nim oddajemy ostatni poziom,
+       zeby funkcja nigdy nie zawiesila sie na drgajacym styku.
+   SPOKOJ / SPOKOJ_MAX - to samo, ale PRZED SNEM, gdzie pomylka kosztuje
+       petle wybudzen, wiec wymagamy dluzszej ciszy.                    */
+#define REED_PROBKA_MS       2
+#define REED_STABIL_MS      12
+#define REED_STABIL_MAX_MS  60
+#define REED_SPOKOJ_MS     150
+#define REED_SPOKOJ_MAX_MS 1500
 
 /* ---------------------------------------------------------------------
  * 5. ALARM

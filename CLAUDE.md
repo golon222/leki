@@ -38,8 +38,8 @@ bash tests/run_all.sh
 ```
 
 Musi przejść przed zmianą i po zmianie. Stan wyjściowy:
-**622 + 52 firmware, 1235 (×6 pór doby) + 92 + 49 aplikacja, 48 zgodności,
-134 reguły bazy, 322 kontrole audytu, 26 kontroli statycznych — 0 błędów.**
+**631 + 52 firmware, 1241 (×6 pór doby) + 92 + 49 aplikacja, 48 zgodności,
+134 reguły bazy, 326 kontroli audytu, 26 kontroli statycznych — 0 błędów.**
 
 **Runner jest cichy przy sukcesie i głośny przy błędzie** (D66). Udany przebieg
 to 12 linii — **i te 12 linii TO JEST potwierdzenie, nie jego skrót.** Nie
@@ -235,7 +235,7 @@ na `esp32:esp32@3.3.11` i z **ustawieniami płytki z nagłówka `PillBox.ino`**.
 Nie jest częścią `run_all.sh`: wymaga sieci i ~500 MB toolchainu.
 **Uruchom to po każdej zmianie w firmware.**
 
-Stan: `PillBox.ino` **64% flasha** (1 262 871 B z 1,875 MB), `PillBoxTest.ino` 20%.
+Stan: `PillBox.ino` **64% flasha** (1 263 277 B z 1,875 MB), `PillBoxTest.ino` 20%.
 Zapas ~718 kB.
 
 **Podział pamięci musi być `Minimal SPIFFS (1.9MB APP with OTA/190KB SPIFFS)`**,

@@ -4081,6 +4081,38 @@ head("Kopia zapasowa");
    dawna - a raport i CSV nie.
 
    Bierzemy funkcje BEZARGUMENTOWE, czyli te, ktore przycisk woła wprost. */
+/* ═══ DRGNIECIA STYKU KONTAKTRONU — POMIAR, NIE OZDOBA ═══
+
+   Zgloszenie Kuby: "jak zakrece, to pudelko pokazuje sie jako zamkniete,
+   a pozniej sie otwiera i dostaje zwiechy". Pudelko odfiltrowuje odbicia
+   od 1.47.3, ale je LICZY - bo tylko ta liczba rozstrzyga, czy zostalo
+   jeszcze cos sprzetowego (przesuniety magnes), czy sprawa byla w kodzie. */
+head("Diagnostyka pokazuje drgniecia styku");
+{
+  const devInfo = () => document.getElementById("devInfo").innerHTML;
+  const stan = d => ({ battery:80, volt:3.9, lastSeen:Math.floor(Date.now()/1000),
+                       boots:10, queued:0, ssid:"Dom", rssi:-60, ...d });
+
+  A.renderStatus(stan({}));
+  check(!devInfo().includes("Drgnięć"),
+        "starszy firmware nie przysyla licznika - nie zmyslamy pola");
+
+  A.renderStatus(stan({ reedBounce: 0 }));
+  check(!devInfo().includes("Drgnięć"),
+        "zero drgnien to nie jest wiadomosc - nie zasmiecamy ekranu");
+
+  A.renderStatus(stan({ reedBounce: 7 }));
+  check(devInfo().includes("Drgnięć styku") && devInfo().includes("7"),
+        "kilka drgnien widac jako liczbe, bez straszenia");
+  check(!devInfo().includes("sprawdź magnes"),
+        "i bez podpowiedzi, ktora przy siedmiu nic nie znaczy");
+
+  A.renderStatus(stan({ reedBounce: A.REED_DRGANIA_DUZO + 1 }));
+  check(devInfo().includes("sprawdź magnes"),
+        "dopiero setki mowia wprost, ze to sprzet, a nie kod");
+  check(!/undefined|NaN/.test(devInfo()), "i nigdzie nie ma undefined/NaN");
+}
+
 head("Zadna akcja uzytkownika nie wywala sie na pustym stanie");
 {
   const bezArgumentow = [...html.matchAll(/window\.([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?\(\s*\)\s*=>/g)]

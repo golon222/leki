@@ -76,6 +76,7 @@ RTC_DATA_ATTR int16_t  rtcPillsLeft     = -1;   // z Firebase; -1 = nieznane
 RTC_DATA_ATTR uint32_t rtcRolloverDay   = 0;    // ostatnia rozliczona doba
 RTC_DATA_ATTR uint8_t  rtcRetryCount    = 0;    // nieudane proby wyslania
 RTC_DATA_ATTR uint8_t  rtcStuckButton   = 0;    // ile razy z rzedu przycisk byl wcisniety
+RTC_DATA_ATTR uint16_t rtcReedDrgania  = 0;    // ile razy styk kontaktronu drgal przy odczycie
 RTC_DATA_ATTR float    rtcLastVoltage   = 0.0f; // do wykrycia podlaczenia ladowarki
 RTC_DATA_ATTR bool     rtcCutoff        = false;// tryb ochrony rozladowanego ogniwa
 RTC_DATA_ATTR bool     rtcCharging      = false;// stoi na ladowarce
@@ -859,7 +860,64 @@ void configureInputs() {
   pinMode(PIN_BUTTON, BUTTON_MODE);
 }
 
-bool boxIsOpen()      { return digitalRead(PIN_REED)   == REED_OPEN_LEVEL; }
+/* --- STABILNY POZIOM NA KONTAKTRONIE ---------------------------------
+
+   TU BYL BLAD, i zglosil go Kuba jednym zdaniem: *"jak zakrece, to pudelko
+   pokazuje sie jako zamkniete, a pozniej sie otwiera i dostaje zwiechy"*.
+
+   Stalo tu jedno gole `digitalRead()`. Kontaktron to styk MECHANICZNY -
+   jezyczki sprezynuja, a przy ZAKRECANIU wieczka magnes przechodzi przez
+   prog czulosci powoli, wiec stan skacze przez kilkaset milisekund. Jeden
+   odczyt trafiony w to okno klamie, a na tym odczycie stoja trzy decyzje:
+
+     1. jaki stan wieczka poleci do aplikacji (`pushLidState`,
+        `pushStatus`, `trackBoxOpen`) - stad "zakrecam, a po chwili
+        pokazuje sie otwarte",
+     2. na ktory poziom uzbroic wybudzanie w `goToSleep()`,
+     3. czy skonczyc czekanie na zamkniecie.
+
+   DRUGA JEST NAJGROZNIEJSZA i to ona daje "zwiechy". `goToSleep()` broni
+   sie przed petla wybudzen odwracajac poziom, gdy wieczko jest otwarte -
+   ale robi to na podstawie tego samego, jednego odczytu. Gdy odczyt
+   sklamie, obrona dziala DOKLADNIE ODWROTNIE: uzbrajamy pin na poziom,
+   ktory JUZ na nim jest, wiec uklad budzi sie natychmiast po zasnieciu.
+   I znowu. Odtworzone na tym kodzie: przy typowym przebiegu zakrecania
+   cztery uzbrojenia na dwadziescia jeden trafialy w stan, ktory juz byl
+   na pinie.
+
+   Czytamy wiec pin tak dlugo, az przez REED_STABIL_MS nic sie nie zmieni.
+   Sufit REED_STABIL_MAX_MS pilnuje, zeby drgajacy styk nie zawiesil
+   funkcji - po nim oddajemy ostatni poziom, bo lepszy odczyt niepewny
+   niz brak odpowiedzi.
+
+   `rtcReedDrgania` liczy, ile razy poziom zmienil sie w trakcie takiego
+   odczytu. To jest POMIAR, nie ozdoba: jesli po tej naprawie licznik
+   nadal rosnie, znaczy, ze drga sam styk (przesuniety magnes) i sprawa
+   jest sprzetowa, a nie programowa. Widac go w Diagnostyce.          */
+int reedPoziomStabilny(uint32_t stabilnoscMs, uint32_t limitMs, bool* spokojny) {
+  int poziom = digitalRead(PIN_REED);
+  const uint32_t t0 = millis();
+  uint32_t odKiedy = t0;
+  bool ok = false;
+  while (millis() - t0 < limitMs) {
+    const int p = digitalRead(PIN_REED);
+    if (p != poziom) {
+      poziom  = p;
+      odKiedy = millis();
+      if (rtcReedDrgania < 65535) rtcReedDrgania++;
+    } else if (millis() - odKiedy >= stabilnoscMs) {
+      ok = true;
+      break;
+    }
+    delay(REED_PROBKA_MS);
+  }
+  if (spokojny) *spokojny = ok;
+  return poziom;
+}
+
+bool boxIsOpen() {
+  return reedPoziomStabilny(REED_STABIL_MS, REED_STABIL_MAX_MS, nullptr) == REED_OPEN_LEVEL;
+}
 bool buttonPressed()  { return digitalRead(PIN_BUTTON) == BUTTON_PRESS_LEVEL; }
 
 const char* wakeName(WakeReason w) {
@@ -2564,9 +2622,21 @@ bool pushStatus() {
   prefs.end();
   /* Aplikacja pokazuje ostrzezenie, gdy wieczko zostalo otwarte.
      openSince pozwala jej napisac, od jak dawna - bez zgadywania.     */
-  doc["boxOpen"]   = boxIsOpen();
-  doc["openSince"] = boxIsOpen() ? rtcOpenSinceTs : 0;
+  /* JEDEN ODCZYT NA TRZY POLA, nie trzy odczyty.
+
+     Stan wieczka szedl tu w trzech osobnych wywolaniach `boxIsOpen()`.
+     Kazde z nich to teraz odrebny pomiar z odbiciem, wiec przy drgajacym
+     styku mogly dac TRZY ROZNE odpowiedzi - a `rtcOpenReported` zapisywane
+     nizej ma odpowiadac dokladnie temu, co poszlo do bazy. Rozjazd tutaj
+     znaczy, ze aplikacja i pudelko nie zgadzaja sie co do stanu wieczka
+     i nikt tego nie prostuje.                                          */
   const bool stanWyslany = boxIsOpen();
+  doc["boxOpen"]   = stanWyslany;
+  doc["openSince"] = stanWyslany ? rtcOpenSinceTs : 0;
+  /* POMIAR, nie ozdoba: ile razy styk drgnal przy odczycie. Jesli po
+     naprawie odbic ta liczba nadal rosnie, drga sam kontaktron - czyli
+     sprawa jest sprzetowa (przesuniety magnes), a nie programowa.     */
+  doc["reedBounce"] = rtcReedDrgania;
   String body;
   serializeJson(doc, body);
   int code = rtdbSend("PUT", "/devices/" DEVICE_ID "/status.json", body);
@@ -5406,7 +5476,29 @@ void goToSleep(uint32_t seconds) {
   rtcArmedForClose = false;
   esp_deepsleep_gpio_wake_up_mode_t reedMode;
 
-  if (boxIsOpen()) {
+  /* --- TU STAN WIECZKA MUSI BYC PEWNY, NIE "PRAWDOPODOBNY" -----------
+
+     Ponizsza decyzja wybiera poziom, na ktory uzbrajamy pin. Pomylka nie
+     kosztuje bledu na ekranie, tylko PETLE: uzbrojenie na poziom, ktory
+     juz jest na pinie, budzi uklad natychmiast po zasnieciu - i tak
+     w kolko, az padnie bateria. Tak wygladaja "zwiechy" po zakreceniu
+     wieczka.
+
+     Zwykly `boxIsOpen()` odfiltrowuje drgania krotkie. Tutaj wymagamy
+     WIECEJ: styk ma byc spokojny przez REED_SPOKOJ_MS, bo miedzy tym
+     odczytem a `esp_deep_sleep_start()` nie ma juz nikogo, kto moglby
+     poprawic bledna decyzje. Sufit REED_SPOKOJ_MAX_MS pilnuje, zebysmy
+     przy trwale drgajacym styku nie czuwali w nieskonczonosc - wtedy
+     uzbrajamy na ostatni odczyt i mowimy o tym w logu.               */
+  bool stykSpokojny = false;
+  const bool wieczkoOtwarte =
+      reedPoziomStabilny(REED_SPOKOJ_MS, REED_SPOKOJ_MAX_MS, &stykSpokojny)
+      == REED_OPEN_LEVEL;
+  if (!stykSpokojny)
+    LOG("[REED] styk nie uspokoil sie w %d ms (drgan lacznie %u) - uzbrajam na ostatni odczyt\n",
+        REED_SPOKOJ_MAX_MS, (unsigned)rtcReedDrgania);
+
+  if (wieczkoOtwarte) {
     /* Pin jest juz w stanie "otwarte", wiec uzbrojenie go na ten sam poziom
        obudziloby uklad natychmiast, w petli. Odwracamy poziom i czekamy na
        ZAMKNIECIE - dzieki temu zamkniecie wieczka od razu konczy stan

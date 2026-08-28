@@ -742,6 +742,42 @@ ok("godzinaPoprawna(item)" in ino,
 _m_fc = re.search(r"void fetchConfig\(\)\s*\{(.*?)\n  /\* --- Nowa siec", ino, re.S)
 ok(_m_fc is not None and "godzinaPoprawna" in _m_fc.group(1),
    "fetchConfig() odsiewa z bazy pozycje, ktore nie sa godzina")
+# KONTAKTRON: stan wieczka NIGDZIE nie moze stac na golym digitalRead().
+#
+# Zgloszenie Kuby: "jak zakrece, pokazuje sie zamkniete, a pozniej otwarte
+# i pudelko dostaje zwiechy". Styk drga przy zakrecaniu, wiec jeden odczyt
+# klamie - a na nim stoja: stan wysylany do aplikacji ORAZ poziom, na ktory
+# uzbrajamy wybudzanie. Ten drugi jest grozniejszy: uzbrojenie na poziom,
+# ktory juz jest na pinie, budzi uklad natychmiast po zasnieciu.
+#
+# Testy sprawdzaja arytmetyke odbic; tu sprawdzamy OKABLOWANIE, bo
+# goToSleep() dotyka sprzetu i w tescie nie ruszy (lekcja B19).
+ok(re.search(r"bool boxIsOpen\(\)\s*\{[^}]*reedPoziomStabilny", ino, re.S) is not None,
+   "boxIsOpen() czyta styk z odbiciem, nie golym digitalRead()")
+_m_gts = re.search(r"void goToSleep\(uint32_t seconds\)\s*\{(.*?)\n\}", ino, re.S)
+if not _m_gts:
+    ok(False, "znaleziono goToSleep()")
+else:
+    _g = _m_gts.group(1)
+    ok("REED_SPOKOJ_MS" in _g and "reedPoziomStabilny" in _g,
+       "goToSleep() czeka, az styk sie uspokoi, ZANIM uzbroi wybudzanie")
+    ok(not re.search(r"if \(boxIsOpen\(\)\) \{\s*\n\s*/\* Pin jest juz", _g),
+       "i nie decyduje o poziomie uzbrojenia jednym odczytem")
+# Poza samym odczytem z odbiciem pin kontaktronu wolno czytac WYLACZNIE
+# do logu - surowy stan pinu obok stanu wyliczonego jest tam cenny przy
+# szukaniu usterki styku. Kazde inne uzycie to decyzja podjeta na jednym
+# odczycie, czyli ten sam blad od nowa.
+_m_rps = re.search(r"int reedPoziomStabilny\([^)]*\)\s*\{.*?\n\}", ino, re.S)
+_poza = ino.replace(_m_rps.group(0), "") if _m_rps else ino
+_golne = [l.strip() for l in _poza.splitlines()
+          if "digitalRead(PIN_REED)" in l and not l.strip().startswith(("*", "//"))]
+_niedozwolone = [l for l in _golne
+                 if not re.search(r'(LOG|LOGLN|printf)\s*\(', l)
+                 and not l.startswith(("digitalRead(PIN_REED),", '"'))
+                 and not re.match(r'^[a-z]?\s*\?\s*"', l)]
+ok(not _niedozwolone,
+   f"pin kontaktronu czytany wprost tylko do logu ({len(_niedozwolone)} wyjatkow: {_niedozwolone[:2]})")
+
 _m_ls = re.search(r"void loadSchedule\(\)\s*\{(.*?)\n\}", ino, re.S)
 ok(_m_ls is not None and "slotCount == 0" in _m_ls.group(1)
    and "DEFAULT_SCHEDULE" in _m_ls.group(1),

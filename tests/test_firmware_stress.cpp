@@ -17,6 +17,8 @@
 
 time_t FAKE_NOW = 0;
 int    FAKE_ADC = 0;
+uint16_t rtcReedDrgania = 0;
+std::map<int, FakePinPlan> FAKE_PINY;   /* kontaktron i przycisk - stan zmienny w czasie */
 unsigned long FAKE_MILLIS = 0;
 FakeSerial Serial;
 
@@ -71,9 +73,22 @@ uint8_t  rtcAlarmRetries  = 0;
 uint8_t  rtcRetryCount    = 0;
 enum WakeReason { WAKE_BOOT, WAKE_REED, WAKE_BUTTON, WAKE_TIMER, WAKE_CLOSED };
 WakeReason wakeReason = WAKE_TIMER;
-bool FAKE_BOX_OPEN = false;
+/* FAKE_BOX_OPEN zostaje jako WYGODA, ale nie jest juz wlasna prawda.
+
+   Byla nia do 1.47.3 - i wlasnie dlatego odbicia styku byly dla testow
+   niewidzialne: atrapa oddawala jedna liczbe, a prawdziwe `boxIsOpen()`
+   czyta PIN, ktory przy zakrecaniu wieczka przelacza sie wiele razy.
+   Teraz przypisanie ustawia stan pinu, a `boxIsOpen()` przychodzi
+   z logic.inc, czyli jest tym samym kodem, ktory siedzi w pudelku.   */
+struct BoxOpenProxy {
+  operator bool() const { return digitalRead(PIN_REED) == REED_OPEN_LEVEL; }
+  BoxOpenProxy& operator=(bool v) {
+    ustawPin(PIN_REED, v ? REED_OPEN_LEVEL : !REED_OPEN_LEVEL);
+    return *this;
+  }
+};
+BoxOpenProxy FAKE_BOX_OPEN;
 int  FAKE_BEEPS    = 0;
-bool boxIsOpen()   { return FAKE_BOX_OPEN; }
 void beepBoxOpen() { FAKE_BEEPS++; }
 
 uint16_t rtcNvsFail      = 0;
