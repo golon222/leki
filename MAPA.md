@@ -164,7 +164,7 @@ pozycjom w pasku nawigacji i podekranom Ustawien.
 
 ---
 
-## `firmware/PillBox/PillBox.ino` — 6524 linii
+## `firmware/PillBox/PillBox.ino` — 6567 linii
 
 | od | do | blok |
 |---|---|---|
@@ -179,19 +179,19 @@ pozycjom w pasku nawigacji i podekranom Ustawien.
 | 1262 | 1282 | 4b.  PUDELKO ZOSTAWIONE OTWARTE |
 | 1283 | 1506 | 4c.  DZIENNIK WIECZKA  -  narzedzie do testu terenowego |
 | 1507 | 1758 | 5.  KOLEJKA OFFLINE  (Preferences / NVS - pierscien) |
-| 1759 | 2107 | 6.  WiFi |
-| 2108 | 3163 | 7.  FIREBASE  (REST: Auth email/haslo + Realtime Database) |
-| 3164 | 3528 | 8.  ZDARZENIA |
-| 3529 | 3584 | 9.  ALARM |
-| 3585 | 3803 | 10.  PORTAL KONFIGURACJI WiFi  (zamiast Bluetooth) |
-| 3804 | 4295 | 10a2. AKTUALIZACJA PROGRAMU PRZEZ WIFI  (OTA)   -  D59 |
-| 4296 | 4415 | 10b. CZARNA SKRZYNKA |
-| 4416 | 4758 | 10c. GESTY SERWISOWE I AUTOTEST |
-| 4759 | 5181 | 10b. POWIADOMIENIA NA TELEFON  (bot Telegram, D67) |
-| 5182 | 5779 | 11.  DEEP SLEEP |
-| 5780 | 6524 | 12.  SETUP  =  cala logika (loop() nigdy nie jest osiagany) |
+| 1759 | 2144 | 6.  WiFi |
+| 2145 | 3200 | 7.  FIREBASE  (REST: Auth email/haslo + Realtime Database) |
+| 3201 | 3565 | 8.  ZDARZENIA |
+| 3566 | 3621 | 9.  ALARM |
+| 3622 | 3840 | 10.  PORTAL KONFIGURACJI WiFi  (zamiast Bluetooth) |
+| 3841 | 4332 | 10a2. AKTUALIZACJA PROGRAMU PRZEZ WIFI  (OTA)   -  D59 |
+| 4333 | 4452 | 10b. CZARNA SKRZYNKA |
+| 4453 | 4801 | 10c. GESTY SERWISOWE I AUTOTEST |
+| 4802 | 5224 | 10b. POWIADOMIENIA NA TELEFON  (bot Telegram, D67) |
+| 5225 | 5822 | 11.  DEEP SLEEP |
+| 5823 | 6567 | 12.  SETUP  =  cala logika (loop() nigdy nie jest osiagany) |
 
-**Funkcje** (177):
+**Funkcje** (178):
 
 *STAN GLOBALNY* — `zanotujNvsFail`&nbsp;324, `nvsPutStr`&nbsp;343, `nvsPutU16`&nbsp;366, `nvsPutU32`&nbsp;389, `nvsWolneWpisy`&nbsp;404, `syncTimeNTP`&nbsp;447, `logbookJson`&nbsp;448, `setTakenDay`&nbsp;449, `note`&nbsp;451, `awakeTooLong`&nbsp;465, `extendAwake`&nbsp;467
 
@@ -211,27 +211,27 @@ pozycjom w pasku nawigacji i podekranom Ustawien.
 
 *5.  KOLEJKA OFFLINE  (Preferences / NVS - pierscien)* — `rekordTs`&nbsp;1523, `rekordBezDaty`&nbsp;1530, `tsDoBazy`&nbsp;1539, `queuePush`&nbsp;1543, `queueCount`&nbsp;1566, `queuePeek`&nbsp;1573, `queuePop`&nbsp;1588, `queueDrop`&nbsp;1607, `przesunZnaczniki`&nbsp;1631, `queueShiftTimestamps`&nbsp;1646, `queueNadajCzas`&nbsp;1694, `queueEpokaSkasuj`&nbsp;1737
 
-*6.  WiFi* — `netKlucz`&nbsp;1776, `wifiSieciCount`&nbsp;1780, `wifiSiecSsid`&nbsp;1787, `wifiSiecPass`&nbsp;1796, `wifiListeZapisz`&nbsp;1823, `wifiListeCzytaj`&nbsp;1847, `wifiSiecDodaj`&nbsp;1860, `wifiSiecUsun`&nbsp;1891, `wifiSiecPriorytet`&nbsp;1924, `wifiSprobuj`&nbsp;1952, `wifiConnect`&nbsp;1970, `wifiOff`&nbsp;2039, `wifiUspij`&nbsp;2053, `syncTimeNTP`&nbsp;2058
+*6.  WiFi* — `netKlucz`&nbsp;1776, `wifiSieciCount`&nbsp;1780, `wifiSiecSsid`&nbsp;1787, `wifiSiecPass`&nbsp;1796, `wifiListeZapisz`&nbsp;1823, `wifiListeCzytaj`&nbsp;1847, `wifiSiecDodaj`&nbsp;1860, `wifiSiecUsun`&nbsp;1891, `wifiSiecPriorytet`&nbsp;1924, `wifiSprobuj`&nbsp;1952, `wifiStart`&nbsp;1987, `wifiConnect`&nbsp;2007, `wifiOff`&nbsp;2076, `wifiUspij`&nbsp;2090, `syncTimeNTP`&nbsp;2095
 
-*7.  FIREBASE  (REST: Auth email/haslo + Realtime Database)* — `tokenZPamieci`&nbsp;2125, `zapomnijToken`&nbsp;2134, `hasloJestPrawdziwe`&nbsp;2179, `hasloZPamieci`&nbsp;2184, `hasloWPamieci`&nbsp;2193, `hasloUtrwal`&nbsp;2197, `hasloDoLogowania`&nbsp;2210, `tgTokenZPamieci`&nbsp;2230, `tgChatZPamieci`&nbsp;2237, `tgSkonfigurowany`&nbsp;2246, `tgUtrwal`&nbsp;2253, `tgZapomnij`&nbsp;2265, `firebaseSignIn`&nbsp;2299, `rtdbUrl`&nbsp;2394, `rtdbSend`&nbsp;2416, `rekordKompletny`&nbsp;2443, `pushEventRecord`&nbsp;2452, `pushLidState`&nbsp;2509, `otaSumaZPamieci`&nbsp;2551, `otaSumaWgranej`&nbsp;2573, `pushStatus`&nbsp;2579, `fetchConfig`&nbsp;2797, `trwaleOdrzucony`&nbsp;3121, `flushQueue`&nbsp;3125
+*7.  FIREBASE  (REST: Auth email/haslo + Realtime Database)* — `tokenZPamieci`&nbsp;2162, `zapomnijToken`&nbsp;2171, `hasloJestPrawdziwe`&nbsp;2216, `hasloZPamieci`&nbsp;2221, `hasloWPamieci`&nbsp;2230, `hasloUtrwal`&nbsp;2234, `hasloDoLogowania`&nbsp;2247, `tgTokenZPamieci`&nbsp;2267, `tgChatZPamieci`&nbsp;2274, `tgSkonfigurowany`&nbsp;2283, `tgUtrwal`&nbsp;2290, `tgZapomnij`&nbsp;2302, `firebaseSignIn`&nbsp;2336, `rtdbUrl`&nbsp;2431, `rtdbSend`&nbsp;2453, `rekordKompletny`&nbsp;2480, `pushEventRecord`&nbsp;2489, `pushLidState`&nbsp;2546, `otaSumaZPamieci`&nbsp;2588, `otaSumaWgranej`&nbsp;2610, `pushStatus`&nbsp;2616, `fetchConfig`&nbsp;2834, `trwaleOdrzucony`&nbsp;3158, `flushQueue`&nbsp;3162
 
-*8.  ZDARZENIA* — `makeRecordAt`&nbsp;3167, `makeRecord`&nbsp;3189, `loadDayMarkers`&nbsp;3199, `clearDayMarkers`&nbsp;3218, `setTakenDay`&nbsp;3232, `setRolloverDay`&nbsp;3240, `zapiszDawke`&nbsp;3270, `oznaczAlarmObsluzony`&nbsp;3313, `alarmJuzObsluzony`&nbsp;3330, `ostatniSlotDoby`&nbsp;3356, `juzDzisBrane`&nbsp;3366, `checkDayRollover`&nbsp;3373, `reportEvent`&nbsp;3455
+*8.  ZDARZENIA* — `makeRecordAt`&nbsp;3204, `makeRecord`&nbsp;3226, `loadDayMarkers`&nbsp;3236, `clearDayMarkers`&nbsp;3255, `setTakenDay`&nbsp;3269, `setRolloverDay`&nbsp;3277, `zapiszDawke`&nbsp;3307, `oznaczAlarmObsluzony`&nbsp;3350, `alarmJuzObsluzony`&nbsp;3367, `ostatniSlotDoby`&nbsp;3393, `juzDzisBrane`&nbsp;3403, `checkDayRollover`&nbsp;3410, `reportEvent`&nbsp;3492
 
-*9.  ALARM* — `alarmPotwierdzony`&nbsp;3552, `runAlarmWindow`&nbsp;3557
+*9.  ALARM* — `alarmPotwierdzony`&nbsp;3589, `runAlarmWindow`&nbsp;3594
 
-*10.  PORTAL KONFIGURACJI WiFi  (zamiast Bluetooth)* — `htmlEscape`&nbsp;3598, `portalPage`&nbsp;3612, `startWifiPortal`&nbsp;3656
+*10.  PORTAL KONFIGURACJI WiFi  (zamiast Bluetooth)* — `htmlEscape`&nbsp;3635, `portalPage`&nbsp;3649, `startWifiPortal`&nbsp;3693
 
-*10a2. AKTUALIZACJA PROGRAMU PRZEZ WIFI  (OTA)   -  D59* — `otaOpisDecyzji`&nbsp;3928, `otaZanotujProbe`&nbsp;3954, `otaWyzerujLicznik`&nbsp;3962, `otaZlecenieWBazie`&nbsp;3992, `otaPobierzOpis`&nbsp;4007, `otaWgraj`&nbsp;4051, `otaSprawdzPoStarcie`&nbsp;4209, `otaPotwierdzDzialanie`&nbsp;4242
+*10a2. AKTUALIZACJA PROGRAMU PRZEZ WIFI  (OTA)   -  D59* — `otaOpisDecyzji`&nbsp;3965, `otaZanotujProbe`&nbsp;3991, `otaWyzerujLicznik`&nbsp;3999, `otaZlecenieWBazie`&nbsp;4029, `otaPobierzOpis`&nbsp;4044, `otaWgraj`&nbsp;4088, `otaSprawdzPoStarcie`&nbsp;4246, `otaPotwierdzDzialanie`&nbsp;4279
 
-*10b. CZARNA SKRZYNKA* — `note`&nbsp;4316, `wartoZapisac`&nbsp;4323, `logbookAdd`&nbsp;4335, `logbookPrint`&nbsp;4374, `logbookJson`&nbsp;4398
+*10b. CZARNA SKRZYNKA* — `note`&nbsp;4353, `wartoZapisac`&nbsp;4360, `logbookAdd`&nbsp;4372, `logbookPrint`&nbsp;4411, `logbookJson`&nbsp;4435
 
-*10c. GESTY SERWISOWE I AUTOTEST* — `pikNumer`&nbsp;4588, `pikKoniecTestu`&nbsp;4600, `pikBrakSieci`&nbsp;4611, `wynikEtapu`&nbsp;4623, `etapTestu`&nbsp;4642, `autoTest`&nbsp;4647
+*10c. GESTY SERWISOWE I AUTOTEST* — `pikNumer`&nbsp;4631, `pikKoniecTestu`&nbsp;4643, `pikBrakSieci`&nbsp;4654, `wynikEtapu`&nbsp;4666, `etapTestu`&nbsp;4685, `autoTest`&nbsp;4690
 
-*10b. POWIADOMIENIA NA TELEFON  (bot Telegram, D67)* — `tgWyslijTekst`&nbsp;4794, `tgZglosNieodebrane`&nbsp;4840, `tgSprawdzBaterie`&nbsp;4860, `tgSprawdzZapas`&nbsp;4879, `dniOdEry`&nbsp;4902, `dniDoDaty`&nbsp;4913, `inrPrzypomnienieTeraz`&nbsp;4947, `tgOznaczInrMiniete`&nbsp;4967, `sekundyDoInrPrzypomnienia`&nbsp;4976, `tgSprawdzInr`&nbsp;4998, `tgTekstZapas`&nbsp;5012, `tgTekstInr`&nbsp;5021, `tgTekstNieodebrane`&nbsp;5041, `tgTekstBateria`&nbsp;5050, `tgWyslijZalegle`&nbsp;5069
+*10b. POWIADOMIENIA NA TELEFON  (bot Telegram, D67)* — `tgWyslijTekst`&nbsp;4837, `tgZglosNieodebrane`&nbsp;4883, `tgSprawdzBaterie`&nbsp;4903, `tgSprawdzZapas`&nbsp;4922, `dniOdEry`&nbsp;4945, `dniDoDaty`&nbsp;4956, `inrPrzypomnienieTeraz`&nbsp;4990, `tgOznaczInrMiniete`&nbsp;5010, `sekundyDoInrPrzypomnienia`&nbsp;5019, `tgSprawdzInr`&nbsp;5041, `tgTekstZapas`&nbsp;5055, `tgTekstInr`&nbsp;5064, `tgTekstNieodebrane`&nbsp;5084, `tgTekstBateria`&nbsp;5093, `tgWyslijZalegle`&nbsp;5112
 
-*11.  DEEP SLEEP* — `otaZglos`&nbsp;5200, `skanujSieci`&nbsp;5228, `otaSprobuj`&nbsp;5277, `kolejnePrzesuniecie`&nbsp;5476, `goToSleep`&nbsp;5481, `planNextSleep`&nbsp;5699
+*11.  DEEP SLEEP* — `otaZglos`&nbsp;5243, `skanujSieci`&nbsp;5271, `otaSprobuj`&nbsp;5320, `kolejnePrzesuniecie`&nbsp;5519, `goToSleep`&nbsp;5524, `planNextSleep`&nbsp;5742
 
-*12.  SETUP  =  cala logika (loop() nigdy nie jest osiagany)* — `petlaLadowania`&nbsp;5792, `setup`&nbsp;5890, `loop`&nbsp;6521
+*12.  SETUP  =  cala logika (loop() nigdy nie jest osiagany)* — `petlaLadowania`&nbsp;5835, `setup`&nbsp;5933, `loop`&nbsp;6564
 
 
 ---
@@ -252,7 +252,7 @@ pozycjom w pasku nawigacji i podekranom Ustawien.
 
 ---
 
-## `firmware/PillBox/config.h` — 627 linii
+## `firmware/PillBox/config.h` — 612 linii
 
 | linia | grupa |
 |---|---|
@@ -261,27 +261,26 @@ pozycjom w pasku nawigacji i podekranom Ustawien.
 | 52 | /* --------------------------------------------------------------------- |
 | 68 | /* --------------------------------------------------------------------- |
 | 109 | /* --- ODBICIA STYKU KONTAKTRONU --------------------------------------- |
-| 135 | /* --- KIEDY WLACZYC RADIO DLA MELDUNKU "WIECZKO OTWARTE" -------------- |
-| 151 | /* --------------------------------------------------------------------- |
-| 162 | /* --------------------------------------------------------------------- |
-| 169 | /* --------------------------------------------------------------------- |
-| 203 | /* --------------------------------------------------------------------- |
-| 219 | /* --------------------------------------------------------------------- |
+| 136 | /* --------------------------------------------------------------------- |
+| 147 | /* --------------------------------------------------------------------- |
+| 154 | /* --------------------------------------------------------------------- |
+| 188 | /* --------------------------------------------------------------------- |
+| 204 | /* --------------------------------------------------------------------- |
+| 223 | /* --------------------------------------------------------------------- |
+| 228 | /* --------------------------------------------------------------------- |
 | 238 | /* --------------------------------------------------------------------- |
-| 243 | /* --------------------------------------------------------------------- |
-| 253 | /* --------------------------------------------------------------------- |
-| 284 | /* --------------------------------------------------------------------- |
-| 292 | /* --------------------------------------------------------------------- |
-| 310 | /* --------------------------------------------------------------------- |
-| 318 | /* --------------------------------------------------------------------- |
-| 330 | /* --------------------------------------------------------------------- |
-| 361 | /* --------------------------------------------------------------------- |
-| 371 | /* --------------------------------------------------------------------- |
-| 390 | /* --------------------------------------------------------------------- |
-| 419 | /* --------------------------------------------------------------------- |
-| 466 | /* --------------------------------------------------------------------- |
-| 483 | /* --------------------------------------------------------------------- |
-| 554 | /* --------------------------------------------------------------------- |
-| 596 | /* --------------------------------------------------------------------- |
-| 603 | /* --------------------------------------------------------------------- |
-| 609 | /* --------------------------------------------------------------------- |
+| 269 | /* --------------------------------------------------------------------- |
+| 277 | /* --------------------------------------------------------------------- |
+| 295 | /* --------------------------------------------------------------------- |
+| 303 | /* --------------------------------------------------------------------- |
+| 315 | /* --------------------------------------------------------------------- |
+| 346 | /* --------------------------------------------------------------------- |
+| 356 | /* --------------------------------------------------------------------- |
+| 375 | /* --------------------------------------------------------------------- |
+| 404 | /* --------------------------------------------------------------------- |
+| 451 | /* --------------------------------------------------------------------- |
+| 468 | /* --------------------------------------------------------------------- |
+| 539 | /* --------------------------------------------------------------------- |
+| 581 | /* --------------------------------------------------------------------- |
+| 588 | /* --------------------------------------------------------------------- |
+| 594 | /* --------------------------------------------------------------------- |

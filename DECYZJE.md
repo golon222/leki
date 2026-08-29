@@ -9,7 +9,7 @@ zamiast 60 tys. tokenów wchodzi 2,5 tys. plus jeden obszar.
 
 | plik | o czym | ile |
 |---|---|---|
-| `decyzje/pudelko.md` | Pudełko — sen, alarm, NVS, WiFi | 24 |
+| `decyzje/pudelko.md` | Pudełko — sen, alarm, NVS, WiFi | 25 |
 | `decyzje/ota.md` | Aktualizacja przez WiFi i skan sieci | 8 |
 | `decyzje/telegram.md` | Powiadomienia Telegram | 5 |
 | `decyzje/aplikacja.md` | Aplikacja — ekrany i wygląd | 34 |
@@ -65,6 +65,7 @@ Od najnowszej. Kolumna „gdzie" mówi, który plik w `decyzje/` trzymać otwart
 
 | # | O co chodziło | gdzie |
 |---|---|---|
+| **D98** | Radio wstaje w tle, a pudełko przez ten czas pilnuje wieczka — próg czasowy z D97 dokładał sekundy zamiast usunąć blokadę (firmware `1.48.1`) | `pudelko` |
 | **D97** | Pudełko było ślepe na zamknięcie wieczka przez ~47 s — blokujące `wifiConnect()` stało przed pętlą czekania (firmware `1.48.0`) | `pudelko` |
 | **D96** | Stan wieczka czytany raz na krok — trzy odczyty w `pushLidState()` rozjeżdżały aplikację z pudełkiem; do tego pomiar powodu restartów (firmware `1.47.4`) | `pudelko` |
 | **D95** | Kontaktron czytany z odbiciem — jeden goły `digitalRead()` kłamał przy zakręcaniu i uzbrajał wybudzanie na poziom, który już był na pinie (firmware `1.47.3`) | `pudelko` |

@@ -263,13 +263,29 @@ ok("pushLidState(" in czek,
 # Meldunek natychmiastowy zostaje - ale tylko wtedy, gdy lacze JUZ stoi.
 # Bez lacza probujemy dopiero po LID_MELDUNEK_PO_MS, czyli gdy to juz nie
 # jest "wyjmuje tabletke", tylko "zostawilem otwarte".
+# `wifiConnect()` blokuje, wiec w CALEJ tej funkcji nie ma dla niego
+# miejsca - ani przed petla, ani w srodku. Kazda sekunda w nim to sekunda,
+# w ktorej pudelko nie widzi, ze wieczko zamknieto. Pierwsza wersja tej
+# kontroli patrzyla tylko na fragment PRZED petla i przepuszczala powrot
+# blokady do jej wnetrza - zlapane mutacja, nie okiem.
+ok("wifiConnect()" not in czek,
+   "i NIGDZIE nie blokuje na laczeniu - ani przed petla, ani w niej")
 _przed_petla = czek[:czek.find("while (")] if "while (" in czek else czek
-ok("wifiConnect()" not in _przed_petla,
-   "i NIE blokuje na laczeniu z siecia, zanim zacznie czekac na zamkniecie")
 ok("WL_CONNECTED" in _przed_petla,
    "natychmiastowy meldunek idzie tylko po gotowym laczu")
-ok("LID_MELDUNEK_PO_MS" in czek,
-   "bez lacza meldunek czeka, az wieczko bedzie otwarte dluzej niz chwile")
+# Bez lacza NIE czekamy - uruchamiamy radio w tle i pilnujemy wieczka
+# dalej. Prog czasowy (pierwsza wersja tej naprawy) byl gorszy: dokladal
+# swoje sekundy DO blokady zamiast ja usunac, wiec meldunek przychodzil
+# jeszcze pozniej. Teraz petla patrzy naraz na kontaktron i na
+# `WiFi.status()`, wiec meldunek idzie w chwili, w ktorej lacze wstanie.
+ok("wifiStart()" in czek,
+   "bez lacza radio startuje W TLE, zamiast blokowac czekanie na zamkniecie")
+ok("WiFi.status() == WL_CONNECTED" in czek[czek.find("while ("):],
+   "a petla czekania sama zauwaza, ze lacze wstalo")
+_ws = ino[ino.find("void wifiStart() {"):]
+_ws = _ws[:_ws.find("\n}")]
+ok("while" not in _ws and "wifiSprobuj" not in _ws,
+   "wifiStart() naprawde nie czeka na wynik - inaczej nie ma sensu")
 ok("!rtcOpenReported" in czek,
    "ale bez powtarzania tego, co poszlo juz przy zwyklym otwarciu")
 ok("WiFi.reconnect();" in czek,

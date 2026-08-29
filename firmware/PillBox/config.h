@@ -20,7 +20,7 @@
  * 1. IDENTYFIKATOR URZADZENIA
  * ------------------------------------------------------------------ */
 #define DEVICE_ID           "pillbox01"     // klucz w /devices/<DEVICE_ID>
-#define FW_VERSION          "1.48.0"   // widoczna w aplikacji - po wgraniu sprawdz, czy sie zmienila
+#define FW_VERSION          "1.48.1"   // widoczna w aplikacji - po wgraniu sprawdz, czy sie zmienila
 
 /* ---------------------------------------------------------------------
  * 2. FIREBASE  (Realtime Database + Auth email/haslo)
@@ -132,21 +132,6 @@
 #define REED_SPOKOJ_MS     150
 #define REED_SPOKOJ_MAX_MS 1500
 
-/* --- KIEDY WLACZYC RADIO DLA MELDUNKU "WIECZKO OTWARTE" --------------
-
-   `wifiConnect()` blokuje. W najgorszym przypadku 15 s na pierwsza siec
-   plus 3 x 8 s na kolejne plus 8 s na poswiadczenia sterownika - okolo
-   47 sekund, przez ktore pudelko nie widzi, ze wieczko zostalo zamkniete.
-   Zglaszanie otwarcia od razu kosztowalo wiec dokladnie to: przy krotkim
-   otwarciu aplikacja dostawala stan z przypadkowego momentu albo nie
-   dostawala go wcale (D97).
-
-   Gdy lacze JUZ stoi, meldunek kosztuje ulamek sekundy i idzie natychmiast.
-   Gdy nie stoi - czekamy, az wieczko bedzie otwarte tyle czasu, ze nie ma
-   czego przegapic. Wtedy to juz nie jest "wyjmuje tabletke", tylko
-   "zostawilem otwarte" - czyli dokladnie ten przypadek, dla ktorego
-   natychmiastowy meldunek powstal.                                     */
-#define LID_MELDUNEK_PO_MS  20000
 
 /* ---------------------------------------------------------------------
  * 5. ALARM

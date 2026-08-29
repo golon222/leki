@@ -1967,6 +1967,43 @@ static bool wifiSprobuj(const String& ssid, const String& pass, uint32_t limitMs
   return WiFi.status() == WL_CONNECTED;
 }
 
+/* --- ZACZNIJ LACZENIE I NIE CZEKAJ ------------------------------------
+
+   `wifiConnect()` czeka na wynik, i to jest w wiekszosci miejsc dobre -
+   ale nie wtedy, gdy pudelko ma JEDNOCZESNIE pilnowac wieczka. Tam
+   blokada oznacza slepote: przez caly czas laczenia uklad nie widzi, ze
+   wieczko zostalo zamkniete (D97).
+
+   Ta funkcja tylko URUCHAMIA laczenie. Sterownik ESP32 robi to w tle, a
+   wolajacy sprawdza `WiFi.status()` miedzy swoimi sprawami - czyli tutaj
+   miedzy kolejnymi odczytami kontaktronu. Radio wstaje w tle, zamkniecie
+   jest widziane od razu, meldunek idzie w chwili, w ktorej lacze naprawde
+   stoi - a nie po najgorszym przypadku przegladania calej listy sieci.
+
+   Probujemy TEJ SIECI, ktora dzialala ostatnio (`rtcNetOstatnia`) - w domu
+   to jest wlasciwa odpowiedz w pierwszej probie. Gdyby nie odpowiedziala,
+   nic nie tracimy: `wifiConnect()` na koncu wybudzenia i tak przejdzie
+   cala liste po kolei.                                                  */
+void wifiStart() {
+  if (batterySaver || WiFi.status() == WL_CONNECTED) return;
+  WiFi.persistent(true);
+  WiFi.mode(WIFI_STA);
+  delay(60);
+  WiFi.setSleep(true);
+  const int n = wifiSieciCount();
+  if (n > 0) {
+    const int i = rtcNetOstatnia % n;
+    const String ssid = wifiSiecSsid(i);
+    if (ssid.length()) {
+      LOG("[NET] zaczynam laczenie w tle z '%s'\n", ssid.c_str());
+      WiFi.begin(ssid.c_str(), wifiSiecPass(i).c_str());
+      return;
+    }
+  }
+  LOGLN("[NET] zaczynam laczenie w tle (poswiadczenia sterownika)");
+  WiFi.begin();
+}
+
 bool wifiConnect() {
   if (batterySaver) {
     LOGLN("[NET] tryb oszczedzania baterii - radio pozostaje wylaczone");
@@ -4479,11 +4516,20 @@ Gest czekajNaZamkniecieIGest(uint32_t limitMs) {
      od razu. Gdy go nie ma - nie czekamy ani chwili. Stan wieczka
      poleci na koncu wybudzenia, kiedy bedzie OSTATECZNY i prawdziwy,
      a `rtcStatusDirty` pilnuje, zeby na pewno poleciał.               */
+  /* Lacze gotowe - meldunek idzie natychmiast i kosztuje ulamek sekundy.
+     Lacza nie ma - URUCHAMIAMY je w tle i wracamy do pilnowania wieczka.
+     Ani jednej sekundy blokady: petla nizej patrzy i na kontaktron, i na
+     `WiFi.status()`, wiec meldunek pojdzie w chwili, w ktorej radio
+     naprawde wstanie (D97).                                            */
   bool zgloszonoOtwarcie = false;
-  if (boxIsOpen() && !rtcOpenReported && !batterySaver
-      && WiFi.status() == WL_CONNECTED && firebaseSignIn()) {
-    pushLidState(true);
-    zgloszonoOtwarcie = true;
+  if (boxIsOpen() && !rtcOpenReported && !batterySaver) {
+    if (WiFi.status() == WL_CONNECTED && firebaseSignIn()) {
+      pushLidState(boxIsOpen());
+      zgloszonoOtwarcie = true;
+    } else {
+      wifiStart();
+      rtcStatusDirty = true;      // gdyby nie zdazylo - dosle sie pozniej
+    }
   }
 
   /* Czuwanie moze trwac dlugo, wiec bezpiecznik czasowy trzeba odsunac -
@@ -4521,17 +4567,14 @@ Gest czekajNaZamkniecieIGest(uint32_t limitMs) {
       wifiUspij();
       radioZgaszone = true;
     }
-    /* Lacza nie bylo na starcie: probujemy je zbudowac DOPIERO wtedy, gdy
-       wieczko stoi otwarte dluzej niz LID_MELDUNEK_PO_MS. Wczesniej nie
-       wolno - `wifiConnect()` blokuje do ~47 s i pudelko bylo przez ten
-       czas slepe na zamkniecie (D97). Po progu blokada juz nic nie psuje:
-       to nie jest "wyjmuje tabletke", tylko "zostawilem otwarte", a wtedy
-       i tak czekamy dalej. Probujemy RAZ.                               */
+    /* Radio wstalo w tle - meldujemy TERAZ, bez czekania na cokolwiek.
+       Stan bierzemy swiezy: logowanie do bazy trwa chwile, a w tej chwili
+       wieczko moglo juz zostac zamkniete. Wysylamy to, co jest naprawde. */
     if (!zgloszonoOtwarcie && !rtcOpenReported && !batterySaver
-        && boxIsOpen() && millis() - t0 > LID_MELDUNEK_PO_MS) {
+        && boxIsOpen() && WiFi.status() == WL_CONNECTED) {
       zgloszonoOtwarcie = true;
-      LOGLN("[LID] wieczko otwarte dluzej niz chwile - melduje aplikacji");
-      if (wifiConnect() && firebaseSignIn()) pushLidState(boxIsOpen());
+      LOGLN("[LID] lacze wstalo - melduje stan wieczka");
+      if (firebaseSignIn()) pushLidState(boxIsOpen());
       else rtcStatusDirty = true;
     }
 
