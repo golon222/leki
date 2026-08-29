@@ -12,7 +12,7 @@ sed -n '2800,2960p' index.html          # jeden obszar
 grep -n "nazwaFunkcji" index.html       # gdy znasz nazwe
 ```
 
-## `index.html` — 8134 linii, ~130 tys. tokenow
+## `index.html` — 8152 linii, ~130 tys. tokenow
 
 Ekrany (`<section>`) i dwa duze bloki. Zakladki `tab-*` odpowiadaja
 pozycjom w pasku nawigacji i podekranom Ustawien.
@@ -63,23 +63,23 @@ pozycjom w pasku nawigacji i podekranom Ustawien.
 | 4472 | 4728 | OSTRZEŻENIA — celowo NIE schowane w Diagnostyce |
 | 4729 | 4769 | KOLEJKA, KTÓRA NIE SCHODZI |
 | 4770 | 4863 | EKRAN, KTÓRY SIĘ NIE NARYSOWAŁ |
-| 4864 | 5218 | EKRAN ZDARZEN |
-| 5219 | 5337 | ZAPAS TABLETEK |
-| 5338 | 5567 | USTAWIENIA |
-| 5568 | 5875 | POWIADOMIENIA NA TELEFON — BOT TELEGRAM (D67) |
-| 5876 | 6332 | AKTUALIZACJA PROGRAMU PUDEŁKA (D59) |
-| 6333 | 6694 | SIECI WIDZIANE PRZEZ PUDEŁKO |
-| 6695 | 6905 | ANALIZA |
-| 6906 | 7291 | WYKRESY ANALIZY |
-| 7292 | 7448 | RAPORT |
-| 7449 | 7510 | KONTEKST DNIA (TAGI) |
-| 7511 | 7556 | KOPIA ZAPASOWA |
-| 7557 | 7770 | KOPIA NA TELEGRAM |
-| 7771 | 7836 | WIEK KOPII |
-| 7837 | 7934 | ODTWARZANIE Z KOPII |
-| 7935 | 8009 | KOPIE Z BAZY |
-| 8010 | 8092 | NAWIGACJA |
-| 8093 | 8134 | AUTOMATYCZNA AKTUALIZACJA |
+| 4864 | 5236 | EKRAN ZDARZEN |
+| 5237 | 5355 | ZAPAS TABLETEK |
+| 5356 | 5585 | USTAWIENIA |
+| 5586 | 5893 | POWIADOMIENIA NA TELEFON — BOT TELEGRAM (D67) |
+| 5894 | 6350 | AKTUALIZACJA PROGRAMU PUDEŁKA (D59) |
+| 6351 | 6712 | SIECI WIDZIANE PRZEZ PUDEŁKO |
+| 6713 | 6923 | ANALIZA |
+| 6924 | 7309 | WYKRESY ANALIZY |
+| 7310 | 7466 | RAPORT |
+| 7467 | 7528 | KONTEKST DNIA (TAGI) |
+| 7529 | 7574 | KOPIA ZAPASOWA |
+| 7575 | 7788 | KOPIA NA TELEGRAM |
+| 7789 | 7854 | WIEK KOPII |
+| 7855 | 7952 | ODTWARZANIE Z KOPII |
+| 7953 | 8027 | KOPIE Z BAZY |
+| 8028 | 8110 | NAWIGACJA |
+| 8111 | 8152 | AUTOMATYCZNA AKTUALIZACJA |
 
 **Funkcje** (209) — nazwa i linia deklaracji:
 
@@ -131,35 +131,35 @@ pozycjom w pasku nawigacji i podekranom Ustawien.
 
 *EKRAN ZDARZEN* — `evFiltr`&nbsp;4880, `evPasuje`&nbsp;4885, `renderEvents`&nbsp;4897, `renderOpenWarn`&nbsp;4937, `minutyDoPelna`&nbsp;4990, `opisLadowania`&nbsp;5002, `dni`&nbsp;5022, `opisLadowan`&nbsp;5025, `renderStatus`&nbsp;5042
 
-*ZAPAS TABLETEK* — `yesterdayKey`&nbsp;5222, `dayAfter`&nbsp;5225, `pillsBaseInfo`&nbsp;5236, `settlePills`&nbsp;5246, `dniZapasu`&nbsp;5286, `renderPills`&nbsp;5299, `savePills`&nbsp;5320, `setPills`&nbsp;5331
+*ZAPAS TABLETEK* — `yesterdayKey`&nbsp;5240, `dayAfter`&nbsp;5243, `pillsBaseInfo`&nbsp;5254, `settlePills`&nbsp;5264, `dniZapasu`&nbsp;5304, `renderPills`&nbsp;5317, `savePills`&nbsp;5338, `setPills`&nbsp;5349
 
-*USTAWIENIA* — `renderKafelki`&nbsp;5342, `renderSettings`&nbsp;5369, `tydzienZPol`&nbsp;5413, `renderWeekEditor`&nbsp;5425, `odswiezPodpowiedzTygodnia`&nbsp;5442, `tydzienZmieniony`&nbsp;5456, `rownajTydzien`&nbsp;5457, `renderPlanList`&nbsp;5470, `renderExceptions`&nbsp;5497, `wyslijSiec`&nbsp;5543
+*USTAWIENIA* — `renderKafelki`&nbsp;5360, `renderSettings`&nbsp;5387, `tydzienZPol`&nbsp;5431, `renderWeekEditor`&nbsp;5443, `odswiezPodpowiedzTygodnia`&nbsp;5460, `tydzienZmieniony`&nbsp;5474, `rownajTydzien`&nbsp;5475, `renderPlanList`&nbsp;5488, `renderExceptions`&nbsp;5515, `wyslijSiec`&nbsp;5561
 
-*POWIADOMIENIA NA TELEFON — BOT TELEGRAM (D67)* — `tgTokenPoprawny`&nbsp;5585, `tgZapytaj`&nbsp;5595, `tgKodParowania`&nbsp;5635, `tgZnajdzCzat`&nbsp;5651, `tgPolacz`&nbsp;5719, `tgProbna`&nbsp;5752, `tgOdlacz`&nbsp;5759, `renderTgStan`&nbsp;5781
+*POWIADOMIENIA NA TELEFON — BOT TELEGRAM (D67)* — `tgTokenPoprawny`&nbsp;5603, `tgZapytaj`&nbsp;5613, `tgKodParowania`&nbsp;5653, `tgZnajdzCzat`&nbsp;5669, `tgPolacz`&nbsp;5737, `tgProbna`&nbsp;5770, `tgOdlacz`&nbsp;5777, `renderTgStan`&nbsp;5799
 
-*AKTUALIZACJA PROGRAMU PUDEŁKA (D59)* — `sprawdzAktualizacje`&nbsp;5896, `pobierzOpisFirmware`&nbsp;5902, `wyslijAktualizacje`&nbsp;5923, `anulujAktualizacje`&nbsp;5968, `renderOta`&nbsp;5974, `renderNetStan`&nbsp;6259
+*AKTUALIZACJA PROGRAMU PUDEŁKA (D59)* — `sprawdzAktualizacje`&nbsp;5914, `pobierzOpisFirmware`&nbsp;5920, `wyslijAktualizacje`&nbsp;5941, `anulujAktualizacje`&nbsp;5986, `renderOta`&nbsp;5992, `renderNetStan`&nbsp;6277
 
-*SIECI WIDZIANE PRZEZ PUDEŁKO* — `opisSygnalu`&nbsp;6344, `renderSkan`&nbsp;6350, `szukajSieci`&nbsp;6402, `wybierzSiec`&nbsp;6410, `wyslijPolecenieSieci`&nbsp;6428, `siecZIndeksu`&nbsp;6438, `tzChanged`&nbsp;6472, `cfgTime`&nbsp;6477, `addSlot`&nbsp;6485, `zapiszPlanDnia`&nbsp;6498, `saveConfig`&nbsp;6516, `inrKrokiZakresu`&nbsp;6577, `opcjeInr`&nbsp;6584, `inrZakresZmieniony`&nbsp;6595, `wypelnijListyZakresu`&nbsp;6608, `saveInrRange`&nbsp;6619, `wypelnijListeOdstepu`&nbsp;6653, `saveInrEvery`&nbsp;6666, `odswiezPodpowiedzInr`&nbsp;6676
+*SIECI WIDZIANE PRZEZ PUDEŁKO* — `opisSygnalu`&nbsp;6362, `renderSkan`&nbsp;6368, `szukajSieci`&nbsp;6420, `wybierzSiec`&nbsp;6428, `wyslijPolecenieSieci`&nbsp;6446, `siecZIndeksu`&nbsp;6456, `tzChanged`&nbsp;6490, `cfgTime`&nbsp;6495, `addSlot`&nbsp;6503, `zapiszPlanDnia`&nbsp;6516, `saveConfig`&nbsp;6534, `inrKrokiZakresu`&nbsp;6595, `opcjeInr`&nbsp;6602, `inrZakresZmieniony`&nbsp;6613, `wypelnijListyZakresu`&nbsp;6626, `saveInrRange`&nbsp;6637, `wypelnijListeOdstepu`&nbsp;6671, `saveInrEvery`&nbsp;6684, `odswiezPodpowiedzInr`&nbsp;6694
 
-*ANALIZA* — `openTimeOf`&nbsp;6701, `openMinutes`&nbsp;6707, `sredniaPora`&nbsp;6731, `kwantyl`&nbsp;6739, `dniMiedzy`&nbsp;6747, `odstepyZPunktow`&nbsp;6761, `analyze`&nbsp;6770, `inrContext`&nbsp;6872
+*ANALIZA* — `openTimeOf`&nbsp;6719, `openMinutes`&nbsp;6725, `sredniaPora`&nbsp;6749, `kwantyl`&nbsp;6757, `dniMiedzy`&nbsp;6765, `odstepyZPunktow`&nbsp;6779, `analyze`&nbsp;6788, `inrContext`&nbsp;6890
 
-*WYKRESY ANALIZY* — `komorkaRytmu`&nbsp;6931, `rytmSVG`&nbsp;6943, `poryWCzasieSVG`&nbsp;7005, `iskraSVG`&nbsp;7073, `dowSVG`&nbsp;7101, `dniRytmu`&nbsp;7137, `skutecznoscTygodniami`&nbsp;7158, `renderAnalysis`&nbsp;7186
+*WYKRESY ANALIZY* — `komorkaRytmu`&nbsp;6949, `rytmSVG`&nbsp;6961, `poryWCzasieSVG`&nbsp;7023, `iskraSVG`&nbsp;7091, `dowSVG`&nbsp;7119, `dniRytmu`&nbsp;7155, `skutecznoscTygodniami`&nbsp;7176, `renderAnalysis`&nbsp;7204
 
-*RAPORT* — `collectRows`&nbsp;7293, `makeReport`&nbsp;7330
+*RAPORT* — `collectRows`&nbsp;7311, `makeReport`&nbsp;7348
 
-*KONTEKST DNIA (TAGI)* — `tagiDnia`&nbsp;7481, `tagiPrzed`&nbsp;7489, `tagPrzelacz`&nbsp;7498
+*KONTEKST DNIA (TAGI)* — `tagiDnia`&nbsp;7499, `tagiPrzed`&nbsp;7507, `tagPrzelacz`&nbsp;7516
 
-*KOPIA ZAPASOWA* — `zbierzKopie`&nbsp;7541, `opisKopii`&nbsp;7551
+*KOPIA ZAPASOWA* — `zbierzKopie`&nbsp;7559, `opisKopii`&nbsp;7569
 
-*KOPIA NA TELEGRAM* — `tgKopiaUst`&nbsp;7591, `tgCzatKopii`&nbsp;7598, `odswiezKopie`&nbsp;7605, `tgKopiaCzatZapisz`&nbsp;7613, `tgKopiaCzatZnajdz`&nbsp;7633, `tgKopiaWlacz`&nbsp;7663, `tgKopiaWylacz`&nbsp;7682, `kopiaNaTelegram`&nbsp;7691, `kopiaAutomat`&nbsp;7742
+*KOPIA NA TELEGRAM* — `tgKopiaUst`&nbsp;7609, `tgCzatKopii`&nbsp;7616, `odswiezKopie`&nbsp;7623, `tgKopiaCzatZapisz`&nbsp;7631, `tgKopiaCzatZnajdz`&nbsp;7651, `tgKopiaWlacz`&nbsp;7681, `tgKopiaWylacz`&nbsp;7700, `kopiaNaTelegram`&nbsp;7709, `kopiaAutomat`&nbsp;7760
 
-*WIEK KOPII* — `dniOdDaty`&nbsp;7789, `wiekKopiiTxt`&nbsp;7795, `renderKopiaStan`&nbsp;7803, `zapiszKopie`&nbsp;7818
+*WIEK KOPII* — `dniOdDaty`&nbsp;7807, `wiekKopiiTxt`&nbsp;7813, `renderKopiaStan`&nbsp;7821, `zapiszKopie`&nbsp;7836
 
-*ODTWARZANIE Z KOPII* — `policzOdtworzenie`&nbsp;7852, `wczytajKopie`&nbsp;7882, `kopiaCzytelna`&nbsp;7887, `odtworzKopie`&nbsp;7897, `kopiaWybrana`&nbsp;7920
+*ODTWARZANIE Z KOPII* — `policzOdtworzenie`&nbsp;7870, `wczytajKopie`&nbsp;7900, `kopiaCzytelna`&nbsp;7905, `odtworzKopie`&nbsp;7915, `kopiaWybrana`&nbsp;7938
 
-*KOPIE Z BAZY* — `kopieZBazy`&nbsp;7944, `odtworzZBazy`&nbsp;7976, `exportCsv`&nbsp;7988
+*KOPIE Z BAZY* — `kopieZBazy`&nbsp;7962, `odtworzZBazy`&nbsp;7994, `exportCsv`&nbsp;8006
 
-*NAWIGACJA* — `wrocZEkranu`&nbsp;8091
+*NAWIGACJA* — `wrocZEkranu`&nbsp;8109
 
 
 ---

@@ -1929,7 +1929,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-29.71";
+const APP_VERSION = "2026-08-29.72";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -5155,6 +5155,24 @@ function renderStatus(st){
   const wiersz = (etykieta, wartosc) =>
     `<div class="fakt"><span>${etykieta}</span><b>${wartosc}</b></div>`;
   document.getElementById("devInfo").innerHTML =
+    /* STAN WIECZKA — i to nie jest powtórka banera z Kalendarza.
+
+       TU BYŁ BŁĄD, i przez niego Kuba trzy razy zgłosił „otwieram, pika,
+       a w aplikacji nic". Baner „Pudełko jest otwarte" siedzi w sekcji
+       `tab-cal`. Sprawdzając pudełko siedzi się na Diagnostyce i Historii
+       pudełka — bo tam są dowody — a te ekrany są OSOBNYMI sekcjami:
+       `tab-cal` jest wtedy schowany, więc baner nie ma jak się pokazać.
+       Choćby pudełko zameldowało stan w ćwierć sekundy, na tym ekranie
+       widać było dokładnie to samo co przy zerwanym WiFi: nic.
+
+       Dlatego stan wieczka stoi TAKŻE tutaj, obok pozostałych pomiarów.
+       Ekran, na którym się sprawdza, ma odpowiadać na pytanie, z którym
+       się na niego wchodzi (D100).                                     */
+    (typeof st.boxOpen === "boolean"
+       ? wiersz("Wieczko", st.boxOpen
+           ? `<span style="color:var(--warn)">otwarte</span>` +
+             (+st.openSince > 1 ? ` <span class="dim2">od ${devHM(+st.openSince)}</span>` : "")
+           : "zamknięte") : "") +
     wiersz("Identyfikator", esc(DEVICE_ID)) +
     wiersz("Sieć WiFi", `${esc(st.ssid) || "—"}` +
            (Number.isFinite(+st.rssi) ? ` <span class="dim2">${+st.rssi} dBm</span>` : "")) +

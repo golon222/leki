@@ -4132,6 +4132,21 @@ head("Diagnostyka pokazuje drgniecia styku");
   check(!devInfo().includes("Po otwarciu"),
         "starszy firmware nie przysyla pomiaru - nie zmyslamy pola");
 
+  /* STAN WIECZKA NA EKRANIE, NA KTORYM SIE SPRAWDZA (D100).
+     Baner "Pudelko jest otwarte" stoi w sekcji tab-cal. Kuba sprawdzal
+     pudelko z Diagnostyki i Historii - osobnych sekcji, przy schowanym
+     tab-cal - wiec baner nie mial jak sie pokazac i "zameldowane w
+     cwiercsekundy" wygladalo dokladnie tak samo jak zerwane WiFi. */
+  A.renderStatus(stan({ boxOpen: true, openSince: 1750000000 }));
+  check(devInfo().includes("Wieczko") && devInfo().includes("otwarte"),
+        "otwarte wieczko widac takze w Diagnostyce, nie tylko w Kalendarzu");
+  A.renderStatus(stan({ boxOpen: false }));
+  check(devInfo().includes("Wieczko") && devInfo().includes("zamknięte"),
+        "i zamkniete tak samo - inaczej brak wiersza znaczylby dwie rzeczy");
+  A.renderStatus(stan({}));
+  check(!devInfo().includes("Wieczko"),
+        "ale bez stanu z pudelka nie zmyslamy 'zamkniete'");
+
   A.renderStatus(stan({ netMs: 1840, lidMs: 2610 }));
   check(devInfo().includes("Po otwarciu wieczka"), "pomiar widoczny w Diagnostyce");
   check(devInfo().includes("radio 1.8 s") && devInfo().includes("baza 2.6 s"),

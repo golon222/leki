@@ -12,7 +12,7 @@ zamiast 60 tys. tokenów wchodzi 2,5 tys. plus jeden obszar.
 | `decyzje/pudelko.md` | Pudełko — sen, alarm, NVS, WiFi | 26 |
 | `decyzje/ota.md` | Aktualizacja przez WiFi i skan sieci | 8 |
 | `decyzje/telegram.md` | Powiadomienia Telegram | 5 |
-| `decyzje/aplikacja.md` | Aplikacja — ekrany i wygląd | 34 |
+| `decyzje/aplikacja.md` | Aplikacja — ekrany i wygląd | 35 |
 | `decyzje/dane.md` | Dane, kolejka, dawkowanie | 17 |
 | `decyzje/testy.md` | Testy, audyt, kompilacja | 12 |
 | `decyzje/bugi.md` | Błędy **zamknięte** — historia objawów | 25 |
@@ -65,6 +65,7 @@ Od najnowszej. Kolumna „gdzie" mówi, który plik w `decyzje/` trzymać otwart
 
 | # | O co chodziło | gdzie |
 |---|---|---|
+| **D100** | Stan wieczka widać także w Diagnostyce — baner „otwarte" siedział w `tab-cal`, a sprawdza się z `tab-diag`/`tab-hist`, gdzie tamta sekcja jest schowana (aplikacja `2026-08-29.72`) | `aplikacja` |
 | **D99** | Pętla czekania przestała przerywać własne łączenie — `WiFi.reconnect()` co 5 s kasowało próbę zaczętą w tle przez D98; do tego pomiar `netMs`/`lidMs` (firmware `1.48.2`) | `pudelko` |
 | **D98** | Radio wstaje w tle, a pudełko przez ten czas pilnuje wieczka — próg czasowy z D97 dokładał sekundy zamiast usunąć blokadę (firmware `1.48.1`) | `pudelko` |
 | **D97** | Pudełko było ślepe na zamknięcie wieczka przez ~47 s — blokujące `wifiConnect()` stało przed pętlą czekania (firmware `1.48.0`) | `pudelko` |
