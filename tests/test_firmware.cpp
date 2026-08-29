@@ -2891,6 +2891,75 @@ head("Telegram: zapas i termin INR");
   }
 
 
+/* ================= 24. MELODIA PRZYPOMNIENIA (D97) ==================
+   Tablica MELODIA jest danymi, nie logika - a mimo to ma tu testy,
+   bo jest dokladnie tym rodzajem danych, ktory psuje sie po cichu.
+   Zla wysokosc nie wywala kompilacji, nie zapala nic w aplikacji
+   i nie da sie jej zobaczyc w logu: objawem jest "pudelko jakos
+   ciszej dzwoni", a to Kuba zauwazy dopiero po pominietej dawce.
+
+   Sprawdzamy trzy rzeczy, kazda z wlasnego powodu:
+     - PASMO 2000-3400 Hz, bo poza nim piezo gra o 20-30 dB ciszej
+       (ta sama wiedza, co przy beepErr - komentarz w PillBox.ino);
+     - ze fraza sie DOMYKA i miesci w oknie alarmu;
+     - ze nie ma nut zerowej dlugosci ani dwoch pauz z rzedu - jedno
+       i drugie to slad po recznej poprawce w tablicy.               */
+head("Melodia przypomnienia (D97)");
+{
+  CHECK(MELODIA_NUT >= 16, "fraza ma z czego byc rozpoznawalna");
+
+  int zlePasmo = 0, zeroDlugosci = 0, dwiePauzy = 0, nut = 0, pauz = 0;
+  long osemek = 0;
+  int najnizsza = 99999, najwyzsza = 0;
+  for (int i = 0; i < MELODIA_NUT; i++) {
+    osemek += MELODIA[i].osemek;
+    if (MELODIA[i].osemek == 0) zeroDlugosci++;
+    if (MELODIA[i].hz == 0) {
+      pauz++;
+      if (i > 0 && MELODIA[i - 1].hz == 0) dwiePauzy++;
+    } else {
+      nut++;
+      if (MELODIA[i].hz < 2000 || MELODIA[i].hz > 3400) zlePasmo++;
+      if (MELODIA[i].hz < najnizsza) najnizsza = MELODIA[i].hz;
+      if (MELODIA[i].hz > najwyzsza) najwyzsza = MELODIA[i].hz;
+    }
+  }
+
+  CHECK(zlePasmo == 0, "kazda nuta siedzi w slyszalnym pasmie 2000-3400 Hz");
+  CHECK(zeroDlugosci == 0, "zadna nuta nie trwa zero slotow");
+  CHECK(dwiePauzy == 0, "zadne dwie pauzy nie stoja obok siebie");
+  CHECK(nut >= 20, "melodii jest wiecej niz ciszy");
+  CHECK(pauz > 0, "fraza ma oddech - to melodia, a nie jeden ciag pisku");
+  CHECK(MELODIA[0].hz != 0, "fraza zaczyna sie dzwiekiem, nie cisza");
+  CHECK(MELODIA[MELODIA_NUT - 1].hz != 0, "i konczy sie dzwiekiem");
+
+  /* Transpozycja przeniosla cala fraze o 45 poltonow w gore, wiec jej
+     ambitus musi zostac taki jak w oryginale: E3-B3, czyli kwinta
+     czysta (stosunek 1,4983). Gdyby ktos "poprawil" pojedyncza nute,
+     zeby lepiej brzmiala, ten stosunek by sie zmienil - i melodia
+     przestalaby byc ta melodia.                                     */
+  double ambitus = (double)najwyzsza / (double)najnizsza;
+  CHECK(ambitus > 1.49 && ambitus < 1.51,
+        "ambitus frazy to nadal kwinta czysta - transpozycja, nie przestrajanie");
+
+  /* Jedno przejscie musi zmiescic sie w oknie alarmu z zapasem na
+     przerwe - inaczej melodia urywalaby sie zawsze w tym samym
+     miejscu i nikt by nie uslyszal jej konca.                       */
+  long msFrazy = osemek * MELODIA_SLOT_MS;
+  CHECK(msFrazy + BURST_GAP_MS < (long)ALARM_WINDOW_S * 1000L,
+        "cala fraza plus przerwa miesci sie w oknie alarmu");
+  CHECK(msFrazy >= 4000 && msFrazy <= 20000,
+        "fraza trwa tyle, ile fraza - nie sekunde i nie pol minuty");
+
+  /* Cisza doklejana do kazdej nuty nie moze zjesc najkrotszej z nich. */
+  CHECK(MELODIA_LUZ_MS * 3 < MELODIA_SLOT_MS,
+        "luz artykulacyjny jest krotszy niz najkrotsza nuta");
+  /* A pomiar wieczka nie moze rozciagac rytmu (D95: odczyt do 60 ms). */
+  CHECK(MELODIA_KROK_MS > REED_STABIL_MAX_MS,
+        "prog pytania o wieczko jest dluzszy niz najdluzszy odczyt kontaktronu");
+}
+
+
 printf("\n──────────────────────────────────────\n");
 printf("  ZALICZONE: %d    BLEDY: %d\n", PASS, FAIL);
 printf("──────────────────────────────────────\n");

@@ -853,6 +853,52 @@ void beepCharging() {
   buzzerOff();
 }
 
+/* ---------------------------------------------------------------------
+   MELODIA PRZYPOMNIENIA O LEKU  (D97)
+
+   Przypomnienie o 20:00 gra fraze z "ODDO" (Louis Villain x Pezet) -
+   Kuba przyslal plik MIDI i poprosil, zeby pudelko gralo wlasnie to.
+   Fraza wyjeta z tego pliku wraca w nagraniu trzy razy identycznie, wiec
+   nie jest przypadkowym fragmentem: to jest ten kawalek, ktory sie nuci.
+
+   DWIE RZECZY, KTORE TU DECYDUJA, I ZADNA Z NICH NIE JEST "NA OKO":
+
+   1. WYSOKOSC. Piezo 23 mm ma rezonans kolo 2700 Hz i poza pasmem
+      2000-3400 Hz gra dramatycznie ciszej - to jest ta sama wiedza, ktora
+      kazala kiedys podniesc wszystkie sygnaly bledu (patrz komentarz przy
+      beepErr wyzej). Melodia w oryginale chodzi po E3-B3, czyli 165-247 Hz,
+      i na tym piezo bylaby praktycznie NIESLYSZALNA. Cala fraza jest wiec
+      przeniesiona o 45 poltonow w gore. To transpozycja, nie przestrajanie
+      pojedynczych nut: WSZYSTKIE odleglosci miedzy dzwiekami zostaly co do
+      centa, wiec melodia jest ta sama, tylko w innej tonacji. Wyszlo
+      2217-3322 Hz, czyli dokladnie w pasmie, w ktorym to pudelko slychac.
+
+   2. RYTM. Slot to osemka (MELODIA_SLOT_MS). Kolumna `osemek` mowi, ile
+      slotow trwa nuta; hz == 0 to pauza. Fraza ma 48 osemek, czyli 12 s
+      przy 250 ms - i konczy sie cala, zanim minie ALARM_WINDOW_S.
+
+   Czego tu NIE ma i celowo: to nie jest odtwarzacz MIDI. Zadnych akordow
+   (piezo gra jeden ton), zadnej dynamiki, zadnego basu. Bas z pliku
+   siedzi w okolicy 30-40 Hz i na tym glosniku nie istnieje.            */
+/* @extract-begin */
+struct MelodiaNuta {
+  uint16_t hz;        // 0 = pauza
+  uint8_t  osemek;    // dlugosc w slotach MELODIA_SLOT_MS
+};
+
+static const MelodiaNuta MELODIA[] = {
+  {3322,2}, {2960,2}, {3322,2}, {2960,2},             /* B3 A3 B3 A3 */
+  {2960,1}, {2960,1}, {2794,1}, {2794,2},             /* A3 A3 G#3 G#3 */
+  {2794,2}, {   0,2}, {2217,3}, {   0,2},             /* G#3 - E3 - */
+  {3136,2}, {2960,1}, {3322,2}, {2960,1},             /* A#3 A3 B3 A3 */
+  {2960,1}, {2960,1}, {2960,2}, {   0,1},             /* A3 A3 A3 - */
+  {2794,3}, {   0,1}, {3322,1}, {2217,2},             /* G#3 - B3 E3 */
+  {2217,2}, {   0,2}, {2960,1}, {2960,1},             /* E3 - A3 A3 */
+  {2960,2},                                           /* A3 */
+};
+static const int MELODIA_NUT = sizeof(MELODIA) / sizeof(MELODIA[0]);
+/* @extract-end */
+
 /* =====================================================================
  *  3.  GPIO / WYBUDZANIE
  * ===================================================================== */
@@ -3565,13 +3611,37 @@ bool runAlarmWindow() {
   buzzerInit();
   uint32_t deadline = millis() + (uint32_t)ALARM_WINDOW_S * 1000UL;
 
+  /* Jedno przejscie melodii (D97).
+
+     Zegar jest LICZONY OD POCZATKU FRAZY, nie od poprzedniej nuty:
+     `czas` przesuwa sie o pelna dlugosc slotu niezaleznie od tego, ile
+     naprawde zajelo czekanie. Inaczej kazdy odczyt kontaktronu - a on
+     trwa od 12 do 60 ms (D95) - doklejalby sie do rytmu i melodia
+     rozjechalaby sie po kilkunastu nutach.
+
+     Dlatego tez o wieczko pytamy tylko wtedy, gdy do konca nuty zostalo
+     wiecej niz MELODIA_KROK_MS. Tuz przed koncem juz tylko doczekujemy:
+     pomiar zabralby wiecej czasu, niz nuty zostalo.                    */
   while (millis() < deadline) {
-    for (int b = 0; b < BEEPS_PER_BURST; b++) {
-      buzzerTone(BUZZER_FREQ_HZ);
-      delay(BEEP_MS);
+    uint32_t czas = millis();
+    for (int i = 0; i < MELODIA_NUT && millis() < deadline; i++) {
+      czas += (uint32_t)MELODIA[i].osemek * MELODIA_SLOT_MS;
+      buzzerTone(MELODIA[i].hz);              // 0 = pauza we frazie
+
+      /* Ton milknie MELODIA_LUZ_MS przed koncem slotu - bez tego dwie te
+         same nuty pod rzad slychac jako jedna dluzsza.                 */
+      uint32_t koniecTonu = czas - MELODIA_LUZ_MS;
+      while ((int32_t)(koniecTonu - millis()) > 0) {
+        int32_t zostalo = (int32_t)(koniecTonu - millis());
+        if (zostalo > MELODIA_KROK_MS) {
+          if (alarmPotwierdzony(boxIsOpen(), byloOtwarteNaStarcie)) { buzzerOff(); return true; }
+        } else {
+          delay(zostalo);
+        }
+      }
       buzzerTone(0);
-      delay(120);
-      if (alarmPotwierdzony(boxIsOpen(), byloOtwarteNaStarcie)) { buzzerOff(); return true; }
+      int32_t luz = (int32_t)(czas - millis());
+      if (luz > 0) delay(luz);
     }
     uint32_t gapEnd = millis() + BURST_GAP_MS;
     while (millis() < gapEnd) {

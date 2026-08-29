@@ -38,8 +38,8 @@ bash tests/run_all.sh
 ```
 
 Musi przejść przed zmianą i po zmianie. Stan wyjściowy:
-**631 + 52 firmware, 1246 (×6 pór doby) + 92 + 49 aplikacja, 48 zgodności,
-134 reguły bazy, 332 kontrole audytu, 26 kontroli statycznych — 0 błędów.**
+**644 + 52 firmware, 1246 (×6 pór doby) + 92 + 49 aplikacja, 48 zgodności,
+134 reguły bazy, 342 kontrole audytu, 26 kontroli statycznych — 0 błędów.**
 
 **Runner jest cichy przy sukcesie i głośny przy błędzie** (D66). Udany przebieg
 to 12 linii — **i te 12 linii TO JEST potwierdzenie, nie jego skrót.** Nie
@@ -235,8 +235,8 @@ na `esp32:esp32@3.3.11` i z **ustawieniami płytki z nagłówka `PillBox.ino`**.
 Nie jest częścią `run_all.sh`: wymaga sieci i ~500 MB toolchainu.
 **Uruchom to po każdej zmianie w firmware.**
 
-Stan: `PillBox.ino` **64% flasha** (1 264 065 B z 1,875 MB), `PillBoxTest.ino` 20%.
-Zapas ~718 kB.
+Stan: `PillBox.ino` **64% flasha** (1 264 291 B z 1,875 MB), `PillBoxTest.ino` 20%.
+Zapas ~702 kB.
 
 **Podział pamięci musi być `Minimal SPIFFS (1.9MB APP with OTA/190KB SPIFFS)`**,
 bo tak jest w nagłówku szkicu i bo OTA zapisuje program do **drugiej** partycji
@@ -259,6 +259,14 @@ nie do publikacji. Szczegóły obejść — D17.
 - **Powiadomienia Telegram (1.45.0) — ani jedna wiadomość nie wyszła jeszcze
   z płytki.** Kod się kompiluje i ma 82 kontrole, ale to nie jest dowód.
   Rozstrzygnie przycisk „wyślij wiadomość próbną" — po to powstał.
+- **Melodia przypomnienia (1.48.0) — nie zabrzmiała jeszcze z płytki.**
+  Fraza z „ODDO", przeniesiona o 45 półtonów w górę, żeby zmieściła się
+  w paśmie 2000–3400 Hz, w którym to piezo w ogóle słychać (D97). Tabela nut
+  ma 13 kontroli, firmware się kompiluje — ale **jak to brzmi na 23-milimetrowym
+  krążku, wie tylko ten krążek**. Charakterystyka piezo nie jest płaska nawet
+  w tym paśmie, więc części nut może być słychać ciszej niż reszty. Jeśli
+  melodia okaże się mniej przebojowa niż seria piknięć, pierwszą rzeczą do
+  zmierzenia jest, **które** nuty giną — nie „czy w ogóle działa".
 - Prąd ładowania 350 mA to wartość katalogowa, nie pomiar.
 - **Jakim kodem baza odrzuca wpis łamiący reguły.** Cała decyzja D13 zakłada
   400 — bo tylko wtedy `trwaleOdrzucony()` zdejmie wpis z kolejki. Nikt tego

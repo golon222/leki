@@ -20,7 +20,7 @@
  * 1. IDENTYFIKATOR URZADZENIA
  * ------------------------------------------------------------------ */
 #define DEVICE_ID           "pillbox01"     // klucz w /devices/<DEVICE_ID>
-#define FW_VERSION          "1.47.4"   // widoczna w aplikacji - po wgraniu sprawdz, czy sie zmienila
+#define FW_VERSION          "1.48.0"   // widoczna w aplikacji - po wgraniu sprawdz, czy sie zmienila
 
 /* ---------------------------------------------------------------------
  * 2. FIREBASE  (Realtime Database + Auth email/haslo)
@@ -136,9 +136,28 @@
  * 5. ALARM
  * ------------------------------------------------------------------ */
 #define BUZZER_FREQ_HZ      2700            // rezonans typowego piezo 23mm
-#define BEEP_MS             180
-#define BEEPS_PER_BURST     3
-#define BURST_GAP_MS        4000            // przerwa miedzy seriami piknięć
+
+/* --- MELODIA PRZYPOMNIENIA (D97) ------------------------------------
+ *  Przypomnienie o leku gra melodie, a nie serie piknięć. Nuty siedza
+ *  w PillBox.ino (tablica MELODIA), a tutaj stoi tylko jej TEMPO -
+ *  bo to jedyna rzecz, ktora sie tu reguluje na sluch.
+ *
+ *  MELODIA_SLOT_MS  dlugosc osemki. Cala fraza to 48 osemek, wiec
+ *      250 ms = 12 s na jedno przejscie. Mniej = szybciej.
+ *  MELODIA_LUZ_MS   cisza doklejona na koncu KAZDEJ nuty. Bez niej dwie
+ *      te same nuty pod rzad zlewaja sie w jeden dlugi pisk - a takich
+ *      miejsc melodia ma cztery.
+ *  MELODIA_KROK_MS  ponizej tylu ms do konca nuty juz nie pytamy
+ *      o kontaktron, tylko doczekujemy. Odczyt wieczka trwa od 12 do 60 ms
+ *      (REED_STABIL_*), wiec pytanie tuz przed koncem nuty rozciagaloby
+ *      melodie. Ta wartosc musi zostac WYRAZNIE wieksza od
+ *      REED_STABIL_MAX_MS.
+ * ------------------------------------------------------------------ */
+#define MELODIA_SLOT_MS     250
+#define MELODIA_LUZ_MS      35
+#define MELODIA_KROK_MS     100
+
+#define BURST_GAP_MS        3000            // cisza miedzy przejsciami melodii
 #define ALARM_WINDOW_S      120             // ile sekund dzwoni jedna proba
 #define SNOOZE_S            300             // przerwa miedzy probami (5 min)
 #define MAX_ALARM_RETRIES   3               // po tylu probach -> "missed"

@@ -598,6 +598,58 @@ ok("const bool byloOtwarteNaStarcie = boxIsOpen();" in alarm,
 ok(alarm.find("byloOtwarteNaStarcie = boxIsOpen()") < alarm.find("buzzerInit()"),
    "i zapamietany PRZED pierwszym pikiem, nie w trakcie")
 
+# ---------- 6b1. Melodia przypomnienia (D97) ----------
+# Melodia jest DLUZSZA niz cokolwiek, co ten buzzer grał do tej pory
+# (12 s wobec 0,9 s serii piknięć), wiec pytanie "czy juz otwarl" musi
+# padac w JEJ srodku, a nie dopiero miedzy przejsciami. Inaczej pudelko
+# gralo by jeszcze przez kilkanascie sekund po otwarciu wieczka -
+# i wygladalo, jakby nie zauwazylo dawki.
+ok("MELODIA[" in alarm and "MELODIA_NUT" in alarm,
+   "przypomnienie o leku gra melodie z tablicy, nie zaszyta seria piknięć")
+ok("MELODIA_SLOT_MS" in alarm,
+   "dlugosc nuty bierze sie z tempa w config.h, nie z liczby w petli")
+_i_nuty = alarm.find("MELODIA[i].hz")
+_i_gap  = alarm.find("BURST_GAP_MS")
+ok(0 < _i_nuty < _i_gap and alarm.find("alarmPotwierdzony(", _i_nuty) < _i_gap,
+   "o wieczko pytamy juz w trakcie melodii, nie dopiero w przerwie")
+ok("MELODIA_LUZ_MS" in alarm,
+   "kazda nuta konczy sie cisza - dwie te same nie zleja sie w jeden pisk")
+
+# Zegar frazy musi isc od jej poczatku, a nie od poprzedniej nuty:
+# odczyt kontaktronu trwa do 60 ms (D95) i doklejalby sie do rytmu.
+ok("czas +=" in alarm and alarm.count("czas = millis()") == 1,
+   "rytm liczony od poczatku frazy - pomiar wieczka go nie rozciaga")
+
+# Tablica stoi w bloku @extract, wiec testy pracuja na TEJ SAMEJ melodii,
+# ktora poleci na plytke. Kopia w tescie znaczylaby dokladnie tyle, co nic.
+_mel = re.search(r"/\* @extract-begin \*/\s*struct MelodiaNuta.*?/\* @extract-end \*/",
+                 ino, re.S)
+ok(_mel is not None, "tablica melodii oddana testom przez @extract, bez kopii")
+
+# Stare stale po serii piknięć nie moga zostac - martwa stala w config.h
+# to zaproszenie, zeby ktos ja kiedys "przywrocil" obok melodii.
+ok("BEEPS_PER_BURST" not in cfg and "BEEP_MS" not in cfg,
+   "po zmianie na melodie nie zostaly stale starej serii piknięć")
+
+# Melodia nalezy do PRZYPOMNIENIA. Gdyby wjechala w potwierdzenia albo
+# w ostrzezenia, przestalaby cokolwiek znaczyc - a te sygnaly rozniuje
+# sie rytmem wlasnie po to, zeby dalo sie je rozpoznac bez patrzenia.
+#
+# Naglowki sa wypisane W CALOSCI, bo cialo() szuka doslownego tekstu
+# przed "{". Skrot "void beepAck(" zwracal pusty napis dla wszystkich
+# osmiu funkcji i kontrola przechodzila, nie sprawdzajac NICZEGO -
+# dokladnie ta sama wpadka, co przy strip() i przy galaz(). Dlatego
+# pusty wynik jest tu bledem, a nie cicha zgoda.
+_SYGNALY = ("void beepAck()", "void beepErr()", "void beepQueued()",
+            "void beepAlreadyTaken()", "void beepNowaWersja()",
+            "void beepLowStock()", "void beepLowBattery(bool critical)",
+            "void beepBoxOpen()", "void beepCharging()")
+_puste = [n for n in _SYGNALY if not cialo(n).strip()]
+ok(not _puste, f"audyt widzi cialo kazdego sygnalu dzwiekowego {_puste if _puste else ''}")
+_poza = [n for n in _SYGNALY if "MELODIA" in cialo(n)]
+ok(not _poza,
+   f"melodia gra WYLACZNIE na przypomnienie o leku {_poza if _poza else ''}")
+
 # ---------- 6c. Ochrona przed druga dawka bez internetu ----------
 # Zgloszenie Kuby z wyjazdu: bez sieci pudelko nie ostrzegalo o powtorce.
 # Cala ochrona byla bramkowana rtcTimeValid, ktore ustawia WYLACZNIE NTP.
