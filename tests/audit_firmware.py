@@ -248,8 +248,28 @@ czek = code[code.find("Gest czekajNaZamkniecieIGest("):]
 czek = czek[:czek.find("\n}")]
 ok("extendAwake(limitMs + 30000)" in czek,
    "bezpiecznik czasowy odsuniety na czas czuwania")
-ok("pushLidState();" in czek,
-   "otwarcie zglaszane od razu z KAZDEJ sciezki czekania, nie po zamknieciu")
+ok("pushLidState(" in czek,
+   "otwarcie zglaszane z KAZDEJ sciezki czekania, nie dopiero po zamknieciu")
+# ...ale NIE ZA CENE SLEPOTY NA ZAMKNIECIE.
+#
+# `wifiConnect()` blokuje do ~47 s (15 s na pierwsza siec + 3 x 8 s na
+# kolejne + 8 s na poswiadczenia). Postawione PRZED petla czekania robilo
+# z pudelka slepca: przez ten czas nie widzialo, ze wieczko zamknieto,
+# a stan, ktory potem wysylalo, byl odczytem z chwili, w ktorej odpowiedzial
+# router - nie z chwili, w ktorej cos sie z wieczkiem stalo. Kuba widzial
+# to jako "otwieram i zamykam szybko, a aplikacja w ogole tego nie pokazuje"
+# oraz "pokazuje otwarte, choc fizycznie zamkniete" (D97).
+#
+# Meldunek natychmiastowy zostaje - ale tylko wtedy, gdy lacze JUZ stoi.
+# Bez lacza probujemy dopiero po LID_MELDUNEK_PO_MS, czyli gdy to juz nie
+# jest "wyjmuje tabletke", tylko "zostawilem otwarte".
+_przed_petla = czek[:czek.find("while (")] if "while (" in czek else czek
+ok("wifiConnect()" not in _przed_petla,
+   "i NIE blokuje na laczeniu z siecia, zanim zacznie czekac na zamkniecie")
+ok("WL_CONNECTED" in _przed_petla,
+   "natychmiastowy meldunek idzie tylko po gotowym laczu")
+ok("LID_MELDUNEK_PO_MS" in czek,
+   "bez lacza meldunek czeka, az wieczko bedzie otwarte dluzej niz chwile")
 ok("!rtcOpenReported" in czek,
    "ale bez powtarzania tego, co poszlo juz przy zwyklym otwarciu")
 ok("WiFi.reconnect();" in czek,
@@ -350,7 +370,7 @@ lid = cialo("bool pushLidState()")
 # i wywrocila sie przy pierwszym dluzszym wyjasnieniu (D96).
 # `lid` tu NIE wystarczy: pochodzi ze `strip()`, ktore kasuje takze
 # literaly, wiec napisu "PATCH" juz w nim nie ma.
-_lid_raw = ino[ino.find("bool pushLidState() {"):]
+_lid_raw = ino[ino.find("bool pushLidState(bool stan) {"):]
 _lid_raw = _lid_raw[:_lid_raw.find("\n}")]
 ok('rtdbSend("PATCH"' in _lid_raw,
    "stan wieczka idzie PATCH-em - nie nadpisuje reszty statusu")
@@ -358,8 +378,23 @@ ok("logbookJson" not in lid, "szybka wysylka nie ciagnie za soba czarnej skrzynk
 rep = cialo("void reportEvent(const char* type, int slot)")
 ok(rep.find("pushLidState()") < rep.find("fetchConfig()"),
    "przy otwarciu stan wieczka leci PRZED pobraniem ustawien i kolejka")
-ok("pushLidState() && pushStatus()" in code,
+ok(re.search(r"pushLidState\([^)]*\)\s*&&\s*pushStatus\(\)", code) is not None,
    "przy zamknieciu tez najpierw krotki pakiet, potem pelny status")
+# STAN WYSYLANY JEST TEN ZMIERZONY, a nie odczytany jeszcze raz w srodku.
+# `pushLidState()` zapisuje go takze jako `rtcOpenReported` - czyli "co
+# aplikacja juz wie". Gdy tresc i znacznik pochodza z dwoch roznych
+# odczytow, obie wartosci sie rozjezdzaja i NIKT tego nie prostuje, bo
+# ponowienie rusza wlasnie z ich porownania (D96).
+ok("bool pushLidState(bool stan)" in ino,
+   "stan wieczka jest ARGUMENTEM wysylki, nie odczytem w jej srodku")
+_lid2 = ino[ino.find("bool pushLidState(bool stan) {"):]
+_lid2 = _lid2[:_lid2.find("\n}")]
+# Komentarze precz - opis bledu w naglowku funkcji wymienia `boxIsOpen()`
+# z nazwy i bez tego kontrola lapalaby wlasne wyjasnienie zamiast kodu.
+_lid2 = re.sub(r"/\*.*?\*/", "", _lid2, flags=re.S)
+_lid2 = re.sub(r"//[^\n]*", "", _lid2)
+ok("boxIsOpen()" not in _lid2,
+   "wiec sama wysylka juz nie mierzy stanu po swojemu")
 
 # ── Procent baterii przy ladowaniu ──
 # Uklad ladujacy trzyma na ogniwie swoje napiecie, wiec kazdy pomiar

@@ -2506,7 +2506,7 @@ int pushEventRecord(const String& rec) {
 
    PATCH zmienia tylko trzy pola i nie rusza reszty statusu, wiec mozemy
    go wyslac od razu po zalogowaniu, przed cala reszta roboty.        */
-bool pushLidState() {
+bool pushLidState(bool stan) {
   /* JEDEN ODCZYT NA TRZY UZYCIA - i to jest tu cala tresc.
 
      TU BYL BLAD, zglosil go Kuba seria z terenu: *"otwieram, a w aplikacji
@@ -2529,7 +2529,6 @@ bool pushLidState() {
      nastepnym wybudzeniu. Stad "po czasie pokazalo".
 
      Odczyt jest wiec jeden i ten sam trafia do tresci i do znacznika.  */
-  const bool stan = boxIsOpen();
   char body[96];
   snprintf(body, sizeof(body), "{\"boxOpen\":%s,\"openSince\":%lu,\"lastSeen\":%lu}",
            stan ? "true" : "false",
@@ -3466,7 +3465,7 @@ void reportEvent(const char* type, int slot) {
     if (firebaseSignIn()) {
       /* Najpierw sam stan wieczka - to jedno male zapytanie, ktore
          zapala wskaznik w telefonie. Reszta moze poczekac.          */
-      pushLidState();
+      pushLidState(boxIsOpen());
       fetchConfig();
       flushQueue();
       if (pushEventRecord(rec) == 200) {
@@ -4456,9 +4455,35 @@ Gest czekajNaZamkniecieIGest(uint32_t limitMs) {
 
      Warunek na rtcOpenReported pilnuje, zebysmy nie wysylali drugi raz
      tego, co przy zwyklym otwarciu poszlo juz w reportEvent().        */
-  if (boxIsOpen() && !rtcOpenReported && !batterySaver) {
-    if (wifiConnect() && firebaseSignIn()) pushLidState();
-    else rtcStatusDirty = true;
+  /* NIE LACZYMY SIE TUTAJ Z SIECIA - i to jest cala naprawa.
+
+     TU BYL BLAD, i zglosil go Kuba trzema scenariuszami pod rzad:
+     *"otwieram, pika, po okolo minucie w aplikacji pokaze sie ze pudelko
+     jest otwarte"*, *"otworze i zamkne szybko - aplikacja w ogole nie
+     pokazuje ze bylo otwarte"*, *"biore tabletke, zamykam, a po chwili
+     pokazuje sie ze otwarte, mimo ze fizycznie zamkniete"*.
+
+     Stalo tu blokujace `wifiConnect()`. W najgorszym przypadku to
+     15 s na pierwsza siec + 3 x 8 s na kolejne + 8 s na poswiadczenia
+     sterownika = OKOLO 47 SEKUND. Kubowa "minuta" co do joty.
+
+     Przez caly ten czas pudelko stoi w jednym wywolaniu i NIE WIDZI, ze
+     wieczko zostalo zamkniete - petla czekania zaczyna sie dopiero za
+     nim. A stan, ktory wysyla po powrocie, jest odczytem z PRZYPADKOWEGO
+     momentu: z chwili, w ktorej odpowiedzial router, a nie z chwili,
+     w ktorej cos sie z wieczkiem stalo. Stad wszystkie trzy objawy naraz:
+     zamkniesz szybko - poleci "zamkniete" i otwarcia nie widac wcale;
+     potrzymasz dluzej - poleci "otwarte", ale dociera, gdy juz zamknales.
+
+     Teraz: gdy lacze JUZ stoi, meldunek kosztuje ulamek sekundy i idzie
+     od razu. Gdy go nie ma - nie czekamy ani chwili. Stan wieczka
+     poleci na koncu wybudzenia, kiedy bedzie OSTATECZNY i prawdziwy,
+     a `rtcStatusDirty` pilnuje, zeby na pewno poleciał.               */
+  bool zgloszonoOtwarcie = false;
+  if (boxIsOpen() && !rtcOpenReported && !batterySaver
+      && WiFi.status() == WL_CONNECTED && firebaseSignIn()) {
+    pushLidState(true);
+    zgloszonoOtwarcie = true;
   }
 
   /* Czuwanie moze trwac dlugo, wiec bezpiecznik czasowy trzeba odsunac -
@@ -4496,6 +4521,20 @@ Gest czekajNaZamkniecieIGest(uint32_t limitMs) {
       wifiUspij();
       radioZgaszone = true;
     }
+    /* Lacza nie bylo na starcie: probujemy je zbudowac DOPIERO wtedy, gdy
+       wieczko stoi otwarte dluzej niz LID_MELDUNEK_PO_MS. Wczesniej nie
+       wolno - `wifiConnect()` blokuje do ~47 s i pudelko bylo przez ten
+       czas slepe na zamkniecie (D97). Po progu blokada juz nic nie psuje:
+       to nie jest "wyjmuje tabletke", tylko "zostawilem otwarte", a wtedy
+       i tak czekamy dalej. Probujemy RAZ.                               */
+    if (!zgloszonoOtwarcie && !rtcOpenReported && !batterySaver
+        && boxIsOpen() && millis() - t0 > LID_MELDUNEK_PO_MS) {
+      zgloszonoOtwarcie = true;
+      LOGLN("[LID] wieczko otwarte dluzej niz chwile - melduje aplikacji");
+      if (wifiConnect() && firebaseSignIn()) pushLidState(boxIsOpen());
+      else rtcStatusDirty = true;
+    }
+
     bool teraz = buttonPressed();
 
     if (teraz != byl) {
@@ -6409,7 +6448,7 @@ void setup() {
          uczciwy zapas czasu na polaczenie oraz wyslanie.               */
       extendAwake(60000);
       LOG("[OPN] wysylam stan koncowy: pudelko %s\n",
-          boxIsOpen() ? "OTWARTE" : "zamkniete");
+          boxIsOpen() ? "OTWARTE" : "zamkniete");   // tuz przed pomiarem nizej
       /* Zamkniecie wieczka: najpierw krotki PATCH, zeby aplikacja
          zareagowala natychmiast, a dopiero potem pelny status.      */
       /* USTAWIENIA CZYTAMY TAKZE TUTAJ - i to jest naprawa prawdziwej
@@ -6438,7 +6477,13 @@ void setup() {
          pudelka dopiero nastepnego dnia.                              */
       const bool bazaGotowa = wifiConnect() && firebaseSignIn();
       if (bazaGotowa) fetchConfig();
-      if (bazaGotowa && pushLidState() && pushStatus()) {
+      /* Stan mierzymy PO nawiazaniu lacza i tuz przed wysylka - to jest
+         moment, w ktorym jest juz ostateczny - i ten sam pomiar idzie
+         do obu wysylek. Dwa osobne odczyty moglyby dac dwie rozne
+         odpowiedzi, a wtedy szybki PATCH i pelny status mowilyby
+         aplikacji co innego.                                         */
+      const bool stanKoncowy = boxIsOpen();
+      if (bazaGotowa && pushLidState(stanKoncowy) && pushStatus()) {
         /* Ile naprawde uplynelo od zamkniecia wieczka do potwierdzenia
            z bazy. Bez tej liczby "za wolno" jest nie do zdiagnozowania:
            nie wiadomo, czy zwleka pudelko, czy telefon.               */
