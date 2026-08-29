@@ -4107,6 +4107,22 @@ head("Diagnostyka pokazuje drgniecia styku");
   check(!devInfo().includes("sprawdź magnes"),
         "i bez podpowiedzi, ktora przy siedmiu nic nie znaczy");
 
+  /* TWARDE RESTARTY - drugi pomiar z tej samej serii (D96). Po restarcie
+     pudelko zapomina, czy dawka byla dzis wzieta, wiec raz pika "juz
+     brales", a raz nie. Bez tej liczby to wyglada na kaprys. */
+  A.renderStatus(stan({ resetow: 0 }));
+  check(!devInfo().includes("Restartów"), "zero restartow to nie jest wiadomosc");
+  A.renderStatus(stan({ resetow: 3, resetPowod: "wybudzenie ze snu" }));
+  check(devInfo().includes("Restartów pudełka") && devInfo().includes("3"),
+        "liczba restartow widoczna");
+  check(!devInfo().includes("to nie jest normalne"),
+        "zwykly powod nie straszy");
+  A.renderStatus(stan({ resetow: 5, resetPowod: "SPADEK NAPIĘCIA" }));
+  check(devInfo().includes("SPADEK NAPIĘCIA") && devInfo().includes("to nie jest normalne"),
+        "spadek napiecia mowi wprost, ze cos jest nie tak");
+  A.renderStatus(stan({ resetow: 2, resetPowod: "BŁĄD PROGRAMU" }));
+  check(devInfo().includes("to nie jest normalne"), "blad programu tak samo");
+
   A.renderStatus(stan({ reedBounce: A.REED_DRGANIA_DUZO + 1 }));
   check(devInfo().includes("sprawdź magnes"),
         "dopiero setki mowia wprost, ze to sprzet, a nie kod");

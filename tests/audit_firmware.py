@@ -344,7 +344,15 @@ ok("rtcLogWyslanyIdx" in code,
 # ── Stan wieczka wysylany osobno i natychmiast ──
 ok("bool pushLidState(" in code, "stan wieczka ma wlasna, szybka wysylke")
 lid = cialo("bool pushLidState()")
-ok("PATCH" in ino[ino.find("bool pushLidState("):][:600],
+# Patrzymy na CALE cialo funkcji w SUROWYM zrodle, nie na okno 600 znakow
+# od naglowka. Okno przesuwa sie przy kazdym dopisanym komentarzu, wiec
+# kontrola zaczynala mierzyc dlugosc opisu zamiast tego, co robi kod -
+# i wywrocila sie przy pierwszym dluzszym wyjasnieniu (D96).
+# `lid` tu NIE wystarczy: pochodzi ze `strip()`, ktore kasuje takze
+# literaly, wiec napisu "PATCH" juz w nim nie ma.
+_lid_raw = ino[ino.find("bool pushLidState() {"):]
+_lid_raw = _lid_raw[:_lid_raw.find("\n}")]
+ok('rtdbSend("PATCH"' in _lid_raw,
    "stan wieczka idzie PATCH-em - nie nadpisuje reszty statusu")
 ok("logbookJson" not in lid, "szybka wysylka nie ciagnie za soba czarnej skrzynki")
 rep = cialo("void reportEvent(const char* type, int slot)")
@@ -763,6 +771,48 @@ else:
        "goToSleep() czeka, az styk sie uspokoi, ZANIM uzbroi wybudzanie")
     ok(not re.search(r"if \(boxIsOpen\(\)\) \{\s*\n\s*/\* Pin jest juz", _g),
        "i nie decyduje o poziomie uzbrojenia jednym odczytem")
+# POWOD TWARDEGO RESTARTU MUSI ZOSTAC ZAPISANY.
+#
+# Pamiec RTC nie przezywa resetu, wiec bez zapisu do NVS nie ma jak
+# odroznic "pudelko sie zrestartowalo" od "pudelko zachowalo sie dziwnie".
+# A te dwa prowadza w zupelnie rozne strony: brownout to zasilanie, panic
+# to blad w programie. Zapis musi isc PRZED reszta rozruchu, bo pozniejsze
+# kroki potrafia go przykryc (D96).
+ok("void zanotujReset()" in ino, "pudelko umie zanotowac powod restartu")
+_m_setup = re.search(r"void setup\(\)\s*\{(.*?)\n  bool juzOstrzezono", ino, re.S)
+ok(_m_setup is not None and "zanotujReset()" in _m_setup.group(1),
+   "i robi to na poczatku setup(), przy twardym resecie")
+ok("esp_reset_reason()" in ino, "powod bierze sie z uk\u0142adu, nie ze zgadywania")
+ok('doc["resetPowod"]' in ino and 'doc["resetow"]' in ino,
+   "powod i licznik restartow ida do aplikacji")
+
+# STAN WIECZKA W JEDNEJ FUNKCJI CZYTAMY RAZ.
+#
+# Od 1.47.3 `boxIsOpen()` to POMIAR z odbiciem, a nie jedno `digitalRead()`.
+# Dwa wywolania w jednym kroku decyzyjnym to dwa rozne momenty i moga dac
+# dwie rozne odpowiedzi. Tak powstal objaw zgloszony przez Kube: pudelko
+# wysylalo do bazy "otwarte", a zapisywalo sobie "zglosilem zamkniete" -
+# i nikt juz tego nie prostowal, bo ponowienie rusza tylko przy roznicy
+# miedzy tymi dwiema wartosciami. Aplikacja zostawala ze stanem sprzed
+# minut (D96).
+#
+# W petlach wielokrotny odczyt jest z definicji poprawny - tam pytamy
+# "jak jest TERAZ" - wiec je pomijamy.
+_fn = re.compile(r'^[A-Za-z_][\w:<>\*\s]*?\b(\w+)\s*\([^;{]*\)\s*\{', re.M)
+_poz = [(m.group(1), m.start()) for m in _fn.finditer(ino)]
+_wiele = []
+for _i, (_nazwa, _start) in enumerate(_poz):
+    _koniec = _poz[_i+1][1] if _i+1 < len(_poz) else len(ino)
+    _cialo = ino[_start:_koniec]
+    _bez = re.sub(r'/\*.*?\*/', '', _cialo, flags=re.S)
+    _bez = re.sub(r'//[^\n]*', '', _bez)
+    if re.search(r'\b(while|for)\b', _bez):      # petla: pytamy o "teraz"
+        continue
+    if len(re.findall(r'\bboxIsOpen\(\)', _bez)) > 1:
+        _wiele.append(_nazwa)
+ok(not _wiele,
+   f"stan wieczka czytany raz na krok decyzyjny (wielokrotnie w: {_wiele})")
+
 # Poza samym odczytem z odbiciem pin kontaktronu wolno czytac WYLACZNIE
 # do logu - surowy stan pinu obok stanu wyliczonego jest tam cenny przy
 # szukaniu usterki styku. Kazde inne uzycie to decyzja podjeta na jednym

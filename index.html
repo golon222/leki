@@ -1929,7 +1929,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-22.69";
+const APP_VERSION = "2026-08-29.70";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -5178,6 +5178,20 @@ function renderStatus(st){
        ? wiersz("Drgnięć styku", `${+st.reedBounce}` +
            (+st.reedBounce > REED_DRGANIA_DUZO
               ? ` <span style="color:var(--warn)">dużo — sprawdź magnes</span>` : "")) : "") +
+    /* TWARDE RESTARTY. Pamięć RTC ich nie przeżywa, więc po restarcie
+       pudełko zapomina, czy dawka była dziś wzięta — i przestaje ostrzegać
+       przed drugą tabletką, dopóki nie odczyta znacznika z pamięci trwałej.
+       Z zewnątrz wygląda to tak, jakby raz piknęło, a raz nie.
+
+       Powód rozdziela trzy zupełnie różne tropy: SPADEK NAPIĘCIA to słabe
+       ogniwo (buzzer plus radio potrafią je ściągnąć), BŁĄD PROGRAMU to
+       nasza wina, a „włączenie zasilania" to po prostu ktoś odpiął ogniwo.
+       Bez tej linijki wszystkie trzy wyglądają identycznie (D96).       */
+    (Number.isFinite(+st.resetow) && +st.resetow > 0
+       ? wiersz("Restartów pudełka", `${+st.resetow}` +
+           (st.resetPowod ? ` <span class="dim2">· ostatni: ${esc(st.resetPowod)}</span>` : "") +
+           (/NAPIĘCIA|PROGRAMU|watchdog/i.test(String(st.resetPowod || ""))
+              ? ` <span style="color:var(--warn)">to nie jest normalne</span>` : "")) : "") +
     (rawTxt ? `<div class="dim2" style="margin-top:var(--s2)">${rawTxt}</div>` : "") +
     (opisLadowan(st) ? `<div class="dim2" style="margin-top:var(--s2)">${opisLadowan(st)}</div>` : "");
 }

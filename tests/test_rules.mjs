@@ -233,7 +233,7 @@ const PRZYKLAD_STATUSU = {
   prevCharge: 0, boxOpen: false, openSince: 0,
   /* Drgniecia styku kontaktronu (D95) - pomiar, po ktorym poznac, czy po
      odfiltrowaniu odbic zostalo jeszcze cos sprzetowego.               */
-  reedBounce: 0,
+  reedBounce: 0, resetow: 0, resetPowod: "wybudzenie ze snu",
   /* Aktualizacja przez WiFi (D59). otaBad to suma MD5 wersji, ktora sie
      nie uruchomila - 32 znaki albo pusto, nigdy nic pomiedzy.         */
   otaMsg: "za malo baterii - postaw na ladowarke", otaWersja: "1.38.0",

@@ -12,7 +12,7 @@ sed -n '2800,2960p' index.html          # jeden obszar
 grep -n "nazwaFunkcji" index.html       # gdy znasz nazwe
 ```
 
-## `index.html` — 8100 linii, ~130 tys. tokenow
+## `index.html` — 8114 linii, ~130 tys. tokenow
 
 Ekrany (`<section>`) i dwa duze bloki. Zakladki `tab-*` odpowiadaja
 pozycjom w pasku nawigacji i podekranom Ustawien.
@@ -63,23 +63,23 @@ pozycjom w pasku nawigacji i podekranom Ustawien.
 | 4472 | 4728 | OSTRZEŻENIA — celowo NIE schowane w Diagnostyce |
 | 4729 | 4769 | KOLEJKA, KTÓRA NIE SCHODZI |
 | 4770 | 4863 | EKRAN, KTÓRY SIĘ NIE NARYSOWAŁ |
-| 4864 | 5184 | EKRAN ZDARZEN |
-| 5185 | 5303 | ZAPAS TABLETEK |
-| 5304 | 5533 | USTAWIENIA |
-| 5534 | 5841 | POWIADOMIENIA NA TELEFON — BOT TELEGRAM (D67) |
-| 5842 | 6298 | AKTUALIZACJA PROGRAMU PUDEŁKA (D59) |
-| 6299 | 6660 | SIECI WIDZIANE PRZEZ PUDEŁKO |
-| 6661 | 6871 | ANALIZA |
-| 6872 | 7257 | WYKRESY ANALIZY |
-| 7258 | 7414 | RAPORT |
-| 7415 | 7476 | KONTEKST DNIA (TAGI) |
-| 7477 | 7522 | KOPIA ZAPASOWA |
-| 7523 | 7736 | KOPIA NA TELEGRAM |
-| 7737 | 7802 | WIEK KOPII |
-| 7803 | 7900 | ODTWARZANIE Z KOPII |
-| 7901 | 7975 | KOPIE Z BAZY |
-| 7976 | 8058 | NAWIGACJA |
-| 8059 | 8100 | AUTOMATYCZNA AKTUALIZACJA |
+| 4864 | 5198 | EKRAN ZDARZEN |
+| 5199 | 5317 | ZAPAS TABLETEK |
+| 5318 | 5547 | USTAWIENIA |
+| 5548 | 5855 | POWIADOMIENIA NA TELEFON — BOT TELEGRAM (D67) |
+| 5856 | 6312 | AKTUALIZACJA PROGRAMU PUDEŁKA (D59) |
+| 6313 | 6674 | SIECI WIDZIANE PRZEZ PUDEŁKO |
+| 6675 | 6885 | ANALIZA |
+| 6886 | 7271 | WYKRESY ANALIZY |
+| 7272 | 7428 | RAPORT |
+| 7429 | 7490 | KONTEKST DNIA (TAGI) |
+| 7491 | 7536 | KOPIA ZAPASOWA |
+| 7537 | 7750 | KOPIA NA TELEGRAM |
+| 7751 | 7816 | WIEK KOPII |
+| 7817 | 7914 | ODTWARZANIE Z KOPII |
+| 7915 | 7989 | KOPIE Z BAZY |
+| 7990 | 8072 | NAWIGACJA |
+| 8073 | 8114 | AUTOMATYCZNA AKTUALIZACJA |
 
 **Funkcje** (209) — nazwa i linia deklaracji:
 
@@ -131,107 +131,107 @@ pozycjom w pasku nawigacji i podekranom Ustawien.
 
 *EKRAN ZDARZEN* — `evFiltr`&nbsp;4880, `evPasuje`&nbsp;4885, `renderEvents`&nbsp;4897, `renderOpenWarn`&nbsp;4937, `minutyDoPelna`&nbsp;4990, `opisLadowania`&nbsp;5002, `dni`&nbsp;5022, `opisLadowan`&nbsp;5025, `renderStatus`&nbsp;5042
 
-*ZAPAS TABLETEK* — `yesterdayKey`&nbsp;5188, `dayAfter`&nbsp;5191, `pillsBaseInfo`&nbsp;5202, `settlePills`&nbsp;5212, `dniZapasu`&nbsp;5252, `renderPills`&nbsp;5265, `savePills`&nbsp;5286, `setPills`&nbsp;5297
+*ZAPAS TABLETEK* — `yesterdayKey`&nbsp;5202, `dayAfter`&nbsp;5205, `pillsBaseInfo`&nbsp;5216, `settlePills`&nbsp;5226, `dniZapasu`&nbsp;5266, `renderPills`&nbsp;5279, `savePills`&nbsp;5300, `setPills`&nbsp;5311
 
-*USTAWIENIA* — `renderKafelki`&nbsp;5308, `renderSettings`&nbsp;5335, `tydzienZPol`&nbsp;5379, `renderWeekEditor`&nbsp;5391, `odswiezPodpowiedzTygodnia`&nbsp;5408, `tydzienZmieniony`&nbsp;5422, `rownajTydzien`&nbsp;5423, `renderPlanList`&nbsp;5436, `renderExceptions`&nbsp;5463, `wyslijSiec`&nbsp;5509
+*USTAWIENIA* — `renderKafelki`&nbsp;5322, `renderSettings`&nbsp;5349, `tydzienZPol`&nbsp;5393, `renderWeekEditor`&nbsp;5405, `odswiezPodpowiedzTygodnia`&nbsp;5422, `tydzienZmieniony`&nbsp;5436, `rownajTydzien`&nbsp;5437, `renderPlanList`&nbsp;5450, `renderExceptions`&nbsp;5477, `wyslijSiec`&nbsp;5523
 
-*POWIADOMIENIA NA TELEFON — BOT TELEGRAM (D67)* — `tgTokenPoprawny`&nbsp;5551, `tgZapytaj`&nbsp;5561, `tgKodParowania`&nbsp;5601, `tgZnajdzCzat`&nbsp;5617, `tgPolacz`&nbsp;5685, `tgProbna`&nbsp;5718, `tgOdlacz`&nbsp;5725, `renderTgStan`&nbsp;5747
+*POWIADOMIENIA NA TELEFON — BOT TELEGRAM (D67)* — `tgTokenPoprawny`&nbsp;5565, `tgZapytaj`&nbsp;5575, `tgKodParowania`&nbsp;5615, `tgZnajdzCzat`&nbsp;5631, `tgPolacz`&nbsp;5699, `tgProbna`&nbsp;5732, `tgOdlacz`&nbsp;5739, `renderTgStan`&nbsp;5761
 
-*AKTUALIZACJA PROGRAMU PUDEŁKA (D59)* — `sprawdzAktualizacje`&nbsp;5862, `pobierzOpisFirmware`&nbsp;5868, `wyslijAktualizacje`&nbsp;5889, `anulujAktualizacje`&nbsp;5934, `renderOta`&nbsp;5940, `renderNetStan`&nbsp;6225
+*AKTUALIZACJA PROGRAMU PUDEŁKA (D59)* — `sprawdzAktualizacje`&nbsp;5876, `pobierzOpisFirmware`&nbsp;5882, `wyslijAktualizacje`&nbsp;5903, `anulujAktualizacje`&nbsp;5948, `renderOta`&nbsp;5954, `renderNetStan`&nbsp;6239
 
-*SIECI WIDZIANE PRZEZ PUDEŁKO* — `opisSygnalu`&nbsp;6310, `renderSkan`&nbsp;6316, `szukajSieci`&nbsp;6368, `wybierzSiec`&nbsp;6376, `wyslijPolecenieSieci`&nbsp;6394, `siecZIndeksu`&nbsp;6404, `tzChanged`&nbsp;6438, `cfgTime`&nbsp;6443, `addSlot`&nbsp;6451, `zapiszPlanDnia`&nbsp;6464, `saveConfig`&nbsp;6482, `inrKrokiZakresu`&nbsp;6543, `opcjeInr`&nbsp;6550, `inrZakresZmieniony`&nbsp;6561, `wypelnijListyZakresu`&nbsp;6574, `saveInrRange`&nbsp;6585, `wypelnijListeOdstepu`&nbsp;6619, `saveInrEvery`&nbsp;6632, `odswiezPodpowiedzInr`&nbsp;6642
+*SIECI WIDZIANE PRZEZ PUDEŁKO* — `opisSygnalu`&nbsp;6324, `renderSkan`&nbsp;6330, `szukajSieci`&nbsp;6382, `wybierzSiec`&nbsp;6390, `wyslijPolecenieSieci`&nbsp;6408, `siecZIndeksu`&nbsp;6418, `tzChanged`&nbsp;6452, `cfgTime`&nbsp;6457, `addSlot`&nbsp;6465, `zapiszPlanDnia`&nbsp;6478, `saveConfig`&nbsp;6496, `inrKrokiZakresu`&nbsp;6557, `opcjeInr`&nbsp;6564, `inrZakresZmieniony`&nbsp;6575, `wypelnijListyZakresu`&nbsp;6588, `saveInrRange`&nbsp;6599, `wypelnijListeOdstepu`&nbsp;6633, `saveInrEvery`&nbsp;6646, `odswiezPodpowiedzInr`&nbsp;6656
 
-*ANALIZA* — `openTimeOf`&nbsp;6667, `openMinutes`&nbsp;6673, `sredniaPora`&nbsp;6697, `kwantyl`&nbsp;6705, `dniMiedzy`&nbsp;6713, `odstepyZPunktow`&nbsp;6727, `analyze`&nbsp;6736, `inrContext`&nbsp;6838
+*ANALIZA* — `openTimeOf`&nbsp;6681, `openMinutes`&nbsp;6687, `sredniaPora`&nbsp;6711, `kwantyl`&nbsp;6719, `dniMiedzy`&nbsp;6727, `odstepyZPunktow`&nbsp;6741, `analyze`&nbsp;6750, `inrContext`&nbsp;6852
 
-*WYKRESY ANALIZY* — `komorkaRytmu`&nbsp;6897, `rytmSVG`&nbsp;6909, `poryWCzasieSVG`&nbsp;6971, `iskraSVG`&nbsp;7039, `dowSVG`&nbsp;7067, `dniRytmu`&nbsp;7103, `skutecznoscTygodniami`&nbsp;7124, `renderAnalysis`&nbsp;7152
+*WYKRESY ANALIZY* — `komorkaRytmu`&nbsp;6911, `rytmSVG`&nbsp;6923, `poryWCzasieSVG`&nbsp;6985, `iskraSVG`&nbsp;7053, `dowSVG`&nbsp;7081, `dniRytmu`&nbsp;7117, `skutecznoscTygodniami`&nbsp;7138, `renderAnalysis`&nbsp;7166
 
-*RAPORT* — `collectRows`&nbsp;7259, `makeReport`&nbsp;7296
+*RAPORT* — `collectRows`&nbsp;7273, `makeReport`&nbsp;7310
 
-*KONTEKST DNIA (TAGI)* — `tagiDnia`&nbsp;7447, `tagiPrzed`&nbsp;7455, `tagPrzelacz`&nbsp;7464
+*KONTEKST DNIA (TAGI)* — `tagiDnia`&nbsp;7461, `tagiPrzed`&nbsp;7469, `tagPrzelacz`&nbsp;7478
 
-*KOPIA ZAPASOWA* — `zbierzKopie`&nbsp;7507, `opisKopii`&nbsp;7517
+*KOPIA ZAPASOWA* — `zbierzKopie`&nbsp;7521, `opisKopii`&nbsp;7531
 
-*KOPIA NA TELEGRAM* — `tgKopiaUst`&nbsp;7557, `tgCzatKopii`&nbsp;7564, `odswiezKopie`&nbsp;7571, `tgKopiaCzatZapisz`&nbsp;7579, `tgKopiaCzatZnajdz`&nbsp;7599, `tgKopiaWlacz`&nbsp;7629, `tgKopiaWylacz`&nbsp;7648, `kopiaNaTelegram`&nbsp;7657, `kopiaAutomat`&nbsp;7708
+*KOPIA NA TELEGRAM* — `tgKopiaUst`&nbsp;7571, `tgCzatKopii`&nbsp;7578, `odswiezKopie`&nbsp;7585, `tgKopiaCzatZapisz`&nbsp;7593, `tgKopiaCzatZnajdz`&nbsp;7613, `tgKopiaWlacz`&nbsp;7643, `tgKopiaWylacz`&nbsp;7662, `kopiaNaTelegram`&nbsp;7671, `kopiaAutomat`&nbsp;7722
 
-*WIEK KOPII* — `dniOdDaty`&nbsp;7755, `wiekKopiiTxt`&nbsp;7761, `renderKopiaStan`&nbsp;7769, `zapiszKopie`&nbsp;7784
+*WIEK KOPII* — `dniOdDaty`&nbsp;7769, `wiekKopiiTxt`&nbsp;7775, `renderKopiaStan`&nbsp;7783, `zapiszKopie`&nbsp;7798
 
-*ODTWARZANIE Z KOPII* — `policzOdtworzenie`&nbsp;7818, `wczytajKopie`&nbsp;7848, `kopiaCzytelna`&nbsp;7853, `odtworzKopie`&nbsp;7863, `kopiaWybrana`&nbsp;7886
+*ODTWARZANIE Z KOPII* — `policzOdtworzenie`&nbsp;7832, `wczytajKopie`&nbsp;7862, `kopiaCzytelna`&nbsp;7867, `odtworzKopie`&nbsp;7877, `kopiaWybrana`&nbsp;7900
 
-*KOPIE Z BAZY* — `kopieZBazy`&nbsp;7910, `odtworzZBazy`&nbsp;7942, `exportCsv`&nbsp;7954
+*KOPIE Z BAZY* — `kopieZBazy`&nbsp;7924, `odtworzZBazy`&nbsp;7956, `exportCsv`&nbsp;7968
 
-*NAWIGACJA* — `wrocZEkranu`&nbsp;8057
+*NAWIGACJA* — `wrocZEkranu`&nbsp;8071
 
 
 ---
 
-## `firmware/PillBox/PillBox.ino` — 6389 linii
+## `firmware/PillBox/PillBox.ino` — 6479 linii
 
 | od | do | blok |
 |---|---|---|
-| 1 | 63 | PillBox.ino  -  Inteligentne pudelko na leki / IoT Pill Reminder |
-| 64 | 244 | PAMIEC RTC  (przezywa deep sleep, ginie po odlaczeniu zasilania) |
-| 245 | 470 | STAN GLOBALNY |
-| 471 | 691 | 1.  POMIAR BATERII |
-| 692 | 854 | 2.  BUZZER  (pasywny piezo -> PWM przez LEDC) |
-| 855 | 973 | 3.  GPIO / WYBUDZANIE |
-| 974 | 1088 | 4.  HARMONOGRAM |
-| 1089 | 1214 | 4a.  DNI BEZ LEKU |
-| 1215 | 1235 | 4b.  PUDELKO ZOSTAWIONE OTWARTE |
-| 1236 | 1459 | 4c.  DZIENNIK WIECZKA  -  narzedzie do testu terenowego |
-| 1460 | 1711 | 5.  KOLEJKA OFFLINE  (Preferences / NVS - pierscien) |
-| 1712 | 2060 | 6.  WiFi |
-| 2061 | 3084 | 7.  FIREBASE  (REST: Auth email/haslo + Realtime Database) |
-| 3085 | 3449 | 8.  ZDARZENIA |
-| 3450 | 3505 | 9.  ALARM |
-| 3506 | 3724 | 10.  PORTAL KONFIGURACJI WiFi  (zamiast Bluetooth) |
-| 3725 | 4216 | 10a2. AKTUALIZACJA PROGRAMU PRZEZ WIFI  (OTA)   -  D59 |
-| 4217 | 4336 | 10b. CZARNA SKRZYNKA |
-| 4337 | 4639 | 10c. GESTY SERWISOWE I AUTOTEST |
-| 4640 | 5062 | 10b. POWIADOMIENIA NA TELEFON  (bot Telegram, D67) |
-| 5063 | 5655 | 11.  DEEP SLEEP |
-| 5656 | 6389 | 12.  SETUP  =  cala logika (loop() nigdy nie jest osiagany) |
+| 1 | 64 | PillBox.ino  -  Inteligentne pudelko na leki / IoT Pill Reminder |
+| 65 | 245 | PAMIEC RTC  (przezywa deep sleep, ginie po odlaczeniu zasilania) |
+| 246 | 471 | STAN GLOBALNY |
+| 472 | 692 | 1.  POMIAR BATERII |
+| 693 | 855 | 2.  BUZZER  (pasywny piezo -> PWM przez LEDC) |
+| 856 | 1020 | 3.  GPIO / WYBUDZANIE |
+| 1021 | 1135 | 4.  HARMONOGRAM |
+| 1136 | 1261 | 4a.  DNI BEZ LEKU |
+| 1262 | 1282 | 4b.  PUDELKO ZOSTAWIONE OTWARTE |
+| 1283 | 1506 | 4c.  DZIENNIK WIECZKA  -  narzedzie do testu terenowego |
+| 1507 | 1758 | 5.  KOLEJKA OFFLINE  (Preferences / NVS - pierscien) |
+| 1759 | 2107 | 6.  WiFi |
+| 2108 | 3164 | 7.  FIREBASE  (REST: Auth email/haslo + Realtime Database) |
+| 3165 | 3529 | 8.  ZDARZENIA |
+| 3530 | 3585 | 9.  ALARM |
+| 3586 | 3804 | 10.  PORTAL KONFIGURACJI WiFi  (zamiast Bluetooth) |
+| 3805 | 4296 | 10a2. AKTUALIZACJA PROGRAMU PRZEZ WIFI  (OTA)   -  D59 |
+| 4297 | 4416 | 10b. CZARNA SKRZYNKA |
+| 4417 | 4719 | 10c. GESTY SERWISOWE I AUTOTEST |
+| 4720 | 5142 | 10b. POWIADOMIENIA NA TELEFON  (bot Telegram, D67) |
+| 5143 | 5740 | 11.  DEEP SLEEP |
+| 5741 | 6479 | 12.  SETUP  =  cala logika (loop() nigdy nie jest osiagany) |
 
-**Funkcje** (175):
+**Funkcje** (177):
 
-*STAN GLOBALNY* — `zanotujNvsFail`&nbsp;323, `nvsPutStr`&nbsp;342, `nvsPutU16`&nbsp;365, `nvsPutU32`&nbsp;388, `nvsWolneWpisy`&nbsp;403, `syncTimeNTP`&nbsp;446, `logbookJson`&nbsp;447, `setTakenDay`&nbsp;448, `note`&nbsp;450, `awakeTooLong`&nbsp;464, `extendAwake`&nbsp;466
+*STAN GLOBALNY* — `zanotujNvsFail`&nbsp;324, `nvsPutStr`&nbsp;343, `nvsPutU16`&nbsp;366, `nvsPutU32`&nbsp;389, `nvsWolneWpisy`&nbsp;404, `syncTimeNTP`&nbsp;447, `logbookJson`&nbsp;448, `setTakenDay`&nbsp;449, `note`&nbsp;451, `awakeTooLong`&nbsp;465, `extendAwake`&nbsp;467
 
-*1.  POMIAR BATERII* — `readBatteryRaw`&nbsp;479, `battPercentFromCurve`&nbsp;519, `resetBatteryFilter`&nbsp;551, `zapiszKoniecLadowania`&nbsp;574, `trackCharging`&nbsp;584, `battSmooth`&nbsp;638, `readBattery`&nbsp;669
+*1.  POMIAR BATERII* — `readBatteryRaw`&nbsp;480, `battPercentFromCurve`&nbsp;520, `resetBatteryFilter`&nbsp;552, `zapiszKoniecLadowania`&nbsp;575, `trackCharging`&nbsp;585, `battSmooth`&nbsp;639, `readBattery`&nbsp;670
 
-*2.  BUZZER  (pasywny piezo -> PWM przez LEDC)* — `buzzerInit`&nbsp;695, `buzzerTone`&nbsp;704, `buzzerTonCicho`&nbsp;715, `buzzerOff`&nbsp;724, `beepAck`&nbsp;736, `beepErr`&nbsp;760, `beepQueued`&nbsp;770, `beepAlreadyTaken`&nbsp;780, `beepNowaWersja`&nbsp;805, `beepLowStock`&nbsp;815, `beepLowBattery`&nbsp;824, `beepBoxOpen`&nbsp;840, `beepCharging`&nbsp;848
+*2.  BUZZER  (pasywny piezo -> PWM przez LEDC)* — `buzzerInit`&nbsp;696, `buzzerTone`&nbsp;705, `buzzerTonCicho`&nbsp;716, `buzzerOff`&nbsp;725, `beepAck`&nbsp;737, `beepErr`&nbsp;761, `beepQueued`&nbsp;771, `beepAlreadyTaken`&nbsp;781, `beepNowaWersja`&nbsp;806, `beepLowStock`&nbsp;816, `beepLowBattery`&nbsp;825, `beepBoxOpen`&nbsp;841, `beepCharging`&nbsp;849
 
-*3.  GPIO / WYBUDZANIE* — `configureInputs`&nbsp;858, `reedPoziomStabilny`&nbsp;897, `boxIsOpen`&nbsp;918, `buttonPressed`&nbsp;921, `wakeName`&nbsp;923
+*3.  GPIO / WYBUDZANIE* — `configureInputs`&nbsp;859, `powodResetuOpis`&nbsp;881, `zanotujReset`&nbsp;899, `reedPoziomStabilny`&nbsp;944, `boxIsOpen`&nbsp;965, `buttonPressed`&nbsp;968, `wakeName`&nbsp;970
 
-*4.  HARMONOGRAM* — `godzinaPoprawna`&nbsp;987, `parseSchedule`&nbsp;996, `loadSchedule`&nbsp;1009, `saveSchedule`&nbsp;1032, `localMinutesOfDay`&nbsp;1043, `slotMinutes`&nbsp;1050, `localDayNumber`&nbsp;1059, `matchSlot`&nbsp;1067, `secondsToDayBoundary`&nbsp;1082
+*4.  HARMONOGRAM* — `godzinaPoprawna`&nbsp;1034, `parseSchedule`&nbsp;1043, `loadSchedule`&nbsp;1056, `saveSchedule`&nbsp;1079, `localMinutesOfDay`&nbsp;1090, `slotMinutes`&nbsp;1097, `localDayNumber`&nbsp;1106, `matchSlot`&nbsp;1114, `secondsToDayBoundary`&nbsp;1129
 
-*4a.  DNI BEZ LEKU* — `localWeekday`&nbsp;1109, `dateKeyToNum`&nbsp;1117, `dawkaNaDobe`&nbsp;1130, `dzisBezLeku`&nbsp;1140, `parseDoseWeek`&nbsp;1149, `parseDoseEx`&nbsp;1167, `saveDosing`&nbsp;1189, `loadDosing`&nbsp;1202
+*4a.  DNI BEZ LEKU* — `localWeekday`&nbsp;1156, `dateKeyToNum`&nbsp;1164, `dawkaNaDobe`&nbsp;1177, `dzisBezLeku`&nbsp;1187, `parseDoseWeek`&nbsp;1196, `parseDoseEx`&nbsp;1214, `saveDosing`&nbsp;1236, `loadDosing`&nbsp;1249
 
-*4b.  PUDELKO ZOSTAWIONE OTWARTE* — `openWarnSecondsLeft`&nbsp;1226
+*4b.  PUDELKO ZOSTAWIONE OTWARTE* — `openWarnSecondsLeft`&nbsp;1273
 
-*4c.  DZIENNIK WIECZKA  -  narzedzie do testu terenowego* — `lidLogAdd`&nbsp;1269, `lidLogCount`&nbsp;1293, `jsonEscape`&nbsp;1303, `lidLogJson`&nbsp;1319, `lidLogClear`&nbsp;1349, `nvsFailLogDoWyslania`&nbsp;1364, `nvsFailLogJson`&nbsp;1374, `nvsFailLogOznaczWyslany`&nbsp;1392, `trackBoxOpen`&nbsp;1396, `secondsToNextSlot`&nbsp;1445
+*4c.  DZIENNIK WIECZKA  -  narzedzie do testu terenowego* — `lidLogAdd`&nbsp;1316, `lidLogCount`&nbsp;1340, `jsonEscape`&nbsp;1350, `lidLogJson`&nbsp;1366, `lidLogClear`&nbsp;1396, `nvsFailLogDoWyslania`&nbsp;1411, `nvsFailLogJson`&nbsp;1421, `nvsFailLogOznaczWyslany`&nbsp;1439, `trackBoxOpen`&nbsp;1443, `secondsToNextSlot`&nbsp;1492
 
-*5.  KOLEJKA OFFLINE  (Preferences / NVS - pierscien)* — `rekordTs`&nbsp;1476, `rekordBezDaty`&nbsp;1483, `tsDoBazy`&nbsp;1492, `queuePush`&nbsp;1496, `queueCount`&nbsp;1519, `queuePeek`&nbsp;1526, `queuePop`&nbsp;1541, `queueDrop`&nbsp;1560, `przesunZnaczniki`&nbsp;1584, `queueShiftTimestamps`&nbsp;1599, `queueNadajCzas`&nbsp;1647, `queueEpokaSkasuj`&nbsp;1690
+*5.  KOLEJKA OFFLINE  (Preferences / NVS - pierscien)* — `rekordTs`&nbsp;1523, `rekordBezDaty`&nbsp;1530, `tsDoBazy`&nbsp;1539, `queuePush`&nbsp;1543, `queueCount`&nbsp;1566, `queuePeek`&nbsp;1573, `queuePop`&nbsp;1588, `queueDrop`&nbsp;1607, `przesunZnaczniki`&nbsp;1631, `queueShiftTimestamps`&nbsp;1646, `queueNadajCzas`&nbsp;1694, `queueEpokaSkasuj`&nbsp;1737
 
-*6.  WiFi* — `netKlucz`&nbsp;1729, `wifiSieciCount`&nbsp;1733, `wifiSiecSsid`&nbsp;1740, `wifiSiecPass`&nbsp;1749, `wifiListeZapisz`&nbsp;1776, `wifiListeCzytaj`&nbsp;1800, `wifiSiecDodaj`&nbsp;1813, `wifiSiecUsun`&nbsp;1844, `wifiSiecPriorytet`&nbsp;1877, `wifiSprobuj`&nbsp;1905, `wifiConnect`&nbsp;1923, `wifiOff`&nbsp;1992, `wifiUspij`&nbsp;2006, `syncTimeNTP`&nbsp;2011
+*6.  WiFi* — `netKlucz`&nbsp;1776, `wifiSieciCount`&nbsp;1780, `wifiSiecSsid`&nbsp;1787, `wifiSiecPass`&nbsp;1796, `wifiListeZapisz`&nbsp;1823, `wifiListeCzytaj`&nbsp;1847, `wifiSiecDodaj`&nbsp;1860, `wifiSiecUsun`&nbsp;1891, `wifiSiecPriorytet`&nbsp;1924, `wifiSprobuj`&nbsp;1952, `wifiConnect`&nbsp;1970, `wifiOff`&nbsp;2039, `wifiUspij`&nbsp;2053, `syncTimeNTP`&nbsp;2058
 
-*7.  FIREBASE  (REST: Auth email/haslo + Realtime Database)* — `tokenZPamieci`&nbsp;2078, `zapomnijToken`&nbsp;2087, `hasloJestPrawdziwe`&nbsp;2132, `hasloZPamieci`&nbsp;2137, `hasloWPamieci`&nbsp;2146, `hasloUtrwal`&nbsp;2150, `hasloDoLogowania`&nbsp;2163, `tgTokenZPamieci`&nbsp;2183, `tgChatZPamieci`&nbsp;2190, `tgSkonfigurowany`&nbsp;2199, `tgUtrwal`&nbsp;2206, `tgZapomnij`&nbsp;2218, `firebaseSignIn`&nbsp;2252, `rtdbUrl`&nbsp;2347, `rtdbSend`&nbsp;2369, `rekordKompletny`&nbsp;2396, `pushEventRecord`&nbsp;2405, `pushLidState`&nbsp;2462, `otaSumaZPamieci`&nbsp;2483, `otaSumaWgranej`&nbsp;2505, `pushStatus`&nbsp;2511, `fetchConfig`&nbsp;2718, `trwaleOdrzucony`&nbsp;3042, `flushQueue`&nbsp;3046
+*7.  FIREBASE  (REST: Auth email/haslo + Realtime Database)* — `tokenZPamieci`&nbsp;2125, `zapomnijToken`&nbsp;2134, `hasloJestPrawdziwe`&nbsp;2179, `hasloZPamieci`&nbsp;2184, `hasloWPamieci`&nbsp;2193, `hasloUtrwal`&nbsp;2197, `hasloDoLogowania`&nbsp;2210, `tgTokenZPamieci`&nbsp;2230, `tgChatZPamieci`&nbsp;2237, `tgSkonfigurowany`&nbsp;2246, `tgUtrwal`&nbsp;2253, `tgZapomnij`&nbsp;2265, `firebaseSignIn`&nbsp;2299, `rtdbUrl`&nbsp;2394, `rtdbSend`&nbsp;2416, `rekordKompletny`&nbsp;2443, `pushEventRecord`&nbsp;2452, `pushLidState`&nbsp;2509, `otaSumaZPamieci`&nbsp;2552, `otaSumaWgranej`&nbsp;2574, `pushStatus`&nbsp;2580, `fetchConfig`&nbsp;2798, `trwaleOdrzucony`&nbsp;3122, `flushQueue`&nbsp;3126
 
-*8.  ZDARZENIA* — `makeRecordAt`&nbsp;3088, `makeRecord`&nbsp;3110, `loadDayMarkers`&nbsp;3120, `clearDayMarkers`&nbsp;3139, `setTakenDay`&nbsp;3153, `setRolloverDay`&nbsp;3161, `zapiszDawke`&nbsp;3191, `oznaczAlarmObsluzony`&nbsp;3234, `alarmJuzObsluzony`&nbsp;3251, `ostatniSlotDoby`&nbsp;3277, `juzDzisBrane`&nbsp;3287, `checkDayRollover`&nbsp;3294, `reportEvent`&nbsp;3376
+*8.  ZDARZENIA* — `makeRecordAt`&nbsp;3168, `makeRecord`&nbsp;3190, `loadDayMarkers`&nbsp;3200, `clearDayMarkers`&nbsp;3219, `setTakenDay`&nbsp;3233, `setRolloverDay`&nbsp;3241, `zapiszDawke`&nbsp;3271, `oznaczAlarmObsluzony`&nbsp;3314, `alarmJuzObsluzony`&nbsp;3331, `ostatniSlotDoby`&nbsp;3357, `juzDzisBrane`&nbsp;3367, `checkDayRollover`&nbsp;3374, `reportEvent`&nbsp;3456
 
-*9.  ALARM* — `alarmPotwierdzony`&nbsp;3473, `runAlarmWindow`&nbsp;3478
+*9.  ALARM* — `alarmPotwierdzony`&nbsp;3553, `runAlarmWindow`&nbsp;3558
 
-*10.  PORTAL KONFIGURACJI WiFi  (zamiast Bluetooth)* — `htmlEscape`&nbsp;3519, `portalPage`&nbsp;3533, `startWifiPortal`&nbsp;3577
+*10.  PORTAL KONFIGURACJI WiFi  (zamiast Bluetooth)* — `htmlEscape`&nbsp;3599, `portalPage`&nbsp;3613, `startWifiPortal`&nbsp;3657
 
-*10a2. AKTUALIZACJA PROGRAMU PRZEZ WIFI  (OTA)   -  D59* — `otaOpisDecyzji`&nbsp;3849, `otaZanotujProbe`&nbsp;3875, `otaWyzerujLicznik`&nbsp;3883, `otaZlecenieWBazie`&nbsp;3913, `otaPobierzOpis`&nbsp;3928, `otaWgraj`&nbsp;3972, `otaSprawdzPoStarcie`&nbsp;4130, `otaPotwierdzDzialanie`&nbsp;4163
+*10a2. AKTUALIZACJA PROGRAMU PRZEZ WIFI  (OTA)   -  D59* — `otaOpisDecyzji`&nbsp;3929, `otaZanotujProbe`&nbsp;3955, `otaWyzerujLicznik`&nbsp;3963, `otaZlecenieWBazie`&nbsp;3993, `otaPobierzOpis`&nbsp;4008, `otaWgraj`&nbsp;4052, `otaSprawdzPoStarcie`&nbsp;4210, `otaPotwierdzDzialanie`&nbsp;4243
 
-*10b. CZARNA SKRZYNKA* — `note`&nbsp;4237, `wartoZapisac`&nbsp;4244, `logbookAdd`&nbsp;4256, `logbookPrint`&nbsp;4295, `logbookJson`&nbsp;4319
+*10b. CZARNA SKRZYNKA* — `note`&nbsp;4317, `wartoZapisac`&nbsp;4324, `logbookAdd`&nbsp;4336, `logbookPrint`&nbsp;4375, `logbookJson`&nbsp;4399
 
-*10c. GESTY SERWISOWE I AUTOTEST* — `pikNumer`&nbsp;4469, `pikKoniecTestu`&nbsp;4481, `pikBrakSieci`&nbsp;4492, `wynikEtapu`&nbsp;4504, `etapTestu`&nbsp;4523, `autoTest`&nbsp;4528
+*10c. GESTY SERWISOWE I AUTOTEST* — `pikNumer`&nbsp;4549, `pikKoniecTestu`&nbsp;4561, `pikBrakSieci`&nbsp;4572, `wynikEtapu`&nbsp;4584, `etapTestu`&nbsp;4603, `autoTest`&nbsp;4608
 
-*10b. POWIADOMIENIA NA TELEFON  (bot Telegram, D67)* — `tgWyslijTekst`&nbsp;4675, `tgZglosNieodebrane`&nbsp;4721, `tgSprawdzBaterie`&nbsp;4741, `tgSprawdzZapas`&nbsp;4760, `dniOdEry`&nbsp;4783, `dniDoDaty`&nbsp;4794, `inrPrzypomnienieTeraz`&nbsp;4828, `tgOznaczInrMiniete`&nbsp;4848, `sekundyDoInrPrzypomnienia`&nbsp;4857, `tgSprawdzInr`&nbsp;4879, `tgTekstZapas`&nbsp;4893, `tgTekstInr`&nbsp;4902, `tgTekstNieodebrane`&nbsp;4922, `tgTekstBateria`&nbsp;4931, `tgWyslijZalegle`&nbsp;4950
+*10b. POWIADOMIENIA NA TELEFON  (bot Telegram, D67)* — `tgWyslijTekst`&nbsp;4755, `tgZglosNieodebrane`&nbsp;4801, `tgSprawdzBaterie`&nbsp;4821, `tgSprawdzZapas`&nbsp;4840, `dniOdEry`&nbsp;4863, `dniDoDaty`&nbsp;4874, `inrPrzypomnienieTeraz`&nbsp;4908, `tgOznaczInrMiniete`&nbsp;4928, `sekundyDoInrPrzypomnienia`&nbsp;4937, `tgSprawdzInr`&nbsp;4959, `tgTekstZapas`&nbsp;4973, `tgTekstInr`&nbsp;4982, `tgTekstNieodebrane`&nbsp;5002, `tgTekstBateria`&nbsp;5011, `tgWyslijZalegle`&nbsp;5030
 
-*11.  DEEP SLEEP* — `otaZglos`&nbsp;5081, `skanujSieci`&nbsp;5109, `otaSprobuj`&nbsp;5158, `kolejnePrzesuniecie`&nbsp;5357, `goToSleep`&nbsp;5362, `planNextSleep`&nbsp;5580
+*11.  DEEP SLEEP* — `otaZglos`&nbsp;5161, `skanujSieci`&nbsp;5189, `otaSprobuj`&nbsp;5238, `kolejnePrzesuniecie`&nbsp;5437, `goToSleep`&nbsp;5442, `planNextSleep`&nbsp;5660
 
-*12.  SETUP  =  cala logika (loop() nigdy nie jest osiagany)* — `petlaLadowania`&nbsp;5668, `setup`&nbsp;5766, `loop`&nbsp;6386
+*12.  SETUP  =  cala logika (loop() nigdy nie jest osiagany)* — `petlaLadowania`&nbsp;5753, `setup`&nbsp;5851, `loop`&nbsp;6476
 
 
 ---

@@ -60,6 +60,7 @@
 #include <time.h>
 #include <Update.h>             // OTA: zapis nowego programu do drugiej partycji
 #include <esp_ota_ops.h>        // OTA: przelaczanie partycji i powrot do starej
+#include <esp_system.h>         // esp_reset_reason - DLACZEGO pudelko wstalo od nowa
 
 /* =====================================================================
  *  PAMIEC RTC  (przezywa deep sleep, ginie po odlaczeniu zasilania)
@@ -858,6 +859,52 @@ void beepCharging() {
 void configureInputs() {
   pinMode(PIN_REED,   REED_MODE);
   pinMode(PIN_BUTTON, BUTTON_MODE);
+}
+
+/* --- DLACZEGO PUDELKO WSTALO OD NOWA --------------------------------
+
+   Pamiec RTC przezywa deep sleep, ale NIE przezywa resetu. Po nim znika
+   `rtcTakenTs`, `rtcTakenDay` wraca z NVS dopiero przez `loadDayMarkers()`,
+   a `rtcTimeValid` jest falszywe - czyli `juzDzisBrane()` odpowiada
+   inaczej niz minute wczesniej. Z zewnatrz wyglada to tak, jakby pudelko
+   raz ostrzegalo przed druga dawka, a raz nie.
+
+   Do 1.47.4 nie bylo jak tego odroznic od zwyklego wybudzenia: licznik
+   `boots` wracal do zera i tyle. A powody sa ROZNE i prowadza w rozne
+   strony: brownout znaczy siadajace napiecie (buzzer plus radio na slabym
+   ogniwie), panic - blad w programie, watchdog - zawieszenie. Zgadywanie
+   miedzy nimi kosztowaloby kolejny wieczor.
+
+   Powod chowamy w pamieci trwalej, bo RTC go nie przezyje, i wysylamy
+   w statusie razem z licznikiem twardych restartow. Jedna liczba w
+   Diagnostyce zamiast trzech hipotez.                                 */
+const char* powodResetuOpis(int r) {
+  switch (r) {
+    case ESP_RST_POWERON:  return "wlaczenie zasilania";
+    case ESP_RST_EXT:      return "reset zewnetrzny";
+    case ESP_RST_SW:       return "restart programowy";
+    case ESP_RST_PANIC:    return "BLAD PROGRAMU";
+    case ESP_RST_INT_WDT:  return "watchdog przerwan";
+    case ESP_RST_TASK_WDT: return "watchdog zadania";
+    case ESP_RST_WDT:      return "watchdog";
+    case ESP_RST_DEEPSLEEP:return "wybudzenie ze snu";
+    case ESP_RST_BROWNOUT: return "SPADEK NAPIECIA";
+    case ESP_RST_SDIO:     return "reset SDIO";
+    default:               return "nieznany";
+  }
+}
+
+/* Zapisuje powod TWARDEGO restartu i podnosi licznik. Wolane raz, na
+   samym poczatku setup(), zanim cokolwiek zdazy go przykryc.          */
+void zanotujReset() {
+  const int r = (int)esp_reset_reason();
+  prefs.begin(NVS_NAMESPACE, false);
+  uint16_t ile = prefs.getUShort("rstCnt", 0);
+  if (ile < 65535) ile++;
+  nvsPutU16("rstCnt", ile);
+  nvsPutU16("rstPow", (uint16_t)r);
+  prefs.end();
+  LOG("[RST] twardy restart #%u, powod: %s (%d)\n", ile, powodResetuOpis(r), r);
 }
 
 /* --- STABILNY POZIOM NA KONTAKTRONIE ---------------------------------
@@ -2460,12 +2507,34 @@ int pushEventRecord(const String& rec) {
    PATCH zmienia tylko trzy pola i nie rusza reszty statusu, wiec mozemy
    go wyslac od razu po zalogowaniu, przed cala reszta roboty.        */
 bool pushLidState() {
+  /* JEDEN ODCZYT NA TRZY UZYCIA - i to jest tu cala tresc.
+
+     TU BYL BLAD, zglosil go Kuba seria z terenu: *"otwieram, a w aplikacji
+     pokazuje sie zamkniete... po minucie pokazalo, ze zamkniete jest
+     dopiero"*. Stały tu TRZY osobne wywolania `boxIsOpen()`: dwa budowaly
+     tresc wysylana do bazy, trzecie zapisywalo sie jako `rtcOpenReported`,
+     czyli "co aplikacja juz wie".
+
+     Do 1.47.2 kazde z nich bylo jednym `digitalRead()` i rozjazd miedzy
+     nimi trwal mikrosekundy. Od 1.47.3 kazde jest POMIAREM Z ODBICIEM,
+     ktory czeka na stabilny styk - wiec trzy odczyty to okno rzedu
+     kilkudziesieciu milisekund. Wystarczy zamknac wieczko w jego trakcie
+     i do bazy idzie "otwarte", a pudelko zapisuje sobie "zglosilem
+     zamkniete".
+
+     Skutek jest trwaly, nie chwilowy: koniec `planNextSleep()` ponawia
+     wysylke tylko wtedy, gdy `rtcOpenReported != boxIsOpen()`. Po takim
+     rozjezdzie oba sa "zamkniete", wiec NIKT juz nie prostuje bazy -
+     aplikacja zostaje z "otwarte" az do przypadkowego statusu przy
+     nastepnym wybudzeniu. Stad "po czasie pokazalo".
+
+     Odczyt jest wiec jeden i ten sam trafia do tresci i do znacznika.  */
+  const bool stan = boxIsOpen();
   char body[96];
   snprintf(body, sizeof(body), "{\"boxOpen\":%s,\"openSince\":%lu,\"lastSeen\":%lu}",
-           boxIsOpen() ? "true" : "false",
-           (unsigned long)(boxIsOpen() ? rtcOpenSinceTs : 0),
+           stan ? "true" : "false",
+           (unsigned long)(stan ? rtcOpenSinceTs : 0),
            (unsigned long)time(nullptr));
-  const bool stan = boxIsOpen();
   int code = rtdbSend("PATCH", "/devices/" DEVICE_ID "/status.json", String(body));
   const bool ok = (code >= 200 && code < 300);
   if (ok) { rtcOpenReported = stan; rtcStatusDirty = false; }
@@ -2637,6 +2706,17 @@ bool pushStatus() {
      naprawie odbic ta liczba nadal rosnie, drga sam kontaktron - czyli
      sprawa jest sprzetowa (przesuniety magnes), a nie programowa.     */
   doc["reedBounce"] = rtcReedDrgania;
+  /* Twarde restarty i powod OSTATNIEGO. Pamiec RTC ich nie przezywa, wiec
+     bez tego nie da sie odroznic "pudelko sie zrestartowalo" od "pudelko
+     zachowalo sie dziwnie" - a to zupelnie rozne tropy (D96).         */
+  {
+    prefs.begin(NVS_NAMESPACE, true);
+    const uint16_t ile = prefs.getUShort("rstCnt", 0);
+    const uint16_t pow = prefs.getUShort("rstPow", 0);
+    prefs.end();
+    doc["resetow"]    = ile;
+    doc["resetPowod"] = powodResetuOpis((int)pow);
+  }
   String body;
   serializeJson(doc, body);
   int code = rtdbSend("PUT", "/devices/" DEVICE_ID "/status.json", body);
@@ -5624,7 +5704,12 @@ uint32_t planNextSleep() {
         HOUSEKEEP_MAX_S, czyli nawet 12 godzin. Aplikacja pokazywalaby przez
         ten czas nieprawde - a caly sens tego pudelka polega na tym, ze temu
         co widac na telefonie mozna wierzyc.                             */
-  if (rtcStatusDirty || rtcOpenClearPend || rtcOpenReported != boxIsOpen()) {
+  /* Jeden odczyt na obie decyzje ponizej (3b i 5). Dwa osobne pomiary
+     z odbiciem moglyby dac dwie rozne odpowiedzi, a wtedy pudelko
+     jednoczesnie "nie ma nic do zgloszenia" i "pilnuje otwartego
+     wieczka" - albo odwrotnie.                                       */
+  const bool wieczkoOtwarte = boxIsOpen();
+  if (rtcStatusDirty || rtcOpenClearPend || rtcOpenReported != wieczkoOtwarte) {
     uint8_t shift = rtcRetryCount > 4 ? 4 : rtcRetryCount;
     uint32_t r = (uint32_t)RETRY_BASE_S << shift;
     if (r > RETRY_MAX_S) r = RETRY_MAX_S;
@@ -5643,7 +5728,7 @@ uint32_t planNextSleep() {
 #endif
 
   /* 5. Pudelko zostawione otwarte - nie spimy dluzej niz do sygnalu. */
-  if (boxIsOpen()) {
+  if (wieczkoOtwarte) {
     uint32_t w = openWarnSecondsLeft();
     if (w < s) s = w;
   }
@@ -5826,7 +5911,12 @@ void setup() {
   /* Znaczniki wzgledne w kolejce naleza do POPRZEDNIEGO startu i nie da
      sie ich juz z niczym zestawic. Zerujemy je, zanim cokolwiek zdazy je
      przeliczyc - falszywa data byloby gorsza niz jej brak (D87).       */
-  if (twardyReset) queueEpokaSkasuj();
+  if (twardyReset) {
+    /* Powod restartu ma trafic do pamieci ZANIM cokolwiek innego pojdzie
+       nie tak - to jedyny slad po tym, ze pudelko w ogole wstalo od nowa. */
+    zanotujReset();
+    queueEpokaSkasuj();
+  }
 
   bool juzOstrzezono = false;
 #if ONE_DOSE_PER_DAY

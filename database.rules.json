@@ -154,6 +154,12 @@
           "tg": {
             ".validate": "newData.isBoolean()"
           },
+          "resetow": {
+            ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 65535"
+          },
+          "resetPowod": {
+            ".validate": "newData.isString() && newData.val().length <= 24"
+          },
           "reedBounce": {
             ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 65535"
           },
