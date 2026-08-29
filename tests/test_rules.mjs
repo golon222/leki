@@ -234,6 +234,9 @@ const PRZYKLAD_STATUSU = {
   /* Drgniecia styku kontaktronu (D95) - pomiar, po ktorym poznac, czy po
      odfiltrowaniu odbic zostalo jeszcze cos sprzetowego.               */
   reedBounce: 0, resetow: 0, resetPowod: "wybudzenie ze snu",
+  /* Czuwanie przy otwartym wieczku (D99): ile ms do gotowego lacza i ile
+     do potwierdzonego zapisu "otwarte". -1 = nie zdazylo w ogole.     */
+  netMs: 1840, lidMs: 2610,
   /* Aktualizacja przez WiFi (D59). otaBad to suma MD5 wersji, ktora sie
      nie uruchomila - 32 znaki albo pusto, nigdy nic pomiedzy.         */
   otaMsg: "za malo baterii - postaw na ladowarke", otaWersja: "1.38.0",
@@ -247,6 +250,13 @@ const PRZYKLAD_STATUSU = {
 check(POLA_STATUSU.every(p => p in PRZYKLAD_STATUSU),
       `pola statusu nieopisane w tescie: ${POLA_STATUSU.filter(p => !(p in PRZYKLAD_STATUSU))}`);
 ok("pelny status z pushStatus()", "devices/pillbox1/status", PRZYKLAD_STATUSU);
+/* -1 znaczy "nie zdazylo" i JEST prawdziwa odpowiedzia - regula musi je
+   przepuscic, inaczej najwazniejszy przypadek (lacze nie wstalo) nie
+   dojechalby do aplikacji wcale.                                      */
+ok("status z pomiarem 'nie zdazylo'", "devices/pillbox1/status",
+   { ...PRZYKLAD_STATUSU, netMs: -1, lidMs: -1 });
+odrzuc("pomiar czuwania nie moze byc napisem", "devices/pillbox1/status",
+    { ...PRZYKLAD_STATUSU, netMs: "dlugo" });
 
 /* Lista sieci widzianych przez pudelko (D65). Zapis odrzucony przez reguly
    wyglada DOKLADNIE tak samo jak "nic sie nie stalo" - a tego objawu

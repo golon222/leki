@@ -4123,6 +4123,29 @@ head("Diagnostyka pokazuje drgniecia styku");
   A.renderStatus(stan({ resetow: 2, resetPowod: "BŁĄD PROGRAMU" }));
   check(devInfo().includes("to nie jest normalne"), "blad programu tak samo");
 
+  /* CZUWANIE PRZY OTWARTYM WIECZKU - trzeci pomiar z tej serii (D99).
+     Kuba trzy razy zglosil "otwieram, pika, i przez minute nic w
+     aplikacji". Z zewnatrz "nic" wyglada tak samo, gdy nie wstaje radio,
+     gdy nie odpowiada baza i gdy to telefon nie odswieza - a to trzy
+     zupelnie rozne naprawy. Te dwie liczby je rozdzielaja.            */
+  A.renderStatus(stan({}));
+  check(!devInfo().includes("Po otwarciu"),
+        "starszy firmware nie przysyla pomiaru - nie zmyslamy pola");
+
+  A.renderStatus(stan({ netMs: 1840, lidMs: 2610 }));
+  check(devInfo().includes("Po otwarciu wieczka"), "pomiar widoczny w Diagnostyce");
+  check(devInfo().includes("radio 1.8 s") && devInfo().includes("baza 2.6 s"),
+        "obie liczby w sekundach, bo w milisekundach nikt tego nie czyta");
+  check(!devInfo().includes("nie wstało"), "przy udanym czuwaniu nikt nie straszy");
+
+  A.renderStatus(stan({ netMs: -1, lidMs: -1 }));
+  check(devInfo().includes("nie wstało") && devInfo().includes("bez odpowiedzi"),
+        "'nie zdazylo' mowi wprost, ktory z dwoch krokow zawiodl");
+
+  A.renderStatus(stan({ netMs: 900, lidMs: -1 }));
+  check(devInfo().includes("radio 0.9 s") && devInfo().includes("bez odpowiedzi"),
+        "radio wstalo, a baza nie odpowiedziala - to osobny trop");
+
   A.renderStatus(stan({ reedBounce: A.REED_DRGANIA_DUZO + 1 }));
   check(devInfo().includes("sprawdź magnes"),
         "dopiero setki mowia wprost, ze to sprzet, a nie kod");

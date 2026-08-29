@@ -20,7 +20,7 @@
  * 1. IDENTYFIKATOR URZADZENIA
  * ------------------------------------------------------------------ */
 #define DEVICE_ID           "pillbox01"     // klucz w /devices/<DEVICE_ID>
-#define FW_VERSION          "1.48.1"   // widoczna w aplikacji - po wgraniu sprawdz, czy sie zmienila
+#define FW_VERSION          "1.48.2"   // widoczna w aplikacji - po wgraniu sprawdz, czy sie zmienila
 
 /* ---------------------------------------------------------------------
  * 2. FIREBASE  (Realtime Database + Auth email/haslo)
@@ -250,6 +250,14 @@
  * ------------------------------------------------------------------ */
 #define WIFI_SIECI_MAX      4               // ile sieci pamietamy
 #define WIFI_ALT_TIMEOUT_MS 8000            // krocej na kazda KOLEJNA probe
+
+/*     Laczenie W TLE - przy otwartym wieczku pudelko nie moze na nie
+ *     czekac, bo przez ten czas nie widzi, ze wieczko zamknieto (D98).
+ *     Ta wartosc mowi, ile czasu dostaje JEDNA proba, zanim przejdziemy
+ *     do nastepnej sieci. Musi byc SPORO wiecej niz skojarzenie z
+ *     routerem plus DHCP - poprzednia wersja ruszala trwajaca probe co
+ *     5 s i lacze nie wstawalo w ogole (D99).                          */
+#define WIFI_PROBA_MS       12000           // jedna proba w tle
 
 /*     Wyniki usuwania sieci. Osobne wartosci, a nie samo true/false, bo
  *     "nie ma takiej sieci" i "nie usune, bo to jedyna droga do mnie" to

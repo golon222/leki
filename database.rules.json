@@ -163,6 +163,12 @@
           "reedBounce": {
             ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 65535"
           },
+          "netMs": {
+            ".validate": "newData.isNumber() && newData.val() >= -1 && newData.val() <= 1000000"
+          },
+          "lidMs": {
+            ".validate": "newData.isNumber() && newData.val() >= -1 && newData.val() <= 1000000"
+          },
           "tgMsg": {
             ".validate": "newData.isString() && newData.val().length <= 64"
           },

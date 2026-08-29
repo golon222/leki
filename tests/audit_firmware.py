@@ -286,10 +286,38 @@ _ws = ino[ino.find("void wifiStart() {"):]
 _ws = _ws[:_ws.find("\n}")]
 ok("while" not in _ws and "wifiSprobuj" not in _ws,
    "wifiStart() naprawde nie czeka na wynik - inaczej nie ma sensu")
+_wz = cialo("static void wifiZacznijProbe(uint8_t nr)")
+ok(bool(_wz) and "while" not in _wz and "wifiSprobuj" not in _wz,
+   "wifiZacznijProbe() tez nie czeka - to ona wola WiFi.begin()")
+_wk = cialo("bool wifiKrokLaczenia()")
+ok(bool(_wk) and "while" not in _wk and "wifiSprobuj" not in _wk,
+   "wifiKrokLaczenia() tez nie czeka - jest wolana z petli czekania")
+# TU BYL BLAD 1.48.1, i to on zepsul cala naprawe D98.
+#
+# W petli czekania stalo podtrzymanie lacza: co 5 s `WiFi.reconnect()`,
+# gdy status nie jest WL_CONNECTED. Przy blokujacym `wifiConnect()` przed
+# petla bylo to nieszkodliwe - wchodzilismy do niej juz polaczeni. Po D98
+# laczenie zaczyna sie W TLE i trwa jeszcze w pierwszych sekundach petli,
+# a `WiFi.reconnect()` to `esp_wifi_disconnect()` + `esp_wifi_connect()`,
+# czyli PRZERWANIE trwajacej proby. Skojarzenie plus DHCP rzadko miesci
+# sie w 5 s, wiec lacze nie wstawalo nigdy. Kuba: "policzylem do 100 i nic".
+ok("WiFi.reconnect()" not in czek,
+   "petla czekania NIE przerywa trwajacego laczenia (to psulo 1.48.1)")
+ok("wifiKrokLaczenia()" in czek[czek.find("while ("):],
+   "lacze dociagane krok po kroku Z WNETRZA petli, bez blokady")
+ok("WIFI_PROBA_MS" in _wk,
+   "jedna proba dostaje wlasne okno, zanim siegniemy po nastepna siec")
 ok("!rtcOpenReported" in czek,
    "ale bez powtarzania tego, co poszlo juz przy zwyklym otwarciu")
-ok("WiFi.reconnect();" in czek,
-   "lacze odbudowywane w czasie czekania, nie dopiero przy wysylce")
+# Sam kawalek "if (wifiBylLink) { ... }", uciety na klamrze zamykajacej -
+# bez tego kontrola widziala `wifiZacznijProbe()` z DALSZEJ czesci funkcji
+# i przepuszczala galaz, ktora niczego nie odbudowuje (zlapane mutacja).
+_gal = ""
+if "if (wifiBylLink) {" in _wk:
+    _gal = _wk[_wk.find("if (wifiBylLink) {"):]
+    _gal = _gal[:_gal.find("\n  }")]
+ok("wifiZacznijProbe(wifiProbaNr)" in _gal,
+   "zerwane lacze odbudowywane od razu, bez czekania na okno proby")
 ok("msZamkniecia = millis();" in czek,
    "zapamietujemy chwile zamkniecia - inaczej opoznienia nie da sie zmierzyc")
 ok("zamkn->wyslane" in ino,

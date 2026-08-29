@@ -1929,7 +1929,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-29.70";
+const APP_VERSION = "2026-08-29.71";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -5178,6 +5178,26 @@ function renderStatus(st){
        ? wiersz("Drgnięć styku", `${+st.reedBounce}` +
            (+st.reedBounce > REED_DRGANIA_DUZO
               ? ` <span style="color:var(--warn)">dużo — sprawdź magnes</span>` : "")) : "") +
+    /* OD OTWARCIA WIECZKA DO APLIKACJI — dwie liczby, nie jedna.
+
+       Kuba trzy razy z rzędu zgłosił to samo zdanie: „otwieram, pika,
+       patrzę w telefon i przez minutę nic". Trzy razy odpowiedzią była
+       hipoteza, i trzy razy była niepełna — bo z zewnątrz „nic" wygląda
+       tak samo, gdy nie wstaje radio, gdy nie odpowiada baza i gdy to
+       telefon nie odświeża. Te dwie liczby to rozdzielają (D99).
+
+       „Radio" to czas do gotowego łącza, „baza" — do potwierdzonego
+       zapisu. Radio długie = sieć. Radio krótkie, baza długa = Firebase.
+       Obie krótkie, a w telefonie pusto = aplikacja.                    */
+    (Number.isFinite(+st.netMs) || Number.isFinite(+st.lidMs)
+       ? wiersz("Po otwarciu wieczka",
+           (Number.isFinite(+st.netMs)
+              ? (+st.netMs < 0 ? `radio <span style="color:var(--bad)">nie wstało</span>`
+                               : `radio ${(+st.netMs / 1000).toFixed(1)} s`) : "") +
+           (Number.isFinite(+st.lidMs)
+              ? `<span class="dim2"> · </span>` +
+                (+st.lidMs < 0 ? `baza <span style="color:var(--bad)">bez odpowiedzi</span>`
+                               : `baza ${(+st.lidMs / 1000).toFixed(1)} s`) : "")) : "") +
     /* TWARDE RESTARTY. Pamięć RTC ich nie przeżywa, więc po restarcie
        pudełko zapomina, czy dawka była dziś wzięta — i przestaje ostrzegać
        przed drugą tabletką, dopóki nie odczyta znacznika z pamięci trwałej.
