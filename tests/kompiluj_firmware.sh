@@ -152,10 +152,32 @@ fi
 # kompilacja pada na sprzecznej deklaracji. Nasz kod definiuje wszystko
 # w kolejnosci uzycia, wiec zadne prototypy nie sa potrzebne.
 # Dyrektywa #line sprawia, ze numery linii w bledach wskazuja .ino.
+# KATALOG BUDOWANIA MUSI BYC STALY, NIE `mktemp -d`.
+#
+# ZMIERZONE, nie przypuszczone: dwie kompilacje BYTE-IDENTYCZNEGO zrodla
+# dawaly binarki roznione 65 bajtami na przesunieciach 176-240. To jest
+# `app_elf_sha256` z naglowka obrazu ESP32 - suma pliku ELF, a ELF nosi
+# w sobie BEZWZGLEDNE sciezki budowania. `mktemp -d` daje inny katalog
+# przy kazdym uruchomieniu, wiec suma zmieniala sie za kazdym razem.
+#
+# Skutek widac az u Kuby. Automat publikuje binarke przy kazdej zmianie
+# w `firmware/**` - takze w szkicu diagnostycznym albo w komentarzu.
+# Skoro md5 zawsze inne, to:
+#   * wlasny guard automatu ("binarka bez zmian - nie ma czego publikowac")
+#     NIE MOGL sie odezwac ani razu,
+#   * aplikacja porownuje md5 z tym, ktore melduje pudelko, i pisze
+#     "jest nowa wersja" - o tej samej wersji.
+# Kuba klika, pudelko sciaga 1,2 MB przez WiFi z baterii i restartuje sie
+# na to samo. Dwa razy dzisiaj.
+#
+# Katalog czyscimy przed kazdym budowaniem, zeby stary artefakt nie udawal
+# swiezego - to jedyna rzecz, ktora `mktemp -d` dawal za darmo.
+BUILD_DIR="${BUILD_DIR:-$ACLI_DIR/build}"
+
 zbuduj() {
   local nazwa="$1" zrodlo="$2" katalog="$3" opis="$4" dodatkoweH="${5:-}"
-  local tmp; tmp="$(mktemp -d)/$nazwa"
-  mkdir -p "$tmp"
+  local tmp="$BUILD_DIR/$nazwa"
+  rm -rf "$tmp"; mkdir -p "$tmp"
   printf '#include <Arduino.h>\n#line 1 "%s"\n' "$(basename "$zrodlo")" > "$tmp/$nazwa.cpp"
   cat "$zrodlo" >> "$tmp/$nazwa.cpp"
   # config.h i reszta plikow obok szkicu
@@ -216,8 +238,8 @@ zbuduj pillboxtestcfg "$ROOT/firmware/PillBoxTest/PillBoxTest.ino" "$ROOT/firmwa
 # wgralby Arduino IDE, a nie jego bliskiego kuzyna.
 zbudujIno() {
   local nazwa="$1" zrodlo="$2" katalog="$3" opis="$4" wynik="$5" dodatkoweH="${6:-}"
-  local tmp; tmp="$(mktemp -d)/$nazwa"
-  mkdir -p "$tmp"
+  local tmp="$BUILD_DIR/$nazwa"      # staly katalog - patrz komentarz przy zbuduj()
+  rm -rf "$tmp"; mkdir -p "$tmp"
   python3 "$ROOT/tests/proto_arduino.py" "$zrodlo" "$tmp/$nazwa.cpp" "$(basename "$zrodlo")"
   find "$katalog" -maxdepth 1 -name '*.h' -exec cp {} "$tmp/" \;
   [ -n "$dodatkoweH" ] && find "$dodatkoweH" -maxdepth 1 -name '*.h' -exec cp {} "$tmp/" \;

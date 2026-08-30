@@ -356,6 +356,30 @@ for _fw, _app in _pary:
 #   * placeholder hasla - to jest ten guard, ktory zatrzymuje budowe, gdyby
 #     ktos wrzucil do repo config.h z PRAWDZIWYM haslem. Szuka konkretnego
 #     napisu; zmiana tego napisu po stronie firmware rozbraja go w ciszy.
+# ── BINARKA MUSI BYC POWTARZALNA ────────────────────────────────────────
+#
+# ZMIERZONE: dwie kompilacje byte-identycznego zrodla dawaly binarki
+# roznione 65 bajtami (app_elf_sha256 w naglowku obrazu - suma pliku ELF,
+# a ELF nosi bezwzgledne sciezki budowania). Winny byl `mktemp -d`: inny
+# katalog przy kazdym uruchomieniu.
+#
+# Skutek widac az u Kuby: automat publikuje binarke przy kazdej zmianie
+# w firmware/**, wiec md5 bylo zawsze inne, wlasny guard automatu
+# ("binarka bez zmian") nie mogl sie odezwac ani razu, a aplikacja pisala
+# "jest nowa wersja" o tej samej wersji. Pudelko sciagalo 1,2 MB przez
+# WiFi z baterii i restartowalo sie na to samo.
+_ksh = (root/'tests/kompiluj_firmware.sh').read_text(encoding='utf-8')
+_ksh_kod = _re.sub(r'#[^\n]*', '', _ksh)          # komentarze opisuja ten blad
+if 'mktemp -d' in _ksh_kod:
+    bad += 1
+    print('  BLAD kompiluj_firmware.sh buduje w mktemp -d - binarka przestaje '
+          'byc powtarzalna, a automat publikuje ja przy kazdym przebiegu')
+elif 'BUILD_DIR' not in _ksh_kod:
+    bad += 1
+    print('  BLAD kompiluj_firmware.sh nie ma stalego katalogu budowania')
+else:
+    print('  OK   binarka budowana w stalym katalogu (powtarzalne md5)')
+
 _wf_p = root/'.github/workflows/firmware.yml'
 if not _wf_p.exists():
     bad += 1; print('  BLAD brak .github/workflows/firmware.yml')
