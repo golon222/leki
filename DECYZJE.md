@@ -12,7 +12,7 @@ zamiast 60 tys. tokenów wchodzi 2,5 tys. plus jeden obszar.
 | `decyzje/pudelko.md` | Pudełko — sen, alarm, NVS, WiFi | 27 |
 | `decyzje/ota.md` | Aktualizacja przez WiFi i skan sieci | 8 |
 | `decyzje/telegram.md` | Powiadomienia Telegram | 5 |
-| `decyzje/aplikacja.md` | Aplikacja — ekrany i wygląd | 36 |
+| `decyzje/aplikacja.md` | Aplikacja — ekrany i wygląd | 37 |
 | `decyzje/dane.md` | Dane, kolejka, dawkowanie | 17 |
 | `decyzje/testy.md` | Testy, audyt, kompilacja | 12 |
 | `decyzje/bugi.md` | Błędy **zamknięte** — historia objawów | 25 |
@@ -65,6 +65,7 @@ Od najnowszej. Kolumna „gdzie" mówi, który plik w `decyzje/` trzymać otwart
 
 | # | O co chodziło | gdzie |
 |---|---|---|
+| **D104** | Dwa pola bez walidacji: za długa notatka odrzucała CAŁY wpis o dawce, a data „śledzimy od” z przyszłości wygaszała kalendarz i raport dla lekarza (aplikacja `2026-08-30.75`) | `aplikacja` |
 | **D103** | Szkic diagnostyczny: część Firebase (722 kB kodu) nigdy nie była kompilowana, nagłówek kazał wgrywać ze starym podziałem pamięci, a test hasła czytał `config.h` zamiast NVS | `testy` |
 | **D102** | Aplikacja mówi, ilu wyjątków dawkowania pudełko nie zapamięta — RTC mieści 8 najbliższych, reszta znikała po cichu i pudełko dzwoniło w dni rozpisane bez leku (aplikacja `2026-08-29.74`) | `aplikacja` |
 | **D101** | Pełny przegląd kodu: `almMask` zapisywane na zamkniętym uchwycie NVS (fałszywy `nvsFail` codziennie), `doReconcile()` wiszące przy Firebase offline, `lastSeen` bez zegara jako rok 1970 (firmware `1.48.3`, aplikacja `2026-08-29.73`) | `pudelko` |

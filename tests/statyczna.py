@@ -295,6 +295,41 @@ ino = (root/'firmware/PillBox/PillBox.ino').read_text(encoding='utf-8')
 # DOSE_EX_MAX, `fetchConfig()` bierze tyle NAJBLIZSZYCH, a reszte pomija
 # po cichu. Aplikacja o tej granicy mowi wprost - ale tylko dopoty, dopoki
 # obie liczby sa te same (D102).
+# NOTATKA: limit trzymaja REGULY BAZY, aplikacja musi go znac.
+# `note` przy dawce i przy pomiarze INR ma w regulach `length <= 300`,
+# a wpis dawki ma obok `$other: false` - czyli za dluga notatka nie jest
+# obcinana, tylko odrzuca CALY wpis o dawce. Aplikacja przycina ja sama
+# (NOTATKA_MAX), ale tylko dopoki obie liczby sa te same (D104).
+_lim_regul = set(re.findall(r'newData\.isString\(\) && newData\.val\(\)\.length <= (\d+)',
+                            (root/'database.rules.json').read_text(encoding='utf-8')))
+_m_not = re.search(r'const\s+NOTATKA_MAX\s*=\s*(\d+)', js)
+if not _m_not:
+    bad += 1; print('  BLAD nie znalazlem NOTATKA_MAX w aplikacji')
+elif _m_not.group(1) not in _lim_regul:
+    bad += 1
+    print(f'  BLAD NOTATKA_MAX={_m_not.group(1)}, a reguly bazy nie maja takiego '
+          f'limitu dlugosci (maja: {sorted(_lim_regul)})')
+else:
+    # OBA pola notatki, nie "gdziekolwiek w pliku". Pierwsza wersja tej
+    # kontroli szukala napisu `maxlength="300"` w calym HTML - a pole dnia
+    # ma tam `maxlength="${NOTATKA_MAX}"`, wiec wystarczalo, ze limit
+    # zostal przy notatce INR. Zdjecie go z notatki dnia (czyli z tego
+    # pola, ktore odrzuca CALY wpis o dawce) przechodzilo bez slowa.
+    # Zlapane mutacja, nie okiem.
+    _bez = []
+    for _id in ('inrNote', 'dayNote'):
+        _m_pole = _re.search(rf'<input[^>]*id="{_id}"[^>]*>', html, _re.S)
+        if not _m_pole:
+            _bez.append(f'{_id}: nie ma takiego pola')
+        elif 'maxlength=' not in _m_pole.group(0):
+            _bez.append(f'{_id}: bez maxlength')
+    if _bez:
+        bad += 1
+        print('  BLAD pole notatki bez ograniczenia dlugosci:', '; '.join(_bez))
+    else:
+        print(f'  OK   limit notatki ({_m_not.group(1)}) zgodny z regulami bazy '
+              f'i pilnowany w obu polach')
+
 _pary = [('DOSE_EX_MAX', 'PUDELKO_WYJATKOW_MAX')]
 for _fw, _app in _pary:
     _m1 = re.search(rf'#\s*define\s+{_fw}\s+(\d+)', cfg)

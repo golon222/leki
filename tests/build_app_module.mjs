@@ -33,7 +33,7 @@ export { renderSkan, brakujePokrycia, doReconcile, reconcileDecyzja, opisLadowan
          dawkaNaDzien, tydzienDawek, dzienBezLeku, wyjatekNaDzien, opisDawkowania,
          planNaDzien, dosePlans, zapiszPlanDnia, renderPlanList,
          dniZapasu, ZAPAS_HORYZONT, renderNetStan,
-         renderExceptions, PUDELKO_WYJATKOW_MAX,
+         renderExceptions, PUDELKO_WYJATKOW_MAX, NOTATKA_MAX,
          EKRANY, renderEvents, renderKafelki, bezPokrycia, evPasuje, opisNvsFailKey,
          nvsFailLog, renderNvsFailLog,
          EV_STANY, EV_CZASY, EV_LIMIT,

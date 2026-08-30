@@ -957,7 +957,7 @@ nav button .kropka-nav{position:absolute;top:6px;right:50%;margin-right:-16px;
         <input type="number" id="inrVal" step="0.1" min="0.5" max="15"
                inputmode="decimal" placeholder="2,4"></div>
     </div>
-    <input id="inrNote" placeholder="Notatka, np. dzień po antybiotyku" style="margin-top:10px">
+    <input id="inrNote" maxlength="300" placeholder="Notatka, np. dzień po antybiotyku" style="margin-top:10px">
     <button class="primary" style="width:100%;margin-top:14px;padding:14px;font-size:15px"
             onclick="addInr()">＋  Zapisz pomiar</button>
     <div id="inrAddMsg" class="dim2" style="text-align:center;margin-top:8px;min-height:15px"></div>
@@ -1929,7 +1929,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-29.74";
+const APP_VERSION = "2026-08-30.75";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -3671,8 +3671,8 @@ function renderSheet(){
     }).join("")}</div>
 
     <label>Notatka</label>
-    <input id="dayNote" placeholder="np. wzięte po kolacji" value="${esc(rec.note||"")}"
-           onchange="saveNote(this.value)">
+    <input id="dayNote" maxlength="${NOTATKA_MAX}" placeholder="np. wzięte po kolacji"
+           value="${esc(rec.note||"")}" onchange="saveNote(this.value)">
 
     ${inr[sheetDate] ? `<div class="card" style="margin:14px 0 0;background:rgba(167,139,250,.09);
         border-color:rgba(167,139,250,.3)">
@@ -3813,6 +3813,10 @@ window.wezTeraz = async () => {
 };
 
 window.saveNote = async txt => {
+  /* `maxlength` w HTML zatrzymuje wpisywanie i wklejanie, ale nie jest
+     jedyną drogą do tej funkcji — a za długa notatka odrzuca CAŁY wpis
+     o dawce, nie samo pole. Przycinamy więc także tutaj. */
+  txt = String(txt ?? "").slice(0, NOTATKA_MAX);
   const rec = (doses[sheetDate] || {})[0];
   /* Notatka na dniu bez wpisu i w przyszłości nie może tworzyć wpisu
      „nie wzięte" — inaczej jutrzejszy dzień robiłby się czerwony. */
@@ -3881,7 +3885,7 @@ window.addInr = async () => {
     msg.textContent = "Data pomiaru nie może być z przyszłości.";
     msg.style.color = "var(--bad)"; return;
   }
-  const note = document.getElementById("inrNote").value.trim();
+  const note = document.getElementById("inrNote").value.trim().slice(0, NOTATKA_MAX);
   const wpis = {
     value: Math.round(val*100)/100,
     ts: Math.floor(new Date(date+"T12:00:00").getTime()/1000),
@@ -5473,7 +5477,18 @@ function renderSettings(){
     : `${tzOffsetTxt(off)} · pudełko dostaje ${off} min. Czas letni uwzględniany sam.`;
 
   const ts = document.getElementById("trackFrom");
-  if (ts) ts.value = trackingSince();
+  /* KALENDARZ SAM NIE DAJE WYBRAC JUTRA — ta sama obrona co przy dacie
+     pomiaru INR, i z gorszego powodu (D104).
+
+     `trackingSince` mówi, od kiedy dane w ogóle mogą być prawdziwe:
+     dni WCZEŚNIEJSZE są w kalendarzu „bez danych", wypadają ze
+     skuteczności i z raportu dla lekarza. Data z przyszłości znaczy więc
+     „wszystko jest bez danych" — kalendarz się wygasza, skuteczność
+     pokazuje kreskę, a raport wychodzi pusty. Cicho, bo to jest
+     poprawnie wyliczony wynik ze złej liczby. Literówka w roku
+     wystarczy. Ustawiamy przy każdym renderze, bo aplikacja potrafi być
+     otwarta przez kilka dni i „dziś" się zmienia.                    */
+  if (ts) { ts.max = dzisiajKey(); ts.value = trackingSince(); }
   document.getElementById("defDose").value  = cfg.defaultDose ?? 1;
   renderWeekEditor();
   renderExceptions();
@@ -5569,6 +5584,22 @@ const EX_POKAZ = 6;
    wyjątki zakłada. Ostrzeżenie dotyczy dawek, więc stoi na wierzchu,
    a nie w Instrukcji (D11, D75).                                       */
 const PUDELKO_WYJATKOW_MAX = 8;
+
+/* DLUGOSC NOTATKI — musi być tą samą liczbą co limit `note` w
+   `database.rules.json` (dawki i pomiary INR). Kontrola statyczna to pilnuje.
+
+   ZNALEZIONE PRZY PRZEGLĄDZIE (D104). Notatka to jedyne pole, którego
+   aplikacja NIE sprawdzała przed wysłaniem — a wpis dawki ma w regułach
+   `$other: false` i limit 300 znaków na `note`. Baza nie odrzuca samego
+   pola: odrzuca CAŁY wpis. `saveNote()` przepisuje przy tym całą dawkę
+   (status, liczbę tabletek, godzinę), więc jedna za długa notatka znaczyła
+   zapis odrzucony na zawsze — wpis wracał do kolejki, kolejka go ponawiała,
+   baza odmawiała, a ekran krzyczał „BAZA ODRZUCIŁA zapis, to nie minie
+   samo" nie mówiąc, o które pole chodzi.
+
+   Wszystkie pozostałe pola są przycinane albo filtrowane właśnie dlatego
+   (dawka, godziny, INR, nazwa sieci, hasło). To jedno zostało pominięte. */
+const NOTATKA_MAX = 300;
 /* Lista wersji planu, od najnowszej. Każdy wiersz mówi: od kiedy i ile.
    „obowiązuje" przy pierwszym wierszu, bo to jedyna rzecz, której szuka
    się tu najczęściej.                                                   */
@@ -6646,7 +6677,16 @@ window.saveConfig = async () => {
   cfg.schedule     = godziny;
   cfg.tz           = document.getElementById("tzSelect").value || TZ_DEFAULT;
   cfg.tzOffsetMin  = tzOffsetFor(cfg.tz) ?? 120;
-  cfg.trackingSince = document.getElementById("trackFrom")?.value || trackingSince();
+  /* Data z przyszłości wygasiłaby cały kalendarz i raport — patrz
+     komentarz przy `trackFrom` w renderSettings(). `max` w polu tego
+     pilnuje, ale wpisać datę da się także z klawiatury.             */
+  const odKiedy = document.getElementById("trackFrom")?.value || trackingSince();
+  if (odKiedy > dzisiajKey()){
+    toast("Data „śledzimy od” nie może być z przyszłości — kalendarz byłby pusty.",
+          "err", 4500);
+    return;
+  }
+  cfg.trackingSince = odKiedy;
   /* Reguły bazy dopuszczają 0 < defaultDose <= 10. Bez tego ograniczenia
      większa wartość leciała do bazy, ta odrzucała CAŁY zapis ustawień
      (to jedna aktualizacja wielościeżkowa), a użytkownik dostawał

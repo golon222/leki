@@ -2154,6 +2154,40 @@ check(/String\(v\)\.trim\(\) !== ""/.test(html),
 check(/id="inrVal"[^>]*max="15"/.test(html),
       "gorna granica INR w polu zgadza sie z regulami bazy (15)");
 
+/* ── NOTATKA (D104) ──
+   `note` ma w regulach limit 300 znakow, a wpis dawki ma obok
+   `$other: false`. Za dluga notatka nie jest wiec obcinana - odrzuca CALY
+   wpis o dawce. A `saveNote()` przepisuje przy tym cala dawke: status,
+   liczbe tabletek i godzine. Wszystkie inne pola aplikacja przycina albo
+   filtruje wlasnie z tego powodu; to jedno zostalo pominiete.        */
+{
+  const dlugie = "x".repeat(A.NOTATKA_MAX + 120);
+  A.__resetDb();
+  A.__setState({ cfg: { schedule:["20:00"], defaultDose:1, tzOffsetMin:120 },
+                 doses: { "2026-08-20": { 0: { status:"taken", dose:1,
+                                               source:"device", ts:1755000000 } } } });
+  window.openSheet("2026-08-20");
+  await window.saveNote(dlugie);
+  const zapis = A.__db.data.users?.testuid?.doses?.["2026-08-20"]?.["0"];
+  check(!!zapis, "za dluga notatka NIE odrzuca calego wpisu o dawce");
+  check(zapis && zapis.note.length === A.NOTATKA_MAX,
+        `notatka przycieta do limitu regul (${zapis ? zapis.note.length : "brak"})`);
+  check(zapis && zapis.status === "taken" && zapis.dose === 1,
+        "a sama dawka zostaje nietknieta");
+  check(A.oczekIle() === 0, "i nic nie zostaje w kolejce odrzuconych");
+  window.closeSheet();
+}
+
+/* ── OD KIEDY SLEDZIMY (D104) ──
+   Dni wczesniejsze niz `trackingSince` sa "bez danych": wypadaja
+   z kalendarza, ze skutecznosci i z raportu dla lekarza. Data z
+   przyszlosci znaczy wiec "wszystko jest bez danych" - a to poprawnie
+   wyliczony wynik ze zlej liczby, czyli awaria cicha. */
+check(/ts\.max = dzisiajKey\(\)/.test(html),
+      "kalendarz przy 'sledzimy od' sam nie pozwala wybrac jutra");
+check(/odKiedy > dzisiajKey\(\)/.test(html),
+      "i zapis odmawia daty z przyszlosci takze przy wpisaniu z klawiatury");
+
 head("Zakres terapeutyczny INR wybiera sie z LIST, nie wpisuje");
 {
   /* Wpisywanie liczby na telefonie to klawiatura, przecinek kontra kropka
