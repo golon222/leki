@@ -10,9 +10,11 @@ WANTED = [
     # Pomocniki NVS musza byc PRZED wszystkim, co z nich korzysta.
     # zanotujNvsFail przed nvsPutStr/nvsPutU16 - to one je woluja.
     "zanotujNvsFail", "nvsPutStr", "nvsPutU16", "nvsPutU32",
+    "nvsPutI16", "nvsPutU8",
     "readBatteryRaw", "battPercentFromCurve", "resetBatteryFilter",
     "battSmooth", "readBattery", "zapiszKoniecLadowania", "trackCharging",
-    "godzinaPoprawna", "parseSchedule", "loadSchedule", "slotMinutes", "localDayNumber", "localMinutesOfDay",
+    "godzinaPoprawna", "parseSchedule", "loadSchedule", "saveSchedule",
+    "slotMinutes", "localDayNumber", "localMinutesOfDay",
     # Dni bez leku - musza byc przed checkDayRollover, ktore je wola.
     "localWeekday", "dateKeyToNum", "dawkaNaDobe", "dzisBezLeku",
     "parseDoseWeek", "parseDoseEx", "saveDosing",

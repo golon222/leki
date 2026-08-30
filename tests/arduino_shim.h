@@ -189,7 +189,15 @@ public:
     ul[k] = v; return sizeof(unsigned long); }
   short getShort(const char* k, short d = 0) {
     auto it = sh.find(k); return it == sh.end() ? d : it->second; }
-  void putShort(const char* k, short v) { sh[k] = v; }
+  /* OSTATNI, KTORY ZWRACAL `void`. Ta sama lekcja co przy putUInt/putULong
+     wyzej, tylko znaleziona pozniej: `tz` idzie tedy, a od niego zalezy,
+     gdzie przebiega granica doby lekowej po twardym restarcie. Dopoki
+     atrapa nie umiala tu zawiesc, `nvsPutI16()` nie mial jak byc
+     sprawdzony - a bez niego zapis strefy przepadal po cichu.        */
+  size_t putShort(const char* k, short v) {
+    if (failKeys.count(k)) return 0;
+    if (strict && !_started) return 0;
+    sh[k] = v; return sizeof(short); }
   /* Kasowanie pojedynczego klucza - uzywa go lidLogClear(). Musi czyscic
      WSZYSTKIE mapy, bo prawdziwe NVS nie wie, jakiego typu byl wpis.    */
   bool remove(const char* k) {

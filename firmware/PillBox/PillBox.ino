@@ -400,6 +400,39 @@ bool nvsPutU32(const char* key, uint32_t val) {
   return false;
 }
 
+/* --- I DWA POZOSTALE TYPY, ZEBY ZASADA NIE MIALA WYJATKOW -------------
+
+   ZNALEZIONE PRZY PELNYM PRZEGLADZIE. Szesc zapisow do NVS szlo wprost
+   przez `prefs.put*`, z pominieciem licznika strat: daty ladowania,
+   znacznik proby OTA, przesuniecie strefy czasowej i dlugosc listy sieci.
+   Zaden z nich nie gubil dawki, ale zasada "zapisy do NVS nie udaja, ze
+   sie udaly" (D46) nie moze miec wyjatkow, o ktorych trzeba pamietac -
+   bo pamieta sie o nich do pierwszego razu.
+
+   Najwiecej wazy `tz`: od niego zalezy, gdzie przebiega granica doby
+   lekowej. Po twardym restarcie `loadSchedule()` czyta go z NVS, wiec
+   cichy brak zapisu znaczy dobe liczona wedlug DEFAULT_TZ_OFFSET. Samo
+   sie naprawia przy nastepnym `fetchConfig()`, ale przez ten czas nikt
+   nie wie, ze cos jest nie tak.
+
+   `putShort` to w NVS typ ZE ZNAKIEM (i16), a `putUChar` - u8. Nie da sie
+   ich podmienic na istniejace pomocniki, bo odczyt siegnalby po inny typ
+   i wrocil z wartoscia domyslna. Stad dwie osobne funkcje.
+   Audyt pilnuje, ze poza tymi pieciona nie ma juz zadnego `prefs.put*`. */
+bool nvsPutI16(const char* key, int16_t val) {
+  if (prefs.putShort(key, val) > 0) return true;
+  zanotujNvsFail(key);
+  LOG("[NVS] ZAPIS NIEUDANY: %s\n", key);
+  return false;
+}
+
+bool nvsPutU8(const char* key, uint8_t val) {
+  if (prefs.putUChar(key, val) > 0) return true;
+  zanotujNvsFail(key);
+  LOG("[NVS] ZAPIS NIEUDANY: %s\n", key);
+  return false;
+}
+
 /* --- Ile miejsca zostalo w pamieci trwalej ----------------------------
    nvsPutStr() mowi, ze zapis PRZEPADL. Nie mowi, ile jeszcze zostalo -
    a to jest roznica miedzy "wlasnie zaczely ginac dane" a "za dwa dni
@@ -583,8 +616,8 @@ void zapiszKoniecLadowania() {
   if (!rtcTimeValid) return;
   prefs.begin(NVS_NAMESPACE, false);
   uint32_t poprzednie = prefs.getUInt("chgEnd", 0);
-  if (poprzednie) prefs.putUInt("chgPrev", poprzednie);
-  prefs.putUInt("chgEnd", (uint32_t)time(nullptr));
+  if (poprzednie) nvsPutU32("chgPrev", poprzednie);
+  nvsPutU32("chgEnd", (uint32_t)time(nullptr));
   prefs.end();
   LOGLN("[CHG] zapisano date ladowania");
 }
@@ -1086,7 +1119,7 @@ void loadSchedule() {
 void saveSchedule(const String& s, int16_t tz) {
   prefs.begin(NVS_NAMESPACE, false);
   nvsPutStr("sched", s);
-  prefs.putShort("tz", tz);
+  nvsPutI16("tz", tz);
   prefs.end();
   strncpy(rtcSchedule, s.c_str(), sizeof(rtcSchedule) - 1);
   rtcTzOffsetMin = tz;
@@ -1844,7 +1877,7 @@ static bool wifiListeZapisz(const String* ss, const String* pp, int n) {
     prefs.remove(ks);
     prefs.remove(kp);
   }
-  if (!prefs.putUChar("netN", (uint8_t)n)) ok = false;
+  if (!nvsPutU8("netN", (uint8_t)n)) ok = false;
   prefs.end();
   return ok;
 }
@@ -4130,7 +4163,7 @@ void otaZanotujProbe(uint32_t teraz) {
   prefs.begin(NVS_NAMESPACE, false);
   uint16_t ile = prefs.getUShort("otaFail", 0);
   nvsPutU16("otaFail", ile + 1);
-  if (teraz) prefs.putUInt("otaTs", teraz);
+  if (teraz) nvsPutU32("otaTs", teraz);
   prefs.end();
 }
 

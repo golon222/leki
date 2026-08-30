@@ -2090,6 +2090,30 @@ head("Pierwsze przypomnienie nie wycisza drugiego");
    Testy tego nie widzialy, bo atrapa Preferences przepuszcza zapis bez
    uchwytu, dopoki nie wlaczy sie `strict`. Wlaczamy - to jest jedyny
    tryb, w ktorym atrapa zachowuje sie jak prawdziwe NVS.             */
+/* ── STREFA CZASOWA TEZ NIE MOZE PRZEPASC PO CICHU ──
+   `tz` idzie przez `nvsPutI16()`, bo od niego zalezy, gdzie przebiega
+   granica doby lekowej po twardym restarcie: `loadSchedule()` czyta go
+   z NVS, a cichy brak zapisu znaczy dobe liczona wedlug DEFAULT_TZ_OFFSET.
+   Do 1.48.3 szedl surowym `prefs.putShort()`, ktorego wyniku nikt nie
+   ogladal - a atrapa zwracala wtedy `void`, wiec ta galaz nie miala jak
+   zostac sprawdzona. */
+head("Nieudany zapis strefy czasowej krzyczy, a nie milczy");
+{
+  prefs.wipe();
+  rtcNvsFail = 0; rtcNvsFailKey[0] = 0;
+  prefs.failKeys.insert("tz");
+  saveSchedule("20:00", 60);
+  CHECK(rtcNvsFail == 1, "nieudany zapis strefy podnosi licznik strat (%u)", rtcNvsFail);
+  CHECK(String(rtcNvsFailKey) == String("tz"),
+        "i mowi, KTORY klucz przepadl ('%s')", rtcNvsFailKey);
+  prefs.failKeys.clear();
+
+  rtcNvsFail = 0;
+  saveSchedule("20:00", 60);
+  CHECK(rtcNvsFail == 0, "udany zapis niczego nie zglasza (%u)", rtcNvsFail);
+  prefs.wipe();
+}
+
 head("Maska odzwonionych przypomnien trafia do NVS, nie w prozne");
 {
   prefs.wipe();

@@ -1518,7 +1518,8 @@ _PISZE   = re.compile(r"\b(nvsPutStr|nvsPutU16|nvsPutU32)\s*\(")
 _WPROST  = re.compile(r"\bprefs\.(getString|getUShort|getULong|getUInt|getUChar"
                       r"|getShort|putString|putUShort|putULong|putUInt|putUChar"
                       r"|putShort|remove)\s*\(")
-_WLASNE  = ("bool nvsPutStr(", "bool nvsPutU16(", "bool nvsPutU32(")
+_WLASNE  = ("bool nvsPutStr(", "bool nvsPutU16(", "bool nvsPutU32(",
+            "bool nvsPutI16(", "bool nvsPutU8(")
 
 _poza = []
 for _m in re.finditer(r"^[A-Za-z_][^\n;=]*\)\s*\{\s*$", code, re.M):
@@ -1537,6 +1538,34 @@ for _m in re.finditer(r"^[A-Za-z_][^\n;=]*\)\s*\{\s*$", code, re.M):
 ok(not _poza,
    "kazdy zapis do pamieci trwalej stoi miedzy prefs.begin() a prefs.end()"
    + ("" if not _poza else f" (poza: {'; '.join(_poza[:3])})"))
+
+# ...I ZADEN NIE OMIJA LICZNIKA STRAT.
+#
+# `prefs.put*` zwraca zero, gdy zapis przepadl - i tyle. Bez pomocnika
+# nikt tego nie zauwaza: licznik `nvsFail` nie drgnie, dziennik nie
+# dostanie wpisu, aplikacja nie ma o czym krzyczec. Zasada D46 mowi, ze
+# zapisy do NVS "nie udaja, ze sie udaly", ale szesc wywolan chodzilo
+# obok niej: daty ladowania, znacznik proby OTA, przesuniecie strefy
+# czasowej i dlugosc listy sieci. Najwiecej wazyl `tz` - od niego zalezy,
+# gdzie przebiega granica doby lekowej po twardym restarcie.
+#
+# Wyjatkiem sa same pomocniki (to one wolaja prefs.put*) oraz autotest,
+# ktory pisze do WLASNEJ przestrzeni "pbtest" wlasnie po to, zeby
+# sprawdzic, czy pamiec w ogole przyjmuje zapis.
+_POMOCNIKI = ("bool nvsPutStr(", "bool nvsPutU16(", "bool nvsPutU32(",
+              "bool nvsPutI16(", "bool nvsPutU8(")
+_surowe = []
+for _m in re.finditer(r"^[A-Za-z_][^\n;=]*\)\s*\{\s*$", code, re.M):
+    _naglowek = _m.group(0)
+    if any(_naglowek.startswith(w) for w in _POMOCNIKI): continue
+    if _naglowek.startswith("void autoTest("): continue     # wlasna przestrzen pbtest
+    _reszta = code[_m.start():]
+    _k = _reszta.find("\n}")
+    for _w in re.finditer(r"prefs\.put\w+\s*\(", _reszta[:_k] if _k > 0 else _reszta):
+        _surowe.append(f"{_naglowek.strip()[:40]} -> {_w.group(0)}")
+ok(not _surowe,
+   "i zaden nie omija licznika strat (nvsPut* zamiast prefs.put*)"
+   + ("" if not _surowe else f" (surowe: {'; '.join(_surowe[:3])})"))
 
 # ---------- 9d. BEZ ZEGARA NIE PODAJEMY GODZINY MELDUNKU ----------
 #

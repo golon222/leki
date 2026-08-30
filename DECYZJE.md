@@ -13,7 +13,7 @@ zamiast 60 tys. tokenów wchodzi 2,5 tys. plus jeden obszar.
 | `decyzje/ota.md` | Aktualizacja przez WiFi i skan sieci | 8 |
 | `decyzje/telegram.md` | Powiadomienia Telegram | 5 |
 | `decyzje/aplikacja.md` | Aplikacja — ekrany i wygląd | 37 |
-| `decyzje/dane.md` | Dane, kolejka, dawkowanie | 17 |
+| `decyzje/dane.md` | Dane, kolejka, dawkowanie | 18 |
 | `decyzje/testy.md` | Testy, audyt, kompilacja | 12 |
 | `decyzje/bugi.md` | Błędy **zamknięte** — historia objawów | 25 |
 | `decyzje/cofniete.md` | Cofnięte — **nie próbować drugi raz** | 5 |
@@ -65,6 +65,7 @@ Od najnowszej. Kolumna „gdzie" mówi, który plik w `decyzje/` trzymać otwart
 
 | # | O co chodziło | gdzie |
 |---|---|---|
+| **D105** | Sześć zapisów do NVS omijało licznik strat — `nvsPutI16`/`nvsPutU8` domykają zasadę D46, atrapa `putShort` przestała zwracać `void` (firmware `1.48.4`) | `dane` |
 | **D104** | Dwa pola bez walidacji: za długa notatka odrzucała CAŁY wpis o dawce, a data „śledzimy od” z przyszłości wygaszała kalendarz i raport dla lekarza (aplikacja `2026-08-30.75`) | `aplikacja` |
 | **D103** | Szkic diagnostyczny: część Firebase (722 kB kodu) nigdy nie była kompilowana, nagłówek kazał wgrywać ze starym podziałem pamięci, a test hasła czytał `config.h` zamiast NVS | `testy` |
 | **D102** | Aplikacja mówi, ilu wyjątków dawkowania pudełko nie zapamięta — RTC mieści 8 najbliższych, reszta znikała po cichu i pudełko dzwoniło w dni rozpisane bez leku (aplikacja `2026-08-29.74`) | `aplikacja` |
