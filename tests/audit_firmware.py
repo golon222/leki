@@ -317,8 +317,25 @@ ok("wifiOknoProby()" in _wk and "WIFI_PROBA_MS" in _okno,
 # ma szans dojsc do konca ANI RAZU (D107).
 ok("setAutoReconnect" in (cialo("static void wifiZacznijProbe(uint8_t nr)") or ""),
    "sterownik ma sam ponawiac skojarzenie miedzy naszymi probami")
-ok("ostatniKandydat" in _wk and "return false" in _wk,
-   "po przejsciu wszystkich sieci przestajemy przerywac trwajaca probe")
+# PRZERWANIE MA SENS WYLACZNIE WTEDY, GDY MAMY CO INNEGO SPROBOWAC.
+#
+# Rozstrzygniete POMIAREM z pudelka Kuby: `radio 82,4 s - baza 82,9 s`
+# przy sile sygnalu -54 dBm. Baza odpowiada w pol sekundy; cala minuta
+# szla w samo polaczenie. Proby leciały co WIFI_PROBA_MS (25 s), a lacze
+# wstalo o 82,4 s - czyli dopiero wtedy, gdy przestalismy przerywac.
+# Kazde okno kasowalo skojarzenie, ktore wlasnie mialo sie udac (D108).
+ok("wifiOstatniKandydat()" in _wk,
+   "przerywamy tylko wtedy, gdy jest CO INNEGO sprobowac")
+_kand = cialo("static uint8_t wifiOstatniKandydat()")
+ok(bool(_kand) and "wifiZPodpowiedzia" in _kand and "wifiSieciCount()" in _kand,
+   "a przy jednej sieci i bez podpowiedzi nie przerywamy w ogole")
+# Oszczedzanie radia usypia odbiornik miedzy ramkami - w trakcie kojarzenia
+# i DHCP to znaczy pominiete odpowiedzi. Wlaczamy je dopiero po polaczeniu.
+_ws2 = cialo("void wifiStart()")
+ok(bool(_ws2) and "WiFi.setSleep(false)" in _ws2,
+   "laczymy sie z wylaczonym oszczedzaniem radia")
+ok("WiFi.setSleep(true)" in _wk,
+   "a modem-sleep wlaczamy dopiero, gdy lacze stoi")
 # PODPOWIEDZ: kanal i BSSID z ostatniego udanego polaczenia. Bez niej
 # sterownik po deep sleepie przemiata cale pasmo 2,4 GHz - przy -87 dBm
 # to kilkanascie sekund, czyli cala "minuta", na ktora czekal Kuba.

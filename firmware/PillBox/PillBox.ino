@@ -2086,6 +2086,7 @@ static uint8_t  wifiProbaNr  = 0;   // ktora z kolei (n = poswiadczenia sterowni
 static uint8_t  wifiBaza     = 0;   // od ktorej sieci zaczelismy przeglad
 static bool     wifiBylLink  = false;// czy lacze w tym czuwaniu juz raz stalo
 static bool     wifiProbaTrwa = false;// czy to MY zaczelismy laczenie
+static bool     wifiZPodpowiedzia = false;// czy proba 0 poszla ze znanego kanalu
 
 /* Przeglad listy od sieci, ktora dzialala ostatnio. */
 static void wifiOdNowa() {
@@ -2099,17 +2100,21 @@ static void wifiOdNowa() {
    Rozlaczenie przed `WiFi.begin()` jest tu tak samo obowiazkowe jak w
    `wifiSprobuj()`: sterownik, ktory wciaz probuje poprzedniej sieci,
    potrafi po cichu zignorowac nowe zgloszenie.                        */
-/* Kolejnosc prob - i to ona decyduje, po ilu sekundach Kuba widzi
-   "otwarte" na telefonie:
+/* Kandydaci, w kolejnosci prob:
 
-     0  siec, ktora dzialala ostatnio, Z PODPOWIEDZIA (kanal + BSSID)
-     1  ta sama siec, ale normalnie - gdy podpowiedz sie zestarzala
-     2..n  kolejne sieci z listy
-     n+1   poswiadczenia zapamietane przez sterownik
+     0            siec, ktora dzialala ostatnio - Z PODPOWIEDZIA, gdy jest
+     1            ta sama siec normalnie (tylko gdy proba 0 byla z podpowiedzia)
+     dalej        pozostale sieci z listy, jesli w ogole sa
 
-   Proba 0 dostaje krotkie okno: albo laczy sie od razu, albo podpowiedz
-   jest nieaktualna i szkoda na nia czasu. Pozostale dostaja DUZO -
-   patrz `wifiOknoProby()`.                                            */
+   POSWIADCZEN STEROWNIKA TU NIE MA i to jest swiadome: laczenie w tle ma
+   byc SZYBKIE dla przypadku codziennego, a nie wyczerpujace. Pelny
+   przeglad, razem z poswiadczeniami sterownika, robi blokujacy
+   `wifiConnect()` na koncu wybudzenia.                                */
+static uint8_t wifiOstatniKandydat() {
+  const int n = wifiSieciCount();
+  return (uint8_t)((wifiZPodpowiedzia ? 1 : 0) + (n > 1 ? n - 1 : 0));
+}
+
 static void wifiZacznijProbe(uint8_t nr) {
   const int n = wifiSieciCount();
   msProbaOd     = millis();
@@ -2118,47 +2123,49 @@ static void wifiZacznijProbe(uint8_t nr) {
     WiFi.disconnect(false, false);
     delay(80);
   }
-  /* Sterownik ma sam ponawiac skojarzenie miedzy naszymi probami -
-     to on, a nie my, wie, kiedy warto sprobowac jeszcze raz.        */
+  /* Sterownik ma sam ponawiac skojarzenie - to on, a nie my, wie, kiedy
+     warto sprobowac jeszcze raz.                                      */
   WiFi.setAutoReconnect(true);
 
-  if (n > 0) {
-    const int i = (nr == 0) ? wifiBaza : (wifiBaza + nr - 1) % n;
-    const uint8_t ostatniZListy = (uint8_t)n;      // nr 1..n to lista
-    if (nr <= ostatniZListy) {
-      const String ssid = wifiSiecSsid(i);
-      if (ssid.length()) {
-        if (nr == 0) {
-          if (wifiBeginZPodpowiedzia(ssid, wifiSiecPass(i))) return;
-          /* Podpowiedzi nie ma - proba 0 jest wtedy zwyklym laczeniem
-             i ma dostac zwykle, dlugie okno. Mowimy o tym `msProbaOd`
-             cofniete nie bedzie; okno liczy `wifiOknoProby()`.      */
-          LOG("[NET] proba 0 w tle: '%s' (bez podpowiedzi)\n", ssid.c_str());
-          return;
-        }
-        LOG("[NET] proba %u w tle: '%s'\n", (unsigned)nr, ssid.c_str());
-        WiFi.begin(ssid.c_str(), wifiSiecPass(i).c_str());
-        return;
-      }
-    }
+  if (n <= 0) { LOGLN("[NET] proba w tle: poswiadczenia sterownika"); WiFi.begin(); return; }
+
+  int i;
+  bool zPodpowiedzia = false;
+  if (nr == 0)                             { i = wifiBaza; zPodpowiedzia = wifiZPodpowiedzia; }
+  else if (wifiZPodpowiedzia && nr == 1)   { i = wifiBaza; }
+  else {
+    const uint8_t k = (uint8_t)(nr - (wifiZPodpowiedzia ? 1 : 0));
+    i = (wifiBaza + k) % n;
   }
-  LOGLN("[NET] proba w tle: poswiadczenia sterownika");
-  WiFi.begin();
+
+  const String ssid = wifiSiecSsid(i);
+  if (!ssid.length()) { WiFi.begin(); return; }
+
+  if (zPodpowiedzia) { wifiBeginZPodpowiedzia(ssid, wifiSiecPass(i)); return; }
+  LOG("[NET] proba %u w tle: '%s'\n", (unsigned)nr, ssid.c_str());
+  WiFi.begin(ssid.c_str(), wifiSiecPass(i).c_str());
 }
 
-/* Ile czasu dostaje BIEZACA proba, zanim siegniemy po nastepna.
+/* Ile czasu dostaje BIEZACA proba, zanim siegniemy po NASTEPNEGO kandydata.
 
-   TU BYL BLAD, i to ten sam co w 1.48.1, tylko wolniejszy. D99 zamienilo
-   `WiFi.reconnect()` co 5 s na wlasne okno 12 s - ale okno tez PRZERYWA
-   trwajace skojarzenie. Przy -87 dBm, ktore pudelko ma u Kuby, samo
-   przemiatanie pasma bywa dluzsze niz dwanascie sekund, wiec proba nie
-   miala szans dojsc do konca ANI RAZU. Laczylo sie dopiero wtedy, gdy
-   akurat trafilo miedzy dwa przerwania - stad "po okolo minucie".
+   TU BYL BLAD, i to on kosztowal szesc podejsc. Pomiar z pudelka Kuby
+   rozstrzygnal go jedna linijka: `radio 82,4 s - baza 82,9 s` przy sile
+   sygnalu **-54 dBm**. Baza odpowiada w pol sekundy; cala minuta idzie
+   w samo polaczenie - i to przy sygnale, przy ktorym telefon laczy sie
+   natychmiast.
 
-   Teraz przerywamy tylko po to, zeby sprobowac CZEGOS INNEGO, i dajemy
-   na to czas z zapasem. Probie z podpowiedzia wystarczy chwila.      */
-static uint32_t wifiOknoProby() {
-  return (wifiProbaNr == 0 && rtcApKanal) ? WIFI_PROBA_SZYBKA_MS : WIFI_PROBA_MS;
+   Arytmetyka mowi reszte. Po restarcie po aktualizacji podpowiedzi nie
+   bylo, wiec proby szly co WIFI_PROBA_MS: start, 25 s, 50 s, 75 s.
+   Lacze wstalo o 82,4 s - czyli DOPIERO WTEDY, GDY PRZESTALEM
+   PRZERYWAC. Kazde moje "okno" kasowalo skojarzenie, ktore wlasnie
+   mialo sie udac. Trzeci raz ten sam blad: 5 s w 1.48.1, 12 s w D99,
+   25 s tutaj - zmienialem okres, nie zjawisko.
+
+   Wniosek jest prosty i az nudny: PRZERWANIE MA SENS WYLACZNIE WTEDY,
+   GDY MAMY CO INNEGO SPROBOWAC. Przy jednej zapisanej sieci i bez
+   podpowiedzi nie ma - wiec nie przerywamy w ogole, tylko schodzimy
+   sterownikowi z drogi i patrzymy na status.                        */static uint32_t wifiOknoProby() {
+  return (wifiProbaNr == 0 && wifiZPodpowiedzia) ? WIFI_PROBA_SZYBKA_MS : WIFI_PROBA_MS;
 }
 
 void wifiStart() {
@@ -2166,9 +2173,20 @@ void wifiStart() {
   WiFi.persistent(true);
   WiFi.mode(WIFI_STA);
   delay(60);
-  WiFi.setSleep(true);
+  /* MODEM SLEEP DOPIERO PO POLACZENIU, nie w jego trakcie.
+
+     Oszczedzanie radia usypia odbiornik miedzy ramkami rozgloszeniowymi -
+     w czasie kojarzenia i DHCP to znaczy pominiete odpowiedzi i kolejne
+     podejscia. Przez cale wybudzenie radio zyje najwyzej minute, wiec
+     na etapie laczenia nie ma tu czego oszczedzac. Wlaczamy je z powrotem
+     w chwili, w ktorej lacze staje (patrz `wifiKrokLaczenia`).        */
+  WiFi.setSleep(false);
   wifiOdNowa();
   wifiBylLink = false;
+  {
+    const int n = wifiSieciCount();
+    wifiZPodpowiedzia = n > 0 && apPodpowiedzPasuje(wifiSiecSsid(wifiBaza));
+  }
   wifiZacznijProbe(0);
 }
 
@@ -2218,6 +2236,7 @@ bool wifiKrokLaczenia() {
       /* I GDZIE ten router stoi - to jest cala oszczednosc przy nastepnym
          otwarciu wieczka (D107).                                       */
       zapamietajAp();
+      WiFi.setSleep(true);           // teraz juz mozna oszczedzac radio
       LOG("[NET] lacze stoi po %lu ms\n",
           (unsigned long)(millis() - msProbaOd));
     }
@@ -2246,8 +2265,7 @@ bool wifiKrokLaczenia() {
      oknie, to nie brak pomyslow jest problemem, tylko zasieg. Wtedy
      jedyne sensowne zachowanie to zejsc mu z drogi: `setAutoReconnect`
      kaze mu probowac dalej samemu, a my tylko patrzymy na status.    */
-  const uint8_t ostatniKandydat = (uint8_t)(wifiSieciCount() + 1);
-  if (wifiProbaNr >= ostatniKandydat) return false;
+  if (wifiProbaNr >= wifiOstatniKandydat()) return false;
 
   wifiProbaNr++;
   wifiZacznijProbe(wifiProbaNr);
@@ -2266,7 +2284,9 @@ bool wifiConnect() {
      uspieniu radia (WIFI_OFF) potrafi sie nie udac za pierwszym razem -
      a to wlasnie ta sciezka wysyla stan po zamknieciu wieczka.        */
   delay(60);
-  WiFi.setSleep(true);                      // modem-sleep w trakcie pracy
+  /* Bez oszczedzania radia NA CZAS LACZENIA - patrz komentarz w wifiStart().
+     Wlaczamy je z powrotem dopiero, gdy lacze stoi.                     */
+  WiFi.setSleep(false);
 
   /* Czekamy najwyzej WIFI_TIMEOUT_MS na PIERWSZA probe. Chwilowa awaria
      routera nie moze zatrzymac urzadzenia na dluzej - zdarzenie laduje
@@ -2331,6 +2351,7 @@ bool wifiConnect() {
   }
 
   ok = WiFi.status() == WL_CONNECTED;
+  if (ok) WiFi.setSleep(true);              // modem-sleep dopiero po polaczeniu
   LOG("[NET] %s%s\n", ok ? "polaczono, IP=" : "BRAK POLACZENIA",
       ok ? WiFi.localIP().toString().c_str() : "");
 

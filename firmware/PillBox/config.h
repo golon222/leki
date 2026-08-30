@@ -20,7 +20,7 @@
  * 1. IDENTYFIKATOR URZADZENIA
  * ------------------------------------------------------------------ */
 #define DEVICE_ID           "pillbox01"     // klucz w /devices/<DEVICE_ID>
-#define FW_VERSION          "1.49.0"   // widoczna w aplikacji - po wgraniu sprawdz, czy sie zmienila
+#define FW_VERSION          "1.49.1"   // widoczna w aplikacji - po wgraniu sprawdz, czy sie zmienila
 
 /* ---------------------------------------------------------------------
  * 2. FIREBASE  (Realtime Database + Auth email/haslo)
@@ -268,7 +268,7 @@
 /*     Proba Z PODPOWIEDZIA (znany kanal i BSSID) omija przemiatanie
  *     pasma, wiec albo laczy sie od razu, albo podpowiedz sie
  *     zestarzala i szkoda na nia czasu.                              */
-#define WIFI_PROBA_SZYBKA_MS 4000
+#define WIFI_PROBA_SZYBKA_MS 8000
 
 /*     Wyniki usuwania sieci. Osobne wartosci, a nie samo true/false, bo
  *     "nie ma takiej sieci" i "nie usune, bo to jedyna droga do mnie" to
