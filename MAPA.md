@@ -12,7 +12,7 @@ sed -n '2800,2960p' index.html          # jeden obszar
 grep -n "nazwaFunkcji" index.html       # gdy znasz nazwe
 ```
 
-## `index.html` — 8152 linii, ~130 tys. tokenow
+## `index.html` — 8220 linii, ~130 tys. tokenow
 
 Ekrany (`<section>`) i dwa duze bloki. Zakladki `tab-*` odpowiadaja
 pozycjom w pasku nawigacji i podekranom Ustawien.
@@ -48,40 +48,41 @@ pozycjom w pasku nawigacji i podekranom Ustawien.
 | 2251 | 2390 | TEST POŁĄCZENIA — przechodzi całą drogę danych krok po kroku |
 | 2391 | 2763 | START |
 | 2764 | 2824 | OSŁONA RYSOWANIA |
-| 2825 | 3021 | REKONCYLIACJA |
-| 3022 | 3080 | KALENDARZ |
-| 3081 | 3347 | HISTORIA ROZPISANIA DAWKI |
-| 3348 | 3529 | ILE MINĘŁO OD POPRZEDNIEJ DAWKI |
-| 3530 | 3681 | ARKUSZ DNIA |
-| 3682 | 3777 | WZIĄŁEM TERAZ |
-| 3778 | 3892 | INR |
-| 3893 | 4032 | ODSTĘP MIĘDZY POMIARAMI INR |
-| 4033 | 4045 | STATUS PUDEŁKA |
-| 4046 | 4196 | DIAGNOSTYKA — surowe zdarzenia z pudełka obok tego, co aplikacja |
-| 4197 | 4301 | DZIENNIK WIECZKA — narzędzie na czas testu terenowego. |
-| 4302 | 4471 | KOLEJKA ZAPISÓW — to samo, co pudełko ma w pamięci nieulotnej. |
-| 4472 | 4728 | OSTRZEŻENIA — celowo NIE schowane w Diagnostyce |
-| 4729 | 4769 | KOLEJKA, KTÓRA NIE SCHODZI |
-| 4770 | 4863 | EKRAN, KTÓRY SIĘ NIE NARYSOWAŁ |
-| 4864 | 5236 | EKRAN ZDARZEN |
-| 5237 | 5355 | ZAPAS TABLETEK |
-| 5356 | 5585 | USTAWIENIA |
-| 5586 | 5893 | POWIADOMIENIA NA TELEFON — BOT TELEGRAM (D67) |
-| 5894 | 6350 | AKTUALIZACJA PROGRAMU PUDEŁKA (D59) |
-| 6351 | 6712 | SIECI WIDZIANE PRZEZ PUDEŁKO |
-| 6713 | 6923 | ANALIZA |
-| 6924 | 7309 | WYKRESY ANALIZY |
-| 7310 | 7466 | RAPORT |
-| 7467 | 7528 | KONTEKST DNIA (TAGI) |
-| 7529 | 7574 | KOPIA ZAPASOWA |
-| 7575 | 7788 | KOPIA NA TELEGRAM |
-| 7789 | 7854 | WIEK KOPII |
-| 7855 | 7952 | ODTWARZANIE Z KOPII |
-| 7953 | 8027 | KOPIE Z BAZY |
-| 8028 | 8110 | NAWIGACJA |
-| 8111 | 8152 | AUTOMATYCZNA AKTUALIZACJA |
+| 2825 | 2883 | REKONCYLIACJA |
+| 2884 | 3088 | ŻADEN ZAPIS DO BAZY NIE CZEKA W NIESKOŃCZONOŚĆ |
+| 3089 | 3147 | KALENDARZ |
+| 3148 | 3414 | HISTORIA ROZPISANIA DAWKI |
+| 3415 | 3596 | ILE MINĘŁO OD POPRZEDNIEJ DAWKI |
+| 3597 | 3748 | ARKUSZ DNIA |
+| 3749 | 3844 | WZIĄŁEM TERAZ |
+| 3845 | 3959 | INR |
+| 3960 | 4099 | ODSTĘP MIĘDZY POMIARAMI INR |
+| 4100 | 4112 | STATUS PUDEŁKA |
+| 4113 | 4263 | DIAGNOSTYKA — surowe zdarzenia z pudełka obok tego, co aplikacja |
+| 4264 | 4368 | DZIENNIK WIECZKA — narzędzie na czas testu terenowego. |
+| 4369 | 4530 | KOLEJKA ZAPISÓW — to samo, co pudełko ma w pamięci nieulotnej. |
+| 4531 | 4787 | OSTRZEŻENIA — celowo NIE schowane w Diagnostyce |
+| 4788 | 4828 | KOLEJKA, KTÓRA NIE SCHODZI |
+| 4829 | 4925 | EKRAN, KTÓRY SIĘ NIE NARYSOWAŁ |
+| 4926 | 5304 | EKRAN ZDARZEN |
+| 5305 | 5423 | ZAPAS TABLETEK |
+| 5424 | 5653 | USTAWIENIA |
+| 5654 | 5961 | POWIADOMIENIA NA TELEFON — BOT TELEGRAM (D67) |
+| 5962 | 6418 | AKTUALIZACJA PROGRAMU PUDEŁKA (D59) |
+| 6419 | 6780 | SIECI WIDZIANE PRZEZ PUDEŁKO |
+| 6781 | 6991 | ANALIZA |
+| 6992 | 7377 | WYKRESY ANALIZY |
+| 7378 | 7534 | RAPORT |
+| 7535 | 7596 | KONTEKST DNIA (TAGI) |
+| 7597 | 7642 | KOPIA ZAPASOWA |
+| 7643 | 7856 | KOPIA NA TELEGRAM |
+| 7857 | 7922 | WIEK KOPII |
+| 7923 | 8020 | ODTWARZANIE Z KOPII |
+| 8021 | 8095 | KOPIE Z BAZY |
+| 8096 | 8178 | NAWIGACJA |
+| 8179 | 8220 | AUTOMATYCZNA AKTUALIZACJA |
 
-**Funkcje** (209) — nazwa i linia deklaracji:
+**Funkcje** (211) — nazwa i linia deklaracji:
 
 *INFORMACJA ZWROTNA* — `toast`&nbsp;1992, `busy`&nbsp;2008, `todayKey`&nbsp;2035, `dzisiajKey`&nbsp;2039, `inNightWindow`&nbsp;2042
 
@@ -99,72 +100,74 @@ pozycjom w pasku nawigacji i podekranom Ustawien.
 
 *OSŁONA RYSOWANIA* — `rysuj`&nbsp;2791, `rysujWszystkie`&nbsp;2804, `renderAll`&nbsp;2808
 
-*REKONCYLIACJA* — `brakujePokrycia`&nbsp;2831, `reconcileDecyzja`&nbsp;2870, `zapiszReconcile`&nbsp;2887, `doReconcile`&nbsp;2904, `reconcile`&nbsp;3020
+*REKONCYLIACJA* — `brakujePokrycia`&nbsp;2831, `reconcileDecyzja`&nbsp;2870
 
-*KALENDARZ* — `tydzienDawek`&nbsp;3060
+*ŻADEN ZAPIS DO BAZY NIE CZEKA W NIESKOŃCZONOŚĆ* — `zTerminem`&nbsp;2905, `zapiszReconcile`&nbsp;2917, `doReconcile`&nbsp;2956, `doReconcileWewn`&nbsp;2966, `reconcile`&nbsp;3087
 
-*HISTORIA ROZPISANIA DAWKI* — `planNaDzien`&nbsp;3106, `dawkaNaDzien`&nbsp;3117, `dzienBezLeku`&nbsp;3138, `wyjatekNaDzien`&nbsp;3143, `opisDawkowania`&nbsp;3149, `dayDose`&nbsp;3159, `dzienZamkniety`&nbsp;3193, `trackingSince`&nbsp;3199, `beforeTracking`&nbsp;3200, `dayStatus`&nbsp;3202, `renderCalendar`&nbsp;3243, `seriaDni`&nbsp;3308, `doNastepnej`&nbsp;3326, `opisCzasu`&nbsp;3341
+*KALENDARZ* — `tydzienDawek`&nbsp;3127
 
-*ILE MINĘŁO OD POPRZEDNIEJ DAWKI* — `ostatniaDawka`&nbsp;3356, `trwanieTxt`&nbsp;3371, `kiedyDawkaTxt`&nbsp;3382, `odswiezOdDawki`&nbsp;3390, `startTikOdDawki`&nbsp;3404, `renderToday`&nbsp;3414
+*HISTORIA ROZPISANIA DAWKI* — `planNaDzien`&nbsp;3173, `dawkaNaDzien`&nbsp;3184, `dzienBezLeku`&nbsp;3205, `wyjatekNaDzien`&nbsp;3210, `opisDawkowania`&nbsp;3216, `dayDose`&nbsp;3226, `dzienZamkniety`&nbsp;3260, `trackingSince`&nbsp;3266, `beforeTracking`&nbsp;3267, `dayStatus`&nbsp;3269, `renderCalendar`&nbsp;3310, `seriaDni`&nbsp;3375, `doNastepnej`&nbsp;3393, `opisCzasu`&nbsp;3408
 
-*ARKUSZ DNIA* — `closeSheet`&nbsp;3541, `renderSheet`&nbsp;3543, `resetDose`&nbsp;3621, `resetPlan`&nbsp;3628, `commitPlan`&nbsp;3633, `clearPlan`&nbsp;3649, `commitDose`&nbsp;3661
+*ILE MINĘŁO OD POPRZEDNIEJ DAWKI* — `ostatniaDawka`&nbsp;3423, `trwanieTxt`&nbsp;3438, `kiedyDawkaTxt`&nbsp;3449, `odswiezOdDawki`&nbsp;3457, `startTikOdDawki`&nbsp;3471, `renderToday`&nbsp;3481
 
-*WZIĄŁEM TERAZ* — `wezTeraz`&nbsp;3702, `askConfirm`&nbsp;3767
+*ARKUSZ DNIA* — `closeSheet`&nbsp;3608, `renderSheet`&nbsp;3610, `resetDose`&nbsp;3688, `resetPlan`&nbsp;3695, `commitPlan`&nbsp;3700, `clearPlan`&nbsp;3716, `commitDose`&nbsp;3728
 
-*INR* — `inrState`&nbsp;3779, `odswiezTerminInr`&nbsp;3792, `addInr`&nbsp;3801, `inrKeysOk`&nbsp;3887
+*WZIĄŁEM TERAZ* — `wezTeraz`&nbsp;3769, `askConfirm`&nbsp;3834
 
-*ODSTĘP MIĘDZY POMIARAMI INR* — `inrOdstep`&nbsp;3902, `inrTerminKey`&nbsp;3910, `inrDoTerminu`&nbsp;3922, `dniTxt`&nbsp;3931, `renderInr`&nbsp;3933, `inrChart`&nbsp;4005
+*INR* — `inrState`&nbsp;3846, `odswiezTerminInr`&nbsp;3859, `addInr`&nbsp;3868, `inrKeysOk`&nbsp;3954
 
-*STATUS PUDEŁKA* — `relTime`&nbsp;4034, `devDayMon`&nbsp;4043
+*ODSTĘP MIĘDZY POMIARAMI INR* — `inrOdstep`&nbsp;3969, `inrTerminKey`&nbsp;3977, `inrDoTerminu`&nbsp;3989, `dniTxt`&nbsp;3998, `renderInr`&nbsp;4000, `inrChart`&nbsp;4072
 
-*DIAGNOSTYKA — surowe zdarzenia z pudełka obok tego, co aplikacja* — `renderTesty`&nbsp;4078, `renderBoxLog`&nbsp;4124, `logPrzelacz`&nbsp;4160, `renderNvsFailLog`&nbsp;4169
+*STATUS PUDEŁKA* — `relTime`&nbsp;4101, `devDayMon`&nbsp;4110
 
-*DZIENNIK WIECZKA — narzędzie na czas testu terenowego.* — `lidPaczki`&nbsp;4218, `lidWpisy`&nbsp;4224, `renderLidLog`&nbsp;4237
+*DIAGNOSTYKA — surowe zdarzenia z pudełka obok tego, co aplikacja* — `renderTesty`&nbsp;4145, `renderBoxLog`&nbsp;4191, `logPrzelacz`&nbsp;4227, `renderNvsFailLog`&nbsp;4236
 
-*KOLEJKA ZAPISÓW — to samo, co pudełko ma w pamięci nieulotnej.* — `magazyn`&nbsp;4319, `oczekWczytaj`&nbsp;4327, `oczekZapisz`&nbsp;4332, `oczekIle`&nbsp;4335, `zapiszPewnie`&nbsp;4345, `zapiszCfg`&nbsp;4387, `bazaOdmowila`&nbsp;4405, `oczekWyslij`&nbsp;4429, `oczekOdmowy`&nbsp;4470
+*DZIENNIK WIECZKA — narzędzie na czas testu terenowego.* — `lidPaczki`&nbsp;4285, `lidWpisy`&nbsp;4291, `renderLidLog`&nbsp;4304
 
-*OSTRZEŻENIA — celowo NIE schowane w Diagnostyce* — `ostrzKolejka`&nbsp;4486, `ostrzReguly`&nbsp;4508, `lm`&nbsp;4547, `ostrzMilczy`&nbsp;4553, `nvsMalo`&nbsp;4610, `opisNvsFailKey`&nbsp;4622, `stratyDotyczaLeku`&nbsp;4672, `ostrzStraty`&nbsp;4684, `stratyCicho`&nbsp;4718
+*KOLEJKA ZAPISÓW — to samo, co pudełko ma w pamięci nieulotnej.* — `magazyn`&nbsp;4386, `oczekWczytaj`&nbsp;4394, `oczekZapisz`&nbsp;4399, `oczekIle`&nbsp;4402, `zapiszPewnie`&nbsp;4412, `zapiszCfg`&nbsp;4450, `bazaOdmowila`&nbsp;4468, `oczekWyslij`&nbsp;4492, `oczekOdmowy`&nbsp;4529
 
-*KOLEJKA, KTÓRA NIE SCHODZI* — `ostrzZatkana`&nbsp;4750
+*OSTRZEŻENIA — celowo NIE schowane w Diagnostyce* — `ostrzKolejka`&nbsp;4545, `ostrzReguly`&nbsp;4567, `lm`&nbsp;4606, `ostrzMilczy`&nbsp;4612, `nvsMalo`&nbsp;4669, `opisNvsFailKey`&nbsp;4681, `stratyDotyczaLeku`&nbsp;4731, `ostrzStraty`&nbsp;4743, `stratyCicho`&nbsp;4777
 
-*EKRAN, KTÓRY SIĘ NIE NARYSOWAŁ* — `ostrzRysowanie`&nbsp;4780, `renderOstrzezenia`&nbsp;4795, `bezPokrycia`&nbsp;4805, `wierszZdarzenia`&nbsp;4811, `renderDiag`&nbsp;4828
+*KOLEJKA, KTÓRA NIE SCHODZI* — `ostrzZatkana`&nbsp;4809
 
-*EKRAN ZDARZEN* — `evFiltr`&nbsp;4880, `evPasuje`&nbsp;4885, `renderEvents`&nbsp;4897, `renderOpenWarn`&nbsp;4937, `minutyDoPelna`&nbsp;4990, `opisLadowania`&nbsp;5002, `dni`&nbsp;5022, `opisLadowan`&nbsp;5025, `renderStatus`&nbsp;5042
+*EKRAN, KTÓRY SIĘ NIE NARYSOWAŁ* — `ostrzRysowanie`&nbsp;4839, `renderOstrzezenia`&nbsp;4854, `bezPokrycia`&nbsp;4864, `wierszZdarzenia`&nbsp;4870, `renderDiag`&nbsp;4887
 
-*ZAPAS TABLETEK* — `yesterdayKey`&nbsp;5240, `dayAfter`&nbsp;5243, `pillsBaseInfo`&nbsp;5254, `settlePills`&nbsp;5264, `dniZapasu`&nbsp;5304, `renderPills`&nbsp;5317, `savePills`&nbsp;5338, `setPills`&nbsp;5349
+*EKRAN ZDARZEN* — `evFiltr`&nbsp;4942, `evPasuje`&nbsp;4947, `renderEvents`&nbsp;4959, `renderOpenWarn`&nbsp;4999, `minutyDoPelna`&nbsp;5052, `opisLadowania`&nbsp;5064, `dni`&nbsp;5084, `opisLadowan`&nbsp;5087, `renderStatus`&nbsp;5104
 
-*USTAWIENIA* — `renderKafelki`&nbsp;5360, `renderSettings`&nbsp;5387, `tydzienZPol`&nbsp;5431, `renderWeekEditor`&nbsp;5443, `odswiezPodpowiedzTygodnia`&nbsp;5460, `tydzienZmieniony`&nbsp;5474, `rownajTydzien`&nbsp;5475, `renderPlanList`&nbsp;5488, `renderExceptions`&nbsp;5515, `wyslijSiec`&nbsp;5561
+*ZAPAS TABLETEK* — `yesterdayKey`&nbsp;5308, `dayAfter`&nbsp;5311, `pillsBaseInfo`&nbsp;5322, `settlePills`&nbsp;5332, `dniZapasu`&nbsp;5372, `renderPills`&nbsp;5385, `savePills`&nbsp;5406, `setPills`&nbsp;5417
 
-*POWIADOMIENIA NA TELEFON — BOT TELEGRAM (D67)* — `tgTokenPoprawny`&nbsp;5603, `tgZapytaj`&nbsp;5613, `tgKodParowania`&nbsp;5653, `tgZnajdzCzat`&nbsp;5669, `tgPolacz`&nbsp;5737, `tgProbna`&nbsp;5770, `tgOdlacz`&nbsp;5777, `renderTgStan`&nbsp;5799
+*USTAWIENIA* — `renderKafelki`&nbsp;5428, `renderSettings`&nbsp;5455, `tydzienZPol`&nbsp;5499, `renderWeekEditor`&nbsp;5511, `odswiezPodpowiedzTygodnia`&nbsp;5528, `tydzienZmieniony`&nbsp;5542, `rownajTydzien`&nbsp;5543, `renderPlanList`&nbsp;5556, `renderExceptions`&nbsp;5583, `wyslijSiec`&nbsp;5629
 
-*AKTUALIZACJA PROGRAMU PUDEŁKA (D59)* — `sprawdzAktualizacje`&nbsp;5914, `pobierzOpisFirmware`&nbsp;5920, `wyslijAktualizacje`&nbsp;5941, `anulujAktualizacje`&nbsp;5986, `renderOta`&nbsp;5992, `renderNetStan`&nbsp;6277
+*POWIADOMIENIA NA TELEFON — BOT TELEGRAM (D67)* — `tgTokenPoprawny`&nbsp;5671, `tgZapytaj`&nbsp;5681, `tgKodParowania`&nbsp;5721, `tgZnajdzCzat`&nbsp;5737, `tgPolacz`&nbsp;5805, `tgProbna`&nbsp;5838, `tgOdlacz`&nbsp;5845, `renderTgStan`&nbsp;5867
 
-*SIECI WIDZIANE PRZEZ PUDEŁKO* — `opisSygnalu`&nbsp;6362, `renderSkan`&nbsp;6368, `szukajSieci`&nbsp;6420, `wybierzSiec`&nbsp;6428, `wyslijPolecenieSieci`&nbsp;6446, `siecZIndeksu`&nbsp;6456, `tzChanged`&nbsp;6490, `cfgTime`&nbsp;6495, `addSlot`&nbsp;6503, `zapiszPlanDnia`&nbsp;6516, `saveConfig`&nbsp;6534, `inrKrokiZakresu`&nbsp;6595, `opcjeInr`&nbsp;6602, `inrZakresZmieniony`&nbsp;6613, `wypelnijListyZakresu`&nbsp;6626, `saveInrRange`&nbsp;6637, `wypelnijListeOdstepu`&nbsp;6671, `saveInrEvery`&nbsp;6684, `odswiezPodpowiedzInr`&nbsp;6694
+*AKTUALIZACJA PROGRAMU PUDEŁKA (D59)* — `sprawdzAktualizacje`&nbsp;5982, `pobierzOpisFirmware`&nbsp;5988, `wyslijAktualizacje`&nbsp;6009, `anulujAktualizacje`&nbsp;6054, `renderOta`&nbsp;6060, `renderNetStan`&nbsp;6345
 
-*ANALIZA* — `openTimeOf`&nbsp;6719, `openMinutes`&nbsp;6725, `sredniaPora`&nbsp;6749, `kwantyl`&nbsp;6757, `dniMiedzy`&nbsp;6765, `odstepyZPunktow`&nbsp;6779, `analyze`&nbsp;6788, `inrContext`&nbsp;6890
+*SIECI WIDZIANE PRZEZ PUDEŁKO* — `opisSygnalu`&nbsp;6430, `renderSkan`&nbsp;6436, `szukajSieci`&nbsp;6488, `wybierzSiec`&nbsp;6496, `wyslijPolecenieSieci`&nbsp;6514, `siecZIndeksu`&nbsp;6524, `tzChanged`&nbsp;6558, `cfgTime`&nbsp;6563, `addSlot`&nbsp;6571, `zapiszPlanDnia`&nbsp;6584, `saveConfig`&nbsp;6602, `inrKrokiZakresu`&nbsp;6663, `opcjeInr`&nbsp;6670, `inrZakresZmieniony`&nbsp;6681, `wypelnijListyZakresu`&nbsp;6694, `saveInrRange`&nbsp;6705, `wypelnijListeOdstepu`&nbsp;6739, `saveInrEvery`&nbsp;6752, `odswiezPodpowiedzInr`&nbsp;6762
 
-*WYKRESY ANALIZY* — `komorkaRytmu`&nbsp;6949, `rytmSVG`&nbsp;6961, `poryWCzasieSVG`&nbsp;7023, `iskraSVG`&nbsp;7091, `dowSVG`&nbsp;7119, `dniRytmu`&nbsp;7155, `skutecznoscTygodniami`&nbsp;7176, `renderAnalysis`&nbsp;7204
+*ANALIZA* — `openTimeOf`&nbsp;6787, `openMinutes`&nbsp;6793, `sredniaPora`&nbsp;6817, `kwantyl`&nbsp;6825, `dniMiedzy`&nbsp;6833, `odstepyZPunktow`&nbsp;6847, `analyze`&nbsp;6856, `inrContext`&nbsp;6958
 
-*RAPORT* — `collectRows`&nbsp;7311, `makeReport`&nbsp;7348
+*WYKRESY ANALIZY* — `komorkaRytmu`&nbsp;7017, `rytmSVG`&nbsp;7029, `poryWCzasieSVG`&nbsp;7091, `iskraSVG`&nbsp;7159, `dowSVG`&nbsp;7187, `dniRytmu`&nbsp;7223, `skutecznoscTygodniami`&nbsp;7244, `renderAnalysis`&nbsp;7272
 
-*KONTEKST DNIA (TAGI)* — `tagiDnia`&nbsp;7499, `tagiPrzed`&nbsp;7507, `tagPrzelacz`&nbsp;7516
+*RAPORT* — `collectRows`&nbsp;7379, `makeReport`&nbsp;7416
 
-*KOPIA ZAPASOWA* — `zbierzKopie`&nbsp;7559, `opisKopii`&nbsp;7569
+*KONTEKST DNIA (TAGI)* — `tagiDnia`&nbsp;7567, `tagiPrzed`&nbsp;7575, `tagPrzelacz`&nbsp;7584
 
-*KOPIA NA TELEGRAM* — `tgKopiaUst`&nbsp;7609, `tgCzatKopii`&nbsp;7616, `odswiezKopie`&nbsp;7623, `tgKopiaCzatZapisz`&nbsp;7631, `tgKopiaCzatZnajdz`&nbsp;7651, `tgKopiaWlacz`&nbsp;7681, `tgKopiaWylacz`&nbsp;7700, `kopiaNaTelegram`&nbsp;7709, `kopiaAutomat`&nbsp;7760
+*KOPIA ZAPASOWA* — `zbierzKopie`&nbsp;7627, `opisKopii`&nbsp;7637
 
-*WIEK KOPII* — `dniOdDaty`&nbsp;7807, `wiekKopiiTxt`&nbsp;7813, `renderKopiaStan`&nbsp;7821, `zapiszKopie`&nbsp;7836
+*KOPIA NA TELEGRAM* — `tgKopiaUst`&nbsp;7677, `tgCzatKopii`&nbsp;7684, `odswiezKopie`&nbsp;7691, `tgKopiaCzatZapisz`&nbsp;7699, `tgKopiaCzatZnajdz`&nbsp;7719, `tgKopiaWlacz`&nbsp;7749, `tgKopiaWylacz`&nbsp;7768, `kopiaNaTelegram`&nbsp;7777, `kopiaAutomat`&nbsp;7828
 
-*ODTWARZANIE Z KOPII* — `policzOdtworzenie`&nbsp;7870, `wczytajKopie`&nbsp;7900, `kopiaCzytelna`&nbsp;7905, `odtworzKopie`&nbsp;7915, `kopiaWybrana`&nbsp;7938
+*WIEK KOPII* — `dniOdDaty`&nbsp;7875, `wiekKopiiTxt`&nbsp;7881, `renderKopiaStan`&nbsp;7889, `zapiszKopie`&nbsp;7904
 
-*KOPIE Z BAZY* — `kopieZBazy`&nbsp;7962, `odtworzZBazy`&nbsp;7994, `exportCsv`&nbsp;8006
+*ODTWARZANIE Z KOPII* — `policzOdtworzenie`&nbsp;7938, `wczytajKopie`&nbsp;7968, `kopiaCzytelna`&nbsp;7973, `odtworzKopie`&nbsp;7983, `kopiaWybrana`&nbsp;8006
 
-*NAWIGACJA* — `wrocZEkranu`&nbsp;8109
+*KOPIE Z BAZY* — `kopieZBazy`&nbsp;8030, `odtworzZBazy`&nbsp;8062, `exportCsv`&nbsp;8074
+
+*NAWIGACJA* — `wrocZEkranu`&nbsp;8177
 
 
 ---
 
-## `firmware/PillBox/PillBox.ino` — 6678 linii
+## `firmware/PillBox/PillBox.ino` — 6704 linii
 
 | od | do | blok |
 |---|---|---|
@@ -180,16 +183,16 @@ pozycjom w pasku nawigacji i podekranom Ustawien.
 | 1290 | 1513 | 4c.  DZIENNIK WIECZKA  -  narzedzie do testu terenowego |
 | 1514 | 1765 | 5.  KOLEJKA OFFLINE  (Preferences / NVS - pierscien) |
 | 1766 | 2250 | 6.  WiFi |
-| 2251 | 3312 | 7.  FIREBASE  (REST: Auth email/haslo + Realtime Database) |
-| 3313 | 3677 | 8.  ZDARZENIA |
-| 3678 | 3733 | 9.  ALARM |
-| 3734 | 3952 | 10.  PORTAL KONFIGURACJI WiFi  (zamiast Bluetooth) |
-| 3953 | 4444 | 10a2. AKTUALIZACJA PROGRAMU PRZEZ WIFI  (OTA)   -  D59 |
-| 4445 | 4564 | 10b. CZARNA SKRZYNKA |
-| 4565 | 4912 | 10c. GESTY SERWISOWE I AUTOTEST |
-| 4913 | 5335 | 10b. POWIADOMIENIA NA TELEFON  (bot Telegram, D67) |
-| 5336 | 5933 | 11.  DEEP SLEEP |
-| 5934 | 6678 | 12.  SETUP  =  cala logika (loop() nigdy nie jest osiagany) |
+| 2251 | 3322 | 7.  FIREBASE  (REST: Auth email/haslo + Realtime Database) |
+| 3323 | 3703 | 8.  ZDARZENIA |
+| 3704 | 3759 | 9.  ALARM |
+| 3760 | 3978 | 10.  PORTAL KONFIGURACJI WiFi  (zamiast Bluetooth) |
+| 3979 | 4470 | 10a2. AKTUALIZACJA PROGRAMU PRZEZ WIFI  (OTA)   -  D59 |
+| 4471 | 4590 | 10b. CZARNA SKRZYNKA |
+| 4591 | 4938 | 10c. GESTY SERWISOWE I AUTOTEST |
+| 4939 | 5361 | 10b. POWIADOMIENIA NA TELEFON  (bot Telegram, D67) |
+| 5362 | 5959 | 11.  DEEP SLEEP |
+| 5960 | 6704 | 12.  SETUP  =  cala logika (loop() nigdy nie jest osiagany) |
 
 **Funkcje** (181):
 
@@ -213,25 +216,25 @@ pozycjom w pasku nawigacji i podekranom Ustawien.
 
 *6.  WiFi* — `netKlucz`&nbsp;1783, `wifiSieciCount`&nbsp;1787, `wifiSiecSsid`&nbsp;1794, `wifiSiecPass`&nbsp;1803, `wifiListeZapisz`&nbsp;1830, `wifiListeCzytaj`&nbsp;1854, `wifiSiecDodaj`&nbsp;1867, `wifiSiecUsun`&nbsp;1898, `wifiSiecPriorytet`&nbsp;1931, `wifiSprobuj`&nbsp;1959, `wifiOdNowa`&nbsp;2003, `wifiZacznijProbe`&nbsp;2014, `wifiStart`&nbsp;2034, `wifiKrokLaczenia`&nbsp;2074, `wifiConnect`&nbsp;2113, `wifiOff`&nbsp;2182, `wifiUspij`&nbsp;2196, `syncTimeNTP`&nbsp;2201
 
-*7.  FIREBASE  (REST: Auth email/haslo + Realtime Database)* — `tokenZPamieci`&nbsp;2268, `zapomnijToken`&nbsp;2277, `hasloJestPrawdziwe`&nbsp;2322, `hasloZPamieci`&nbsp;2327, `hasloWPamieci`&nbsp;2336, `hasloUtrwal`&nbsp;2340, `hasloDoLogowania`&nbsp;2353, `tgTokenZPamieci`&nbsp;2373, `tgChatZPamieci`&nbsp;2380, `tgSkonfigurowany`&nbsp;2389, `tgUtrwal`&nbsp;2396, `tgZapomnij`&nbsp;2408, `firebaseSignIn`&nbsp;2442, `rtdbUrl`&nbsp;2537, `rtdbSend`&nbsp;2559, `rekordKompletny`&nbsp;2586, `pushEventRecord`&nbsp;2595, `pushLidState`&nbsp;2652, `otaSumaZPamieci`&nbsp;2694, `otaSumaWgranej`&nbsp;2716, `pushStatus`&nbsp;2722, `fetchConfig`&nbsp;2946, `trwaleOdrzucony`&nbsp;3270, `flushQueue`&nbsp;3274
+*7.  FIREBASE  (REST: Auth email/haslo + Realtime Database)* — `tokenZPamieci`&nbsp;2268, `zapomnijToken`&nbsp;2277, `hasloJestPrawdziwe`&nbsp;2322, `hasloZPamieci`&nbsp;2327, `hasloWPamieci`&nbsp;2336, `hasloUtrwal`&nbsp;2340, `hasloDoLogowania`&nbsp;2353, `tgTokenZPamieci`&nbsp;2373, `tgChatZPamieci`&nbsp;2380, `tgSkonfigurowany`&nbsp;2389, `tgUtrwal`&nbsp;2396, `tgZapomnij`&nbsp;2408, `firebaseSignIn`&nbsp;2442, `rtdbUrl`&nbsp;2537, `rtdbSend`&nbsp;2559, `rekordKompletny`&nbsp;2586, `pushEventRecord`&nbsp;2595, `pushLidState`&nbsp;2652, `otaSumaZPamieci`&nbsp;2703, `otaSumaWgranej`&nbsp;2725, `pushStatus`&nbsp;2731, `fetchConfig`&nbsp;2956, `trwaleOdrzucony`&nbsp;3280, `flushQueue`&nbsp;3284
 
-*8.  ZDARZENIA* — `makeRecordAt`&nbsp;3316, `makeRecord`&nbsp;3338, `loadDayMarkers`&nbsp;3348, `clearDayMarkers`&nbsp;3367, `setTakenDay`&nbsp;3381, `setRolloverDay`&nbsp;3389, `zapiszDawke`&nbsp;3419, `oznaczAlarmObsluzony`&nbsp;3462, `alarmJuzObsluzony`&nbsp;3479, `ostatniSlotDoby`&nbsp;3505, `juzDzisBrane`&nbsp;3515, `checkDayRollover`&nbsp;3522, `reportEvent`&nbsp;3604
+*8.  ZDARZENIA* — `makeRecordAt`&nbsp;3326, `makeRecord`&nbsp;3348, `loadDayMarkers`&nbsp;3358, `clearDayMarkers`&nbsp;3377, `setTakenDay`&nbsp;3391, `setRolloverDay`&nbsp;3399, `zapiszDawke`&nbsp;3429, `oznaczAlarmObsluzony`&nbsp;3472, `alarmJuzObsluzony`&nbsp;3505, `ostatniSlotDoby`&nbsp;3531, `juzDzisBrane`&nbsp;3541, `checkDayRollover`&nbsp;3548, `reportEvent`&nbsp;3630
 
-*9.  ALARM* — `alarmPotwierdzony`&nbsp;3701, `runAlarmWindow`&nbsp;3706
+*9.  ALARM* — `alarmPotwierdzony`&nbsp;3727, `runAlarmWindow`&nbsp;3732
 
-*10.  PORTAL KONFIGURACJI WiFi  (zamiast Bluetooth)* — `htmlEscape`&nbsp;3747, `portalPage`&nbsp;3761, `startWifiPortal`&nbsp;3805
+*10.  PORTAL KONFIGURACJI WiFi  (zamiast Bluetooth)* — `htmlEscape`&nbsp;3773, `portalPage`&nbsp;3787, `startWifiPortal`&nbsp;3831
 
-*10a2. AKTUALIZACJA PROGRAMU PRZEZ WIFI  (OTA)   -  D59* — `otaOpisDecyzji`&nbsp;4077, `otaZanotujProbe`&nbsp;4103, `otaWyzerujLicznik`&nbsp;4111, `otaZlecenieWBazie`&nbsp;4141, `otaPobierzOpis`&nbsp;4156, `otaWgraj`&nbsp;4200, `otaSprawdzPoStarcie`&nbsp;4358, `otaPotwierdzDzialanie`&nbsp;4391
+*10a2. AKTUALIZACJA PROGRAMU PRZEZ WIFI  (OTA)   -  D59* — `otaOpisDecyzji`&nbsp;4103, `otaZanotujProbe`&nbsp;4129, `otaWyzerujLicznik`&nbsp;4137, `otaZlecenieWBazie`&nbsp;4167, `otaPobierzOpis`&nbsp;4182, `otaWgraj`&nbsp;4226, `otaSprawdzPoStarcie`&nbsp;4384, `otaPotwierdzDzialanie`&nbsp;4417
 
-*10b. CZARNA SKRZYNKA* — `note`&nbsp;4465, `wartoZapisac`&nbsp;4472, `logbookAdd`&nbsp;4484, `logbookPrint`&nbsp;4523, `logbookJson`&nbsp;4547
+*10b. CZARNA SKRZYNKA* — `note`&nbsp;4491, `wartoZapisac`&nbsp;4498, `logbookAdd`&nbsp;4510, `logbookPrint`&nbsp;4549, `logbookJson`&nbsp;4573
 
-*10c. GESTY SERWISOWE I AUTOTEST* — `pikNumer`&nbsp;4742, `pikKoniecTestu`&nbsp;4754, `pikBrakSieci`&nbsp;4765, `wynikEtapu`&nbsp;4777, `etapTestu`&nbsp;4796, `autoTest`&nbsp;4801
+*10c. GESTY SERWISOWE I AUTOTEST* — `pikNumer`&nbsp;4768, `pikKoniecTestu`&nbsp;4780, `pikBrakSieci`&nbsp;4791, `wynikEtapu`&nbsp;4803, `etapTestu`&nbsp;4822, `autoTest`&nbsp;4827
 
-*10b. POWIADOMIENIA NA TELEFON  (bot Telegram, D67)* — `tgWyslijTekst`&nbsp;4948, `tgZglosNieodebrane`&nbsp;4994, `tgSprawdzBaterie`&nbsp;5014, `tgSprawdzZapas`&nbsp;5033, `dniOdEry`&nbsp;5056, `dniDoDaty`&nbsp;5067, `inrPrzypomnienieTeraz`&nbsp;5101, `tgOznaczInrMiniete`&nbsp;5121, `sekundyDoInrPrzypomnienia`&nbsp;5130, `tgSprawdzInr`&nbsp;5152, `tgTekstZapas`&nbsp;5166, `tgTekstInr`&nbsp;5175, `tgTekstNieodebrane`&nbsp;5195, `tgTekstBateria`&nbsp;5204, `tgWyslijZalegle`&nbsp;5223
+*10b. POWIADOMIENIA NA TELEFON  (bot Telegram, D67)* — `tgWyslijTekst`&nbsp;4974, `tgZglosNieodebrane`&nbsp;5020, `tgSprawdzBaterie`&nbsp;5040, `tgSprawdzZapas`&nbsp;5059, `dniOdEry`&nbsp;5082, `dniDoDaty`&nbsp;5093, `inrPrzypomnienieTeraz`&nbsp;5127, `tgOznaczInrMiniete`&nbsp;5147, `sekundyDoInrPrzypomnienia`&nbsp;5156, `tgSprawdzInr`&nbsp;5178, `tgTekstZapas`&nbsp;5192, `tgTekstInr`&nbsp;5201, `tgTekstNieodebrane`&nbsp;5221, `tgTekstBateria`&nbsp;5230, `tgWyslijZalegle`&nbsp;5249
 
-*11.  DEEP SLEEP* — `otaZglos`&nbsp;5354, `skanujSieci`&nbsp;5382, `otaSprobuj`&nbsp;5431, `kolejnePrzesuniecie`&nbsp;5630, `goToSleep`&nbsp;5635, `planNextSleep`&nbsp;5853
+*11.  DEEP SLEEP* — `otaZglos`&nbsp;5380, `skanujSieci`&nbsp;5408, `otaSprobuj`&nbsp;5457, `kolejnePrzesuniecie`&nbsp;5656, `goToSleep`&nbsp;5661, `planNextSleep`&nbsp;5879
 
-*12.  SETUP  =  cala logika (loop() nigdy nie jest osiagany)* — `petlaLadowania`&nbsp;5946, `setup`&nbsp;6044, `loop`&nbsp;6675
+*12.  SETUP  =  cala logika (loop() nigdy nie jest osiagany)* — `petlaLadowania`&nbsp;5972, `setup`&nbsp;6070, `loop`&nbsp;6701
 
 
 ---

@@ -1498,6 +1498,68 @@ if re.search(r"#\s*define\s+TG_ENABLED\s+1", cfg):
     ok(_tgt and "rtdbClient.stop()" in _tgt,
        "kanal do bazy zwalniany przed otwarciem polaczenia z Telegramem")
 
+# ---------- 9c. ZAPIS DO NVS TYLKO PRZY OTWARTYM UCHWYCIE ----------
+#
+# TU BYL BLAD (D101), znaleziony przy pelnym przegladzie kodu.
+# `oznaczAlarmObsluzony()` wolalo `nvsPutU16("almMask", ...)` juz ZA
+# `prefs.end()`. Preferences zwraca wtedy zero i nic nie zapisuje - a zero
+# to dokladnie ten sam wynik co zapis nieudany, wiec kazde odzwonione
+# przypomnienie podnosilo licznik `nvsFail` i wpisywalo "almMask" do
+# dziennika strat. Aplikacja krzyczala o utracie danych, ktorej nie bylo,
+# czyli jedyny sygnal majacy znaczyc "dane gina" zaczal klamac codziennie.
+# Do tego maska nie docierala do pamieci trwalej i po twardym restarcie
+# przypomnienie odzywalo sie drugi raz w tej samej dobie (wbrew D23).
+#
+# Kontrola jest OGOLNA, nie punktowa: przechodzi przez kazda funkcje
+# i pilnuje, ze `nvsPut*` oraz bezposrednie `prefs.get*/put*/remove`
+# stoja miedzy `prefs.begin()` a `prefs.end()`. Wyjatkiem sa same
+# funkcje piszace, ktore z zalozenia dzialaja na uchwycie wolajacego.
+_PISZE   = re.compile(r"\b(nvsPutStr|nvsPutU16|nvsPutU32)\s*\(")
+_WPROST  = re.compile(r"\bprefs\.(getString|getUShort|getULong|getUInt|getUChar"
+                      r"|getShort|putString|putUShort|putULong|putUInt|putUChar"
+                      r"|putShort|remove)\s*\(")
+_WLASNE  = ("bool nvsPutStr(", "bool nvsPutU16(", "bool nvsPutU32(")
+
+_poza = []
+for _m in re.finditer(r"^[A-Za-z_][^\n;=]*\)\s*\{\s*$", code, re.M):
+    _naglowek = _m.group(0)
+    if any(_naglowek.startswith(w) for w in _WLASNE): continue
+    _reszta = code[_m.start():]
+    _k = _reszta.find("\n}")
+    _cialo = _reszta[:_k] if _k > 0 else _reszta
+    _glebokosc = 0
+    for _ln in _cialo.split("\n"):
+        _otw = len(re.findall(r"prefs\.begin\s*\(", _ln))
+        _zam = len(re.findall(r"prefs\.end\s*\(", _ln))
+        if _glebokosc + _otw <= 0 and (_PISZE.search(_ln) or _WPROST.search(_ln)):
+            _poza.append(f"{_naglowek.strip()[:44]} -> {_ln.strip()[:44]}")
+        _glebokosc += _otw - _zam
+ok(not _poza,
+   "kazdy zapis do pamieci trwalej stoi miedzy prefs.begin() a prefs.end()"
+   + ("" if not _poza else f" (poza: {'; '.join(_poza[:3])})"))
+
+# ---------- 9d. BEZ ZEGARA NIE PODAJEMY GODZINY MELDUNKU ----------
+#
+# `time(nullptr)` przed synchronizacja NTP zwraca sekundy od startu plytki.
+# Wyslane jako `lastSeen` znaczy dla aplikacji rok 1970, a ta liczy z tego
+# wiek meldunku i pisze "pudelko milczy od 20 tysiecy dni" - stojac obok
+# swiezutkiego statusu. Zdarza sie realnie: WiFi dziala, NTP nie dochodzi.
+# Patrzymy na CALA INSTRUKCJE, a nie na linijke: w pushLidState() nazwa
+# pola stoi w formacie snprintf, a warunek trzy linijki nizej, w argumencie.
+def _instrukcje_z(cialo, slowo):
+    out, i = [], cialo.find(slowo)
+    while i >= 0:
+        k = cialo.find(";", i)
+        out.append(cialo[i:k if k > 0 else len(cialo)])
+        i = cialo.find(slowo, i + 1)
+    return out
+
+for _f, _nazwa in ((cialo_surowe("bool pushStatus()"), "pushStatus()"),
+                   (cialo_surowe("bool pushLidState(bool stan)"), "pushLidState()")):
+    _l = _instrukcje_z(_f, "lastSeen")
+    ok(bool(_l) and all("rtcTimeValid" in x for x in _l),
+       f"{_nazwa} podaje lastSeen tylko z wiarygodnym zegarem, inaczej zero")
+
 # ---------- 10. Rzeczy do uzupelnienia przez uzytkownika ----------
 todo = "TUTAJ_WPISZ_HASLO_C" in cfg
 warn(todo, "DEVICE_PASSWORD nie jest jeszcze uzupelnione w config.h")

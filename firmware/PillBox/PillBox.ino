@@ -2673,10 +2673,19 @@ bool pushLidState(bool stan) {
 
      Odczyt jest wiec jeden i ten sam trafia do tresci i do znacznika.  */
   char body[96];
+  /* BEZ ZEGARA NIE PODAJEMY GODZINY - podajemy zero (D101).
+
+     `time(nullptr)` przed synchronizacja NTP zwraca sekundy od startu
+     plytki, czyli liczbe rzedu kilkudziesieciu. Wyslana jako `lastSeen`
+     znaczy dla aplikacji "1 stycznia 1970" - a ta liczy z niej wiek
+     meldunku i pisze "pudelko milczy od 20 tysiecy dni", stojac obok
+     swiezutkiego statusu. To zdarza sie realnie: WiFi dziala, a NTP nie
+     dochodzi. Zero aplikacja rozumie jako "nie wiadomo kiedy" i mowi to
+     wprost, zamiast straszyc awaria, ktorej nie ma.                   */
   snprintf(body, sizeof(body), "{\"boxOpen\":%s,\"openSince\":%lu,\"lastSeen\":%lu}",
            stan ? "true" : "false",
            (unsigned long)(stan ? rtcOpenSinceTs : 0),
-           (unsigned long)time(nullptr));
+           (unsigned long)(rtcTimeValid ? (uint32_t)time(nullptr) : 0));
   int code = rtdbSend("PATCH", "/devices/" DEVICE_ID "/status.json", String(body));
   const bool ok = (code >= 200 && code < 300);
   if (ok) { rtcOpenReported = stan; rtcStatusDirty = false; }
@@ -2724,7 +2733,8 @@ bool pushStatus() {
   doc["battery"]  = batteryPercentage;
   doc["battRaw"]  = batteryRawPercentage;   // przed wygladzeniem - do diagnostyki
   doc["volt"]     = realBatteryVoltage;
-  doc["lastSeen"] = (uint32_t)time(nullptr);
+  /* Zero, gdy zegar jeszcze nie jest wiarygodny - patrz pushLidState(). */
+  doc["lastSeen"] = rtcTimeValid ? (uint32_t)time(nullptr) : 0;
   doc["rssi"]     = WiFi.RSSI();
   doc["ssid"]     = WiFi.SSID();
   /* Nazwy znanych sieci - SAME NAZWY, nigdy hasla. Bez tego aplikacja nie
@@ -3469,10 +3479,26 @@ void oznaczAlarmObsluzony(int slot) {
     if (rtcAlarmDoneDay != dzis) { rtcAlarmDoneDay = dzis; rtcAlarmDoneMask = 0; }
     if (slot >= 0 && slot < 16) rtcAlarmDoneMask |= (uint16_t)(1u << slot);
     else                        rtcAlarmDoneMask = 0xFFFF;   // slot nieznany: cisza na cala dobe
+    /* OBA ZAPISY W JEDNYM OTWARCIU.
+
+       TU BYL BLAD, znaleziony przy pelnym przegladzie kodu (D101).
+       `nvsPutU16("almMask", ...)` stalo ZA `prefs.end()`, czyli na
+       zamknietym uchwycie. Preferences zwraca wtedy zero i nic nie
+       zapisuje - a zero to dokladnie ten sam wynik co zapis nieudany,
+       wiec kazde odzwonione przypomnienie podnosilo licznik `nvsFail`
+       i wpisywalo "almMask" do dziennika strat. Aplikacja krzyczala
+       o utracie danych, ktorej nie bylo - czyli jedyny sygnal, ktory
+       ma znaczyc "dane gina", zaczal klamac codziennie o 20:00.
+
+       Druga szkoda jest cichsza: maska nie docierala do pamieci
+       trwalej, wiec po twardym restarcie `loadDayMarkers()` czytalo
+       dzien z NVS, a maske jako zero - i przypomnienie odzywalo sie
+       jeszcze raz w tej samej dobie. Dokladnie to, przed czym mial
+       chronic D23.                                                   */
     prefs.begin(NVS_NAMESPACE, false);
-    nvsPutU32("almDay", rtcAlarmDoneDay);   // jak setTakenDay obok
+    nvsPutU32("almDay",  rtcAlarmDoneDay);   // jak setTakenDay obok
+    nvsPutU16("almMask", rtcAlarmDoneMask);  // ...i w TYM SAMYM otwarciu
     prefs.end();
-    nvsPutU16("almMask", rtcAlarmDoneMask);
   }
 }
 

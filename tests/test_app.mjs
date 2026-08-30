@@ -2082,8 +2082,21 @@ check(/\.tabgif:not\(\.zazyta\)/.test(html),
    Automat dziala w tle. Gdy zapis nie przechodzi, kalendarz zostaje pusty
    i wyglada to jak zepsuta synchronizacja - bez slowa wyjasnienia.    */
 head("Nieudane uzupelnianie musi byc widoczne");
-check(/zapis kalendarza[\s\S]{0,400}toast\(/.test(html),
-      "blad zapisu pokazywany takze w trybie automatycznym");
+/* Sprawdzamy KOLEJNOSC, nie odleglosc w znakach.
+
+   Poprzednia wersja wymagala `toast(` w 400 znakach za napisem "zapis
+   kalendarza" - czyli mierzyla dlugosc komentarza, a nie zachowanie kodu.
+   Dopisanie jednego akapitu wyjasnienia zapalalo ja bez zadnej zmiany
+   dzialania. Teraz pytamy o rzecz, ktora naprawde ma byc prawdziwa:
+   w galezi bledu `toast()` stoi PRZED `if (!silent)`, wiec komunikat
+   idzie takze przy uzupelnianiu w tle.                               */
+{
+  const galaz = html.slice(html.indexOf("if (bledy.length) {"));
+  const iToast  = galaz.indexOf("toast(");
+  const iSilent = galaz.indexOf("if (!silent)");
+  check(iToast >= 0 && iSilent > iToast,
+        "blad zapisu pokazywany takze w trybie automatycznym");
+}
 
 /* ── Walidacja tego, co uzytkownik moze wpisac ──
    Kazdy z tych przypadkow konczyl sie CICHA szkoda: pusta godzina
@@ -2226,6 +2239,17 @@ head("Aplikacja mowi, gdy pudelko przestalo sie odzywac");
   check(przy(A.MILCZY_PROG_H - 1) === "", "tuz pod progiem jeszcze cisza");
   A.renderStatus({ lastSeen: 0 });
   check(A.ostrzMilczy() === "", "lastSeen = 0 traktujemy jak brak danych, nie jak rok 1970");
+  /* PUDELKO BEZ ZEGARA (D101). Od 1.48.3 firmware wysyla wtedy lastSeen = 0
+     zamiast sekund od startu plytki - bo z tamtej liczby aplikacja robila
+     "milczy od 20 tysiecy dni" stojac obok swiezego meldunku. Zero znaczy
+     "nie wiadomo kiedy" i tak ma byc nazwane: "nigdy" byloby nieprawda,
+     skoro meldunek wlasnie przyszedl, a to jest jedyny trop po ktorym
+     poznac zablokowane NTP.                                            */
+  A.renderStatus({ battery: 70, volt: 3.9, lastSeen: 0 });
+  check(document.getElementById("lastSync").textContent === "pudełko nie zna godziny",
+        "status bez zegara mowi wprost, ze pudelko nie zna godziny");
+  check(document.getElementById("lastSyncRel").textContent === "",
+        "i nie dokleja do tego wieku meldunku, ktorego nie da sie policzyc");
 
   /* I ostrzezenie, gdy jest o czym mowic. */
   const dzien = przy(A.MILCZY_PROG_H + 1);

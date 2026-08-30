@@ -306,6 +306,46 @@ head("Odmowa WSZYSTKIEGO nie zamienia sie w serie zapytan (naprawa)");
         `poddajemy sie po kilku odmowach pod rzad, nie po dwudziestu (${A.oczekOdmowy()})`);
 }
 
+/* ═══════════ UZUPELNIANIE KALENDARZA TEZ NIE MOZE ZAWISNAC ═══════════
+
+   TU BYL BLAD (D101), znaleziony przy pelnym przegladzie kodu.
+   `zapiszPewnie()` bronilo sie przed D1 od dawna, ale `doReconcile()`
+   czekalo na `runTransaction()` bez zadnego limitu. W `wakeUp()` stoi ono
+   PRZED rysowaniem, wiec po nim nie wykonywalo sie juz nic - lacznie
+   z `busy(false)` z `finally`. Krecielek zostawal na zawsze, a przycisk
+   odswiezania milkl do restartu aplikacji. Do tego siatka bezpieczenstwa
+   wola je co minute, wiec kazda minuta offline dokladala kolejna wiszaca
+   transakcje.                                                          */
+head("Firebase offline: uzupelnianie kalendarza konczy sie, a nie wisi");
+{
+  czysto("wisi");
+  A.__setState({ events: [{ id: "e1", type: "open", ts: 1750000000, slot: 0 }], doses: {} });
+  const bezpiecznik = new Promise(r => prawdziwySetTimeout(() => r("ZAWISLO"), 3000));
+  const wynik = await Promise.race([A.doReconcile(true).then(() => "SKONCZYLO"), bezpiecznik]);
+  check(wynik === "SKONCZYLO", `uzupelnianie oddaje sterowanie (${wynik})`);
+  check(A.__db.data.users?.testuid?.doses === undefined,
+        "i nic nie udaje, ze zostalo zapisane");
+}
+
+head("Nakladajace sie uzupelnienia nie mnoza transakcji");
+{
+  /* Siatka bezpieczenstwa wola doReconcile() co minute. Przy
+     niepotwierdzajacej bazie jeden przebieg trwa do limitu, wiec bez
+     oslony kolejne wywolania nakladalyby sie na siebie.               */
+  czysto("wisi");
+  A.__setState({ events: [{ id: "e1", type: "open", ts: 1750000000, slot: 0 }], doses: {} });
+  const pierwszy = A.doReconcile(true);
+  /* Bezpiecznik jest krotki CELOWO. Ten plik skraca kazde oczekiwanie
+     >= 1 s do 20 ms, wiec "wraca po limicie" i "wraca od razu" roznia sie
+     o tych 20 ms - dluzszy bezpiecznik przepuscilby oba. Z oslona drugie
+     wywolanie konczy sie w mikrozadaniu, bez niej musi odczekac limit. */
+  const drugi    = await Promise.race([
+    A.doReconcile(true).then(() => "WROCILO"),
+    new Promise(r => prawdziwySetTimeout(() => r("CZEKA"), 5))]);
+  check(drugi === "WROCILO", "drugie wywolanie wraca od razu zamiast dokladac probe");
+  await pierwszy;
+}
+
 przywrocKonsole();
 globalThis.setTimeout = prawdziwySetTimeout;
 
