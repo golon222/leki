@@ -13,8 +13,13 @@ niezbalansowane nawiasy w firmware, pola konfiguracji nieznane regulom bazy.
 Uzycie:  python3 tests/statyczna.py
 """
 import re, json, pathlib, sys
-root = pathlib.Path(__file__).resolve().parent.parent if '__file__' in dir() else pathlib.Path('.')
-root = pathlib.Path('..')
+# Katalog repo liczymy z POLOZENIA TEGO PLIKU, nie z katalogu wywolania.
+# Stala '..' dzialala wylacznie przy uruchomieniu z tests/ - czyli tak, jak
+# robi to run_all.sh - a `python3 tests/statyczna.py` z naglowka tego pliku
+# konczylo sie wyjatkiem FileNotFoundError na database.rules.json.
+# Kontrola, ktorej nie da sie uruchomic osobno, jest po polowie bezuzyteczna:
+# szukajac jednej usterki trzeba wtedy odpalac caly zestaw.
+root = pathlib.Path(__file__).resolve().parent.parent
 bad = 0
 
 for f in ['database.rules.json', 'manifest.json']:
@@ -180,9 +185,15 @@ else:
 
 # Skala odstepow: cztery piksele i jej wielokrotnosci. "Jeszcze dwa piksele"
 # w jednym miejscu to poczatek ukladu zlozonego z poprawek.
-for _zm in ('--s1:4px', '--s2:8px', '--s3:12px', '--s4:16px'):
-    if _zm not in _css:
-        bad += 1; print(f'  BLAD brak zmiennej skali odstepow: {_zm}')
+# `else` nalezy tu do `if`, a NIE do `for`. Wczesniej stalo przy petli,
+# a `for/else` w Pythonie wykonuje sie zawsze, gdy nie bylo `break` - wiec
+# przy brakujacej zmiennej wypisywalo sie BLAD i zaraz pod nim OK. Sama
+# kontrola dzialala (bad rosl), ale wypis mowil dwie sprzeczne rzeczy naraz,
+# a to jest dokladnie ten nawyk, ktory uczy nie czytac wynikow testow.
+_brak_skali = [z for z in ('--s1:4px', '--s2:8px', '--s3:12px', '--s4:16px')
+               if z not in _css]
+if _brak_skali:
+    bad += 1; print('  BLAD brak zmiennych skali odstepow:', _brak_skali)
 else:
     print('  OK   skala odstepow zdefiniowana')
 
@@ -274,16 +285,42 @@ for f in ['firmware/PillBox/PillBox.ino', 'firmware/PillBox/config.h',
 
 cfg = (root/'firmware/PillBox/config.h').read_text(encoding='utf-8')
 ino = (root/'firmware/PillBox/PillBox.ino').read_text(encoding='utf-8')
+
+# LICZBY, KTORE MUSZA ZNACZYC TO SAMO PO OBU STRONACH.
+#
+# Pudelko i aplikacja czytaja te same dane, ale kazde ma wlasna kopie
+# granicy. Rozjazd nie wywala niczego - po prostu jedna strona wie o dniu,
+# o ktorym druga nie wie, i to widac dopiero w dniu, w ktorym to ma
+# znaczenie. Tu chodzi o wyjatki dawkowania na daty: pamiec RTC miesci
+# DOSE_EX_MAX, `fetchConfig()` bierze tyle NAJBLIZSZYCH, a reszte pomija
+# po cichu. Aplikacja o tej granicy mowi wprost - ale tylko dopoty, dopoki
+# obie liczby sa te same (D102).
+_pary = [('DOSE_EX_MAX', 'PUDELKO_WYJATKOW_MAX')]
+for _fw, _app in _pary:
+    _m1 = re.search(rf'#\s*define\s+{_fw}\s+(\d+)', cfg)
+    _m2 = re.search(rf'const\s+{_app}\s*=\s*(\d+)', js)
+    if not _m1 or not _m2:
+        bad += 1; print(f'  BLAD nie znalazlem {_fw} albo {_app}')
+    elif _m1.group(1) != _m2.group(1):
+        bad += 1
+        print(f'  BLAD {_fw}={_m1.group(1)} w firmware, a {_app}={_m2.group(1)} '
+              f'w aplikacji - aplikacja klamie o granicy pudelka')
+    else:
+        print(f'  OK   {_fw} i {_app} zgodne ({_m1.group(1)})')
 defined = set(re.findall(r'#\s*define\s+(\w+)', cfg))
 unused = [d for d in defined if d not in ino and d not in
           ('LOG','LOGLN','REED_MODE','BUTTON_MODE')]
 if unused: print('  UWAGA nieuzywane ustawienia w config.h:', unused)
 else: print('  OK   kazde ustawienie z config.h jest uzywane')
 
-for pl in ['pillsLeft','inrMin','inrMax','drugName','drugStrength']:
-    if f'"{pl}"' not in (root/'database.rules.json').read_text(encoding='utf-8'):
-        bad += 1; print(f'  BLAD reguly bazy nie znaja pola {pl}')
-print('  OK   reguly bazy pokrywaja pola konfiguracji')
+# Tak samo tutaj: "OK" szlo bezwarunkowo, zaraz za wypisanym bledem.
+_reguly = (root/'database.rules.json').read_text(encoding='utf-8')
+_brak_pol = [pl for pl in ['pillsLeft','inrMin','inrMax','drugName','drugStrength']
+             if f'"{pl}"' not in _reguly]
+if _brak_pol:
+    bad += 1; print('  BLAD reguly bazy nie znaja pol konfiguracji:', _brak_pol)
+else:
+    print('  OK   reguly bazy pokrywaja pola konfiguracji')
 
 # Dziennik decyzji jest podzielony na indeks (DECYZJE.md) i pelne wpisy
 # w decyzje/*.md - zeby wejscie w zadanie kosztowalo 5 tys. tokenow zamiast

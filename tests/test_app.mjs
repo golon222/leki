@@ -2060,6 +2060,41 @@ check(/setInterval\([\s\S]{0,200}brakujePokrycia\(\)[\s\S]{0,80}60000\)/.test(ht
 check(/doReconcile\(true\);\s*rysuj\("ustawienia", renderSettings\); renderAll\(\);/.test(html),
       "zmiana ustawien tez uruchamia uzupelnianie - i to PRZED rysowaniem");
 
+/* ═══ GRANICA PAMIECI PUDELKA NA WYJATKI (D102) ═══
+
+   Pamiec RTC miesci PUDELKO_WYJATKOW_MAX wyjatkow na daty; fetchConfig()
+   bierze tyle NAJBLIZSZYCH i reszte pomija po cichu. Dzien zapisany dalej
+   jest w aplikacji "bez leku", a pudelko o nim nie wie - zadzwoni i zglosi
+   "missed" w dniu odstawienia. Aplikacja ma o tej granicy mowic TAM, gdzie
+   sie wyjatki zaklada, i nazwac pierwsza date, ktorej to dotyczy.      */
+head("Aplikacja mowi, ilu wyjatkow pudelko nie zapamieta");
+{
+  const exList = () => document.getElementById("exList").innerHTML;
+  const dzien = n => {
+    const d = new Date(); d.setDate(d.getDate() + n);
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+  };
+  const wyjatki = n => Object.fromEntries(
+    Array.from({length:n}, (_, i) => [dzien(i + 1), 0]));
+
+  A.__setState({ cfg: { doseDays: wyjatki(A.PUDELKO_WYJATKOW_MAX) } });
+  A.renderExceptions();
+  check(!/nie wie/.test(exList()),
+        "przy komplecie mieszczacym sie w pudelku nie straszymy");
+
+  A.__setState({ cfg: { doseDays: wyjatki(A.PUDELKO_WYJATKOW_MAX + 3) } });
+  A.renderExceptions();
+  check(/zapamięta tylko/.test(exList()),
+        "powyzej granicy mowimy wprost, ze pudelko nie zapamieta wszystkich");
+  check(exList().includes(dzien(A.PUDELKO_WYJATKOW_MAX + 1)),
+        "i nazywamy PIERWSZA date, o ktorej pudelko nie bedzie wiedzialo");
+  check(/zadzwoni/.test(exList()),
+        "mowiac takze, co z tego wyniknie - a nie samo 'nie zmiesci sie'");
+  check(!/undefined|NaN/.test(exList()), "bez undefined/NaN");
+
+  A.__setState({ cfg: { doseDays: null } });
+}
+
 head("Instrukcja autotestu zgodna z firmware");
 check(!/naciśnij raz/.test(html), "instrukcja nie kaze juz sprawdzac przycisku");
 check(/rusz wieczkiem/.test(html), "kontaktron nadal wymaga reakcji");
