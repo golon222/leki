@@ -1952,6 +1952,41 @@ static bool wifiBeginZPodpowiedzia(const String& ssid, const String& pass) {
   return false;
 }
 
+/* --- DOZORCA: CO ROBIC, CZEKAJAC NA LACZE (D111) ----------------------
+
+   `wifiConnect()` czeka na wynik, i to jest w wiekszosci miejsc dobre -
+   ale nie wtedy, gdy pudelko ma JEDNOCZESNIE pilnowac wieczka. Przez
+   caly czas laczenia uklad nie widzial, ze wieczko zostalo zamkniete.
+   To byl problem D97 i to on kazal mi napisac osobne laczenie w tle.
+
+   Osobne laczenie w tle bylo bledem: przez szesc wersji nie polaczylo
+   sie ani razu, podczas gdy blokujace `wifiConnect()` obok - na tej
+   samej plytce, w tej samej minucie - ciagnelo 1,2 MB aktualizacji.
+
+   Rozwiazanie jest prostsze niz oba: ZOSTAJE JEDNO laczenie, to
+   sprawdzone, a slepote usuwamy przez ten hak. Czekanie na `WL_CONNECTED`
+   wola go co ~20 ms; gdy zwroci true, przerywamy laczenie natychmiast.
+   Wieczko jest wiec obserwowane GESCIEJ niz w petli czekania (co 25 ms),
+   a nie rzadziej.
+
+   `nullptr` = zwykle wybudzenie, nikt niczego nie pilnuje.            */
+static bool (*wifiDozorca)()   = nullptr;
+static bool wifiDozorcaPrzerwal = false;
+
+/* Czekanie z dozorca. Zwraca true, gdy dozorca kazal konczyc.         */
+static bool wifiCzekajNaLacze(uint32_t limitMs) {
+  const uint32_t t0 = millis();
+  while (WiFi.status() != WL_CONNECTED && millis() - t0 < limitMs && !awakeTooLong()) {
+    if (wifiDozorca) {
+      if (wifiDozorca()) { wifiDozorcaPrzerwal = true; return true; }
+      delay(20);
+    } else {
+      delay(200);
+    }
+  }
+  return false;
+}
+
 static bool wifiSprobuj(const String& ssid, const String& pass, uint32_t limitMs) {
   /* Rozlaczenie przed kazda proba. Bez tego druga i kolejne WiFi.begin()
      trafiaja w sterownik, ktory wciaz probuje poprzedniej sieci, i potrafia
@@ -1964,284 +1999,29 @@ static bool wifiSprobuj(const String& ssid, const String& pass, uint32_t limitMs
   if (ssid.length()) wifiBeginZPodpowiedzia(ssid, pass);
   else               WiFi.begin();
 
-  uint32_t t0 = millis();
-  while (WiFi.status() != WL_CONNECTED && millis() - t0 < limitMs && !awakeTooLong())
-    delay(200);
+  wifiCzekajNaLacze(limitMs);
   const bool ok = WiFi.status() == WL_CONNECTED;
   if (ok) zapamietajAp();          // gdzie stoi router - na nastepne wybudzenie
   return ok;
 }
 
-/* --- ZACZNIJ LACZENIE I NIE CZEKAJ ------------------------------------
+/* --- LACZENIE W TLE: USUNIETE (D111) ---------------------------------
 
-   `wifiConnect()` czeka na wynik, i to jest w wiekszosci miejsc dobre -
-   ale nie wtedy, gdy pudelko ma JEDNOCZESNIE pilnowac wieczka. Tam
-   blokada oznacza slepote: przez caly czas laczenia uklad nie widzi, ze
-   wieczko zostalo zamkniete (D97).
+   Stalo tu ~270 linii wlasnego, rownoleglego mechanizmu laczenia:
+   `wifiStart()`, `wifiZacznijProbe()`, `wifiKrokLaczenia()`, licznik
+   zdarzen sterownika, okna prob, podpowiedzi kanalu. Powstal w D98, zeby
+   pudelko moglo naraz laczyc sie i pilnowac wieczka.
 
-   Ta funkcja tylko URUCHAMIA laczenie. Sterownik ESP32 robi to w tle, a
-   wolajacy sprawdza `WiFi.status()` miedzy swoimi sprawami - czyli tutaj
-   miedzy kolejnymi odczytami kontaktronu. Radio wstaje w tle, zamkniecie
-   jest widziane od razu, meldunek idzie w chwili, w ktorej lacze naprawde
-   stoi - a nie po najgorszym przypadku przegladania calej listy sieci.
+   Przez SZESC WERSJI (D98, D99, D107, D108, D110) nie zameldowal
+   otwarcia ani razu, a kazda poprawka zmieniala w nim jedna liczbe.
+   Rozstrzygnela obserwacja Kuby: *"aktualizacja sie zrobila jak
+   kliknalem w aplikacji i otworzylem pudelko"*. Aktualizacja idzie
+   blokujacym `wifiConnect()` i sciagnela 1,2 MB - ta sama plytka, ten
+   sam router, ta sama minuta. Sprawna byla siec, zepsuty byl ten kod.
 
-   Probujemy TEJ SIECI, ktora dzialala ostatnio (`rtcNetOstatnia`) - w domu
-   to jest wlasciwa odpowiedz w pierwszej probie. Gdyby nie odpowiedziala,
-   nic nie tracimy: `wifiConnect()` na koncu wybudzenia i tak przejdzie
-   cala liste po kolei.                                                  */
-/* Stan maszyny. Zwykle zmienne, nie RTC: caly przebieg miesci sie w
-   jednym wybudzeniu, a deep sleep i tak zaczyna laczenie od nowa.      */
-static uint32_t msProbaOd    = 0;   // kiedy ruszyla biezaca proba
-static uint8_t  wifiProbaNr  = 0;   // ktora z kolei (n = poswiadczenia sterownika)
-static uint8_t  wifiBaza     = 0;   // od ktorej sieci zaczelismy przeglad
-static bool     wifiBylLink  = false;// czy lacze w tym czuwaniu juz raz stalo
-static bool     wifiProbaTrwa = false;// czy to MY zaczelismy laczenie
-static bool     wifiZPodpowiedzia = false;// czy proba 0 poszla ze znanego kanalu
-
-/* --- PONAWIAMY DOPIERO, GDY STEROWNIK ZGLOSI PORAZKE (D110) -----------
-
-   Szesc podejsc do tej samej sprawy roznilo sie jedna liczba: co ile
-   sekund przerywac trwajace laczenie. 5 s, potem 12, potem 25. Pomiar
-   z pudelka Kuby zamknal temat: `radio 82,4 s` przy sygnale -54 dBm -
-   lacze wstalo dokladnie wtedy, gdy skonczyly sie moje przerwania.
-
-   Zegar jest tu zlym sedzia, bo nie wie, czy skojarzenie wlasnie trwa,
-   czy juz padlo. Sterownik wie i mowi to wprost: ARDUINO_EVENT_WIFI_
-   STA_DISCONNECTED. Liczymy te zdarzenia i ponawiamy WYLACZNIE po nich.
-   Wtedy ponowienie nie moze niczego zepsuc - nie ma czego przerywac.
-
-   `volatile`, bo licznik rosnie w watku zdarzen WiFi, a czytamy go
-   w petli czekania.                                                    */
-static volatile uint32_t wifiPorazek       = 0;
-static uint32_t          wifiPorazekZnane  = 0;
-static bool              wifiNasluchStoi   = false;
-/* Rozlaczenie, ktore ZROBILISMY SAMI, tez wyzwala to zdarzenie. Gdyby
-   weszlo na licznik, wygladaloby jak porazka wlasnie zaczynanej proby -
-   i ponawialibysmy w kolko co WIFI_MIN_ODSTEP_MS, czyli dokladnie ten
-   blad, od ktorego tu uciekamy.                                       */
-static volatile bool     wifiCiszaZdarzen  = false;
-/* Skojarzenie z routerem juz stoi i trwa jeszcze DHCP. To nie jest cisza
-   sterownika, tylko normalny drugi etap laczenia - bezpiecznik ma wtedy
-   liczyc od nowa, zamiast przerwac probe tuz przed koncem.            */
-static volatile bool     wifiSkojarzono    = false;
-
-static void wifiZdarzenie(arduino_event_id_t ev) {
-  if (wifiCiszaZdarzen) return;
-  if (ev == ARDUINO_EVENT_WIFI_STA_DISCONNECTED && wifiPorazek < 0xFFFFFFFFu)
-    wifiPorazek++;
-  else if (ev == ARDUINO_EVENT_WIFI_STA_CONNECTED)
-    wifiSkojarzono = true;
-}
-
-/* Przeglad listy od sieci, ktora dzialala ostatnio. */
-static void wifiOdNowa() {
-  const int n = wifiSieciCount();
-  wifiBaza    = n > 0 ? (uint8_t)(rtcNetOstatnia % n) : 0;
-  wifiProbaNr = 0;
-}
-
-/* Rozpoczecie JEDNEJ proby - bez czekania na wynik.
-
-   Rozlaczenie przed `WiFi.begin()` jest tu tak samo obowiazkowe jak w
-   `wifiSprobuj()`: sterownik, ktory wciaz probuje poprzedniej sieci,
-   potrafi po cichu zignorowac nowe zgloszenie.                        */
-/* Kandydaci, w kolejnosci prob:
-
-     0            siec, ktora dzialala ostatnio - Z PODPOWIEDZIA, gdy jest
-     1            ta sama siec normalnie (tylko gdy proba 0 byla z podpowiedzia)
-     dalej        pozostale sieci z listy, jesli w ogole sa
-
-   POSWIADCZEN STEROWNIKA TU NIE MA i to jest swiadome: laczenie w tle ma
-   byc SZYBKIE dla przypadku codziennego, a nie wyczerpujace. Pelny
-   przeglad, razem z poswiadczeniami sterownika, robi blokujacy
-   `wifiConnect()` na koncu wybudzenia.                                */
-static uint8_t wifiOstatniKandydat() {
-  const int n = wifiSieciCount();
-  return (uint8_t)((wifiZPodpowiedzia ? 1 : 0) + (n > 1 ? n - 1 : 0));
-}
-
-static void wifiZacznijProbe(uint8_t nr) {
-  const int n = wifiSieciCount();
-  wifiProbaTrwa = true;
-  if (WiFi.status() != WL_IDLE_STATUS) {
-    wifiCiszaZdarzen = true;          // wlasne rozlaczenie nie jest porazka
-    WiFi.disconnect(false, false);
-    delay(80);                        // tyle wystarczy, zeby watek zdarzen zdazyl
-    wifiCiszaZdarzen = false;
-  }
-  /* Zegar i licznik porazek zerujemy RAZEM i dopiero tutaj - od tej chwili
-     kazde zgloszenie sterownika dotyczy juz TEJ proby.                  */
-  msProbaOd        = millis();
-  wifiPorazekZnane = wifiPorazek;
-  wifiSkojarzono   = false;
-  if (n <= 0) { LOGLN("[NET] proba w tle: poswiadczenia sterownika"); WiFi.begin(); return; }
-
-  int i;
-  bool zPodpowiedzia = false;
-  if (nr == 0)                             { i = wifiBaza; zPodpowiedzia = wifiZPodpowiedzia; }
-  else if (wifiZPodpowiedzia && nr == 1)   { i = wifiBaza; }
-  else {
-    const uint8_t k = (uint8_t)(nr - (wifiZPodpowiedzia ? 1 : 0));
-    i = (wifiBaza + k) % n;
-  }
-
-  const String ssid = wifiSiecSsid(i);
-  if (!ssid.length()) { WiFi.begin(); return; }
-
-  if (zPodpowiedzia) { wifiBeginZPodpowiedzia(ssid, wifiSiecPass(i)); return; }
-  LOG("[NET] proba %u w tle: '%s'\n", (unsigned)nr, ssid.c_str());
-  WiFi.begin(ssid.c_str(), wifiSiecPass(i).c_str());
-}
-
-/* Po jakiej CISZY sterownika uznajemy, ze proba w ogole nie ruszyla.
-
-   TO NIE JEST HARMONOGRAM PONOWIEN - ponowieniami rzadzi wylacznie
-   zdarzenie porazki (D110). To jest siatka na jeden przypadek: gdy
-   `WiFi.begin()` zostalo po cichu zignorowane i zadne zdarzenie nie
-   przyjdzie NIGDY. Dlatego okno jest dlugie: ma nie trafic w probe,
-   ktora normalnie trwa.
-
-   Wyjatek dla proby z podpowiedzia (D107): tam znamy kanal i adres
-   routera, wiec albo laczy w ulamku sekundy, albo podpowiedz sie
-   zestarzala. Osiem sekund to i tak dziesieciokrotny zapas.        */
-static uint32_t wifiOknoCiszy() {
-  return (wifiProbaNr == 0 && wifiZPodpowiedzia) ? WIFI_PROBA_SZYBKA_MS
-                                                 : WIFI_BEZ_ODZEWU_MS;
-}
-
-void wifiStart() {
-  if (batterySaver || WiFi.status() == WL_CONNECTED) return;
-  WiFi.persistent(true);
-  WiFi.mode(WIFI_STA);
-  delay(60);
-  /* MODEM SLEEP DOPIERO PO POLACZENIU, nie w jego trakcie.
-
-     Oszczedzanie radia usypia odbiornik miedzy ramkami rozgloszeniowymi -
-     w czasie kojarzenia i DHCP to znaczy pominiete odpowiedzi i kolejne
-     podejscia. Przez cale wybudzenie radio zyje najwyzej minute, wiec
-     na etapie laczenia nie ma tu czego oszczedzac. Wlaczamy je z powrotem
-     w chwili, w ktorej lacze staje (patrz `wifiKrokLaczenia`).        */
-  WiFi.setSleep(false);
-  if (!wifiNasluchStoi) { WiFi.onEvent(wifiZdarzenie); wifiNasluchStoi = true; }
-  /* Ponowieniami sterujemy SAMI, na podstawie zdarzen porazki. Gdyby
-     robil to takze sterownik, dwa mechanizmy deptalyby sobie po piętach
-     i znowu nie dalo by sie powiedziec, kto komu przerwal probe.     */
-  WiFi.setAutoReconnect(false);
-  wifiOdNowa();
-  wifiBylLink = false;
-  {
-    const int n = wifiSieciCount();
-    wifiZPodpowiedzia = n > 0 && apPodpowiedzPasuje(wifiSiecSsid(wifiBaza));
-  }
-  wifiZacznijProbe(0);
-}
-
-/* --- JEDEN KROK LACZENIA, wolany z petli czekania ---------------------
-
-   TU BYL BLAD, i to on zepsul 1.48.1. Kuba: *"otworzylem, zapikalo,
-   policzylem do 100 i nic; drugi raz do 60 i nic; zamknalem i teraz
-   aplikacja pokazuje, ze otwarte"*.
-
-   W petli czekania stalo podtrzymanie lacza: co 5 s `WiFi.reconnect()`,
-   jesli status nie jest WL_CONNECTED. Dopoki przed petla stal BLOKUJACY
-   `wifiConnect()`, bylo to nieszkodliwe - do petli wchodzilismy juz
-   polaczeni, wiec reconnect ruszal tylko przy prawdziwym zerwaniu.
-
-   Po D98 laczenie zaczyna sie W TLE i trwa jeszcze przez pierwsze
-   sekundy petli. A `WiFi.reconnect()` to `esp_wifi_disconnect()` +
-   `esp_wifi_connect()`: PRZERYWA trwajaca probe i zaczyna ja od zera.
-   Skojarzenie z routerem plus DHCP rzadko miesci sie w 5 s, wiec co
-   piec sekund kasowalismy wlasna, prawie gotowa probe. Lacze nie
-   wstawalo NIGDY - stad "policzylem do 100 i nic". A gdy przecisnelo
-   sie miedzy dwoma przerwaniami, meldunek "otwarte" szedl tak pozno,
-   ze Kuba widzial go dopiero po zamknieciu wieczka - i juz bez
-   sprostowania, bo koncowe `wifiConnect()` trafialo na sterownik
-   rozbebniony tym samym miganiem.
-
-   Naprawa, po szesciu podejsciach zamknieta pomiarem (D110): petla nie
-   przerywa proby ANI RAZU z zegara. Nastepnego kandydata bierzemy
-   dopiero wtedy, gdy sterownik sam zglosi porazke - wtedy nie ma juz
-   czego przerywac. Zerwanie JUZ DZIALAJACEGO lacza obslugujemy
-   natychmiast; to jedyny przypadek, w ktorym stare podtrzymanie
-   mialo racje.
-
-   Zwraca true, gdy lacze stoi.                                        */
-bool wifiKrokLaczenia() {
-  if (batterySaver) return false;
-
-  if (WiFi.status() == WL_CONNECTED) {
-    if (!wifiBylLink) {
-      wifiBylLink = true;
-      const int n = wifiSieciCount();
-      /* Siec zapamietujemy TYLKO wtedy, gdy to my prowadzilismy przeglad.
-         Inaczej "lacze juz stalo" zapisywaloby pierwsza pozycje listy jako
-         te dzialajaca - i nastepne wybudzenie zaczynaloby od zlej.      */
-      if (wifiProbaTrwa && n > 0)
-        rtcNetOstatnia = (uint8_t)((wifiProbaNr == 0)
-                                     ? wifiBaza
-                                     : (wifiBaza + wifiProbaNr - 1) % n);
-      /* I GDZIE ten router stoi - to jest cala oszczednosc przy nastepnym
-         otwarciu wieczka (D107).                                       */
-      zapamietajAp();
-      WiFi.setSleep(true);           // teraz juz mozna oszczedzac radio
-      LOG("[NET] lacze stoi po %lu ms\n",
-          (unsigned long)(millis() - msProbaOd));
-    }
-    return true;
-  }
-
-  /* Lacze stalo i padlo - odbudowa NATYCHMIAST, bez czekania na okno.
-     To jedyny przypadek, w ktorym stare podtrzymanie mialo racje.     */
-  if (wifiBylLink) {
-    wifiBylLink = false;
-    LOGLN("[NET] lacze padlo podczas czekania - odbudowuje");
-    if (!wifiProbaTrwa) wifiOdNowa();
-    wifiZacznijProbe(wifiProbaNr);
-    return false;
-  }
-
-  if (!wifiProbaTrwa) return false;   // nikt tu laczenia nie zaczynal
-
-  /* Router nas przyjal, trwa juz tylko DHCP - odliczamy bezpiecznik od
-     nowa, zeby nie przerwac proby na ostatnim metrze.                 */
-  if (wifiSkojarzono) { wifiSkojarzono = false; msProbaOd = millis(); }
-
-  /* PONAWIAMY WYLACZNIE PO ZGLOSZONEJ PORAZCE.
-
-     Dopoki licznik zdarzen stoi w miejscu, skojarzenie TRWA i ruszanie
-     go jest dokladnie tym bledem, ktory wracal szesc razy. Cisza jest
-     tylko bezpiecznikiem na `WiFi.begin()` zignorowane po cichu.     */
-  const bool porazka = (wifiPorazek != wifiPorazekZnane);
-  const bool cisza   = (millis() - msProbaOd) >= wifiOknoCiszy();
-  if (!porazka && !cisza) return false;
-
-  /* Sterownik potrafi odrzucic probe natychmiast (zestarzala podpowiedz,
-     router chwilowo zajety). Bez tego odstepu bilibysmy go kilkanascie
-     razy na sekunde i zadna proba nie doszlaby do DHCP.              */
-  if (millis() - msProbaOd < WIFI_MIN_ODSTEP_MS) return false;
-
-  /* Podpowiedz, ktora wlasnie zawiodla, jest zestarzala - kasujemy ja,
-     zeby koncowy `wifiConnect()` nie zmarnowal na nia drugiego okna
-     (tak samo robi on sam, gdy sie na niej przejedzie).              */
-  if (wifiProbaNr == 0 && wifiZPodpowiedzia) rtcApKanal = 0;
-
-  /* TU BYL BLAD 1.49.1, i kosztowal cala funkcje meldowania otwarcia.
-
-     Stalo tu `if (wifiProbaNr >= wifiOstatniKandydat()) return false;`
-     - czyli "gdy nie ma nastepnego kandydata, nie ponawiaj". Przy
-     JEDNEJ zapisanej sieci i bez podpowiedzi `wifiOstatniKandydat()`
-     wynosi 0, wiec pudelko nie ponawialo NIGDY i po pierwszej porazce
-     zostawalo bez lacza do konca czuwania. Kuba: *"teraz w ogole nie
-     pokazuje w aplikacji, ze sie otwiera"*.
-
-     Teraz po wyczerpaniu listy wracamy na jej poczatek - ale juz BEZ
-     podpowiedzi, skoro raz zawiodla. Przy jednej sieci to znaczy po
-     prostu: probuj tej samej dalej.                                  */
-  if (wifiProbaNr < wifiOstatniKandydat()) wifiProbaNr++;
-  else                                     wifiProbaNr = wifiZPodpowiedzia ? 1 : 0;
-  wifiZacznijProbe(wifiProbaNr);
-  return false;
-}
+   Zostaje wiec JEDNA droga do sieci - ta, ktora dziala i tak - a
+   slepote na wieczko, dla ktorej ten mechanizm w ogole powstal, usuwa
+   `wifiDozorca` wyzej. Patrz D111.                                    */
 
 bool wifiConnect() {
   if (batterySaver) {
@@ -2249,14 +2029,17 @@ bool wifiConnect() {
     return false;
   }
   if (WiFi.status() == WL_CONNECTED) return true;
+  /* Nowe laczenie - poprzedni werdykt dozorcy juz nie obowiazuje.     */
+  wifiDozorcaPrzerwal = false;
   WiFi.persistent(true);
   WiFi.mode(WIFI_STA);
   /* Chwila na dojscie sterownika do siebie. Bez tego polaczenie tuz po
      uspieniu radia (WIFI_OFF) potrafi sie nie udac za pierwszym razem -
      a to wlasnie ta sciezka wysyla stan po zamknieciu wieczka.        */
   delay(60);
-  /* Bez oszczedzania radia NA CZAS LACZENIA - patrz komentarz w wifiStart().
-     Wlaczamy je z powrotem dopiero, gdy lacze stoi.                     */
+  /* Bez oszczedzania radia NA CZAS LACZENIA. Oszczedzanie usypia odbiornik
+     miedzy ramkami rozgloszeniowymi, a w trakcie kojarzenia i DHCP to
+     znaczy pominiete odpowiedzi. Wlaczamy je, gdy lacze stoi.         */
   WiFi.setSleep(false);
 
   /* Czekamy najwyzej WIFI_TIMEOUT_MS na PIERWSZA probe. Chwilowa awaria
@@ -2277,7 +2060,7 @@ bool wifiConnect() {
      sterownik nie musi przemiatac calego pasma 2,4 GHz. Krotkie okno,
      bo podpowiedz albo dziala natychmiast, albo sie zestarzala - a wtedy
      petla nizej i tak przejdzie liste normalnie.                      */
-  if (n > 0 && !awakeTooLong()) {
+  if (n > 0 && !awakeTooLong() && !wifiDozorcaPrzerwal) {
     const int i = rtcNetOstatnia % n;
     const String ssid = wifiSiecSsid(i);
     if (apPodpowiedzPasuje(ssid)) {
@@ -2292,7 +2075,7 @@ bool wifiConnect() {
     }
   }
 
-  for (int k = 0; k < n && !ok && !awakeTooLong(); k++) {
+  for (int k = 0; k < n && !ok && !awakeTooLong() && !wifiDozorcaPrzerwal; k++) {
     int i = (rtcNetOstatnia + k) % n;
     String ssid = wifiSiecSsid(i);
     if (!ssid.length()) continue;
@@ -2315,7 +2098,7 @@ bool wifiConnect() {
 
      Zasada, ta sama co przy portalu fizycznym: nowa droga nie moze zabierac
      starej, dopoki nie udowodni, ze dziala.                             */
-  if (!ok && !awakeTooLong()) {
+  if (!ok && !awakeTooLong() && !wifiDozorcaPrzerwal) {
     if (n) LOGLN("[NET] zadna siec z listy nie odpowiada - probuje zapamietanej");
     ok = wifiSprobuj("", "", n ? WIFI_ALT_TIMEOUT_MS : WIFI_TIMEOUT_MS);
     if (ok && n) LOGLN("[NET] polaczono poswiadczeniami sterownika, nie z listy");
@@ -4759,80 +4542,125 @@ void lidMeldunek() {
   logbookAdd(m);
 }
 
+/* --- OBSERWACJA WIECZKA I PRZYCISKA - JEDNA KOPIA (D111) --------------
+
+   Ten sam krok obserwacji wola petla czekania ORAZ - przez `wifiDozorca`
+   - czekanie na lacze w `wifiSprobuj()`. Dzieki temu blokujace laczenie
+   nie jest juz slepe na zamkniecie wieczka: gest i kontaktron sa czytane
+   w jego trakcie CZESCIEJ (co ~20 ms) niz w samej petli (co 25 ms).
+
+   Stan musi byc plikowy, bo dozorca to zwykly wskaznik na funkcje i nie
+   ma jak przekazac mu kontekstu. Ustawia go i kasuje wylacznie
+   `czekajNaZamkniecieIGest()`, wiec zycie tego stanu nie wychodzi poza
+   jedno czekanie.                                                      */
+static uint32_t dozT0          = 0;
+static bool     dozPrzyciskByl = false;
+static uint32_t dozWcisnietyOd = 0;
+static int      dozKlikniec    = 0;
+static Gest     dozGest        = GEST_BRAK;   // GEST_BRAK = czekamy dalej
+static bool     dozZamkniete   = false;
+
+/* Zwraca true, gdy czekanie ma sie skonczyc - powod siedzi w `dozGest`
+   i `dozZamkniete`.                                                    */
+static bool dozorKrok() {
+  const bool teraz = buttonPressed();
+
+  if (teraz != dozPrzyciskByl) {
+    if (teraz) {                         // wcisniety
+      dozWcisnietyOd = millis();
+    } else {                             // zwolniony - liczymy klikniecie
+      if (millis() - dozWcisnietyOd < GEST_PRZYTRZYM_MS) {
+        dozKlikniec++;
+        LOG("[GST] klikniecie %d z %d\n", dozKlikniec, GEST_KLIKNIEC);
+        buzzerInit(); buzzerTone(3000); delay(35); buzzerOff();
+      }
+      dozWcisnietyOd = 0;
+    }
+    dozPrzyciskByl = teraz;
+  }
+
+  /* Przytrzymanie - portal WiFi. Reagujemy juz w trakcie trzymania,
+     zeby bylo wiadomo, ze gest zostal przyjety.                        */
+  if (teraz && dozWcisnietyOd && millis() - dozWcisnietyOd >= GEST_PRZYTRZYM_MS) {
+    LOGLN("[GST] przytrzymanie -> portal WiFi");
+    /* Potwierdzenie W CHWILI przyjecia gestu, a nie dopiero gdy portal
+       wstanie. Klikniecie ma swoje pikniecie od dawna, przytrzymanie
+       nie mialo zadnego - wiec do ostatniej chwili nie bylo wiadomo,
+       czy pudelko w ogole zauwazylo, ze cos od niego chcesz.          */
+    buzzerInit(); buzzerTone(2600); delay(120); buzzerOff();
+    dozGest = GEST_PORTAL;
+    return true;
+  }
+  if (dozKlikniec >= GEST_KLIKNIEC) {
+    LOGLN("[GST] trzy klikniecia -> autotest");
+    dozGest = GEST_TEST;
+    return true;
+  }
+
+  /* Wieczko zamkniete i nikt nie bawi sie przyciskiem - koniec czekania.
+     Gdy trwa gest, dajemy dokonczyc mimo zamknietego wieczka.          */
+  if (!boxIsOpen() && !teraz && dozKlikniec == 0 && millis() - dozT0 > 1200) {
+    LOG("[REED] zamkniete po %lu s czuwania\n",
+        (unsigned long)((millis() - dozT0) / 1000));
+    msZamkniecia = millis();            // do zmierzenia opoznienia wysylki
+    dozZamkniete = true;
+    return true;
+  }
+  return false;
+}
+
 Gest czekajNaZamkniecieIGest(uint32_t limitMs) {
-  uint32_t t0 = millis();
-  bool byl = buttonPressed();
+  const uint32_t t0 = millis();
+  dozT0          = t0;
+  dozPrzyciskByl = buttonPressed();
   /* Gdy przycisk jest wcisniety JUZ TERAZ, a widzielismy go takim na
      poczatku wybudzenia, to znaczy, ze czlowiek trzyma go od tamtej
      chwili - przez cala robote z siecia. Odliczamy wiec od niej, a nie
-     od startu tej petli. Inaczej kazalibysmy trzymac drugie tyle. */
-  uint32_t wcisnietyOd = byl ? (msPrzyciskOd ? msPrzyciskOd : t0) : 0;
-  int klikniec = 0;
+     od startu tej petli. Inaczej kazalibysmy trzymac drugie tyle.     */
+  dozWcisnietyOd = dozPrzyciskByl ? (msPrzyciskOd ? msPrzyciskOd : t0) : 0;
+  dozKlikniec    = 0;
+  dozGest        = GEST_BRAK;
+  dozZamkniete   = false;
+
   bool radioZgaszone = false;
   if (boxIsOpen()) byloOtwarte = true;
 
-  /* Powiedz aplikacji, ze wieczko jest otwarte - TERAZ, nie po zamknieciu.
+  /* --- MELDUNEK O OTWARCIU: JEDNA DROGA, TA SPRAWDZONA (D111) --------
 
-     TU BYL BLAD i tlumaczy on cala "zepsuta synchronizacje".
+     TU BYL BLAD i kosztowal siedem wersji.
 
-     Sciezka "juz dzis brales" nigdy nie wlaczala radia: piknela i od razu
-     szla czekac na zamkniecie. Pelny status leci dopiero PO powrocie z
-     tego czekania, czyli po zamknieciu wieczka. Efekt: otwierasz pudelko
-     drugi raz w ciagu dnia, patrzysz w telefon przez dwie minuty i nie ma
-     tam nic - bo pudelko przez ten czas w ogole sie nie odzywalo. Nie
-     bylo wolne. Bylo CICHE.
+     Stalo tu `wifiStart()` - poczatek wlasnego, rownoleglego mechanizmu
+     laczenia w tle (D98). Powstal, bo blokujace `wifiConnect()` czynilo
+     pudelko slepym na zamkniecie wieczka na czas laczenia (D97).
 
-     Ta sama luka dotyczyla czekania po alarmie. Teraz stan wieczka idzie
-     z kazdej sciezki, ktora zaczyna czekac przy otwartym pudelku.
+     Problem w tym, ze ten mechanizm NIE LACZYL SIE. Nie "wolno" - wcale.
+     Kuba zglaszal to siedem razy pod rzad, a kazda moja poprawka
+     zmieniala w nim jedna liczbe: 5 s, 12 s, 25 s, "wcale", zdarzenia.
 
-     Warunek na rtcOpenReported pilnuje, zebysmy nie wysylali drugi raz
-     tego, co przy zwyklym otwarciu poszlo juz w reportEvent().        */
-  /* NIE LACZYMY SIE TUTAJ Z SIECIA - i to jest cala naprawa.
+     Rozstrzygnelo jedno jego zdanie: *"aktualizacja sie zrobila jak
+     kliknalem w aplikacji i otworzylem pudelko"*. Aktualizacja idzie
+     blokujacym `wifiConnect()` i sciagnela 1,2 MB. Ta sama plytka, ten
+     sam router, ta sama minuta - droga blokujaca laczy sie bez pudla,
+     rownolegla nie laczy sie nigdy. To nie byla siec. To byl ten kod.
 
-     TU BYL BLAD, i zglosil go Kuba trzema scenariuszami pod rzad:
-     *"otwieram, pika, po okolo minucie w aplikacji pokaze sie ze pudelko
-     jest otwarte"*, *"otworze i zamkne szybko - aplikacja w ogole nie
-     pokazuje ze bylo otwarte"*, *"biore tabletke, zamykam, a po chwili
-     pokazuje sie ze otwarte, mimo ze fizycznie zamkniete"*.
+     Do tego cala ta sciezka jest tu w ogole dlatego, ze przy DRUGIM
+     otwarciu w dobie ("juz dzis brane") nie ma `reportEvent()`, ktore
+     na pierwszym otwarciu laczy sie blokujaco i melduje bez problemu.
+     Dwie drogi robiace to samo, z ktorych jedna dziala - wiec zostaje
+     jedna, ta dzialajaca.
 
-     Stalo tu blokujace `wifiConnect()`. W najgorszym przypadku to
-     15 s na pierwsza siec + 3 x 8 s na kolejne + 8 s na poswiadczenia
-     sterownika = OKOLO 47 SEKUND. Kubowa "minuta" co do joty.
-
-     Przez caly ten czas pudelko stoi w jednym wywolaniu i NIE WIDZI, ze
-     wieczko zostalo zamkniete - petla czekania zaczyna sie dopiero za
-     nim. A stan, ktory wysyla po powrocie, jest odczytem z PRZYPADKOWEGO
-     momentu: z chwili, w ktorej odpowiedzial router, a nie z chwili,
-     w ktorej cos sie z wieczkiem stalo. Stad wszystkie trzy objawy naraz:
-     zamkniesz szybko - poleci "zamkniete" i otwarcia nie widac wcale;
-     potrzymasz dluzej - poleci "otwarte", ale dociera, gdy juz zamknales.
-
-     Teraz: gdy lacze JUZ stoi, meldunek kosztuje ulamek sekundy i idzie
-     od razu. Gdy go nie ma - nie czekamy ani chwili. Stan wieczka
-     poleci na koncu wybudzenia, kiedy bedzie OSTATECZNY i prawdziwy,
-     a `rtcStatusDirty` pilnuje, zeby na pewno poleciał.               */
-  /* Lacze gotowe - meldunek idzie natychmiast i kosztuje ulamek sekundy.
-     Lacza nie ma - URUCHAMIAMY je w tle i wracamy do pilnowania wieczka.
-     Ani jednej sekundy blokady: petla nizej patrzy i na kontaktron, i na
-     `WiFi.status()`, wiec meldunek pojdzie w chwili, w ktorej radio
-     naprawde wstanie (D97).                                            */
+     Slepote, dla ktorej D98 w ogole powstalo, usuwa `wifiDozorca`:
+     czekanie na `WL_CONNECTED` wola `dozorKrok()` co ~20 ms i przerywa
+     laczenie w chwili zamkniecia wieczka. Wieczko jest wiec pilnowane
+     GESCIEJ niz w petli, a nie rzadziej.                              */
   bool zgloszonoOtwarcie = false;
   bool mierzymyWieczko   = false;   // czy te dwie liczby cokolwiek znacza
+  uint32_t ostatniaProba = 0;       // kiedy ostatnio probowalismy sie polaczyc
+
   if (boxIsOpen() && !rtcOpenReported && !batterySaver) {
     mierzymyWieczko = true;
     rtcNetMs = -1;
     rtcLidMs = -1;
-    if (WiFi.status() == WL_CONNECTED && firebaseSignIn()) {
-      /* Liczymy OD WYBUDZENIA, nie od tej petli: `millis()` startuje od zera
-         przy wyjsciu z deep sleepu, czyli w chwili ruchu wieczka. To jest
-         dokladnie ta liczba, na ktora patrzy czlowiek z telefonem. */
-      if (pushLidState(boxIsOpen())) { rtcLidMs = (int32_t)millis(); lidMeldunek(); }
-      rtcNetMs = 0;                 // lacze bylo gotowe od pierwszej chwili
-      zgloszonoOtwarcie = true;
-    } else {
-      wifiStart();
-      rtcStatusDirty = true;      // gdyby nie zdazylo - dosle sie pozniej
-    }
   }
 
   /* Czuwanie moze trwac dlugo, wiec bezpiecznik czasowy trzeba odsunac -
@@ -4840,83 +4668,57 @@ Gest czekajNaZamkniecieIGest(uint32_t limitMs) {
   extendAwake(limitMs + 30000);
 
   while (millis() - t0 < limitMs && !awakeTooLong()) {
+
+    /* --- Meldunek o otwartym wieczku ---------------------------------
+
+       Ponawiamy, dopoki sie nie uda. Wczesniej znacznik "zgloszone"
+       stawal PRZED proba, wiec jedno nieudane logowanie do bazy albo
+       jeden nieprzyjety zapis oznaczaly cisze do konca czuwania - bez
+       zadnego sladu i bez drugiej szansy.                             */
+    if (mierzymyWieczko && !zgloszonoOtwarcie && !radioZgaszone
+        && !rtcOpenReported && boxIsOpen()
+        && (ostatniaProba == 0 || millis() - ostatniaProba >= LID_PONOW_MS)) {
+      ostatniaProba = millis();
+      /* Dozorca na czas laczenia - to on zdejmuje slepote na wieczko. */
+      wifiDozorca = dozorKrok;
+      const bool lacze = wifiConnect();
+      wifiDozorca = nullptr;
+      if (dozZamkniete || dozGest != GEST_BRAK) break;   // dozorca przerwal
+      if (lacze) {
+        if (rtcNetMs < 0) rtcNetMs = (int32_t)millis();
+        LOGLN("[LID] lacze stoi - melduje stan wieczka");
+        if (firebaseSignIn()) {
+          /* Stan bierzemy swiezy: logowanie trwa chwile, a w tej chwili
+             wieczko moglo juz zostac zamkniete. Wysylamy prawde.      */
+          if (pushLidState(boxIsOpen())) {
+            rtcLidMs = (int32_t)millis();
+            lidMeldunek();
+            zgloszonoOtwarcie = true;
+          } else rtcStatusDirty = true;
+        } else rtcStatusDirty = true;
+      } else {
+        rtcStatusDirty = true;      // gdyby nie zdazylo - dosle sie pozniej
+      }
+    }
+
     /* Przez pierwsze RADIO_OTWARTE_S radio zostaje wlaczone. Kosztuje to
        trzy setne procenta baterii, a daje polaczenie gotowe do uzycia:
        zamykasz wieczko i stan idzie do aplikacji natychmiast, bez rundy
        logowania do sieci. Dopiero gdy pudelko stoi otwarte dluzej, radio
        gasnie - bo wtedy to ono odpowiada za wiekszosc poboru. Po
        zamknieciu wraca samo, patrz koniec setup().                     */
-    /* Doprowadzenie i podtrzymanie lacza - JEDEN krok na obrot petli.
-
-       Sluzy dwóm rzeczom naraz: dociaga polaczenie zaczete w tle przed
-       petla i odbudowuje je, gdy router rozlaczy stacje, ktora nic nie
-       nadaje. Wersja poprzednia robila tylko to drugie - i robila to
-       tak, ze psula pierwsze (D99, opis przy `wifiKrokLaczenia()`).
-
-       Cala funkcja jest nieblokujaca: sprawdza status, porownuje czas
-       i najwyzej zaczyna kolejna probe. Wieczko zostaje pod obserwacja. */
-    if (!radioZgaszone && wifiKrokLaczenia() && rtcNetMs < 0 && mierzymyWieczko)
-      rtcNetMs = (int32_t)millis();
-
     if (!radioZgaszone && millis() - t0 > RADIO_OTWARTE_S * 1000UL) {
       LOG("[NET] wieczko otwarte %lu s - usypiam radio\n",
           (unsigned long)((millis() - t0) / 1000));
       wifiUspij();
       radioZgaszone = true;
     }
-    /* Radio wstalo w tle - meldujemy TERAZ, bez czekania na cokolwiek.
-       Stan bierzemy swiezy: logowanie do bazy trwa chwile, a w tej chwili
-       wieczko moglo juz zostac zamkniete. Wysylamy to, co jest naprawde. */
-    if (!zgloszonoOtwarcie && !rtcOpenReported && !batterySaver
-        && boxIsOpen() && WiFi.status() == WL_CONNECTED) {
-      zgloszonoOtwarcie = true;
-      LOGLN("[LID] lacze wstalo - melduje stan wieczka");
-      if (firebaseSignIn()) {
-        if (pushLidState(boxIsOpen())) { rtcLidMs = (int32_t)millis(); lidMeldunek(); }
-      } else rtcStatusDirty = true;
-    }
 
-    bool teraz = buttonPressed();
-
-    if (teraz != byl) {
-      if (teraz) {                       // wcisniety
-        wcisnietyOd = millis();
-      } else {                           // zwolniony - liczymy klikniecie
-        if (millis() - wcisnietyOd < GEST_PRZYTRZYM_MS) {
-          klikniec++;
-          LOG("[GST] klikniecie %d z %d\n", klikniec, GEST_KLIKNIEC);
-          buzzerInit(); buzzerTone(3000); delay(35); buzzerOff();
-        }
-        wcisnietyOd = 0;
-      }
-      byl = teraz;
-    }
-
-    /* Przytrzymanie - portal WiFi. Reagujemy juz w trakcie trzymania,
-       zeby bylo wiadomo, ze gest zostal przyjety.                      */
-    if (teraz && wcisnietyOd && millis() - wcisnietyOd >= GEST_PRZYTRZYM_MS) {
-      LOGLN("[GST] przytrzymanie -> portal WiFi");
-      /* Potwierdzenie W CHWILI przyjecia gestu, a nie dopiero gdy portal
-         wstanie. Klikniecie ma swoje pikniecie od dawna, przytrzymanie
-         nie mialo zadnego - wiec do ostatniej chwili nie bylo wiadomo,
-         czy pudelko w ogole zauwazylo, ze cos od niego chcesz.        */
-      buzzerInit(); buzzerTone(2600); delay(120); buzzerOff();
-      return GEST_PORTAL;
-    }
-    if (klikniec >= GEST_KLIKNIEC) {
-      LOGLN("[GST] trzy klikniecia -> autotest");
-      return GEST_TEST;
-    }
-
-    /* Wieczko zamkniete i nikt nie bawi sie przyciskiem - koniec czekania.
-       Gdy trwa gest, dajemy dokonczyc mimo zamknietego wieczka.        */
-    if (!boxIsOpen() && !teraz && klikniec == 0 && millis() - t0 > 1200) {
-      LOG("[REED] zamkniete po %lu s czuwania\n", (unsigned long)((millis() - t0) / 1000));
-      msZamkniecia = millis();          // do zmierzenia opoznienia wysylki
-      break;
-    }
+    if (dozorKrok()) break;
     delay(25);
   }
+
+  if (dozGest != GEST_BRAK) return dozGest;
   return GEST_BRAK;
 }
 

@@ -250,142 +250,76 @@ ok("extendAwake(limitMs + 30000)" in czek,
    "bezpiecznik czasowy odsuniety na czas czuwania")
 ok("pushLidState(" in czek,
    "otwarcie zglaszane z KAZDEJ sciezki czekania, nie dopiero po zamknieciu")
-# ...ale NIE ZA CENE SLEPOTY NA ZAMKNIECIE.
+# ...ale NIE ZA CENE SLEPOTY NA ZAMKNIECIE - I NIE ZA CENE DRUGIEGO,
+# ROWNOLEGLEGO MECHANIZMU LACZENIA (D111).
 #
-# `wifiConnect()` blokuje do ~47 s (15 s na pierwsza siec + 3 x 8 s na
-# kolejne + 8 s na poswiadczenia). Postawione PRZED petla czekania robilo
-# z pudelka slepca: przez ten czas nie widzialo, ze wieczko zamknieto,
-# a stan, ktory potem wysylalo, byl odczytem z chwili, w ktorej odpowiedzial
-# router - nie z chwili, w ktorej cos sie z wieczkiem stalo. Kuba widzial
-# to jako "otwieram i zamykam szybko, a aplikacja w ogole tego nie pokazuje"
-# oraz "pokazuje otwarte, choc fizycznie zamkniete" (D97).
+# `wifiConnect()` blokuje do ~47 s. Postawione PRZED petla czekania robilo
+# z pudelka slepca: przez ten czas nie widzialo, ze wieczko zamknieto (D97).
+# Naprawa D98 - wlasne laczenie w tle - byla lekarstwem gorszym od choroby:
+# przez SZESC wersji (D98, D99, D107, D108, D110) nie zameldowala otwarcia
+# ANI RAZU, podczas gdy blokujace `wifiConnect()` obok, na tej samej
+# plytce i w tej samej minucie, sciagalo 1,2 MB aktualizacji.
 #
-# Meldunek natychmiastowy zostaje - ale tylko wtedy, gdy lacze JUZ stoi.
-# Bez lacza probujemy dopiero po LID_MELDUNEK_PO_MS, czyli gdy to juz nie
-# jest "wyjmuje tabletke", tylko "zostawilem otwarte".
-# `wifiConnect()` blokuje, wiec w CALEJ tej funkcji nie ma dla niego
-# miejsca - ani przed petla, ani w srodku. Kazda sekunda w nim to sekunda,
-# w ktorej pudelko nie widzi, ze wieczko zamknieto. Pierwsza wersja tej
-# kontroli patrzyla tylko na fragment PRZED petla i przepuszczala powrot
-# blokady do jej wnetrza - zlapane mutacja, nie okiem.
-ok("wifiConnect()" not in czek,
-   "i NIGDZIE nie blokuje na laczeniu - ani przed petla, ani w niej")
-_przed_petla = czek[:czek.find("while (")] if "while (" in czek else czek
-ok("WL_CONNECTED" in _przed_petla,
-   "natychmiastowy meldunek idzie tylko po gotowym laczu")
-# Bez lacza NIE czekamy - uruchamiamy radio w tle i pilnujemy wieczka
-# dalej. Prog czasowy (pierwsza wersja tej naprawy) byl gorszy: dokladal
-# swoje sekundy DO blokady zamiast ja usunac, wiec meldunek przychodzil
-# jeszcze pozniej. Teraz petla patrzy naraz na kontaktron i na
-# `WiFi.status()`, wiec meldunek idzie w chwili, w ktorej lacze wstanie.
-ok("wifiStart()" in czek,
-   "bez lacza radio startuje W TLE, zamiast blokowac czekanie na zamkniecie")
-ok("WiFi.status() == WL_CONNECTED" in czek[czek.find("while ("):],
-   "a petla czekania sama zauwaza, ze lacze wstalo")
-_ws = ino[ino.find("void wifiStart() {"):]
-_ws = _ws[:_ws.find("\n}")]
-ok("while" not in _ws and "wifiSprobuj" not in _ws,
-   "wifiStart() naprawde nie czeka na wynik - inaczej nie ma sensu")
-_wz = cialo("static void wifiZacznijProbe(uint8_t nr)")
-ok(bool(_wz) and "while" not in _wz and "wifiSprobuj" not in _wz,
-   "wifiZacznijProbe() tez nie czeka - to ona wola WiFi.begin()")
-_wk = cialo("bool wifiKrokLaczenia()")
-ok(bool(_wk) and "while" not in _wk and "wifiSprobuj" not in _wk,
-   "wifiKrokLaczenia() tez nie czeka - jest wolana z petli czekania")
-# TU BYL BLAD 1.48.1, i to on zepsul cala naprawe D98.
+# Rozstrzygnela obserwacja Kuby: *"aktualizacja sie zrobila jak kliknalem
+# w aplikacji i otworzylem pudelko"*. Zostaje wiec JEDNA droga do sieci -
+# ta sprawdzona - a slepote zdejmuje dozorca wolany z wnetrza czekania.
+ok("wifiConnect()" in czek,
+   "meldunek o otwarciu idzie TA SAMA droga co zapis dawki i aktualizacja")
+# Szukamy DEFINICJI, nie samej nazwy - nazwy zostaly w komentarzach,
+# ktore tlumacza, czemu tego kodu juz nie ma, i maja tam zostac.
+for _zakazana in ("void wifiStart() {", "bool wifiKrokLaczenia() {",
+                  "static void wifiZacznijProbe("):
+    ok(_zakazana not in ino,
+       f"nie ma juz drugiego mechanizmu laczenia ({_zakazana.split()[-2 if '{' in _zakazana else -1]})")
+# DOZORCA - to on zdejmuje slepote, wiec bez niego cala zmiana jest
+# powrotem do bledu D97.
+ok("wifiDozorca = dozorKrok" in czek and "wifiDozorca = nullptr" in czek,
+   "na czas laczenia wieczko pilnuje dozorca, a po nim jest zdejmowany")
+_czekaj = cialo("static bool wifiCzekajNaLacze(uint32_t limitMs)")
+ok(bool(_czekaj) and "wifiDozorca()" in _czekaj and "wifiDozorcaPrzerwal = true" in _czekaj,
+   "czekanie na lacze naprawde wola dozorce i konczy sie na jego zadanie")
+_sprobuj = cialo("static bool wifiSprobuj(const String& ssid, const String& pass, uint32_t limitMs)")
+ok(bool(_sprobuj) and "wifiCzekajNaLacze(limitMs)" in _sprobuj and "while" not in _sprobuj,
+   "i jest JEDNYM czekaniem na lacze - zadnej wlasnej petli obok")
+# Werdykt dozorcy musi zatrzymac CALE `wifiConnect()`, nie tylko biezaca
+# siec - inaczej po zamknieciu wieczka pudelko przemiela reszte listy.
+_wc2 = cialo("bool wifiConnect()")
+ok(_wc2.count("wifiDozorcaPrzerwal") >= 4,
+   "zamkniecie wieczka przerywa CALE laczenie, nie tylko biezaca siec")
+# JEDNA KOPIA OBSERWACJI. Gdyby petla i dozorca mialy osobne kopie,
+# rozjechalyby sie przy pierwszej poprawce - a gest albo zamkniecie
+# gubiloby sie w zaleznosci od tego, ktora akurat jest aktywna.
+_doz = cialo("static bool dozorKrok()")
+ok(bool(_doz) and "boxIsOpen()" in _doz and "buttonPressed()" in _doz,
+   "dozorKrok() czyta i wieczko, i przycisk - jedna kopia obserwacji")
+ok(czek.count("dozorKrok") >= 2,
+   "i wola ja zarowno petla czekania, jak i laczenie")
+# MELDUNEK PONAWIANY, NIE JEDNORAZOWY.
 #
-# W petli czekania stalo podtrzymanie lacza: co 5 s `WiFi.reconnect()`,
-# gdy status nie jest WL_CONNECTED. Przy blokujacym `wifiConnect()` przed
-# petla bylo to nieszkodliwe - wchodzilismy do niej juz polaczeni. Po D98
-# laczenie zaczyna sie W TLE i trwa jeszcze w pierwszych sekundach petli,
-# a `WiFi.reconnect()` to `esp_wifi_disconnect()` + `esp_wifi_connect()`,
-# czyli PRZERWANIE trwajacej proby. Skojarzenie plus DHCP rzadko miesci
-# sie w 5 s, wiec lacze nie wstawalo nigdy. Kuba: "policzylem do 100 i nic".
-ok("WiFi.reconnect()" not in czek,
-   "petla czekania NIE przerywa trwajacego laczenia (to psulo 1.48.1)")
-ok("wifiKrokLaczenia()" in czek[czek.find("while ("):],
-   "lacze dociagane krok po kroku Z WNETRZA petli, bez blokady")
-# PONOWIENIE IDZIE ZA ZDARZENIEM PORAZKI, A NIE ZA ZEGAREM (D110).
-#
-# Rozstrzygniete POMIAREM z pudelka Kuby: `radio 82,4 s - baza 82,9 s`
-# przy sile sygnalu -54 dBm. Baza odpowiada w pol sekundy; cala minuta
-# szla w samo polaczenie, a lacze wstalo dokladnie wtedy, gdy skonczyly
-# sie nasze przerwania. Szesc podejsc roznilo sie tylko dlugoscia okna
-# (5 s, 12 s, 25 s) - zegar nie odroznia "proba trwa" od "proba padla".
-# Sterownik odroznia i mowi to wprost.
-_zd = cialo("static void wifiZdarzenie(arduino_event_id_t ev)")
-ok(bool(_zd) and "ARDUINO_EVENT_WIFI_STA_DISCONNECTED" in _zd and "wifiPorazek++" in _zd,
-   "porazki laczenia liczymy ze zdarzen sterownika, nie z zegara")
-ok("WiFi.onEvent(wifiZdarzenie)" in _ws,
-   "nasluch zdarzen WiFi jest podpiety przy starcie radia")
-ok("wifiPorazek != wifiPorazekZnane" in _wk,
-   "ponawiamy WYLACZNIE po zgloszonej porazce - nie ma czego przerywac")
-# WLASNE rozlaczenie przed nowa proba tez wyzwala STA_DISCONNECTED. Gdyby
-# weszlo na licznik, kazda proba wygladalaby na natychmiast przegrana i
-# ponawialibysmy w kolko co WIFI_MIN_ODSTEP_MS - ten sam blad, tylko szybszy.
-_zp = cialo("static void wifiZacznijProbe(uint8_t nr)")
-ok("wifiCiszaZdarzen" in _zd and bool(_zp) and "wifiCiszaZdarzen = true" in _zp,
-   "wlasne rozlaczenie nie jest liczone jako porazka proby")
-ok("wifiPorazekZnane = wifiPorazek" in _zp,
-   "licznik porazek zerowany razem z zegarem, w chwili startu proby")
-# Skojarzenie stoi, trwa DHCP - to nie cisza sterownika, tylko drugi etap.
-ok("ARDUINO_EVENT_WIFI_STA_CONNECTED" in _zd and "wifiSkojarzono" in _wk,
-   "bezpiecznik ciszy liczy od nowa, gdy router juz nas przyjal")
-ok("volatile uint32_t wifiPorazek" in ino,
-   "licznik porazek jest volatile - rosnie w watku zdarzen WiFi")
-_okno = cialo("static uint32_t wifiOknoCiszy()")
-ok(bool(_okno) and "WIFI_BEZ_ODZEWU_MS" in _okno and "WIFI_PROBA_SZYBKA_MS" in _okno,
-   "cisza sterownika ma wlasny bezpiecznik, osobny dla proby z podpowiedzia")
-ok("wifiOknoCiszy()" in _wk and "WIFI_MIN_ODSTEP_MS" in _wk,
-   "a ponowienia maja minimalny odstep, gdy porazki sypia sie seriami")
-# ...I NIGDY NIE PRZESTAJEMY PONAWIAC.
-#
-# TU BYL BLAD 1.49.1. Stalo tu `if (wifiProbaNr >= wifiOstatniKandydat())
-# return false;` - czyli "gdy nie ma nastepnego kandydata, nie ponawiaj".
-# Przy JEDNEJ zapisanej sieci i bez podpowiedzi ten limit wynosi 0, wiec
-# pudelko po pierwszej porazce zostawalo bez lacza do konca czuwania.
-# Kuba: "teraz w ogole nie pokazuje w aplikacji, ze sie otwiera".
-ok("wifiProbaNr >= wifiOstatniKandydat()" not in _wk,
-   "brak nastepnego kandydata NIE konczy ponawiania (to psulo 1.49.1)")
-ok("wifiProbaNr = wifiZPodpowiedzia ? 1 : 0" in _wk,
-   "po wyczerpaniu listy wracamy na jej poczatek, ale juz bez podpowiedzi")
-_kand = cialo("static uint8_t wifiOstatniKandydat()")
-ok(bool(_kand) and "wifiZPodpowiedzia" in _kand and "wifiSieciCount()" in _kand,
-   "kolejnosc kandydatow liczona z listy sieci i z podpowiedzi")
-# Dwa mechanizmy ponawiania deptalyby sobie po pietach i znowu nie dalo by
-# sie powiedziec, kto komu przerwal probe.
-ok("WiFi.setAutoReconnect(false)" in _ws,
-   "sterownik NIE ponawia rownolegle z nami")
+# TU BYL BLAD: znacznik "zgloszone" stawal PRZED proba, wiec jedno
+# nieudane logowanie do bazy albo jeden nieprzyjety zapis oznaczaly cisze
+# do konca czuwania - bez sladu i bez drugiej szansy.
+# Liczymy WYSTAPIENIA, nie samo "czy jest po pushLidState". Pierwsza
+# wersja tej kontroli przepuszczala mutacje, ktora DOKLADALA znacznik
+# przed proba i zostawiala ten po niej - czyli dokladnie ten blad,
+# ktory zamykal pudelku usta na cale czuwanie (zlapane mutacja).
+_zgl = [i for i in range(len(czek)) if czek.startswith("zgloszonoOtwarcie = true", i)]
+ok(len(_zgl) == 1 and 0 <= czek.find("if (pushLidState(") < _zgl[0],
+   "za zgloszone uznajemy POTWIERDZONY zapis - i to w jednym jedynym miejscu")
+ok("LID_PONOW_MS" in czek,
+   "a nieudany meldunek jest ponawiany, dopoki wieczko jest otwarte")
 # Oszczedzanie radia usypia odbiornik miedzy ramkami - w trakcie kojarzenia
 # i DHCP to znaczy pominiete odpowiedzi. Wlaczamy je dopiero po polaczeniu.
-_ws2 = cialo("void wifiStart()")
-ok(bool(_ws2) and "WiFi.setSleep(false)" in _ws2,
-   "laczymy sie z wylaczonym oszczedzaniem radia")
-ok("WiFi.setSleep(true)" in _wk,
-   "a modem-sleep wlaczamy dopiero, gdy lacze stoi")
+ok("WiFi.setSleep(false)" in _wc2 and "WiFi.setSleep(true)" in _wc2,
+   "laczymy sie z wylaczonym oszczedzaniem radia, wlaczamy je po polaczeniu")
 # PODPOWIEDZ: kanal i BSSID z ostatniego udanego polaczenia. Bez niej
-# sterownik po deep sleepie przemiata cale pasmo 2,4 GHz - przy -87 dBm
-# to kilkanascie sekund, czyli cala "minuta", na ktora czekal Kuba.
+# sterownik po deep sleepie przemiata cale pasmo 2,4 GHz.
 _hint = cialo("static bool wifiBeginZPodpowiedzia(const String& ssid, const String& pass)")
 ok(bool(_hint) and "rtcApKanal" in _hint and "rtcApBssid" in _hint,
    "laczymy sie ze ZNANEGO kanalu, zamiast przemiatac pasmo")
-for _f in ("static bool wifiSprobuj(const String& ssid, const String& pass, uint32_t limitMs)",
-           "bool wifiKrokLaczenia()"):
-    _c = cialo(_f)
-    ok(bool(_c) and "zapamietajAp()" in _c,
-       f"{_f.split('(')[0].split()[-1]}() zapamietuje kanal routera po udanym polaczeniu")
-ok("!rtcOpenReported" in czek,
-   "ale bez powtarzania tego, co poszlo juz przy zwyklym otwarciu")
-# Sam kawalek "if (wifiBylLink) { ... }", uciety na klamrze zamykajacej -
-# bez tego kontrola widziala `wifiZacznijProbe()` z DALSZEJ czesci funkcji
-# i przepuszczala galaz, ktora niczego nie odbudowuje (zlapane mutacja).
-_gal = ""
-if "if (wifiBylLink) {" in _wk:
-    _gal = _wk[_wk.find("if (wifiBylLink) {"):]
-    _gal = _gal[:_gal.find("\n  }")]
-ok("wifiZacznijProbe(wifiProbaNr)" in _gal,
-   "zerwane lacze odbudowywane od razu, bez czekania na okno proby")
-ok("msZamkniecia = millis();" in czek,
+ok(bool(_sprobuj) and "zapamietajAp()" in _sprobuj,
+   "i zapamietujemy kanal routera po kazdym udanym polaczeniu")
+ok("msZamkniecia = millis();" in _doz,
    "zapamietujemy chwile zamkniecia - inaczej opoznienia nie da sie zmierzyc")
 ok("zamkn->wyslane" in ino,
    "czas od zamkniecia do potwierdzenia trafia do czarnej skrzynki")
@@ -652,9 +586,9 @@ ok("msPrzyciskOd ? msPrzyciskOd : t0" in code,
    "przytrzymanie liczy sie od chwili wcisniecia, nie od startu petli")
 # Klikniecie ma pikniecie od dawna; przytrzymanie musi miec swoje, inaczej
 # do konca nie wiadomo, czy pudelko przyjelo gest.
-_czek = cialo("Gest czekajNaZamkniecieIGest(uint32_t limitMs)")
+_czek = cialo("static bool dozorKrok()")
 ok(_czek and "GEST_PORTAL" in _czek and "buzzerTone" in
-   _czek[:_czek.find("return GEST_PORTAL")],
+   _czek[:_czek.find("dozGest = GEST_PORTAL")],
    "przyjecie przytrzymania potwierdza sie dzwiekiem od razu")
 
 # Punkt dostepowy to najdrozszy tryb pracy - zamkniecie wieczka musi go konczyc.

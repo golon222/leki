@@ -39,7 +39,7 @@ bash tests/run_all.sh
 
 Musi przejść przed zmianą i po zmianie. Stan wyjściowy:
 **626 + 52 firmware, 1264 (×6 pór doby) + 92 + 52 aplikacja, 48 zgodności,
-133 reguły bazy, 362 kontrole audytu, 30 kontroli statycznych — 0 błędów.**
+133 reguły bazy, 348 kontroli audytu, 30 kontroli statycznych — 0 błędów.**
 
 **Runner jest cichy przy sukcesie i głośny przy błędzie** (D66). Udany przebieg
 to 12 linii — **i te 12 linii TO JEST potwierdzenie, nie jego skrót.** Nie
@@ -195,6 +195,21 @@ odrzuca **cały** wpis kodem 400, a `trwaleOdrzucony(400)` go wtedy **kasuje**
    Ostrzeżenia dzielimy po **skutku**: dotyka dawek → na wierzchu
    w Ustawieniach (D11); nie dotyka → cicho w Diagnostyce (D74a).
 
+16. **Do sieci prowadzi JEDNA droga: `wifiConnect()`** (D111). Nie pisz
+   drugiego mechanizmu łączenia „bo tu nie można blokować". Taki mechanizm
+   już był — powstał w D98, żeby pudełko przy otwartym wieczku nie było
+   ślepe na jego zamknięcie — i przez **sześć wersji nie zameldował
+   otwarcia ani razu**, podczas gdy blokujące `wifiConnect()` obok, na tej
+   samej płytce, ściągało 1,2 MB aktualizacji.
+   Ślepotę, dla której powstał, zdejmuje **dozorca**: `wifiDozorca`
+   wołany z wnętrza czekania na `WL_CONNECTED` czyta kontaktron i przycisk
+   co ~20 ms i przerywa **całe** łączenie w chwili zamknięcia wieczka.
+   Obserwacja ma **jedną kopię** (`dozorKrok()`) — używa jej i pętla
+   czekania, i łączenie. Dwie kopie rozjadą się przy pierwszej poprawce.
+   **Meldunek o otwarciu jest ponawiany, nie jednorazowy**: za zgłoszone
+   uznajemy dopiero potwierdzony zapis. Dziewięć kontroli audytu, każda
+   sprawdzona mutacją.
+
 Blok pomiaru napięcia **wolno** zmieniać (zakaz zniesiony). Audyt nie blokuje —
 zgłasza tylko uwagę, żeby zmiana przypadkowa nie wyglądała jak świadoma.
 
@@ -239,7 +254,7 @@ na `esp32:esp32@3.3.11` i z **ustawieniami płytki z nagłówka `PillBox.ino`**.
 Nie jest częścią `run_all.sh`: wymaga sieci i ~500 MB toolchainu.
 **Uruchom to po każdej zmianie w firmware.**
 
-Stan: `PillBox.ino` **64% flasha** (1 266 167 B z 1,875 MB), `PillBoxTest.ino` 20%
+Stan: `PillBox.ino` **64% flasha** (1 263 939 B z 1,875 MB), `PillBoxTest.ino` 20%
 bez `config.h` i **57%** z nim. Szkic diagnostyczny budujemy w OBU
 konfiguracjach — bez tego drugiego przebiegu 722 kB jego kodu (logowanie do
 bazy, zapis wyniku) nie było kompilowane ani razu (D103).
@@ -266,6 +281,11 @@ nie do publikacji. Szczegóły obejść — D17.
 - **Powiadomienia Telegram (1.45.0) — ani jedna wiadomość nie wyszła jeszcze
   z płytki.** Kod się kompiluje i ma 82 kontrole, ale to nie jest dowód.
   Rozstrzygnie przycisk „wyślij wiadomość próbną" — po to powstał.
+- **Czy meldunek o otwartym wieczku dochodzi po D111 — NIESPRAWDZONE na
+  płytce.** Wiadomo tylko tyle, że idzie teraz tą samą drogą, którą
+  potwierdzono w terenie dla zapisu dawki i dla aktualizacji. Nie wiadomo
+  natomiast, **dlaczego** usunięty mechanizm w tle nie łączył się nigdy —
+  to zostaje niewyjaśnione i tak ma być opisywane.
 - Prąd ładowania 350 mA to wartość katalogowa, nie pomiar.
 - **Jakim kodem baza odrzuca wpis łamiący reguły.** Cała decyzja D13 zakłada
   400 — bo tylko wtedy `trwaleOdrzucony()` zdejmie wpis z kolejki. Nikt tego

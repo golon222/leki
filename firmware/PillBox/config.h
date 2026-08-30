@@ -20,7 +20,7 @@
  * 1. IDENTYFIKATOR URZADZENIA
  * ------------------------------------------------------------------ */
 #define DEVICE_ID           "pillbox01"     // klucz w /devices/<DEVICE_ID>
-#define FW_VERSION          "1.50.0"   // widoczna w aplikacji - po wgraniu sprawdz, czy sie zmienila
+#define FW_VERSION          "1.51.0"   // widoczna w aplikacji - po wgraniu sprawdz, czy sie zmienila
 
 /* ---------------------------------------------------------------------
  * 2. FIREBASE  (Realtime Database + Auth email/haslo)
@@ -251,35 +251,27 @@
 #define WIFI_SIECI_MAX      4               // ile sieci pamietamy
 #define WIFI_ALT_TIMEOUT_MS 8000            // krocej na kazda KOLEJNA probe
 
-/*     Laczenie W TLE - przy otwartym wieczku pudelko nie moze na nie
- *     czekac, bo przez ten czas nie widzi, ze wieczko zamknieto (D98).
- *     Ta wartosc mowi, ile czasu dostaje JEDNA proba, zanim przejdziemy
- *     do nastepnej sieci. Musi byc SPORO wiecej niz skojarzenie z
- *     routerem plus DHCP - poprzednia wersja ruszala trwajaca probe co
- *     5 s i lacze nie wstawalo w ogole (D99).                          */
-/*     BEZPIECZNIK, A NIE HARMONOGRAM - i ta roznica kosztowala szesc
- *     podejsc (D110).
+/*     MELDUNEK O OTWARTYM WIECZKU - JEDNA DROGA, TA SPRAWDZONA (D111)
  *
- *     Do 1.49.1 pudelko przerywalo trwajace laczenie co N sekund, zeby
- *     "sprobowac jeszcze raz". Pomiar z pudelka Kuby pokazal, ile to
- *     kosztuje: `radio 82,4 s` przy sygnale -54 dBm - lacze wstalo
- *     dopiero wtedy, gdy skonczyly sie moje przerwania.
+ *     Bylo tu piec stalych opisujacych wlasny mechanizm laczenia w tle
+ *     (okna prob, cisza sterownika, minimalny odstep). Mechanizm zostal
+ *     usuniety: przez szesc wersji nie zameldowal otwarcia ani razu,
+ *     podczas gdy blokujace `wifiConnect()` obok - na tej samej plytce,
+ *     w tej samej minucie - sciagalo 1,2 MB aktualizacji.
  *
- *     Teraz probe ponawiamy WYLACZNIE wtedy, gdy sterownik sam zglosi
- *     porazke (zdarzenie STA_DISCONNECTED) - bo tylko wtedy wiadomo, ze
- *     nie ma czego przerywac. Ta wartosc jest juz tylko siatka na jeden
- *     przypadek: `WiFi.begin()` potrafi zostac po cichu zignorowane
- *     i wtedy nie przyjdzie ZADNE zdarzenie. Ma byc DLUZSZA niz
- *     najgorsze realne skojarzenie, nie krotsza.                      */
-#define WIFI_BEZ_ODZEWU_MS  30000           // cisza sterownika = cos poszlo nie tak
-/*     To samo dla proby Z PODPOWIEDZIA (znany kanal i BSSID). Zla
- *     podpowiedz konczy sie zdarzeniem porazki w ulamku sekundy, wiec
- *     i tu jest to tylko siatka na cisze.                            */
+ *     Zostaje `wifiConnect()`, a slepote na zamkniecie wieczka, dla
+ *     ktorej mechanizm w ogole powstal, zdejmuje dozorca wolany
+ *     z wnetrza czekania na lacze (patrz `wifiDozorca` w PillBox.ino).
+ *
+ *     Ta wartosc mowi, jak czesto PONAWIAMY caly `wifiConnect()`, gdy
+ *     meldunek sie nie udal, a wieczko nadal jest otwarte. Jedna proba
+ *     to najwyzej ~47 s, wiec ponowienie i tak przypada rzadko - a
+ *     wczesniej nie bylo go wcale: jeden nieudany zapis oznaczal cisze
+ *     do konca czuwania.                                              */
+#define LID_PONOW_MS        60000           // ponow meldunek nie czesciej niz raz na minute
+/*     Krotkie okno na probe Z PODPOWIEDZIA (znany kanal i BSSID). Zla
+ *     podpowiedz konczy sie porazka w ulamku sekundy; dobra - laczem.  */
 #define WIFI_PROBA_SZYBKA_MS 8000
-/*     Najkrotszy odstep miedzy naszymi ponowieniami. Zdarzenie porazki
- *     potrafi przyjsc natychmiast, a wtedy bez tego odstepu
- *     przemielilibysmy cala liste w ulamku sekundy.                  */
-#define WIFI_MIN_ODSTEP_MS   1500
 
 /*     Wyniki usuwania sieci. Osobne wartosci, a nie samo true/false, bo
  *     "nie ma takiej sieci" i "nie usune, bo to jedyna droga do mnie" to

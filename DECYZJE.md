@@ -9,7 +9,7 @@ zamiast 60 tys. tokenów wchodzi 2,5 tys. plus jeden obszar.
 
 | plik | o czym | ile |
 |---|---|---|
-| `decyzje/pudelko.md` | Pudełko — sen, alarm, NVS, WiFi | 31 |
+| `decyzje/pudelko.md` | Pudełko — sen, alarm, NVS, WiFi | 32 |
 | `decyzje/ota.md` | Aktualizacja przez WiFi i skan sieci | 8 |
 | `decyzje/telegram.md` | Powiadomienia Telegram | 5 |
 | `decyzje/aplikacja.md` | Aplikacja — ekrany i wygląd | 37 |
@@ -63,6 +63,7 @@ Od najnowszej. Kolumna „gdzie" mówi, który plik w `decyzje/` trzymać otwart
 
 | # | O co chodziło | gdzie |
 |---|---|---|
+| **D111** | Koniec drugiego mechanizmu łączenia: przez sześć wersji nie zameldował otwarcia ani razu, a blokujące `wifiConnect()` obok ściągało 1,2 MB aktualizacji. Ślepotę na wieczko zdejmuje dozorca wołany z wnętrza czekania (firmware `1.51.0`) | `pudelko` |
 | **D110** | Ponawiamy łączenie po zdarzeniu `STA_DISCONNECTED`, nie po zegarze — 1.49.1 przy jednej zapisanej sieci nie ponawiało **ani razu** i otwarcie nie docierało nigdy (firmware `1.50.0`) | `pudelko` |
 | **D109** | Dziennik wieczka usunięty z firmware, aplikacji i bazy — mierzył **B1**, który Kuba zamknął, a kosztował dwa zapisy do flasha na najszybszej ścieżce (firmware `1.50.0`, aplikacja `2026-08-30.76`) | `pudelko` |
 | **D108** | Pomiar z pudełka (`radio 82,4 s`, -54 dBm) rozstrzygnął: to moje okna prób kasowały trwające skojarzenie. Przerywamy tylko, gdy jest co innego spróbować (firmware `1.49.1`) | `pudelko` |
