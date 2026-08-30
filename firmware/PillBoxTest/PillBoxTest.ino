@@ -552,16 +552,26 @@ void testFirebase() {
   Serial.printf("         konto: %s\n", DEVICE_EMAIL);
   Serial.printf("         baza : %s\n", RTDB_HOST);
 
-  if (String(DEVICE_PASSWORD) == "TUTAJ_WPISZ_HASLO_C") {
-    uwagaF("DEVICE_PASSWORD w config.h nie jest uzupelnione - pomijam");
-    return;
+  /* TU BYL MARTWY WARUNEK: porownanie z "TUTAJ_WPISZ_HASLO_C", a placeholder
+     nazywa sie "TUTAJ_WPISZ_HASLO", BEZ `_C`. Nie mogl byc prawdziwy ani razu.
+     Pytanie jest zreszta inne, niz bylo: od D59 liczy sie nie to, czy
+     config.h jest uzupelniony, tylko czy JEST SKAD wziac haslo - a pamiec
+     trwala pudelka ma pierwszenstwo przed config.h (ograniczenie 10).    */
+  {
+    bool zPamieci = false;
+    if (hasloUrzadzenia(&zPamieci) == String(PASSWORD_PLACEHOLDER)) {
+      uwagaF("nie ma hasla ani w pamieci pudelka, ani w config.h - pomijam");
+      info("To nie jest usterka sprzetu. Wgraj PillBox.ino kablem ze swoim");
+      info("haslem albo podaj je w portalu WiFi - trafi wtedy do pamieci.");
+      return;
+    }
   }
 
   bool zalog = firebaseLogowanie();
   if (zalog) wynikF(true,  "zalogowano (token %d znakow)", tokenId.length());
   else       wynik(false, "logowanie NIE POWIODLO SIE");
   if (!zalog) {
-    info("Sprawdz haslo [C] w config.h i konto w Firebase Authentication.");
+    info("Sprawdz haslo (pamiec pudelka albo config.h) i konto w Firebase.");
     return;
   }
 

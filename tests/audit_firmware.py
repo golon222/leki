@@ -1560,9 +1560,25 @@ for _f, _nazwa in ((cialo_surowe("bool pushStatus()"), "pushStatus()"),
     ok(bool(_l) and all("rtcTimeValid" in x for x in _l),
        f"{_nazwa} podaje lastSeen tylko z wiarygodnym zegarem, inaczej zero")
 
-# ---------- 10. Rzeczy do uzupelnienia przez uzytkownika ----------
-todo = "TUTAJ_WPISZ_HASLO_C" in cfg
-warn(todo, "DEVICE_PASSWORD nie jest jeszcze uzupelnione w config.h")
+# ---------- 10. HASLA W REPO NIE MA I BYC NIE MOZE ----------
+#
+# TU BYL MARTWY WARUNEK. Stalo tu `"TUTAJ_WPISZ_HASLO_C" in cfg` z ostrzezeniem
+# "DEVICE_PASSWORD nie jest jeszcze uzupelnione" - a placeholder nazywa sie
+# `TUTAJ_WPISZ_HASLO`, BEZ `_C`. Warunek nie mogl byc prawdziwy ani razu.
+#
+# Sama tresc ostrzezenia jest zreszta sprzed D59: od 1.38.0 placeholder
+# w repo jest STANEM DOCELOWYM, a nie rzecza do uzupelnienia (ograniczenie 3).
+# Prawdziwe haslo zyje w NVS pudelka; binarke buduje publicznie automat
+# z tego repo, wiec wkompilowane haslo byloby jego wyciekiem.
+#
+# Zamiast martwego przypomnienia pilnujemy wiec rzeczy odwrotnej i
+# naprawde grozniej: czy ktos nie wrzucil do repo PRAWDZIWEGO hasla.
+# Ten sam guard ma workflow budujacy binarke, ale tam odpala sie dopiero
+# po wypchnieciu - a `run_all.sh` chodzi przed kazdym commitem.
+_ph_ino = re.search(r'#\s*define\s+PASSWORD_PLACEHOLDER\s+"([^"]+)"', ino)
+_ph_cfg = re.search(r'#\s*define\s+DEVICE_PASSWORD\s+"([^"]*)"', cfg)
+ok(bool(_ph_ino) and bool(_ph_cfg) and _ph_cfg.group(1) == _ph_ino.group(1),
+   "config.h w repo trzyma sam placeholder hasla, nie prawdziwe haslo (D59)")
 
 # ---------- wynik ----------
 for m in PASS: print(f"  OK    {m}")
