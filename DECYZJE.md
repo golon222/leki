@@ -65,6 +65,7 @@ Od najnowszej. Kolumna „gdzie" mówi, który plik w `decyzje/` trzymać otwart
 
 | # | O co chodziło | gdzie |
 |---|---|---|
+| **D103** | Szkic diagnostyczny: część Firebase (722 kB kodu) nigdy nie była kompilowana, nagłówek kazał wgrywać ze starym podziałem pamięci, a test hasła czytał `config.h` zamiast NVS | `testy` |
 | **D102** | Aplikacja mówi, ilu wyjątków dawkowania pudełko nie zapamięta — RTC mieści 8 najbliższych, reszta znikała po cichu i pudełko dzwoniło w dni rozpisane bez leku (aplikacja `2026-08-29.74`) | `aplikacja` |
 | **D101** | Pełny przegląd kodu: `almMask` zapisywane na zamkniętym uchwycie NVS (fałszywy `nvsFail` codziennie), `doReconcile()` wiszące przy Firebase offline, `lastSeen` bez zegara jako rok 1970 (firmware `1.48.3`, aplikacja `2026-08-29.73`) | `pudelko` |
 | **D100** | Stan wieczka widać także w Diagnostyce — baner „otwarte" siedział w `tab-cal`, a sprawdza się z `tab-diag`/`tab-hist`, gdzie tamta sekcja jest schowana (aplikacja `2026-08-29.72`) | `aplikacja` |

@@ -15,7 +15,14 @@
  *  3. Ustawienia plytki takie same jak zwykle:
  *        Board            : XIAO_ESP32C3
  *        USB CDC On Boot  : Enabled
- *        Partition Scheme : Huge APP (3MB No OTA/1MB SPIFFS)
+ *        Partition Scheme : Minimal SPIFFS (1.9MB APP with OTA/190KB SPIFFS)
+ *
+ *     TEN SAM PODZIAL CO W PillBox.ino - i to nie jest kosmetyka.
+ *     Do 1.37.0 stalo tu "Huge APP", i tak zostalo, gdy glowny szkic
+ *     przeszedl na min_spiffs (D59). Przez to naglowek mowil Kubie co
+ *     innego niz `tests/kompiluj_firmware.sh`, ktory OBA szkice buduje
+ *     z podzialem min_spiffs - czyli sprawdzalismy inna binarke, niz
+ *     kazalismy wgrac. Skrypt pilnuje teraz obu naglowkow.
  *  4. Wgraj, otworz Monitor portu szeregowego (115200) i wykonuj polecenia
  *     ktore sie pojawia. Test trwa okolo 2 minut.
  *  5. Po tescie wgraj z powrotem PillBox.ino.
@@ -426,9 +433,53 @@ String wytnijPole(const String& src, const char* nazwa) {
   return (j < 0) ? "" : src.substring(i, j);
 }
 
+/* HASLO Z PAMIECI TRWALEJ, NIE WPROST Z config.h.
+
+   TU BYLA ZLA DIAGNOZA - w narzedziu, ktore istnieje po to, zeby stawiac
+   dobre. Od 1.38.0 `config.h` w repozytorium trzyma wylacznie placeholder,
+   a prawdziwe haslo zyje w NVS pudelka (D59, ograniczenie 10). Ten test
+   czytal `DEVICE_PASSWORD` wprost ze zrodla, wiec z plikiem pobranym
+   z GitHuba logowanie musialo sie nie udac - i szkic pisal wtedy
+   "Serwer mowi wprost: zle haslo w config.h", choc pudelko w normalnej
+   pracy loguje sie bez zarzutu.
+
+   Kolejnosc jest teraz ta sama co w `hasloDoLogowania()` w PillBox.ino:
+   pamiec trwala ma pierwszenstwo. Mowimy przy tym, SKAD haslo wzielismy -
+   bo od tego zalezy, gdzie szukac, gdy serwer je odrzuci.            */
+#ifndef PASSWORD_PLACEHOLDER
+  #define PASSWORD_PLACEHOLDER "TUTAJ_WPISZ_HASLO"
+#endif
+
+/* zNvs = true, gdy haslo przyszlo z pamieci trwalej pudelka. */
+String hasloUrzadzenia(bool* zNvs) {
+  String zPamieci;
+  if (prefs.begin(NVS_NAMESPACE, true)) {
+    zPamieci = prefs.getString("fbpass", "");
+    prefs.end();
+  }
+  if (zPamieci.length() && zPamieci != String(PASSWORD_PLACEHOLDER)) {
+    if (zNvs) *zNvs = true;
+    return zPamieci;
+  }
+  if (zNvs) *zNvs = false;
+  return String(DEVICE_PASSWORD);
+}
+
 bool firebaseLogowanie() {
   Serial.printf("         wolna pamiec przed polaczeniem: %u B\n",
                 (unsigned)ESP.getFreeHeap());
+
+  bool zNvs = false;
+  const String haslo = hasloUrzadzenia(&zNvs);
+  Serial.printf("         haslo urzadzenia: %s\n",
+                zNvs ? "z pamieci trwalej pudelka"
+                     : "z config.h (pamiec trwala go nie ma)");
+  if (!zNvs && haslo == String(PASSWORD_PLACEHOLDER)) {
+    info("W config.h stoi sam placeholder, a pamiec trwala jest pusta -");
+    info("nie ma czym sie zalogowac. To NIE jest usterka sprzetu: wgraj");
+    info("PillBox.ino kablem ze swoim haslem albo podaj je w portalu WiFi.");
+    return false;
+  }
 
   WiFiClientSecure c; c.setInsecure();
   HTTPClient h;
@@ -442,7 +493,7 @@ bool firebaseLogowanie() {
   }
   h.addHeader("Content-Type", "application/json");
   String body = String("{\"email\":\"") + DEVICE_EMAIL +
-                "\",\"password\":\"" + DEVICE_PASSWORD +
+                "\",\"password\":\"" + haslo +
                 "\",\"returnSecureToken\":true}";
   int code = h.POST(body);
   String odp = (code > 0) ? h.getString() : String();
@@ -457,7 +508,9 @@ bool firebaseLogowanie() {
   if (code != 200) {
     Serial.printf("         tresc: %s\n", odp.substring(0, 200).c_str());
     if (odp.indexOf("INVALID_PASSWORD") >= 0 || odp.indexOf("INVALID_LOGIN") >= 0)
-      info("Serwer mowi wprost: zle haslo w config.h (DEVICE_PASSWORD).");
+      info(zNvs ? "Serwer odrzucil haslo z pamieci trwalej pudelka - podaj je "
+                  "na nowo w portalu WiFi."
+                : "Serwer mowi wprost: zle haslo w config.h (DEVICE_PASSWORD).");
     else if (odp.indexOf("EMAIL_NOT_FOUND") >= 0)
       info("Nie ma takiego konta - sprawdz DEVICE_EMAIL w Firebase Authentication.");
     else if (odp.indexOf("API key not valid") >= 0)

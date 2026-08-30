@@ -235,7 +235,10 @@ na `esp32:esp32@3.3.11` i z **ustawieniami płytki z nagłówka `PillBox.ino`**.
 Nie jest częścią `run_all.sh`: wymaga sieci i ~500 MB toolchainu.
 **Uruchom to po każdej zmianie w firmware.**
 
-Stan: `PillBox.ino` **64% flasha** (1 264 779 B z 1,875 MB), `PillBoxTest.ino` 20%.
+Stan: `PillBox.ino` **64% flasha** (1 265 383 B z 1,875 MB), `PillBoxTest.ino` 20%
+bez `config.h` i **57%** z nim. Szkic diagnostyczny budujemy w OBU
+konfiguracjach — bez tego drugiego przebiegu 722 kB jego kodu (logowanie do
+bazy, zapis wyniku) nie było kompilowane ani razu (D103).
 Zapas ~718 kB.
 
 **Podział pamięci musi być `Minimal SPIFFS (1.9MB APP with OTA/190KB SPIFFS)`**,

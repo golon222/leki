@@ -51,11 +51,18 @@ PART="${PART:-min_spiffs}"
 PART_OPIS="Minimal SPIFFS (1.9MB APP with OTA/190KB SPIFFS)"
 FQBN="esp32:esp32:XIAO_ESP32C3:PartitionScheme=$PART,CDCOnBoot=default"
 
-if ! grep -qF "$PART_OPIS" "$ROOT/firmware/PillBox/PillBox.ino"; then
-  echo "BLAD: naglowek PillBox.ino nie zapowiada juz podzialu '$PART_OPIS'."
-  echo "      Kompilowanie na innym podziale mierzy nie to urzadzenie."
-  exit 1
-fi
+# OBA szkice, nie tylko glowny. Naglowek PillBoxTest.ino zapowiadal
+# "Huge APP" jeszcze dlugo po tym, jak projekt przeszedl na min_spiffs -
+# czyli mowil Kubie co innego, niz ten skrypt buduje i sprawdza. Szkic
+# diagnostyczny wgrywa sie recznie, wiec to jego naglowek jest instrukcja.
+for _szkic in "$ROOT/firmware/PillBox/PillBox.ino" \
+              "$ROOT/firmware/PillBoxTest/PillBoxTest.ino"; do
+  if ! grep -qF "$PART_OPIS" "$_szkic"; then
+    echo "BLAD: naglowek $(basename "$_szkic") nie zapowiada podzialu '$PART_OPIS'."
+    echo "      Kompilowanie na innym podziale mierzy nie to urzadzenie."
+    exit 1
+  fi
+done
 ESP32_INDEX="https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json"
 
 mkdir -p "$ACLI_DIR"
@@ -146,13 +153,14 @@ fi
 # w kolejnosci uzycia, wiec zadne prototypy nie sa potrzebne.
 # Dyrektywa #line sprawia, ze numery linii w bledach wskazuja .ino.
 zbuduj() {
-  local nazwa="$1" zrodlo="$2" katalog="$3" opis="$4"
+  local nazwa="$1" zrodlo="$2" katalog="$3" opis="$4" dodatkoweH="${5:-}"
   local tmp; tmp="$(mktemp -d)/$nazwa"
   mkdir -p "$tmp"
   printf '#include <Arduino.h>\n#line 1 "%s"\n' "$(basename "$zrodlo")" > "$tmp/$nazwa.cpp"
   cat "$zrodlo" >> "$tmp/$nazwa.cpp"
   # config.h i reszta plikow obok szkicu
   find "$katalog" -maxdepth 1 -name '*.h' -exec cp {} "$tmp/" \;
+  [ -n "$dodatkoweH" ] && find "$dodatkoweH" -maxdepth 1 -name '*.h' -exec cp {} "$tmp/" \;
   touch "$tmp/$nazwa.ino"
 
   echo
@@ -168,8 +176,25 @@ zbuduj() {
 
 zbuduj pillbox "$ROOT/firmware/PillBox/PillBox.ino" "$ROOT/firmware/PillBox" \
        "PillBox.ino  (rdzen $CORE_VER, XIAO ESP32-C3, $PART_OPIS)"
+# --- PillBoxTest budujemy DWA RAZY, i to nie jest nadmiar ------------
+#
+# TU BYLA DZIURA, znaleziona przy pelnym przegladzie kodu. Katalog
+# firmware/PillBoxTest/ nie zawiera config.h, wiec `__has_include` dawalo
+# MAM_CONFIG = 0 i CALA czesc sieciowo-bazodanowa szkicu (logowanie do
+# Firebase, zapis wyniku testu) nie byla kompilowana ANI RAZU. Skrypt
+# meldowal "PillBoxTest.ino kompiluje sie", pomijajac polowe, ktora Kuba
+# naprawde uruchamia - bo naglowek szkicu kaze mu polozyc obok KOPIE
+# swojego config.h.
+#
+# Dokladnie ta sama lekcja co B21/D26: sprawdzalismy sciezke budowania,
+# ktorej nikt nie uzywa. Teraz budujemy obie: bez config.h (sam sprzet,
+# tak jak obiecuje naglowek) i z config.h z repo - placeholder w srodku
+# w zupelnosci wystarczy, kompilatorowi chodzi o to, ze pola istnieja.
 zbuduj pillboxtest "$ROOT/firmware/PillBoxTest/PillBoxTest.ino" "$ROOT/firmware/PillBoxTest" \
-       "PillBoxTest.ino  (szkic diagnostyczny)"
+       "PillBoxTest.ino  (szkic diagnostyczny, BEZ config.h)"
+zbuduj pillboxtestcfg "$ROOT/firmware/PillBoxTest/PillBoxTest.ino" "$ROOT/firmware/PillBoxTest" \
+       "PillBoxTest.ino  (szkic diagnostyczny, Z config.h - czesc Firebase)" \
+       "$ROOT/firmware/PillBox"
 
 # ── 6. Kompilacja przez PRAWDZIWA sciezke .ino ────────────────────────
 # Kompilacja jako .cpp powyzej odpowiada na pytanie "czy kod sie buduje".
@@ -190,11 +215,12 @@ zbuduj pillboxtest "$ROOT/firmware/PillBoxTest/PillBoxTest.ino" "$ROOT/firmware/
 # kompilacja jako .cpp: pudelko ma dostac dokladnie ten program, ktory
 # wgralby Arduino IDE, a nie jego bliskiego kuzyna.
 zbudujIno() {
-  local nazwa="$1" zrodlo="$2" katalog="$3" opis="$4" wynik="$5"
+  local nazwa="$1" zrodlo="$2" katalog="$3" opis="$4" wynik="$5" dodatkoweH="${6:-}"
   local tmp; tmp="$(mktemp -d)/$nazwa"
   mkdir -p "$tmp"
   python3 "$ROOT/tests/proto_arduino.py" "$zrodlo" "$tmp/$nazwa.cpp" "$(basename "$zrodlo")"
   find "$katalog" -maxdepth 1 -name '*.h' -exec cp {} "$tmp/" \;
+  [ -n "$dodatkoweH" ] && find "$dodatkoweH" -maxdepth 1 -name '*.h' -exec cp {} "$tmp/" \;
   touch "$tmp/$nazwa.ino"
 
   echo
@@ -218,7 +244,9 @@ zbudujIno() {
 zbudujIno pbino "$ROOT/firmware/PillBox/PillBox.ino" "$ROOT/firmware/PillBox" \
        "PillBox.ino  Z PROTOTYPAMI, tak jak wgrywa Arduino IDE" "$OTA_OUT"
 zbudujIno pbtino "$ROOT/firmware/PillBoxTest/PillBoxTest.ino" "$ROOT/firmware/PillBoxTest" \
-       "PillBoxTest.ino  Z PROTOTYPAMI"
+       "PillBoxTest.ino  Z PROTOTYPAMI (bez config.h)" ""
+zbudujIno pbtinocfg "$ROOT/firmware/PillBoxTest/PillBoxTest.ino" "$ROOT/firmware/PillBoxTest" \
+       "PillBoxTest.ino  Z PROTOTYPAMI (z config.h)" "" "$ROOT/firmware/PillBox"
 
 echo
 echo "✔  Firmware kompiluje sie toolchainem Arduino (rdzen $CORE_VER)."
