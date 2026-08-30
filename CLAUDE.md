@@ -39,7 +39,7 @@ bash tests/run_all.sh
 
 Musi przejść przed zmianą i po zmianie. Stan wyjściowy:
 **638 + 52 firmware, 1268 (×6 pór doby) + 92 + 52 aplikacja, 48 zgodności,
-136 reguł bazy, 349 kontroli audytu, 30 kontroli statycznych — 0 błędów.**
+136 reguł bazy, 354 kontrole audytu, 30 kontroli statycznych — 0 błędów.**
 
 **Runner jest cichy przy sukcesie i głośny przy błędzie** (D66). Udany przebieg
 to 12 linii — **i te 12 linii TO JEST potwierdzenie, nie jego skrót.** Nie

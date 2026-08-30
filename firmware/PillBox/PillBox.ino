@@ -115,6 +115,27 @@ RTC_DATA_ATTR bool     rtcDosingLoaded  = false;// czy wczytano juz z pamieci tr
    zmiana - jedna probe.                                                 */
 RTC_DATA_ATTR uint8_t  rtcNetOstatnia   = 0;
 
+/* --- PODPOWIEDZ DO SZYBKIEGO POLACZENIA (D107) ------------------------
+
+   Czym naprawde jest ta minuta, na ktora Kuba czeka. `WiFi.begin(ssid,
+   pass)` po deep sleepie nie wie, gdzie stoi router - wiec sterownik
+   PRZEMIATA CALE PASMO 2,4 GHz, kanal po kanale, i dopiero potem sie
+   kojarzy. Przy mocnym sygnale to sekunda; przy -87 dBm, ktore pudelko
+   ma u Kuby, skan bywa dluzszy niz dziesiec sekund, a probe trzeba
+   czasem powtorzyc.
+
+   Ale my WIEMY, gdzie ten router jest: przy poprzednim udanym polaczeniu
+   zapisalismy jego kanal i adres sprzetowy. Podane do `WiFi.begin()`
+   zamieniaja przemiatanie pasma w jedno zapytanie na jednym kanale.
+
+   Pamiec RTC przezywa deep sleep, wiec podpowiedz jest gotowa dokladnie
+   wtedy, kiedy jest potrzebna - przy wybudzeniu kontaktronem. Nazwa
+   sieci idzie razem z nia, bo podpowiedz dotyczy KONKRETNEJ sieci;
+   po zmianie sieci jest bezwartosciowa i nie wolno jej uzyc.          */
+RTC_DATA_ATTR uint8_t  rtcApBssid[6]   = {0};
+RTC_DATA_ATTR uint8_t  rtcApKanal      = 0;    // 0 = nie mamy podpowiedzi
+RTC_DATA_ATTR char     rtcApSsid[33]   = "";
+
 /* Co sie stalo z ostatnia siecia przyslana z aplikacji. Idzie do statusu,
    zeby nie trzeba bylo ZGADYWAC, czemu siec "nie chce sie wyslac" - raz juz
    kosztowalo to runde zgadywania.                                        */
@@ -1989,6 +2010,38 @@ bool wifiSiecPriorytet(const String& ssid) {
 
 /* Jedna proba polaczenia. Pusty ssid = poswiadczenia zapamietane przez
    sterownik (tak dzialalo pudelko, zanim pojawila sie lista).          */
+/* Zapisz, gdzie stoi router - do uzycia przy nastepnym wybudzeniu.
+   Wolane z KAZDEGO miejsca, ktore doprowadzilo do polaczenia.        */
+static void zapamietajAp() {
+  const uint8_t* b = WiFi.BSSID();
+  if (!b) return;
+  const int32_t k = WiFi.channel();
+  if (k < 1 || k > 14) return;
+  memcpy(rtcApBssid, b, 6);
+  rtcApKanal = (uint8_t)k;
+  strlcpy(rtcApSsid, WiFi.SSID().c_str(), sizeof(rtcApSsid));
+}
+
+/* Czy podpowiedz dotyczy TEJ sieci. Po zmianie sieci jest nic niewarta. */
+static bool apPodpowiedzPasuje(const String& ssid) {
+  return rtcApKanal >= 1 && rtcApKanal <= 14
+      && ssid.length() && ssid == String(rtcApSsid);
+}
+
+/* `WiFi.begin()` z podpowiedzia, gdy ja mamy. Zwraca true, gdy poszla
+   wersja szybka - wolajacy daje jej wtedy krotsze okno, bo podpowiedz
+   albo dziala od razu, albo jest nieaktualna i szkoda na nia czasu.  */
+static bool wifiBeginZPodpowiedzia(const String& ssid, const String& pass) {
+  if (apPodpowiedzPasuje(ssid)) {
+    LOG("[NET] '%s' - znam kanal %u, lacze bez przemiatania pasma\n",
+        ssid.c_str(), (unsigned)rtcApKanal);
+    WiFi.begin(ssid.c_str(), pass.c_str(), (int32_t)rtcApKanal, rtcApBssid);
+    return true;
+  }
+  WiFi.begin(ssid.c_str(), pass.c_str());
+  return false;
+}
+
 static bool wifiSprobuj(const String& ssid, const String& pass, uint32_t limitMs) {
   /* Rozlaczenie przed kazda proba. Bez tego druga i kolejne WiFi.begin()
      trafiaja w sterownik, ktory wciaz probuje poprzedniej sieci, i potrafia
@@ -1998,13 +2051,15 @@ static bool wifiSprobuj(const String& ssid, const String& pass, uint32_t limitMs
     WiFi.disconnect(false, false);
     delay(80);
   }
-  if (ssid.length()) WiFi.begin(ssid.c_str(), pass.c_str());
+  if (ssid.length()) wifiBeginZPodpowiedzia(ssid, pass);
   else               WiFi.begin();
 
   uint32_t t0 = millis();
   while (WiFi.status() != WL_CONNECTED && millis() - t0 < limitMs && !awakeTooLong())
     delay(200);
-  return WiFi.status() == WL_CONNECTED;
+  const bool ok = WiFi.status() == WL_CONNECTED;
+  if (ok) zapamietajAp();          // gdzie stoi router - na nastepne wybudzenie
+  return ok;
 }
 
 /* --- ZACZNIJ LACZENIE I NIE CZEKAJ ------------------------------------
@@ -2044,6 +2099,17 @@ static void wifiOdNowa() {
    Rozlaczenie przed `WiFi.begin()` jest tu tak samo obowiazkowe jak w
    `wifiSprobuj()`: sterownik, ktory wciaz probuje poprzedniej sieci,
    potrafi po cichu zignorowac nowe zgloszenie.                        */
+/* Kolejnosc prob - i to ona decyduje, po ilu sekundach Kuba widzi
+   "otwarte" na telefonie:
+
+     0  siec, ktora dzialala ostatnio, Z PODPOWIEDZIA (kanal + BSSID)
+     1  ta sama siec, ale normalnie - gdy podpowiedz sie zestarzala
+     2..n  kolejne sieci z listy
+     n+1   poswiadczenia zapamietane przez sterownik
+
+   Proba 0 dostaje krotkie okno: albo laczy sie od razu, albo podpowiedz
+   jest nieaktualna i szkoda na nia czasu. Pozostale dostaja DUZO -
+   patrz `wifiOknoProby()`.                                            */
 static void wifiZacznijProbe(uint8_t nr) {
   const int n = wifiSieciCount();
   msProbaOd     = millis();
@@ -2052,16 +2118,47 @@ static void wifiZacznijProbe(uint8_t nr) {
     WiFi.disconnect(false, false);
     delay(80);
   }
-  if (n > 0 && nr < n) {
-    const String ssid = wifiSiecSsid((wifiBaza + nr) % n);
-    if (ssid.length()) {
-      LOG("[NET] proba %u w tle: '%s'\n", (unsigned)nr, ssid.c_str());
-      WiFi.begin(ssid.c_str(), wifiSiecPass((wifiBaza + nr) % n).c_str());
-      return;
+  /* Sterownik ma sam ponawiac skojarzenie miedzy naszymi probami -
+     to on, a nie my, wie, kiedy warto sprobowac jeszcze raz.        */
+  WiFi.setAutoReconnect(true);
+
+  if (n > 0) {
+    const int i = (nr == 0) ? wifiBaza : (wifiBaza + nr - 1) % n;
+    const uint8_t ostatniZListy = (uint8_t)n;      // nr 1..n to lista
+    if (nr <= ostatniZListy) {
+      const String ssid = wifiSiecSsid(i);
+      if (ssid.length()) {
+        if (nr == 0) {
+          if (wifiBeginZPodpowiedzia(ssid, wifiSiecPass(i))) return;
+          /* Podpowiedzi nie ma - proba 0 jest wtedy zwyklym laczeniem
+             i ma dostac zwykle, dlugie okno. Mowimy o tym `msProbaOd`
+             cofniete nie bedzie; okno liczy `wifiOknoProby()`.      */
+          LOG("[NET] proba 0 w tle: '%s' (bez podpowiedzi)\n", ssid.c_str());
+          return;
+        }
+        LOG("[NET] proba %u w tle: '%s'\n", (unsigned)nr, ssid.c_str());
+        WiFi.begin(ssid.c_str(), wifiSiecPass(i).c_str());
+        return;
+      }
     }
   }
   LOGLN("[NET] proba w tle: poswiadczenia sterownika");
   WiFi.begin();
+}
+
+/* Ile czasu dostaje BIEZACA proba, zanim siegniemy po nastepna.
+
+   TU BYL BLAD, i to ten sam co w 1.48.1, tylko wolniejszy. D99 zamienilo
+   `WiFi.reconnect()` co 5 s na wlasne okno 12 s - ale okno tez PRZERYWA
+   trwajace skojarzenie. Przy -87 dBm, ktore pudelko ma u Kuby, samo
+   przemiatanie pasma bywa dluzsze niz dwanascie sekund, wiec proba nie
+   miala szans dojsc do konca ANI RAZU. Laczylo sie dopiero wtedy, gdy
+   akurat trafilo miedzy dwa przerwania - stad "po okolo minucie".
+
+   Teraz przerywamy tylko po to, zeby sprobowac CZEGOS INNEGO, i dajemy
+   na to czas z zapasem. Probie z podpowiedzia wystarczy chwila.      */
+static uint32_t wifiOknoProby() {
+  return (wifiProbaNr == 0 && rtcApKanal) ? WIFI_PROBA_SZYBKA_MS : WIFI_PROBA_MS;
 }
 
 void wifiStart() {
@@ -2114,8 +2211,13 @@ bool wifiKrokLaczenia() {
       /* Siec zapamietujemy TYLKO wtedy, gdy to my prowadzilismy przeglad.
          Inaczej "lacze juz stalo" zapisywaloby pierwsza pozycje listy jako
          te dzialajaca - i nastepne wybudzenie zaczynaloby od zlej.      */
-      if (wifiProbaTrwa && n > 0 && wifiProbaNr < n)
-        rtcNetOstatnia = (uint8_t)((wifiBaza + wifiProbaNr) % n);
+      if (wifiProbaTrwa && n > 0)
+        rtcNetOstatnia = (uint8_t)((wifiProbaNr == 0)
+                                     ? wifiBaza
+                                     : (wifiBaza + wifiProbaNr - 1) % n);
+      /* I GDZIE ten router stoi - to jest cala oszczednosc przy nastepnym
+         otwarciu wieczka (D107).                                       */
+      zapamietajAp();
       LOG("[NET] lacze stoi po %lu ms\n",
           (unsigned long)(millis() - msProbaOd));
     }
@@ -2134,11 +2236,20 @@ bool wifiKrokLaczenia() {
 
   if (!wifiProbaTrwa) return false;   // nikt tu laczenia nie zaczynal
   /* Proba jeszcze trwa - nie wolno jej ruszac. O to szedl caly blad. */
-  if (millis() - msProbaOd < WIFI_PROBA_MS) return false;
+  if (millis() - msProbaOd < wifiOknoProby()) return false;
 
-  const int n = wifiSieciCount();
+  /* PO PRZEJSCIU WSZYSTKICH KANDYDATOW PRZESTAJEMY PRZERYWAC.
+
+     Wczesniej wracalismy do proby 0 i zaczynalismy przeglad od nowa -
+     czyli w kolko kasowalismy skojarzenie, ktore sterownik akurat
+     probowal zestawic. Skoro zadna z sieci nie odpowiedziala w swoim
+     oknie, to nie brak pomyslow jest problemem, tylko zasieg. Wtedy
+     jedyne sensowne zachowanie to zejsc mu z drogi: `setAutoReconnect`
+     kaze mu probowac dalej samemu, a my tylko patrzymy na status.    */
+  const uint8_t ostatniKandydat = (uint8_t)(wifiSieciCount() + 1);
+  if (wifiProbaNr >= ostatniKandydat) return false;
+
   wifiProbaNr++;
-  if (wifiProbaNr > n) wifiProbaNr = 0;      // przeszlismy liste i sterownik
   wifiZacznijProbe(wifiProbaNr);
   return false;
 }
@@ -2166,6 +2277,29 @@ bool wifiConnect() {
      radio wlaczone przez minute.                                       */
   int n = wifiSieciCount();
   bool ok = false;
+
+  /* NAJPIERW SZYBKA PROBA Z PODPOWIEDZIA - to jest droga, ktora wysyla
+     stan po ZAMKNIECIU wieczka, czyli druga polowa tego, o co chodzi
+     Kubie: "od razu, ze jest zamkniete" (D107).
+
+     Znamy kanal i adres routera z ostatniego udanego polaczenia, wiec
+     sterownik nie musi przemiatac calego pasma 2,4 GHz. Krotkie okno,
+     bo podpowiedz albo dziala natychmiast, albo sie zestarzala - a wtedy
+     petla nizej i tak przejdzie liste normalnie.                      */
+  if (n > 0 && !awakeTooLong()) {
+    const int i = rtcNetOstatnia % n;
+    const String ssid = wifiSiecSsid(i);
+    if (apPodpowiedzPasuje(ssid)) {
+      ok = wifiSprobuj(ssid, wifiSiecPass(i), WIFI_PROBA_SZYBKA_MS);
+      if (ok) {
+        rtcNetOstatnia = (uint8_t)i;
+        LOG("[NET] polaczono ze znanego kanalu w %s\n", "ulamku sekundy");
+      } else {
+        LOGLN("[NET] podpowiedz nieaktualna - przechodze na zwykle laczenie");
+        rtcApKanal = 0;            // nie probuj jej drugi raz w tym wybudzeniu
+      }
+    }
+  }
 
   for (int k = 0; k < n && !ok && !awakeTooLong(); k++) {
     int i = (rtcNetOstatnia + k) % n;
@@ -4634,6 +4768,23 @@ String logbookJson() {
 /* Czeka, az wieczko zostanie zamkniete, i po drodze liczy nacisniecia
    przycisku. Zastepuje dawne "poczekaj, az zamkna" - ten sam czas, ta sama
    bateria, tylko teraz cos jeszcze przy okazji robi.                    */
+/* POMIAR W HISTORII, a nie tylko w Diagnostyce.
+
+   `netMs` i `lidMs` ida do statusu od D99, ale zeby je zobaczyc, trzeba
+   wejsc na wlasciwy ekran i wiedziec, ze tam sa. Kuba czyta HISTORIE
+   WYBUDZEN - to ja wkleja w zgloszeniach. Wlasny wpis, nie `note`, bo
+   `note` jest jeden na wybudzenie i nadpisze go "zamkn->wyslane".
+
+   Dwie liczby w jednej linijce odpowiadaja na jedyne pytanie, ktore ma
+   tu sens: gdzie poszedl czas. "radio 1,8 s" plus "razem 2,6 s" znaczy
+   siec; "radio 0,4 s" plus "razem 9 s" znaczy baze.                  */
+void lidMeldunek() {
+  char m[40];
+  snprintf(m, sizeof(m), "otw->apka %ld ms (radio %ld)",
+           (long)rtcLidMs, (long)rtcNetMs);
+  logbookAdd(m);
+}
+
 Gest czekajNaZamkniecieIGest(uint32_t limitMs) {
   uint32_t t0 = millis();
   bool byl = buttonPressed();
@@ -4698,7 +4849,10 @@ Gest czekajNaZamkniecieIGest(uint32_t limitMs) {
     rtcNetMs = -1;
     rtcLidMs = -1;
     if (WiFi.status() == WL_CONNECTED && firebaseSignIn()) {
-      if (pushLidState(boxIsOpen())) rtcLidMs = (int32_t)(millis() - t0);
+      /* Liczymy OD WYBUDZENIA, nie od tej petli: `millis()` startuje od zera
+         przy wyjsciu z deep sleepu, czyli w chwili ruchu wieczka. To jest
+         dokladnie ta liczba, na ktora patrzy czlowiek z telefonem. */
+      if (pushLidState(boxIsOpen())) { rtcLidMs = (int32_t)millis(); lidMeldunek(); }
       rtcNetMs = 0;                 // lacze bylo gotowe od pierwszej chwili
       zgloszonoOtwarcie = true;
     } else {
@@ -4728,7 +4882,7 @@ Gest czekajNaZamkniecieIGest(uint32_t limitMs) {
        Cala funkcja jest nieblokujaca: sprawdza status, porownuje czas
        i najwyzej zaczyna kolejna probe. Wieczko zostaje pod obserwacja. */
     if (!radioZgaszone && wifiKrokLaczenia() && rtcNetMs < 0 && mierzymyWieczko)
-      rtcNetMs = (int32_t)(millis() - t0);
+      rtcNetMs = (int32_t)millis();
 
     if (!radioZgaszone && millis() - t0 > RADIO_OTWARTE_S * 1000UL) {
       LOG("[NET] wieczko otwarte %lu s - usypiam radio\n",
@@ -4744,7 +4898,7 @@ Gest czekajNaZamkniecieIGest(uint32_t limitMs) {
       zgloszonoOtwarcie = true;
       LOGLN("[LID] lacze wstalo - melduje stan wieczka");
       if (firebaseSignIn()) {
-        if (pushLidState(boxIsOpen())) rtcLidMs = (int32_t)(millis() - t0);
+        if (pushLidState(boxIsOpen())) { rtcLidMs = (int32_t)millis(); lidMeldunek(); }
       } else rtcStatusDirty = true;
     }
 

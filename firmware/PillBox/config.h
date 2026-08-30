@@ -20,7 +20,7 @@
  * 1. IDENTYFIKATOR URZADZENIA
  * ------------------------------------------------------------------ */
 #define DEVICE_ID           "pillbox01"     // klucz w /devices/<DEVICE_ID>
-#define FW_VERSION          "1.48.4"   // widoczna w aplikacji - po wgraniu sprawdz, czy sie zmienila
+#define FW_VERSION          "1.49.0"   // widoczna w aplikacji - po wgraniu sprawdz, czy sie zmienila
 
 /* ---------------------------------------------------------------------
  * 2. FIREBASE  (Realtime Database + Auth email/haslo)
@@ -257,7 +257,18 @@
  *     do nastepnej sieci. Musi byc SPORO wiecej niz skojarzenie z
  *     routerem plus DHCP - poprzednia wersja ruszala trwajaca probe co
  *     5 s i lacze nie wstawalo w ogole (D99).                          */
-#define WIFI_PROBA_MS       12000           // jedna proba w tle
+/*     Okno JEDNEJ proby w tle. Nie jest to limit na polaczenie - jest to
+ *     czas, po ktorym warto sprobowac CZEGOS INNEGO (kolejnej sieci).
+ *     Musi wiec byc dluzsze niz najgorsze realne skojarzenie, bo inaczej
+ *     przerywamy probe, ktora wlasnie mialaby sie udac. Przy -87 dBm,
+ *     ktore pudelko ma u Kuby, samo przemiatanie pasma 2,4 GHz potrafi
+ *     zajac kilkanascie sekund - 12 s bylo za malo i dawalo dokladnie
+ *     to, co widzial: "po okolo minucie" (D107).                      */
+#define WIFI_PROBA_MS       25000           // jedna proba w tle
+/*     Proba Z PODPOWIEDZIA (znany kanal i BSSID) omija przemiatanie
+ *     pasma, wiec albo laczy sie od razu, albo podpowiedz sie
+ *     zestarzala i szkoda na nia czasu.                              */
+#define WIFI_PROBA_SZYBKA_MS 4000
 
 /*     Wyniki usuwania sieci. Osobne wartosci, a nie samo true/false, bo
  *     "nie ma takiej sieci" i "nie usune, bo to jedyna droga do mnie" to

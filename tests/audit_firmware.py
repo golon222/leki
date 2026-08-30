@@ -305,8 +305,31 @@ ok("WiFi.reconnect()" not in czek,
    "petla czekania NIE przerywa trwajacego laczenia (to psulo 1.48.1)")
 ok("wifiKrokLaczenia()" in czek[czek.find("while ("):],
    "lacze dociagane krok po kroku Z WNETRZA petli, bez blokady")
-ok("WIFI_PROBA_MS" in _wk,
+_okno = cialo("static uint32_t wifiOknoProby()")
+ok("wifiOknoProby()" in _wk and "WIFI_PROBA_MS" in _okno,
    "jedna proba dostaje wlasne okno, zanim siegniemy po nastepna siec")
+# ...I NIE ZACZYNAMY PRZEGLADU OD NOWA W KOLKO.
+#
+# Do 1.48.4 po ostatnim kandydacie `wifiProbaNr` wracalo do zera i caly
+# przeglad ruszal od poczatku - czyli w kolko kasowalismy skojarzenie,
+# ktore sterownik akurat probowal zestawic. Przy slabym sygnale to jest
+# ten sam blad co `WiFi.reconnect()` co 5 s, tylko wolniejszy: proba nie
+# ma szans dojsc do konca ANI RAZU (D107).
+ok("setAutoReconnect" in (cialo("static void wifiZacznijProbe(uint8_t nr)") or ""),
+   "sterownik ma sam ponawiac skojarzenie miedzy naszymi probami")
+ok("ostatniKandydat" in _wk and "return false" in _wk,
+   "po przejsciu wszystkich sieci przestajemy przerywac trwajaca probe")
+# PODPOWIEDZ: kanal i BSSID z ostatniego udanego polaczenia. Bez niej
+# sterownik po deep sleepie przemiata cale pasmo 2,4 GHz - przy -87 dBm
+# to kilkanascie sekund, czyli cala "minuta", na ktora czekal Kuba.
+_hint = cialo("static bool wifiBeginZPodpowiedzia(const String& ssid, const String& pass)")
+ok(bool(_hint) and "rtcApKanal" in _hint and "rtcApBssid" in _hint,
+   "laczymy sie ze ZNANEGO kanalu, zamiast przemiatac pasmo")
+for _f in ("static bool wifiSprobuj(const String& ssid, const String& pass, uint32_t limitMs)",
+           "bool wifiKrokLaczenia()"):
+    _c = cialo(_f)
+    ok(bool(_c) and "zapamietajAp()" in _c,
+       f"{_f.split('(')[0].split()[-1]}() zapamietuje kanal routera po udanym polaczeniu")
 ok("!rtcOpenReported" in czek,
    "ale bez powtarzania tego, co poszlo juz przy zwyklym otwarciu")
 # Sam kawalek "if (wifiBylLink) { ... }", uciety na klamrze zamykajacej -

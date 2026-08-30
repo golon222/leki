@@ -9,7 +9,7 @@ zamiast 60 tys. tokenów wchodzi 2,5 tys. plus jeden obszar.
 
 | plik | o czym | ile |
 |---|---|---|
-| `decyzje/pudelko.md` | Pudełko — sen, alarm, NVS, WiFi | 27 |
+| `decyzje/pudelko.md` | Pudełko — sen, alarm, NVS, WiFi | 28 |
 | `decyzje/ota.md` | Aktualizacja przez WiFi i skan sieci | 8 |
 | `decyzje/telegram.md` | Powiadomienia Telegram | 5 |
 | `decyzje/aplikacja.md` | Aplikacja — ekrany i wygląd | 37 |
@@ -65,6 +65,7 @@ Od najnowszej. Kolumna „gdzie" mówi, który plik w `decyzje/` trzymać otwart
 
 | # | O co chodziło | gdzie |
 |---|---|---|
+| **D107** | Łączenie ze ZNANEGO kanału (BSSID w RTC) zamiast przemiatania pasma 2,4 GHz; okno próby 12→25 s i koniec restartowania trwającego skojarzenia — to ono dawało „minutę” (firmware `1.49.0`) | `pudelko` |
 | **D106** | Binarka nie była powtarzalna (`mktemp -d` w ścieżce budowania) — każdy przebieg dawał inne md5, więc aplikacja pisała „jest nowa wersja” o tej samej wersji | `testy` |
 | **D105** | Sześć zapisów do NVS omijało licznik strat — `nvsPutI16`/`nvsPutU8` domykają zasadę D46, atrapa `putShort` przestała zwracać `void` (firmware `1.48.4`) | `dane` |
 | **D104** | Dwa pola bez walidacji: za długa notatka odrzucała CAŁY wpis o dawce, a data „śledzimy od” z przyszłości wygaszała kalendarz i raport dla lekarza (aplikacja `2026-08-30.75`) | `aplikacja` |
