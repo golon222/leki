@@ -307,6 +307,59 @@ for _fw, _app in _pary:
               f'w aplikacji - aplikacja klamie o granicy pudelka')
     else:
         print(f'  OK   {_fw} i {_app} zgodne ({_m1.group(1)})')
+
+# ── AUTOMAT BUDUJACY BINARKE TRZYMA KOPIE LICZB Z FIRMWARE ──────────────
+#
+# `.github/workflows/firmware.yml` jest jedynym plikiem w tym repo, ktorego
+# nie dotyka zaden test - a to on produkuje binarke, ktora Kuba wgrywa do
+# pudelka. Trzyma przy tym WLASNE kopie czterech rzeczy z config.h. Kazda
+# z nich moze sie rozjechac po cichu, a objaw wychodzi dopiero na plytce:
+#
+#   * granice rozmiaru - automat wypuscilby plik, ktory pudelko odrzuci
+#     komunikatem "opis wersji na serwerze jest niepoprawny";
+#   * nazwy plikow - pudelko pobieraloby adres, ktorego tam nie ma;
+#   * placeholder hasla - to jest ten guard, ktory zatrzymuje budowe, gdyby
+#     ktos wrzucil do repo config.h z PRAWDZIWYM haslem. Szuka konkretnego
+#     napisu; zmiana tego napisu po stronie firmware rozbraja go w ciszy.
+_wf_p = root/'.github/workflows/firmware.yml'
+if not _wf_p.exists():
+    bad += 1; print('  BLAD brak .github/workflows/firmware.yml')
+else:
+    _wf = _wf_p.read_text(encoding='utf-8')
+    _def = lambda n: (re.search(rf'#\s*define\s+{n}\s+"?([^"\s]+)"?', cfg) or [None, None])[1] \
+                     if re.search(rf'#\s*define\s+{n}\s+', cfg) else None
+    _rozjazd = []
+    for _n in ('OTA_MIN_BIN_SIZE', 'OTA_MAX_BIN_SIZE'):
+        _v = _def(_n)
+        if not _v:            _rozjazd.append(f'{_n}: nie ma w config.h')
+        elif _v not in _wf:   _rozjazd.append(f'{_n}={_v} nie wystepuje w workflow')
+    for _n in ('OTA_BIN_FILE', 'OTA_JSON_FILE'):
+        _v = _def(_n)
+        if not _v:            _rozjazd.append(f'{_n}: nie ma w config.h')
+        elif _v not in _wf:   _rozjazd.append(f'{_n}={_v} nie wystepuje w workflow')
+    # Placeholder hasla stoi w TRZECH miejscach: jako wartosc DEVICE_PASSWORD
+    # w config.h, jako PASSWORD_PLACEHOLDER w PillBox.ino (po tym firmware
+    # poznaje binarke z automatu) i jako wzorzec w guardzie workflow.
+    # Rozjazd miedzy dwoma pierwszymi jest grozny: NVS z dawnym
+    # placeholderem zostalby uznany za prawdziwe haslo, `otaWolno()`
+    # przepuscilby aktualizacje, a nowy program nie zalogowalby sie do bazy -
+    # czyli pudelko traci jedyna zdalna droge naprawy (D59).
+    _ph_ino = re.search(r'#\s*define\s+PASSWORD_PLACEHOLDER\s+"([^"]+)"', ino)
+    _ph_cfg = re.search(r'#\s*define\s+DEVICE_PASSWORD\s+"([^"]+)"', cfg)
+    if not _ph_ino or not _ph_cfg:
+        _rozjazd.append('nie znalazlem PASSWORD_PLACEHOLDER albo DEVICE_PASSWORD')
+    else:
+        if _ph_ino.group(1) != _ph_cfg.group(1):
+            _rozjazd.append(f'placeholder hasla: .ino ma "{_ph_ino.group(1)}", '
+                            f'config.h ma "{_ph_cfg.group(1)}"')
+        if _ph_ino.group(1) not in _wf:
+            _rozjazd.append(f'workflow nie pilnuje placeholdera "{_ph_ino.group(1)}"')
+    if _rozjazd:
+        bad += 1
+        print('  BLAD automat budujacy binarke rozjechal sie z firmware:')
+        for _r in _rozjazd: print('       ' + _r)
+    else:
+        print('  OK   automat budujacy binarke zgodny z config.h (rozmiary, nazwy, placeholder)')
 defined = set(re.findall(r'#\s*define\s+(\w+)', cfg))
 unused = [d for d in defined if d not in ino and d not in
           ('LOG','LOGLN','REED_MODE','BUTTON_MODE')]

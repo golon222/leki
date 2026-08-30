@@ -2074,6 +2074,53 @@ head("Pierwsze przypomnienie nie wycisza drugiego");
   CHECK(juzDzisBrane(), "o 23:00 pudelko wie, ze dzis juz bylo - drugie tez milczy");
 }
 
+/* ── MASKA ODZWONIONYCH NAPRAWDE TRAFIA DO PAMIECI TRWALEJ (D101) ──
+
+   TU BYL BLAD, znaleziony przy pelnym przegladzie kodu. W
+   `oznaczAlarmObsluzony()` wywolanie `nvsPutU16("almMask", ...)` stalo ZA
+   `prefs.end()`, czyli na zamknietym uchwycie. Preferences zwraca wtedy
+   zero i nie zapisuje nic - a zero to ten sam wynik co zapis nieudany.
+
+   Skutek podwojny: licznik `nvsFail` rosl przy KAZDYM odzwonionym
+   przypomnieniu (czyli jedyny sygnal majacy znaczyc "dane gina" klamal
+   codziennie), a maska nie przezywala twardego restartu - po nim
+   `loadDayMarkers()` czytalo dzien z NVS i maske jako zero, wiec
+   przypomnienie odzywalo sie drugi raz w tej samej dobie, wbrew D23.
+
+   Testy tego nie widzialy, bo atrapa Preferences przepuszcza zapis bez
+   uchwytu, dopoki nie wlaczy sie `strict`. Wlaczamy - to jest jedyny
+   tryb, w ktorym atrapa zachowuje sie jak prawdziwe NVS.             */
+head("Maska odzwonionych przypomnien trafia do NVS, nie w prozne");
+{
+  prefs.wipe();
+  prefs.strict = true;                 // NVS: zapis bez uchwytu nie przechodzi
+  parseSchedule("20:00|23:00");
+  rtcTimeValid = true; rtcTzOffsetMin = 120;
+  rtcAlarmDoneDay = 0; rtcAlarmDoneTs = 0; rtcAlarmDoneMask = 0;
+  rtcNvsFail = 0;
+  rtcNvsFailKey[0] = 0;
+
+  FAKE_NOW = local(2026, 8, 8, 20, 0);
+  oznaczAlarmObsluzony(0);
+
+  CHECK(rtcNvsFail == 0,
+        "odzwonienie nie zglasza utraty danych (nvsFail=%u, klucz '%s')",
+        rtcNvsFail, rtcNvsFailKey);
+
+  /* Twardy reset: pamiec RTC znika, prawda zostaje wylacznie w NVS. */
+  rtcAlarmDoneDay = 0; rtcAlarmDoneMask = 0; rtcAlarmDoneTs = 0;
+  rtcTakenDay = 0; rtcRolloverDay = 0;
+  loadDayMarkers();
+  CHECK(rtcAlarmDoneDay == localDayNumber(FAKE_NOW),
+        "dzien odzwonienia przezyl restart (%lu)", (unsigned long)rtcAlarmDoneDay);
+  CHECK(rtcAlarmDoneMask == 1,
+        "i MASKA tez - inaczej po restarcie pudelko dzwoni drugi raz (maska=%u)",
+        rtcAlarmDoneMask);
+  CHECK(alarmJuzObsluzony(0),
+        "czyli po restarcie slot 0 nadal milczy");
+  prefs.strict = false;
+}
+
 head("Ktore przypomnienie jest ostatnia szansa w dobie");
 {
   parseSchedule("20:00|23:00");
