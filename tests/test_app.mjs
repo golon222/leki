@@ -898,7 +898,7 @@ check(css.includes("min-width:0;outline:none") || /input,select\{[^}]*min-width:
 
 head("Diagnostyka na osobnym ekranie");
 
-/* Cztery karty diagnostyczne przenioslo sie z Ustawien na wlasny ekran.
+/* Karty diagnostyczne przenioslo sie z Ustawien na wlasny ekran.
    Test pilnuje PODZIALU, bo bez niego pierwsza nowa karta wroci tam, gdzie
    bylo najblizej - czyli do Ustawien, ktore wlasnie odchudzilismy.       */
 {
@@ -915,7 +915,7 @@ head("Diagnostyka na osobnym ekranie");
      jest w porzadku. Chodzi o to, gdzie stoi KARTA.                       */
   const naglowek = (sekcja, karta) => sekcja.includes(`<h3>${karta}</h3>`);
   for (const karta of ["Co przysłało pudełko", "Autotest pudełka",
-                       "Historia pudełka", "Test wieczka"]){
+                       "Historia pudełka"]){
     check(naglowek(diag, karta) && !naglowek(ust, karta),
           `„${karta}" jest w Diagnostyce, nie w Ustawieniach`);
   }
@@ -2980,7 +2980,7 @@ head("Zapisy z podekranow trafiaja tam, gdzie czyta je pudelko");
      miejsce, z ktorego pudelko czyta ustawienia.                         */
   const sciezki = Object.keys(A.__db.zapisy || {});
   check(sciezki.every(k => !k.startsWith("users/") || k.includes("/doses/")
-                        || k.includes("/inr/") || k.includes("/lidMarks/")),
+                        || k.includes("/inr/")),
         "nic nie wyladowalo w przypadkowej galezi bazy");
 }
 
@@ -4617,7 +4617,6 @@ head("Instrukcja");
       ["kolory w kalendarzu",         /pełna dawka/],
       ["domykanie doby o 3:00",       /3:00/],
       ["autotest i sygnatura",        /sygnatura/],
-      ["dziennik wieczka",            /magnes/],
       ["zapas i recepta",             /recept/i]])
     check(wzor.test(pomoc), `Instrukcja tlumaczy: ${czego}`);
 

@@ -305,30 +305,57 @@ ok("WiFi.reconnect()" not in czek,
    "petla czekania NIE przerywa trwajacego laczenia (to psulo 1.48.1)")
 ok("wifiKrokLaczenia()" in czek[czek.find("while ("):],
    "lacze dociagane krok po kroku Z WNETRZA petli, bez blokady")
-_okno = cialo("static uint32_t wifiOknoProby()")
-ok("wifiOknoProby()" in _wk and "WIFI_PROBA_MS" in _okno,
-   "jedna proba dostaje wlasne okno, zanim siegniemy po nastepna siec")
-# ...I NIE ZACZYNAMY PRZEGLADU OD NOWA W KOLKO.
-#
-# Do 1.48.4 po ostatnim kandydacie `wifiProbaNr` wracalo do zera i caly
-# przeglad ruszal od poczatku - czyli w kolko kasowalismy skojarzenie,
-# ktore sterownik akurat probowal zestawic. Przy slabym sygnale to jest
-# ten sam blad co `WiFi.reconnect()` co 5 s, tylko wolniejszy: proba nie
-# ma szans dojsc do konca ANI RAZU (D107).
-ok("setAutoReconnect" in (cialo("static void wifiZacznijProbe(uint8_t nr)") or ""),
-   "sterownik ma sam ponawiac skojarzenie miedzy naszymi probami")
-# PRZERWANIE MA SENS WYLACZNIE WTEDY, GDY MAMY CO INNEGO SPROBOWAC.
+# PONOWIENIE IDZIE ZA ZDARZENIEM PORAZKI, A NIE ZA ZEGAREM (D110).
 #
 # Rozstrzygniete POMIAREM z pudelka Kuby: `radio 82,4 s - baza 82,9 s`
 # przy sile sygnalu -54 dBm. Baza odpowiada w pol sekundy; cala minuta
-# szla w samo polaczenie. Proby leciały co WIFI_PROBA_MS (25 s), a lacze
-# wstalo o 82,4 s - czyli dopiero wtedy, gdy przestalismy przerywac.
-# Kazde okno kasowalo skojarzenie, ktore wlasnie mialo sie udac (D108).
-ok("wifiOstatniKandydat()" in _wk,
-   "przerywamy tylko wtedy, gdy jest CO INNEGO sprobowac")
+# szla w samo polaczenie, a lacze wstalo dokladnie wtedy, gdy skonczyly
+# sie nasze przerwania. Szesc podejsc roznilo sie tylko dlugoscia okna
+# (5 s, 12 s, 25 s) - zegar nie odroznia "proba trwa" od "proba padla".
+# Sterownik odroznia i mowi to wprost.
+_zd = cialo("static void wifiZdarzenie(arduino_event_id_t ev)")
+ok(bool(_zd) and "ARDUINO_EVENT_WIFI_STA_DISCONNECTED" in _zd and "wifiPorazek++" in _zd,
+   "porazki laczenia liczymy ze zdarzen sterownika, nie z zegara")
+ok("WiFi.onEvent(wifiZdarzenie)" in _ws,
+   "nasluch zdarzen WiFi jest podpiety przy starcie radia")
+ok("wifiPorazek != wifiPorazekZnane" in _wk,
+   "ponawiamy WYLACZNIE po zgloszonej porazce - nie ma czego przerywac")
+# WLASNE rozlaczenie przed nowa proba tez wyzwala STA_DISCONNECTED. Gdyby
+# weszlo na licznik, kazda proba wygladalaby na natychmiast przegrana i
+# ponawialibysmy w kolko co WIFI_MIN_ODSTEP_MS - ten sam blad, tylko szybszy.
+_zp = cialo("static void wifiZacznijProbe(uint8_t nr)")
+ok("wifiCiszaZdarzen" in _zd and bool(_zp) and "wifiCiszaZdarzen = true" in _zp,
+   "wlasne rozlaczenie nie jest liczone jako porazka proby")
+ok("wifiPorazekZnane = wifiPorazek" in _zp,
+   "licznik porazek zerowany razem z zegarem, w chwili startu proby")
+# Skojarzenie stoi, trwa DHCP - to nie cisza sterownika, tylko drugi etap.
+ok("ARDUINO_EVENT_WIFI_STA_CONNECTED" in _zd and "wifiSkojarzono" in _wk,
+   "bezpiecznik ciszy liczy od nowa, gdy router juz nas przyjal")
+ok("volatile uint32_t wifiPorazek" in ino,
+   "licznik porazek jest volatile - rosnie w watku zdarzen WiFi")
+_okno = cialo("static uint32_t wifiOknoCiszy()")
+ok(bool(_okno) and "WIFI_BEZ_ODZEWU_MS" in _okno and "WIFI_PROBA_SZYBKA_MS" in _okno,
+   "cisza sterownika ma wlasny bezpiecznik, osobny dla proby z podpowiedzia")
+ok("wifiOknoCiszy()" in _wk and "WIFI_MIN_ODSTEP_MS" in _wk,
+   "a ponowienia maja minimalny odstep, gdy porazki sypia sie seriami")
+# ...I NIGDY NIE PRZESTAJEMY PONAWIAC.
+#
+# TU BYL BLAD 1.49.1. Stalo tu `if (wifiProbaNr >= wifiOstatniKandydat())
+# return false;` - czyli "gdy nie ma nastepnego kandydata, nie ponawiaj".
+# Przy JEDNEJ zapisanej sieci i bez podpowiedzi ten limit wynosi 0, wiec
+# pudelko po pierwszej porazce zostawalo bez lacza do konca czuwania.
+# Kuba: "teraz w ogole nie pokazuje w aplikacji, ze sie otwiera".
+ok("wifiProbaNr >= wifiOstatniKandydat()" not in _wk,
+   "brak nastepnego kandydata NIE konczy ponawiania (to psulo 1.49.1)")
+ok("wifiProbaNr = wifiZPodpowiedzia ? 1 : 0" in _wk,
+   "po wyczerpaniu listy wracamy na jej poczatek, ale juz bez podpowiedzi")
 _kand = cialo("static uint8_t wifiOstatniKandydat()")
 ok(bool(_kand) and "wifiZPodpowiedzia" in _kand and "wifiSieciCount()" in _kand,
-   "a przy jednej sieci i bez podpowiedzi nie przerywamy w ogole")
+   "kolejnosc kandydatow liczona z listy sieci i z podpowiedzi")
+# Dwa mechanizmy ponawiania deptalyby sobie po pietach i znowu nie dalo by
+# sie powiedziec, kto komu przerwal probe.
+ok("WiFi.setAutoReconnect(false)" in _ws,
+   "sterownik NIE ponawia rownolegle z nami")
 # Oszczedzanie radia usypia odbiornik miedzy ramkami - w trakcie kojarzenia
 # i DHCP to znaczy pominiete odpowiedzi. Wlaczamy je dopiero po polaczeniu.
 _ws2 = cialo("void wifiStart()")

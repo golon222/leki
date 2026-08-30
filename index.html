@@ -1469,21 +1469,8 @@ nav button .kropka-nav{position:absolute;top:6px;right:50%;margin-right:-16px;
            class="hide" onchange="kopiaWybrana(this)">
   </div>
 
-  <!-- WEJSCIE DO TESTU WIECZKA -->
-  <div class="card">
-    <h3>Test wieczka</h3>
-    <p class="muted" style="margin:6px 0 12px">Czy pudełko melduje otwarcia,
-      których nikt nie zrobił.</p>
-    <button class="btn" onclick="showTab('lid')" style="width:100%">
-      Otwórz dziennik wieczka
-    </button>
-  </div>
 </section>
 
-<!-- ═══════════════ DZIENNIK WIECZKA (test terenowy) ═══════════════
-     Osobny ekran, celowo POZA dolną nawigacją — wchodzi się tu tylko
-     z Ustawień. To narzędzie diagnostyczne na czas testu, nie stała
-     część aplikacji.                                                  -->
 <!-- ═══════════════ ZDARZENIA Z PUDELKA ═══════════════
      Pelna lista, ktora wczesniej siedziala w Diagnostyce i zawsze pokazywala
      tylko wycinek. Tutaj jest cala, za to z filtrami - bo przy kilkuset
@@ -1677,9 +1664,6 @@ nav button .kropka-nav{position:absolute;top:6px;right:50%;margin-right:-16px;
         sygnatura na końcu to koniec testu, a nie numer etapu; łagodne pulsowanie
         przez 5 sekund oznacza brak sieci — wynik został wtedy zapisany u pudełka
         i dojedzie później.</p>
-      <p class="muted"><b>Dziennik wieczka</b> — sprawdzamy nim, czy pudełko melduje
-        otwarcia, których nikt nie zrobił (np. gdy magnes przesunie się w plecaku).
-        Zaznaczaj „to ja" przy swoich otwarciach; po tygodniu porównamy.</p>
     </div>
   </details>
 
@@ -1819,16 +1803,6 @@ nav button .kropka-nav{position:absolute;top:6px;right:50%;margin-right:-16px;
   </div>
 </section>
 
-<section id="tab-lid" class="hide">
-  <div class="card">
-    <h3>Dziennik wieczka</h3>
-    <p class="muted" style="margin:6px 0 12px">
-      Przy otwarciach, które zrobiłeś Ty, dotknij <b>„to ja"</b>.
-    </p>
-    <div id="lidSummary" class="muted" style="margin-bottom:12px"></div>
-    <div id="lidList" style="font-size:13px;line-height:1.5"></div>
-  </div>
-</section>
 </main>
 
 <!-- Blokada poziomu. iOS ignoruje pole "orientation" w manifescie i nie ma
@@ -1929,7 +1903,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-30.75";
+const APP_VERSION = "2026-08-30.76";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -1963,8 +1937,6 @@ let pendingPlan = null;
 let staleRules = false;   // baza odrzuca nowe pola -> reguly do odswiezenia
 let boxLog = [];          // czarna skrzynka pudelka
 let nvsFailLog = {};      // paczki historii nieudanych zapisow NVS (D47)
-let lidLog = {};          // dziennik wieczka: paczki wpisow z pudelka
-let lidMarks = {};        // "to ja otwieralem" - znaczniki uzytkownika
 let lastRec = null;       // slad po ostatnim uzupelnieniu kalendarza
 let skanSieci = null;     // sieci widziane PRZEZ PUDELKO, na jego prosbe
 
@@ -2540,14 +2512,6 @@ async function boot(){
     nvsFailLog = s.val() || {};
     rysuj("historia nieudanych zapisów", renderNvsFailLog);
   }, onErr("odczyt historii nieudanych zapisów"));
-
-  onValue(ref(db, `devices/${DEVICE_ID}/lidlog`), s => {
-    lidLog = s.val() || {}; renderLidLog();
-  }, onErr("odczyt dziennika wieczka"));
-
-  onValue(ref(db, `users/${uid}/lidMarks`), s => {
-    lidMarks = s.val() || {}; renderLidLog();
-  }, onErr("odczyt znaczników wieczka"));
 
   /* Lista sieci, które widzi PUDEŁKO. Własna gałąź, nie `status` — jest
      większa niż cały status i zmienia się raz na ruski rok, więc nie ma
@@ -3923,7 +3887,7 @@ window.addInr = async () => {
 
    `null` w aktualizacji wielościeżkowej to sposób, w jaki Firebase kasuje
    klucz — czyli to samo, co `remove()`, tylko przez kolejkę, która przeżyje
-   zamknięcie aplikacji. Tak samo robi lidMark().                       */
+   zamknięcie aplikacji.                                               */
 window.delInr = async date => {
   const ok = await askConfirm("Usunąć pomiar?", `Wynik z dnia ${date} zniknie z historii i z wykresu.`);
   if (!ok) return;
@@ -4232,9 +4196,8 @@ window.logPrzelacz = () => { logWszystko = !logWszystko; renderBoxLog(); };
 
 /* Historia nieudanych zapisow do pamieci pudelka (D47, prosba Kuby: "może
    w bazie damy jakiś zapis, żeby te nieudane tam wrzucał"). Pudelko wysyla
-   paczki pod osobnymi kluczami (ten sam wzor co dziennik wieczka - kasuje
-   je u siebie po wyslaniu, wiec wspolny wezel nadpisywalby poprzednia
-   paczke), tutaj sklejamy je z powrotem w jedna liste posortowana po
+   paczki pod osobnymi kluczami (kasuje je u siebie po wyslaniu, wiec
+   wspolny wezel nadpisywalby poprzednia paczke), tutaj sklejamy je z powrotem w jedna liste posortowana po
    czasie - zeby dalo sie porownac z historia wybudzen na tym samym
    ekranie i sprawdzic hipotezy typu "to sie dzieje po alarmie".        */
 function renderNvsFailLog(){
@@ -4264,111 +4227,6 @@ function renderNvsFailLog(){
   `<div class="dim2" style="margin-top:8px">Łącznie ${wpisy.length}
    ${lm(wpisy.length, "zapisany incydent", "zapisane incydenty", "zapisanych incydentów")}.</div>`;
 }
-
-/* ═══════════════════════════════════════════════════════════════
-   DZIENNIK WIECZKA — narzędzie na czas testu terenowego.
-
-   Pudełko wysyła paczki wpisów pod osobnymi kluczami (bo po wysłaniu
-   kasuje je u siebie, więc wspólny węzeł nadpisywałby poprzedni dzień).
-   Tutaj sklejamy je z powrotem w jedną listę.
-
-   Znacznik „to ja" leży w users/<uid>/lidMarks, a NIE przy zdarzeniu
-   pudełka — gałąź events ma w regułach "$other": false, więc dopisanie
-   tam własnego pola skończyłoby się odrzuceniem całego wpisu.
-   ═══════════════════════════════════════════════════════════════ */
-/* Czyta OBA formaty, jakie potrafi przysłać pudełko.
-
-   Pierwsza wersja firmware robiła PUT na wspólny węzeł, więc w bazie leżało
-   wprost {zgubione, wpisy:[...]}. Poprawiona wysyła paczki pod osobnymi
-   kluczami: {klucz:{zgubione, wpisy:[...]}, ...}. Obie wersje nosiły ten sam
-   numer 1.22.0 — nie podbiłem go przy zmianie — więc z samego numeru nie da
-   się poznać, co siedzi w pudełku.
-
-   Zamiast kazać komukolwiek zgadywać albo wgrywać firmware pod presją,
-   aplikacja przyjmuje jedno i drugie. Kosztuje trzy linijki.              */
-function lidPaczki(){
-  if (!lidLog || typeof lidLog !== "object") return [];
-  if (Array.isArray(lidLog.wpisy)) return [["jedna", lidLog]];  // stary format
-  return Object.entries(lidLog);                                 // nowy format
-}
-
-function lidWpisy(){
-  const out = [];
-  for (const [paczka, dane] of lidPaczki()){
-    const wpisy = Array.isArray(dane?.wpisy) ? dane.wpisy : [];
-    wpisy.forEach((w, i) => {
-      const [ts, stan, powod] = String(w).split(";");
-      out.push({ klucz: `${paczka}_${i}`, ts:+ts||0,
-                 otwarte: stan === "1", powod: powod || "?" });
-    });
-  }
-  return out.sort((a,b) => b.ts - a.ts);
-}
-
-function renderLidLog(){
-  const el = document.getElementById("lidList");
-  const sum = document.getElementById("lidSummary");
-  if (!el || !sum) return;
-
-  const wpisy = lidWpisy();
-  const zgubione = lidPaczki()
-                     .reduce((s, [, d]) => s + (+d?.zgubione || 0), 0);
-
-  if (!wpisy.length){
-    sum.textContent = "";
-    el.innerHTML = `<span class="dim2">Pudełko nie przysłało jeszcze nic.
-      Dziennik trafi tu przy najbliższej synchronizacji.</span>`;
-    return;
-  }
-
-  const otwarcia = wpisy.filter(w => w.otwarte);
-  const moje     = otwarcia.filter(w => lidMarks[w.klucz]).length;
-  const obce     = otwarcia.length - moje;
-  sum.innerHTML =
-    `Otwarć: <b>${otwarcia.length}</b> · oznaczone jako Twoje: <b>${moje}</b> ·
-     <span style="color:${obce ? "var(--warn)" : "var(--ok)"}">bez znacznika: <b>${obce}</b></span>` +
-    (zgubione ? `<br><span style="color:var(--warn)">Pudełko zgubiło ${zgubione} wpisów —
-       dziennik zapełnił się między synchronizacjami.</span>` : "");
-
-  el.innerHTML = wpisy.map(w => {
-    const kiedy = w.ts > 0 ? `${devDayMon(w.ts)} ${devHM(w.ts)}` : "czas nieznany";
-    const znak  = !!lidMarks[w.klucz];
-    /* Zamknięcia pokazujemy dla pełnego obrazu, ale zaznaczać można tylko
-       otwarcia — to one są pytaniem, na które szukamy odpowiedzi.        */
-    const przycisk = w.otwarte
-      ? `<button class="btn" onclick="lidMark('${esc(w.klucz)}')"
-           style="padding:3px 10px;font-size:12px;${znak
-             ? "background:var(--ok);color:#fff"
-             : "background:transparent;border:1px solid var(--line)"}">
-           ${znak ? "✓ to ja" : "to ja"}</button>`
-      : "";
-    return `<div style="display:flex;align-items:center;gap:10px;
-                        padding:7px 0;border-bottom:1px solid var(--line)">
-      <span style="flex:1">
-        <b style="color:${w.otwarte ? "var(--warn)" : "var(--ok)"}">
-          ${w.otwarte ? "otwarte" : "zamknięte"}</b>
-        <span class="dim2">· ${esc(kiedy)} · ${esc(WAKE_PL[w.powod] || w.powod)}</span>
-      </span>${przycisk}</div>`;
-  }).join("");
-}
-
-/* Przełącza znacznik.
-
-   Zapis idzie przez zapiszPewnie(), jak KAŻDY zapis użytkownika w tej
-   aplikacji. Kuszące było pójść tu na skróty — to przecież jedno pole
-   diagnostyczne — ale Firebase offline nie odrzuca obietnicy, tylko trzyma
-   ją w nieskończoność. Zaznaczasz „to ja" na plaży bez zasięgu, ekran
-   pokazuje ptaszka, a znacznik nigdy nie dociera. Wtedy cały tydzień
-   pomiaru jest do wyrzucenia, bo nie wiadomo, które otwarcia były Twoje.
-   null kasuje pole - Firebase tak właśnie usuwa klucze w update().     */
-window.lidMark = klucz => {
-  if (!uid) return;
-  const nowy = !lidMarks[klucz];
-  lidMarks = { ...lidMarks, [klucz]: nowy };   // od razu na ekranie
-  renderLidLog();
-  return zapiszPewnie({ [`users/${uid}/lidMarks/${klucz}`]: nowy ? true : null },
-                      "Znacznik wieczka");
-};
 
 /* ═══════════════════════════════════════════════════════════════
    KOLEJKA ZAPISÓW — to samo, co pudełko ma w pamięci nieulotnej.
@@ -4650,7 +4508,7 @@ function ostrzMilczy(){
 }
 
 /* Pamięć trwała pudełka to jedna partycja 20 kB na WSZYSTKO: kolejkę
-   zdarzeń, dziennik wieczka, czarną skrzynkę i token logowania. Gdy się
+   zdarzeń, czarną skrzynkę, historię nieudanych zapisów i token logowania. Gdy się
    zapełni, `putString()` zwraca zero i każdy z tych mechanizmów zaczyna
    gubić wpisy po cichu — nie ma wyjątku, nie ma komunikatu, nie ma śladu.
    `nvsFail` mówi, że to już się dzieje. To pole mówi, że zaraz zacznie.
@@ -4709,8 +4567,11 @@ function opisNvsFailKey(klucz){
     return { grozne:false, co:"token logowania — bez znaczenia, zaloguje się ponownie samo" };
   if (/^lb/.test(klucz))
     return { grozne:false, co:"wpis czarnej skrzynki — czysto diagnostyczny" };
+  /* Klucze po dzienniku wieczka (usunięty w 1.50.0). Pudełko, które
+     jeszcze nie dostało nowego firmware, może je zgłosić — a stara
+     wersja aplikacji nie może ich pokazać jako „nierozpoznane". */
   if (/^ll/.test(klucz))
-    return { grozne:false, co:"dziennik wieczka — nie dotyczy dawek" };
+    return { grozne:false, co:"stary dziennik wieczka — nie dotyczy dawek" };
   return { grozne:true, co:`klucz „${esc(klucz)}” — nierozpoznany, sprawdź ostrożnie` };
 }
 
@@ -8192,7 +8053,6 @@ const EKRANY = {
   help: { tytul:"Instrukcja",          nav:"set", wraca:"set" },
   ev:   { tytul:"Zdarzenia z pudełka", nav:"set", wraca:"diag" },
   hist: { tytul:"Historia pudełka",    nav:"set", wraca:"diag" },
-  lid:  { tytul:"Dziennik wieczka",    nav:"set", wraca:"diag" },
 };
 
 window.showTab = t => {
@@ -8217,7 +8077,6 @@ window.showTab = t => {
   }
 
   if (t === "ana")  renderAnalysis();
-  if (t === "lid")  renderLidLog();
   if (t === "set")  renderSettings();
   if (t === "lek")  renderSettings();
   if (t === "sinr") renderSettings();

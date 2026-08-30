@@ -198,8 +198,12 @@ public:
     if (failKeys.count(k)) return 0;
     if (strict && !_started) return 0;
     sh[k] = v; return sizeof(short); }
-  /* Kasowanie pojedynczego klucza - uzywa go lidLogClear(). Musi czyscic
-     WSZYSTKIE mapy, bo prawdziwe NVS nie wie, jakiego typu byl wpis.    */
+  /* Czy klucz w ogole istnieje - prawdziwe Preferences maja isKey(). */
+  bool isKey(const char* k) {
+    return str.count(k) || us.count(k) || sh.count(k) || ul.count(k)
+        || ui.count(k) || uc.count(k); }
+  /* Kasowanie pojedynczego klucza. Musi czyscic WSZYSTKIE mapy, bo
+     prawdziwe NVS nie wie, jakiego typu byl wpis.                      */
   bool remove(const char* k) {
     bool bylo = str.erase(k) || us.erase(k) || sh.erase(k) || ul.erase(k) || ui.erase(k);
     return bylo; }

@@ -20,7 +20,7 @@
  * 1. IDENTYFIKATOR URZADZENIA
  * ------------------------------------------------------------------ */
 #define DEVICE_ID           "pillbox01"     // klucz w /devices/<DEVICE_ID>
-#define FW_VERSION          "1.49.1"   // widoczna w aplikacji - po wgraniu sprawdz, czy sie zmienila
+#define FW_VERSION          "1.50.0"   // widoczna w aplikacji - po wgraniu sprawdz, czy sie zmienila
 
 /* ---------------------------------------------------------------------
  * 2. FIREBASE  (Realtime Database + Auth email/haslo)
@@ -257,18 +257,29 @@
  *     do nastepnej sieci. Musi byc SPORO wiecej niz skojarzenie z
  *     routerem plus DHCP - poprzednia wersja ruszala trwajaca probe co
  *     5 s i lacze nie wstawalo w ogole (D99).                          */
-/*     Okno JEDNEJ proby w tle. Nie jest to limit na polaczenie - jest to
- *     czas, po ktorym warto sprobowac CZEGOS INNEGO (kolejnej sieci).
- *     Musi wiec byc dluzsze niz najgorsze realne skojarzenie, bo inaczej
- *     przerywamy probe, ktora wlasnie mialaby sie udac. Przy -87 dBm,
- *     ktore pudelko ma u Kuby, samo przemiatanie pasma 2,4 GHz potrafi
- *     zajac kilkanascie sekund - 12 s bylo za malo i dawalo dokladnie
- *     to, co widzial: "po okolo minucie" (D107).                      */
-#define WIFI_PROBA_MS       25000           // jedna proba w tle
-/*     Proba Z PODPOWIEDZIA (znany kanal i BSSID) omija przemiatanie
- *     pasma, wiec albo laczy sie od razu, albo podpowiedz sie
- *     zestarzala i szkoda na nia czasu.                              */
+/*     BEZPIECZNIK, A NIE HARMONOGRAM - i ta roznica kosztowala szesc
+ *     podejsc (D110).
+ *
+ *     Do 1.49.1 pudelko przerywalo trwajace laczenie co N sekund, zeby
+ *     "sprobowac jeszcze raz". Pomiar z pudelka Kuby pokazal, ile to
+ *     kosztuje: `radio 82,4 s` przy sygnale -54 dBm - lacze wstalo
+ *     dopiero wtedy, gdy skonczyly sie moje przerwania.
+ *
+ *     Teraz probe ponawiamy WYLACZNIE wtedy, gdy sterownik sam zglosi
+ *     porazke (zdarzenie STA_DISCONNECTED) - bo tylko wtedy wiadomo, ze
+ *     nie ma czego przerywac. Ta wartosc jest juz tylko siatka na jeden
+ *     przypadek: `WiFi.begin()` potrafi zostac po cichu zignorowane
+ *     i wtedy nie przyjdzie ZADNE zdarzenie. Ma byc DLUZSZA niz
+ *     najgorsze realne skojarzenie, nie krotsza.                      */
+#define WIFI_BEZ_ODZEWU_MS  30000           // cisza sterownika = cos poszlo nie tak
+/*     To samo dla proby Z PODPOWIEDZIA (znany kanal i BSSID). Zla
+ *     podpowiedz konczy sie zdarzeniem porazki w ulamku sekundy, wiec
+ *     i tu jest to tylko siatka na cisze.                            */
 #define WIFI_PROBA_SZYBKA_MS 8000
+/*     Najkrotszy odstep miedzy naszymi ponowieniami. Zdarzenie porazki
+ *     potrafi przyjsc natychmiast, a wtedy bez tego odstepu
+ *     przemielilibysmy cala liste w ulamku sekundy.                  */
+#define WIFI_MIN_ODSTEP_MS   1500
 
 /*     Wyniki usuwania sieci. Osobne wartosci, a nie samo true/false, bo
  *     "nie ma takiej sieci" i "nie usune, bo to jedyna droga do mnie" to
@@ -482,7 +493,6 @@
  *     Firmware ma wlasna wartosc awaryjna (#ifndef), wiec starszy config.h
  *     bez tego wpisu nadal sie skompiluje.
  * ------------------------------------------------------------------ */
-#define LIDLOG_SLOTS        64              // ile zmian stanu miesci sie w NVS
 
 /* ---------------------------------------------------------------------
  * 7j. AKTUALIZACJA PRZEZ WIFI  (OTA)  -  od 1.38.0, D59

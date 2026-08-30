@@ -170,8 +170,6 @@ ok("dawka poprawiona recznie", "users/u1/doses/2026-08-01/0",
    { status: "missed", dose: 0, source: "manual", ts: 1750000000, note: "zapomnialem" });
 ok("pomiar INR",           "users/u1/inr/2026-08-01", { value: 2.5, ts: 1750000000, note: "" });
 ok("harmonogram",          "devices/pillbox1/config/schedule", ["20:00"]);
-ok("znacznik to-ja",       "users/u1/lidMarks/2026-08-01-20", true);
-ok("paczka dziennika wieczka", "devices/pillbox1/lidlog/1750000000", { wpisy: "x" });
 
 /* config ma $other: true - to swiadoma decyzja (D10, D12), zeby dodanie
    pola nie wymagalo od Kuby publikowania nowych regul. Gdyby ktos to
@@ -335,8 +333,8 @@ odrzuc("token doklejony do polecenia", "devices/pillbox1/config/tgCmd",
        { akcja: "test", token: TOKEN_OK });
 
 /* Historia nieudanych zapisow NVS (D47) - lepiona recznie w nvsFailLogJson(),
-   tak jak lidLogJson() ponizej, wiec te same zasady: pola bierzemy z opisu,
-   nie z parsowania funkcji, bo wynik to zserializowany String, nie doc[]. */
+   wiec pola bierzemy z opisu, a nie z parsowania funkcji: wynik to
+   zserializowany String, nie doc[].                                    */
 head("Historia nieudanych zapisow NVS przechodzi przez reguly");
 ok("paczka z jednym wpisem", "devices/pillbox1/nvsfaillog/p1",
    { wpisy: { 0: { ts: 1750000000, klucz: "q37" } } });
@@ -387,7 +385,6 @@ ok("uzupelnienie z pudelka (doReconcile)", "users/u1/doses/2026-08-01/0",
 ok("ustawienia polami (zapiszCfg)", "devices/pillbox1/config/pillsBase", 30);
 ok("data bazy licznika", "devices/pillbox1/config/pillsBaseFrom", "2026-08-01");
 ok("odstep INR (D10)", "devices/pillbox1/config/inrEveryDays", 21);
-ok("skasowanie znacznika to-ja", "users/u1/lidMarks/2026-08-01-20", null);
 
 /* pillsBaseFrom i pillsCountedUntil to daty "YYYY-MM-DD" = 10 znakow.
    Regula dopuszcza <= 10, wiec kazdy dluzszy format ja zlamie.       */

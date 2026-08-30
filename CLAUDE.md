@@ -38,8 +38,8 @@ bash tests/run_all.sh
 ```
 
 Musi przejść przed zmianą i po zmianie. Stan wyjściowy:
-**638 + 52 firmware, 1268 (×6 pór doby) + 92 + 52 aplikacja, 48 zgodności,
-136 reguł bazy, 357 kontroli audytu, 30 kontroli statycznych — 0 błędów.**
+**626 + 52 firmware, 1264 (×6 pór doby) + 92 + 52 aplikacja, 48 zgodności,
+133 reguły bazy, 362 kontrole audytu, 30 kontroli statycznych — 0 błędów.**
 
 **Runner jest cichy przy sukcesie i głośny przy błędzie** (D66). Udany przebieg
 to 12 linii — **i te 12 linii TO JEST potwierdzenie, nie jego skrót.** Nie
@@ -123,7 +123,7 @@ odrzuca **cały** wpis kodem 400, a `trwaleOdrzucony(400)` go wtedy **kasuje**
    Nigdy gołe `set()`. Firebase offline nie odrzuca obietnicy, tylko wisi —
    ekran pokazuje sukces, dane nie docierają. Test tego pilnuje.
 6. **Nic nie kasujemy z pamięci pudełka przed potwierdzonym 2xx.**
-   Kolejka, flagi statusu, dziennik wieczka. Rodzina błędu 3.5.
+   Kolejka, flagi statusu, historia nieudanych zapisów. Rodzina błędu 3.5.
    **Jeden wyjątek, świadomy:** `queueDrop()` zdejmuje wpis, którego baza
    nie przyjmie **nigdy** (HTTP 400/413 albo rekord uszkodzony) — zostawiony
    blokował wszystkie dawki za sobą. Strata idzie na licznik `dropped`
@@ -131,8 +131,12 @@ odrzuca **cały** wpis kodem 400, a `trwaleOdrzucony(400)` go wtedy **kasuje**
 7. **Do gałęzi `events` nie dokładamy pól.** Reguła `$other: false` odrzuca
    **cały** wpis, gdy trafi w nim nieznane pole — czyli otwarcie pudełka
    przepada w całości. Nowe dane idą do nowej gałęzi.
-8. **Narzędzie diagnostyczne nie może uszkodzić danych o leku.**
-   Stąd dziennik wieczka ma własny bufor zamiast kolejki dawek.
+8. **Narzędzie diagnostyczne nie może uszkodzić danych o leku** — ani
+   spowolnić drogi, którą one jadą. Dziennik wieczka miał z tego powodu
+   własny bufor zamiast kolejki dawek, a i tak został usunięty (D109):
+   dwa zapisy do flasha przy każdym ruchu wieczka stały **przed** startem
+   radia, na ścieżce, która ma być najszybsza w urządzeniu. Test
+   „40 ruchów wieczka nie tyka kolejki dawek" został i pilnuje obu połów.
 9. **Hasło do WiFi kasujemy z bazy dopiero po potwierdzonym zapisie w NVS**
    (D38). `wifiSiecDodaj()` zwraca wynik i ten wynik trzeba sprawdzić.
    Odwrotna kolejność traci sieć, której nikt już nie zna — a z nią jedyną
@@ -235,11 +239,11 @@ na `esp32:esp32@3.3.11` i z **ustawieniami płytki z nagłówka `PillBox.ino`**.
 Nie jest częścią `run_all.sh`: wymaga sieci i ~500 MB toolchainu.
 **Uruchom to po każdej zmianie w firmware.**
 
-Stan: `PillBox.ino` **64% flasha** (1 265 383 B z 1,875 MB), `PillBoxTest.ino` 20%
+Stan: `PillBox.ino` **64% flasha** (1 266 167 B z 1,875 MB), `PillBoxTest.ino` 20%
 bez `config.h` i **57%** z nim. Szkic diagnostyczny budujemy w OBU
 konfiguracjach — bez tego drugiego przebiegu 722 kB jego kodu (logowanie do
 bazy, zapis wyniku) nie było kompilowane ani razu (D103).
-Zapas ~718 kB.
+Zapas ~700 kB.
 
 **Podział pamięci musi być `Minimal SPIFFS (1.9MB APP with OTA/190KB SPIFFS)`**,
 bo tak jest w nagłówku szkicu i bo OTA zapisuje program do **drugiej** partycji

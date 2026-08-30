@@ -457,7 +457,7 @@ bool nvsPutU8(const char* key, uint8_t val) {
 /* --- Ile miejsca zostalo w pamieci trwalej ----------------------------
    nvsPutStr() mowi, ze zapis PRZEPADL. Nie mowi, ile jeszcze zostalo -
    a to jest roznica miedzy "wlasnie zaczely ginac dane" a "za dwa dni
-   zaczna". Kolejka, dziennik wieczka, czarna skrzynka i token siedza w
+   zaczna". Kolejka, czarna skrzynka, historia bledow NVS i token siedza w
    tej samej partycji 20 kB; gdy sie zapelni, kazdy z nich zaczyna cicho
    gubic wpisy. Aplikacja ma to widziec ZANIM zniknie pierwsza dawka.
 
@@ -1341,73 +1341,30 @@ uint32_t openWarnSecondsLeft() {
   return rtcOpenWarnCount == 0 ? OPEN_WARN_FIRST_S : OPEN_WARN_REPEAT_S;
 }
 
+
 /* =====================================================================
- *  4c.  DZIENNIK WIECZKA  -  narzedzie do testu terenowego
+ *  4c.  DZIENNIK WIECZKA - USUNIETY (D109)
  *
- *  Zapisuje KAZDA zmiane stanu kontaktronu: kiedy wieczko sie otworzylo,
- *  kiedy zamknelo. Po co: nie wiemy jeszcze, czy pudelko w plecaku melduje
- *  otwarcia, ktorych nikt nie zrobil. Bez pomiaru mozemy tylko zgadywac,
- *  a zgadywanie w tym projekcie juz raz kosztowalo godziny.
+ *  Zapisywal kazda zmiane stanu kontaktronu do NVS i wysylal paczkami do
+ *  bazy. Powstal jako narzedzie na czas testu terenowego - w jego wlasnym
+ *  opisie stalo: "cale to rozwiazanie jest TYMCZASOWE, do wyjecia, gdy juz
+ *  bedziemy wiedziec, czy problem istnieje". Wiemy: 102 otwarcia
+ *  w dzienniku, zadnej niespodzianki, a Kuba powiedzial wprost, ze nic
+ *  tam nie sprawdza.
  *
- *  DLACZEGO OSOBNY BUFOR, A NIE ZWYKLA KOLEJKA:
- *  queuePush() przy zapelnieniu NADPISUJE NAJSTARSZY wpis (patrz linia z
- *  "pelno -> nadpisz najstarszy"). Wieczko trzesace sie w plecaku
- *  wygenerowaloby setki zdarzen i po cichu wyrzucilo z kolejki zapisy
- *  DAWEK. Dziennik wieczka nie moze zaszkodzic danym o leku, wiec ma
- *  wlasne miejsce i wlasny limit.
+ *  Kosztowal przy tym dokladnie tam, gdzie najbardziej boli. Kazde
+ *  przejscie wieczka to bylo `prefs.begin()` i dwa zapisy do flasha
+ *  PRZED wlaczeniem radia - czyli na sciezce, ktora ma byc najszybsza
+ *  w calym urzadzeniu. Do tego 64 wpisy w tej samej partycji 20 kB, ktora
+ *  trzyma kolejke dawek: pudelko Kuby zeszlo do 126 wolnych wpisow.
  *
- *  Po zapelnieniu NIE nadpisujemy - zostawiamy najstarsze wpisy i tylko
- *  liczymy, ile przepadlo. Do diagnozy wazniejszy jest POCZATEK zjawiska
- *  ("od ktorej godziny zaczelo swirowac") niz jego koniec, a sam licznik
- *  strat mowi o skali: "64 zapisane + 900 zgubionych" to zupelnie inna
- *  historia niz "6 zapisanych".
- *
- *  Cale to rozwiazanie jest TYMCZASOWE - do wyjecia, gdy juz bedziemy
- *  wiedziec, czy problem istnieje.
+ *  Czarna skrzynka (historia wybudzen) zostaje - ona odpowiada na
+ *  pytania, ktore wciaz zadajemy.
  * ===================================================================== */
-/* Wartosc awaryjna, gdy config.h jest starszy niz ta funkcja. Blok jest
-   wyciagany do testow razem z kodem, zeby testy sprawdzaly DOKLADNIE ten
-   sam limit, ktory zadziala na plytce.                                  */
-/* @extract-begin */
-#ifndef LIDLOG_SLOTS
-  #define LIDLOG_SLOTS 64
-#endif
-/* @extract-end */
 
-void lidLogAdd(bool otwarte) {
-  prefs.begin(NVS_NAMESPACE, false);
-  uint16_t cnt = prefs.getUShort("llCnt", 0);
-  if (cnt < LIDLOG_SLOTS) {
-    char klucz[8];
-    snprintf(klucz, sizeof(klucz), "ll%u", cnt);
-    /* Format: czas;stan;powod_wybudzenia   (czas 0 = zegar jeszcze nieznany) */
-    char linia[40];
-    snprintf(linia, sizeof(linia), "%lu;%u;%s",
-             (unsigned long)(rtcTimeValid ? time(nullptr) : 0),
-             otwarte ? 1u : 0u, wakeName(wakeReason));
-    /* Licznik do gory tylko wtedy, gdy tresc naprawde weszla - inaczej
-       w dzienniku siedzialby pusty slot udajacy zapis.               */
-    if (nvsPutStr(klucz, linia)) nvsPutU16("llCnt", cnt + 1);
-    LOG("[LID] %s (wpis %u/%d)\n", otwarte ? "OTWARTE" : "zamkniete",
-        cnt + 1, LIDLOG_SLOTS);
-  } else {
-    uint16_t zgubione = prefs.getUShort("llLost", 0);
-    if (zgubione < 65000) nvsPutU16("llLost", zgubione + 1);
-    LOG("[LID] dziennik pelny - zgubionych %u\n", zgubione + 1);
-  }
-  prefs.end();
-}
-
-uint16_t lidLogCount() {
-  prefs.begin(NVS_NAMESPACE, true);
-  uint16_t c = prefs.getUShort("llCnt", 0);
-  prefs.end();
-  return c;
-}
-
-/* Ucieczka znakow specjalnych w JSON. Stoi tutaj, a nie przy czarnej
-   skrzynce nizej, bo lidLogJson() jest jej PIERWSZYM uzyciem - a w tym
-   pliku obowiazuje zasada "definicja przed uzyciem" (pilnuje jej audyt). */
+/* Ucieczka znakow specjalnych w JSON - uzywa jej czarna skrzynka
+   i dziennik nieudanych zapisow NVS. Stoi tutaj, bo w tym pliku
+   obowiazuje zasada "definicja przed uzyciem" (pilnuje jej audyt). */
 static String jsonEscape(const String& in) {
   String o;
   for (int i = 0; i < in.length(); i++) {
@@ -1421,51 +1378,6 @@ static String jsonEscape(const String& in) {
     else o += c;
   }
   return o;
-}
-
-/* Dziennik jako JSON do wyslania. {"zgubione":N,"wpisy":["ts;stan;powod",...]} */
-String lidLogJson() {
-  prefs.begin(NVS_NAMESPACE, true);
-  uint16_t cnt = prefs.getUShort("llCnt", 0);
-  uint16_t zgubione = prefs.getUShort("llLost", 0);
-  String out = "{\"zgubione\":";
-  out += zgubione;
-  out += ",\"wpisy\":[";
-  bool pierwszy = true;
-  for (uint16_t i = 0; i < cnt; i++) {
-    char klucz[8];
-    snprintf(klucz, sizeof(klucz), "ll%u", i);
-    String l = prefs.getString(klucz, "");
-    if (!l.length()) continue;
-    if (!pierwszy) out += ",";
-    pierwszy = false;
-    /* Escapujemy tak samo jak logbookJson(). Tresc lepi dzis snprintf,
-       wiec cudzyslow sie w niej nie znajdzie - ale blizniacza funkcja
-       obok jest zabezpieczona, a niesymetryczna obrona w module, ktory
-       wedlug zasady 8 nie moze uszkodzic danych o leku, to proszenie
-       sie o klopoty przy pierwszej zmianie formatu.                  */
-    out += "\"" + jsonEscape(l) + "\"";
-  }
-  out += "]}";
-  prefs.end();
-  return out;
-}
-
-/* Kasujemy DOPIERO po potwierdzonym zapisie w bazie - ta sama zasada, co
-   przy pushStatus(). Wyczyszczenie na wiare oznaczaloby, ze nieudana
-   wysylka po cichu niszczy jedyna kopie pomiaru.                        */
-void lidLogClear() {
-  prefs.begin(NVS_NAMESPACE, false);
-  uint16_t cnt = prefs.getUShort("llCnt", 0);
-  for (uint16_t i = 0; i < cnt; i++) {
-    char klucz[8];
-    snprintf(klucz, sizeof(klucz), "ll%u", i);
-    prefs.remove(klucz);
-  }
-  nvsPutU16("llCnt", 0);
-  nvsPutU16("llLost", 0);
-  prefs.end();
-  LOG("[LID] dziennik wyslany i skasowany (%u wpisow)\n", cnt);
 }
 
 /* Czy sa jakies NIEPOTWIERDZONE wpisy dziennika nieudanych zapisow. */
@@ -1509,7 +1421,6 @@ bool trackBoxOpen() {
     if (rtcOpenSinceTs || rtcOpenWarnCount) {
       LOG("[OPN] pudelko zamkniete (bylo otwarte, %u sygnalow)\n", rtcOpenWarnCount);
       if (rtcOpenReported) rtcOpenClearPend = true;   // aplikacja czeka na odwolanie
-      lidLogAdd(false);                               // przejscie otwarte -> zamkniete
     }
     rtcOpenSinceTs = 0; rtcNextWarnTs = 0; rtcOpenWarnCount = 0;
     rtcOpenReported = false;
@@ -1521,7 +1432,6 @@ bool trackBoxOpen() {
     rtcOpenSinceTs = now ? now : 1;                   // 1 = "otwarte, czas nieznany"
     rtcNextWarnTs  = now ? now + OPEN_WARN_FIRST_S : 0;
     LOG("[OPN] pudelko otwarte - przypomne za %d min\n", OPEN_WARN_FIRST_S / 60);
-    lidLogAdd(true);                                  // przejscie zamkniete -> otwarte
     return false;
   }
 
@@ -1878,7 +1788,7 @@ static String wifiSiecPass(int i) {
    Odczytu to nie zmienia - `netN` i tak ogranicza petle, a kazdy zapis
    nadpisuje wszystkie czytane klucze, wiec skasowana siec nie wrocilaby
    tak czy inaczej. Ale cala pamiec trwala pudelka to jedna partycja ~20 kB
-   na kolejke, dziennik wieczka, czarna skrzynke i token (D25), a haslo do
+   na kolejke, czarna skrzynke, historie bledow NVS i token (D25), a haslo do
    WiFi potrafi miec 63 znaki. Zostawianie w niej martwych wpisow to
    oddawanie miejsca, ktorego gdzie indziej brakuje.                    */
 static bool wifiListeZapisz(const String* ss, const String* pp, int n) {
@@ -2088,6 +1998,41 @@ static bool     wifiBylLink  = false;// czy lacze w tym czuwaniu juz raz stalo
 static bool     wifiProbaTrwa = false;// czy to MY zaczelismy laczenie
 static bool     wifiZPodpowiedzia = false;// czy proba 0 poszla ze znanego kanalu
 
+/* --- PONAWIAMY DOPIERO, GDY STEROWNIK ZGLOSI PORAZKE (D110) -----------
+
+   Szesc podejsc do tej samej sprawy roznilo sie jedna liczba: co ile
+   sekund przerywac trwajace laczenie. 5 s, potem 12, potem 25. Pomiar
+   z pudelka Kuby zamknal temat: `radio 82,4 s` przy sygnale -54 dBm -
+   lacze wstalo dokladnie wtedy, gdy skonczyly sie moje przerwania.
+
+   Zegar jest tu zlym sedzia, bo nie wie, czy skojarzenie wlasnie trwa,
+   czy juz padlo. Sterownik wie i mowi to wprost: ARDUINO_EVENT_WIFI_
+   STA_DISCONNECTED. Liczymy te zdarzenia i ponawiamy WYLACZNIE po nich.
+   Wtedy ponowienie nie moze niczego zepsuc - nie ma czego przerywac.
+
+   `volatile`, bo licznik rosnie w watku zdarzen WiFi, a czytamy go
+   w petli czekania.                                                    */
+static volatile uint32_t wifiPorazek       = 0;
+static uint32_t          wifiPorazekZnane  = 0;
+static bool              wifiNasluchStoi   = false;
+/* Rozlaczenie, ktore ZROBILISMY SAMI, tez wyzwala to zdarzenie. Gdyby
+   weszlo na licznik, wygladaloby jak porazka wlasnie zaczynanej proby -
+   i ponawialibysmy w kolko co WIFI_MIN_ODSTEP_MS, czyli dokladnie ten
+   blad, od ktorego tu uciekamy.                                       */
+static volatile bool     wifiCiszaZdarzen  = false;
+/* Skojarzenie z routerem juz stoi i trwa jeszcze DHCP. To nie jest cisza
+   sterownika, tylko normalny drugi etap laczenia - bezpiecznik ma wtedy
+   liczyc od nowa, zamiast przerwac probe tuz przed koncem.            */
+static volatile bool     wifiSkojarzono    = false;
+
+static void wifiZdarzenie(arduino_event_id_t ev) {
+  if (wifiCiszaZdarzen) return;
+  if (ev == ARDUINO_EVENT_WIFI_STA_DISCONNECTED && wifiPorazek < 0xFFFFFFFFu)
+    wifiPorazek++;
+  else if (ev == ARDUINO_EVENT_WIFI_STA_CONNECTED)
+    wifiSkojarzono = true;
+}
+
 /* Przeglad listy od sieci, ktora dzialala ostatnio. */
 static void wifiOdNowa() {
   const int n = wifiSieciCount();
@@ -2117,16 +2062,18 @@ static uint8_t wifiOstatniKandydat() {
 
 static void wifiZacznijProbe(uint8_t nr) {
   const int n = wifiSieciCount();
-  msProbaOd     = millis();
   wifiProbaTrwa = true;
   if (WiFi.status() != WL_IDLE_STATUS) {
+    wifiCiszaZdarzen = true;          // wlasne rozlaczenie nie jest porazka
     WiFi.disconnect(false, false);
-    delay(80);
+    delay(80);                        // tyle wystarczy, zeby watek zdarzen zdazyl
+    wifiCiszaZdarzen = false;
   }
-  /* Sterownik ma sam ponawiac skojarzenie - to on, a nie my, wie, kiedy
-     warto sprobowac jeszcze raz.                                      */
-  WiFi.setAutoReconnect(true);
-
+  /* Zegar i licznik porazek zerujemy RAZEM i dopiero tutaj - od tej chwili
+     kazde zgloszenie sterownika dotyczy juz TEJ proby.                  */
+  msProbaOd        = millis();
+  wifiPorazekZnane = wifiPorazek;
+  wifiSkojarzono   = false;
   if (n <= 0) { LOGLN("[NET] proba w tle: poswiadczenia sterownika"); WiFi.begin(); return; }
 
   int i;
@@ -2146,26 +2093,20 @@ static void wifiZacznijProbe(uint8_t nr) {
   WiFi.begin(ssid.c_str(), wifiSiecPass(i).c_str());
 }
 
-/* Ile czasu dostaje BIEZACA proba, zanim siegniemy po NASTEPNEGO kandydata.
+/* Po jakiej CISZY sterownika uznajemy, ze proba w ogole nie ruszyla.
 
-   TU BYL BLAD, i to on kosztowal szesc podejsc. Pomiar z pudelka Kuby
-   rozstrzygnal go jedna linijka: `radio 82,4 s - baza 82,9 s` przy sile
-   sygnalu **-54 dBm**. Baza odpowiada w pol sekundy; cala minuta idzie
-   w samo polaczenie - i to przy sygnale, przy ktorym telefon laczy sie
-   natychmiast.
+   TO NIE JEST HARMONOGRAM PONOWIEN - ponowieniami rzadzi wylacznie
+   zdarzenie porazki (D110). To jest siatka na jeden przypadek: gdy
+   `WiFi.begin()` zostalo po cichu zignorowane i zadne zdarzenie nie
+   przyjdzie NIGDY. Dlatego okno jest dlugie: ma nie trafic w probe,
+   ktora normalnie trwa.
 
-   Arytmetyka mowi reszte. Po restarcie po aktualizacji podpowiedzi nie
-   bylo, wiec proby szly co WIFI_PROBA_MS: start, 25 s, 50 s, 75 s.
-   Lacze wstalo o 82,4 s - czyli DOPIERO WTEDY, GDY PRZESTALEM
-   PRZERYWAC. Kazde moje "okno" kasowalo skojarzenie, ktore wlasnie
-   mialo sie udac. Trzeci raz ten sam blad: 5 s w 1.48.1, 12 s w D99,
-   25 s tutaj - zmienialem okres, nie zjawisko.
-
-   Wniosek jest prosty i az nudny: PRZERWANIE MA SENS WYLACZNIE WTEDY,
-   GDY MAMY CO INNEGO SPROBOWAC. Przy jednej zapisanej sieci i bez
-   podpowiedzi nie ma - wiec nie przerywamy w ogole, tylko schodzimy
-   sterownikowi z drogi i patrzymy na status.                        */static uint32_t wifiOknoProby() {
-  return (wifiProbaNr == 0 && wifiZPodpowiedzia) ? WIFI_PROBA_SZYBKA_MS : WIFI_PROBA_MS;
+   Wyjatek dla proby z podpowiedzia (D107): tam znamy kanal i adres
+   routera, wiec albo laczy w ulamku sekundy, albo podpowiedz sie
+   zestarzala. Osiem sekund to i tak dziesieciokrotny zapas.        */
+static uint32_t wifiOknoCiszy() {
+  return (wifiProbaNr == 0 && wifiZPodpowiedzia) ? WIFI_PROBA_SZYBKA_MS
+                                                 : WIFI_BEZ_ODZEWU_MS;
 }
 
 void wifiStart() {
@@ -2181,6 +2122,11 @@ void wifiStart() {
      na etapie laczenia nie ma tu czego oszczedzac. Wlaczamy je z powrotem
      w chwili, w ktorej lacze staje (patrz `wifiKrokLaczenia`).        */
   WiFi.setSleep(false);
+  if (!wifiNasluchStoi) { WiFi.onEvent(wifiZdarzenie); wifiNasluchStoi = true; }
+  /* Ponowieniami sterujemy SAMI, na podstawie zdarzen porazki. Gdyby
+     robil to takze sterownik, dwa mechanizmy deptalyby sobie po piętach
+     i znowu nie dalo by sie powiedziec, kto komu przerwal probe.     */
+  WiFi.setAutoReconnect(false);
   wifiOdNowa();
   wifiBylLink = false;
   {
@@ -2212,11 +2158,12 @@ void wifiStart() {
    sprostowania, bo koncowe `wifiConnect()` trafialo na sterownik
    rozbebniony tym samym miganiem.
 
-   Naprawa: petla nie przerywa proby, tylko ja PILNUJE. Jedna proba
-   dostaje WIFI_PROBA_MS; gdy nie wyjdzie, bierzemy nastepna siec z
-   listy, potem poswiadczenia sterownika, potem od poczatku. Zerwanie
-   JUZ DZIALAJACEGO lacza obslugujemy natychmiast - to jedyny przypadek,
-   w ktorym stare podtrzymanie mialo racje.
+   Naprawa, po szesciu podejsciach zamknieta pomiarem (D110): petla nie
+   przerywa proby ANI RAZU z zegara. Nastepnego kandydata bierzemy
+   dopiero wtedy, gdy sterownik sam zglosi porazke - wtedy nie ma juz
+   czego przerywac. Zerwanie JUZ DZIALAJACEGO lacza obslugujemy
+   natychmiast; to jedyny przypadek, w ktorym stare podtrzymanie
+   mialo racje.
 
    Zwraca true, gdy lacze stoi.                                        */
 bool wifiKrokLaczenia() {
@@ -2254,20 +2201,44 @@ bool wifiKrokLaczenia() {
   }
 
   if (!wifiProbaTrwa) return false;   // nikt tu laczenia nie zaczynal
-  /* Proba jeszcze trwa - nie wolno jej ruszac. O to szedl caly blad. */
-  if (millis() - msProbaOd < wifiOknoProby()) return false;
 
-  /* PO PRZEJSCIU WSZYSTKICH KANDYDATOW PRZESTAJEMY PRZERYWAC.
+  /* Router nas przyjal, trwa juz tylko DHCP - odliczamy bezpiecznik od
+     nowa, zeby nie przerwac proby na ostatnim metrze.                 */
+  if (wifiSkojarzono) { wifiSkojarzono = false; msProbaOd = millis(); }
 
-     Wczesniej wracalismy do proby 0 i zaczynalismy przeglad od nowa -
-     czyli w kolko kasowalismy skojarzenie, ktore sterownik akurat
-     probowal zestawic. Skoro zadna z sieci nie odpowiedziala w swoim
-     oknie, to nie brak pomyslow jest problemem, tylko zasieg. Wtedy
-     jedyne sensowne zachowanie to zejsc mu z drogi: `setAutoReconnect`
-     kaze mu probowac dalej samemu, a my tylko patrzymy na status.    */
-  if (wifiProbaNr >= wifiOstatniKandydat()) return false;
+  /* PONAWIAMY WYLACZNIE PO ZGLOSZONEJ PORAZCE.
 
-  wifiProbaNr++;
+     Dopoki licznik zdarzen stoi w miejscu, skojarzenie TRWA i ruszanie
+     go jest dokladnie tym bledem, ktory wracal szesc razy. Cisza jest
+     tylko bezpiecznikiem na `WiFi.begin()` zignorowane po cichu.     */
+  const bool porazka = (wifiPorazek != wifiPorazekZnane);
+  const bool cisza   = (millis() - msProbaOd) >= wifiOknoCiszy();
+  if (!porazka && !cisza) return false;
+
+  /* Sterownik potrafi odrzucic probe natychmiast (zestarzala podpowiedz,
+     router chwilowo zajety). Bez tego odstepu bilibysmy go kilkanascie
+     razy na sekunde i zadna proba nie doszlaby do DHCP.              */
+  if (millis() - msProbaOd < WIFI_MIN_ODSTEP_MS) return false;
+
+  /* Podpowiedz, ktora wlasnie zawiodla, jest zestarzala - kasujemy ja,
+     zeby koncowy `wifiConnect()` nie zmarnowal na nia drugiego okna
+     (tak samo robi on sam, gdy sie na niej przejedzie).              */
+  if (wifiProbaNr == 0 && wifiZPodpowiedzia) rtcApKanal = 0;
+
+  /* TU BYL BLAD 1.49.1, i kosztowal cala funkcje meldowania otwarcia.
+
+     Stalo tu `if (wifiProbaNr >= wifiOstatniKandydat()) return false;`
+     - czyli "gdy nie ma nastepnego kandydata, nie ponawiaj". Przy
+     JEDNEJ zapisanej sieci i bez podpowiedzi `wifiOstatniKandydat()`
+     wynosi 0, wiec pudelko nie ponawialo NIGDY i po pierwszej porazce
+     zostawalo bez lacza do konca czuwania. Kuba: *"teraz w ogole nie
+     pokazuje w aplikacji, ze sie otwiera"*.
+
+     Teraz po wyczerpaniu listy wracamy na jej poczatek - ale juz BEZ
+     podpowiedzi, skoro raz zawiodla. Przy jednej sieci to znaczy po
+     prostu: probuj tej samej dalej.                                  */
+  if (wifiProbaNr < wifiOstatniKandydat()) wifiProbaNr++;
+  else                                     wifiProbaNr = wifiZPodpowiedzia ? 1 : 0;
   wifiZacznijProbe(wifiProbaNr);
   return false;
 }
@@ -3102,24 +3073,6 @@ bool pushStatus() {
   if (ok && idx != rtcLogWyslanyIdx) {
     if (rtdbSend("PUT", "/devices/" DEVICE_ID "/log.json", logbookJson()) / 100 == 2)
       rtcLogWyslanyIdx = idx;
-  }
-
-  /* Dziennik wieczka - test terenowy. Wysylamy CALOSC i dopiero po
-     potwierdzeniu kasujemy z pamieci pudelka, zeby nie zapychac NVS.
-     Kolejnosc jest tu istotna: gdyby kasowanie szlo przed potwierdzeniem,
-     jedna nieudana wysylka niszczylaby caly pomiar bezpowrotnie.       */
-  if (ok && lidLogCount() > 0) {
-    /* KAZDA paczka ma wlasny klucz, a nie wspolny wezel.
-       Pudelko kasuje dziennik po wyslaniu, wiec przy zwyklym PUT druga
-       synchronizacja nadpisalaby pierwsza - po kilku dniach wyjazdu
-       zostalby tylko ostatni dzien. Osobne klucze sie sumuja.         */
-    String sciezka = "/devices/" DEVICE_ID "/lidlog/";
-    sciezka += rtcTimeValid ? String((uint32_t)time(nullptr)) : String("b" + String(rtcBootCount));
-    sciezka += ".json";
-    if (rtdbSend("PUT", sciezka, lidLogJson()) / 100 == 2)
-      lidLogClear();
-    else
-      LOGLN("[LID] dziennik NIE doszedl - zostaje w pamieci do nastepnego razu");
   }
 
   /* Historia nieudanych zapisow NVS (D47, prosba Kuby: "może w bazie damy

@@ -20,9 +20,9 @@ WANTED = [
     "parseDoseWeek", "parseDoseEx", "saveDosing",
     "matchSlot", "secondsToDayBoundary", "secondsToNextSlot",
     "openWarnSecondsLeft", "kolejnePrzesuniecie",
-    "jsonEscape",   # przed lidLogJson - ta go wola
+    "jsonEscape",   # przed nvsFailLogJson - ta go wola
     # reedPoziomStabilny MUSI byc przed boxIsOpen - to ono go wola.
-    "reedPoziomStabilny", "boxIsOpen", "wakeName", "lidLogAdd", "lidLogCount", "lidLogJson", "lidLogClear",
+    "reedPoziomStabilny", "boxIsOpen", "wakeName",
     # Historia nieudanych zapisow NVS - tez wola jsonEscape.
     "nvsFailLogDoWyslania", "nvsFailLogJson", "nvsFailLogOznaczWyslany",
     "trackBoxOpen",
