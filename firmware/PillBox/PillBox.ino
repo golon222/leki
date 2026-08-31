@@ -78,6 +78,16 @@ RTC_DATA_ATTR uint32_t rtcRolloverDay   = 0;    // ostatnia rozliczona doba
 RTC_DATA_ATTR uint8_t  rtcRetryCount    = 0;    // nieudane proby wyslania
 RTC_DATA_ATTR uint8_t  rtcStuckButton   = 0;    // ile razy z rzedu przycisk byl wcisniety
 RTC_DATA_ATTR uint16_t rtcReedDrgania  = 0;    // ile razy styk kontaktronu drgal przy odczycie
+/* ILE ODCZYTOW NIE USTALILO SIE W LIMICIE - i to jest inna informacja
+   niz liczba drgnien (D112). Zgloszenie Kuby: *"jest problem zeby
+   zamknac, zakrecam po 10 razy i pod kazdym katem"*, przy `reedBounce`
+   rownym 17. Same drgniecia nie rozstrzygaja, co jest grane:
+     - styk DRGA, ale sie uspokaja  -> odbicia, sprawa programowa,
+     - styk NIE uspokaja sie w ogole -> styk albo magnes, sprawa fizyczna,
+     - styk spokojny, a poziom mowi "otwarte" przy zakreconym wieczku
+       -> magnes nie dosiega, i tego nie naprawi zaden filtr.
+   Bez tej drugiej liczby wszystkie trzy wygladaja tak samo.          */
+RTC_DATA_ATTR uint16_t rtcReedNiepewne = 0;    // odczyty bez ustalonego poziomu
 RTC_DATA_ATTR float    rtcLastVoltage   = 0.0f; // do wykrycia podlaczenia ladowarki
 RTC_DATA_ATTR bool     rtcCutoff        = false;// tryb ochrony rozladowanego ogniwa
 RTC_DATA_ATTR bool     rtcCharging      = false;// stoi na ladowarce
@@ -114,6 +124,32 @@ RTC_DATA_ATTR bool     rtcDosingLoaded  = false;// czy wczytano juz z pamieci tr
    ze w domu polaczenie kosztuje dokladnie tyle samo, co przed cala ta
    zmiana - jedna probe.                                                 */
 RTC_DATA_ATTR uint8_t  rtcNetOstatnia   = 0;
+
+/* --- CZYM SIE POLACZYLISMY OSTATNIO (D112) ----------------------------
+
+   Pomiar z pudelka Kuby po D111: `radio 35,2 s - baza 35,6 s` przy
+   sygnale -51 dBm. Baza odpowiada w 0,4 s; cale 35 sekund idzie w samo
+   polaczenie - i to przy sygnale, przy ktorym telefon laczy sie od razu.
+
+   Te 35 s to nie jest jedna wolna proba, tylko SUMA prob nieudanych:
+   podpowiedz 8 s + siec z listy 15 s + dopiero poswiadczenia sterownika.
+   Innymi slowy pudelko za kazdym razem przechodzi przez to, co u niego
+   NIE dziala, zanim dojdzie do tego, co dziala.
+
+   To takze najprawdopodobniejsze wyjasnienie zagadki z D111 - dlaczego
+   laczenie w tle nie polaczylo sie ANI RAZU przez szesc wersji. Ono
+   probowalo wylacznie podpowiedzi i sieci z listy; poswiadczen
+   sterownika NIE PROBOWALO W OGOLE, swiadomie ("laczenie w tle ma byc
+   szybkie, nie wyczerpujace"). Probowalo wiec tylko tego, co nie dziala.
+
+   Naprawa jest tania: pamietamy, CO zadzialalo, i zaczynamy od tego.
+   0..n-1 = ta pozycja listy, NET_STEROWNIK = poswiadczenia sterownika. */
+#define NET_STEROWNIK 254
+#define NET_NIEZNANE  255
+RTC_DATA_ATTR uint8_t  rtcNetSkad       = NET_NIEZNANE;
+/* Ta sama liczba dla OSTATNIEGO polaczenia - idzie do aplikacji i do
+   czarnej skrzynki, zeby nie trzeba bylo jej zgadywac z czasu.       */
+RTC_DATA_ATTR uint8_t  rtcNetSkadOstatni = NET_NIEZNANE;
 
 /* --- PODPOWIEDZ DO SZYBKIEGO POLACZENIA (D107) ------------------------
 
@@ -1020,6 +1056,9 @@ int reedPoziomStabilny(uint32_t stabilnoscMs, uint32_t limitMs, bool* spokojny) 
     delay(REED_PROBKA_MS);
   }
   if (spokojny) *spokojny = ok;
+  /* Odczyt, ktory nie ustalil sie w limicie, jest zgadywaniem - i to
+     jest jedyna liczba, po ktorej mozna to poznac z telefonu.        */
+  if (!ok && rtcReedNiepewne < 65535) rtcReedNiepewne++;
   return poziom;
 }
 
@@ -2051,6 +2090,23 @@ bool wifiConnect() {
      radio wlaczone przez minute.                                       */
   int n = wifiSieciCount();
   bool ok = false;
+  uint8_t skad = NET_NIEZNANE;
+
+  /* --- NAJPIERW TO, CO ZADZIALALO OSTATNIO (D112) -------------------
+
+     Pomiar: `radio 35,2 s` przy -51 dBm. To nie byla jedna wolna proba,
+     tylko suma prob NIEUDANYCH - pudelko co otwarcie przechodzilo przez
+     podpowiedz i przez siec z listy, zanim doszlo do poswiadczen
+     sterownika, ktore u Kuby dzialaja. Kolejnosc listy pamietalismy od
+     dawna (`rtcNetOstatnia`), ale "poswiadczenia sterownika" nie byly
+     na tej liscie w ogole - wiec jedyna dzialajaca droga byla za kazdym
+     razem probowana OSTATNIA.                                        */
+  if (rtcNetSkad == NET_STEROWNIK && !awakeTooLong()) {
+    LOGLN("[NET] ostatnio laczyly poswiadczenia sterownika - zaczynam od nich");
+    ok = wifiSprobuj("", "", WIFI_TIMEOUT_MS);
+    if (ok) skad = NET_STEROWNIK;
+    else    LOGLN("[NET] tym razem nie - przechodze na liste");
+  }
 
   /* NAJPIERW SZYBKA PROBA Z PODPOWIEDZIA - to jest droga, ktora wysyla
      stan po ZAMKNIECIU wieczka, czyli druga polowa tego, o co chodzi
@@ -2060,13 +2116,14 @@ bool wifiConnect() {
      sterownik nie musi przemiatac calego pasma 2,4 GHz. Krotkie okno,
      bo podpowiedz albo dziala natychmiast, albo sie zestarzala - a wtedy
      petla nizej i tak przejdzie liste normalnie.                      */
-  if (n > 0 && !awakeTooLong() && !wifiDozorcaPrzerwal) {
+  if (!ok && n > 0 && !awakeTooLong() && !wifiDozorcaPrzerwal) {
     const int i = rtcNetOstatnia % n;
     const String ssid = wifiSiecSsid(i);
     if (apPodpowiedzPasuje(ssid)) {
       ok = wifiSprobuj(ssid, wifiSiecPass(i), WIFI_PROBA_SZYBKA_MS);
       if (ok) {
         rtcNetOstatnia = (uint8_t)i;
+        skad = (uint8_t)i;
         LOG("[NET] polaczono ze znanego kanalu w %s\n", "ulamku sekundy");
       } else {
         LOGLN("[NET] podpowiedz nieaktualna - przechodze na zwykle laczenie");
@@ -2081,7 +2138,7 @@ bool wifiConnect() {
     if (!ssid.length()) continue;
     ok = wifiSprobuj(ssid, wifiSiecPass(i), k == 0 ? WIFI_TIMEOUT_MS
                                                    : WIFI_ALT_TIMEOUT_MS);
-    if (ok) rtcNetOstatnia = (uint8_t)i;
+    if (ok) { rtcNetOstatnia = (uint8_t)i; skad = (uint8_t)i; }
     else LOG("[NET] '%s' nie odpowiada\n", ssid.c_str());
   }
 
@@ -2101,10 +2158,15 @@ bool wifiConnect() {
   if (!ok && !awakeTooLong() && !wifiDozorcaPrzerwal) {
     if (n) LOGLN("[NET] zadna siec z listy nie odpowiada - probuje zapamietanej");
     ok = wifiSprobuj("", "", n ? WIFI_ALT_TIMEOUT_MS : WIFI_TIMEOUT_MS);
+    if (ok) skad = NET_STEROWNIK;
     if (ok && n) LOGLN("[NET] polaczono poswiadczeniami sterownika, nie z listy");
   }
 
   ok = WiFi.status() == WL_CONNECTED;
+  /* Zapamietujemy, CO zadzialalo - nastepnym razem zaczniemy od tego.
+     Nieudane wybudzenie nie kasuje pamieci: brak zasiegu nie znaczy, ze
+     droga byla zla.                                                   */
+  if (ok && skad != NET_NIEZNANE) { rtcNetSkad = skad; rtcNetSkadOstatni = skad; }
   if (ok) WiFi.setSleep(true);              // modem-sleep dopiero po polaczeniu
   LOG("[NET] %s%s\n", ok ? "polaczono, IP=" : "BRAK POLACZENIA",
       ok ? WiFi.localIP().toString().c_str() : "");
@@ -2800,6 +2862,16 @@ bool pushStatus() {
      naprawie odbic ta liczba nadal rosnie, drga sam kontaktron - czyli
      sprawa jest sprzetowa (przesuniety magnes), a nie programowa.     */
   doc["reedBounce"] = rtcReedDrgania;
+  /* ODCZYTY, KTORE SIE NIE USTALILY - inna informacja niz drgniecia.
+     Drgania, ktore sie uspokajaja, to odbicia (sprawa programowa).
+     Odczyt bez ustalonego poziomu znaczy, ze styk nie uspokoil sie
+     w ogole - a to juz styk albo magnes, czyli sprawa fizyczna.     */
+  doc["reedNiepewne"] = rtcReedNiepewne;
+  /* CZYM sie polaczylismy - 254 = poswiadczenia sterownika, inaczej
+     numer pozycji na liscie sieci. Bez tego "radio 35 s" nie mowi,
+     KTORA proba zawiodla, a to jest cala roznica miedzy "slaby zasieg"
+     a "zle haslo na liscie" (D112).                                 */
+  doc["netSkad"] = rtcNetSkadOstatni;
   /* POMIAR czuwania przy otwartym wieczku (D99): po ilu ms wstalo lacze
      i po ilu ms baza potwierdzila "otwarte". Bez tych dwoch liczb zdanie
      "po minucie nic sie nie pokazuje" jest nie do rozstrzygniecia - nie
@@ -4535,10 +4607,20 @@ String logbookJson() {
    Dwie liczby w jednej linijce odpowiadaja na jedyne pytanie, ktore ma
    tu sens: gdzie poszedl czas. "radio 1,8 s" plus "razem 2,6 s" znaczy
    siec; "radio 0,4 s" plus "razem 9 s" znaczy baze.                  */
+/* Skad wzielismy polaczenie - krotko, bo to idzie do czarnej skrzynki
+   i do logu, a tam liczy sie kazdy znak.                            */
+const char* netSkadOpis(uint8_t skad) {
+  if (skad == NET_STEROWNIK) return "sterownik";
+  if (skad == NET_NIEZNANE)  return "?";
+  static char b[10];
+  snprintf(b, sizeof(b), "lista%u", (unsigned)skad);
+  return b;
+}
+
 void lidMeldunek() {
-  char m[40];
-  snprintf(m, sizeof(m), "otw->apka %ld ms (radio %ld)",
-           (long)rtcLidMs, (long)rtcNetMs);
+  char m[56];
+  snprintf(m, sizeof(m), "otw->apka %ld ms (radio %ld, %s)",
+           (long)rtcLidMs, (long)rtcNetMs, netSkadOpis(rtcNetSkadOstatni));
   logbookAdd(m);
 }
 

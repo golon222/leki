@@ -255,9 +255,18 @@ check(A.inrChart(["2026-07-01"]).includes("<circle"), "pojedynczy pomiar tez sie
 /* ═══════════ 7. KALENDARZ + RENDER ═══════════ */
 head("Renderowanie bez wyjatkow");
 /* Kalendarz pokazuje BIEZACY miesiac, wiec do testu siatki uzywamy dni,
-   ktore na pewno w nim wypadaja (1-28), a nie przesuniec wzgledem dzis. */
-const inMonth = d => { const n = new Date();
-  return A.dateKey(new Date(n.getFullYear(), n.getMonth(), d)); };
+   ktore na pewno w nim wypadaja (1-28), a nie przesuniec wzgledem dzis.
+
+   MIESIAC BIERZEMY Z `today`, NIE Z `new Date()` - to nie to samo.
+   Doba lekowa konczy sie o DAY_START_HOUR (3:00), wiec miedzy polnoca
+   a trzecia `todayKey()` wskazuje DZIEN POPRZEDNI. Pierwszego dnia
+   miesiaca o 01:xx kalendarz rysuje wiec jeszcze miesiac miniony, a
+   `new Date()` byloby juz w nowym - i test szukal dni w siatce, ktorej
+   nigdy nie mial zobaczyc. Ten sam blad co N3, tylko od drugiej strony:
+   test zakladal wlasny miesiac zamiast tego, ktory rysuje aplikacja.
+   Zlapane 1 wrzesnia 2026 o 01:51 w strefie Etc/GMT-6.              */
+const inMonth = d => { const [y, m] = today.split("-").map(Number);
+  return A.dateKey(new Date(y, m - 1, d)); };
 
 D({ doses:{ [inMonth(3)]:{0:{status:"taken",dose:1,source:"device",ts:t0800}} },
     inr:{ [inMonth(5)]:{value:2.4,ts:t0800} } });

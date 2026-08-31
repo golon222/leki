@@ -1169,17 +1169,28 @@ if _rep:
 # wyjasnienia. Ta kontrola pilnuje, zeby to nie wrocilo.
 _wc = cialo("bool wifiConnect()")
 if _wc:
-    _sprobuj_puste = re.search(r'wifiSprobuj\(\s*""\s*,\s*""', _wc)
-    ok(_sprobuj_puste is not None,
+    _puste = list(re.finditer(r'wifiSprobuj\(\s*""\s*,\s*""', _wc))
+    ok(bool(_puste),
        "wifiConnect() probuje poswiadczen zapamietanych przez sterownik")
-    if _sprobuj_puste:
-        # Musi stac PO petli po liscie i byc warunkowane niepowodzeniem,
-        # a nie pustoscia listy.
-        _przed = _wc[:_sprobuj_puste.start()]
+    if _puste:
+        # OSTATNIE wywolanie to deska ratunku i ono ma zostac tam, gdzie
+        # bylo: PO petli po liscie i warunkowane niepowodzeniem, a nie
+        # pustoscia listy. Bierzemy ostatnie, bo od D112 moze stac wyzej
+        # takze proba "zacznij od tego, co zadzialalo ostatnio".
+        _przed = _wc[:_puste[-1].start()]
         ok(re.search(r"if\s*\(\s*!\s*ok\b", _przed) is not None,
            "i robi to po nieudanych probach z listy, a nie tylko przy pustej liscie")
         ok("for (" in _przed,
            "czyli dopiero po przejrzeniu calej listy sieci")
+    # ...a proba NA POCZATKU (D112) jest dozwolona WYLACZNIE wtedy, gdy
+    # wiemy, ze poswiadczenia sterownika zadzialaly ostatnio. Bez tego
+    # warunku byloby to ciche wylaczenie listy sieci.
+    if len(_puste) > 1:
+        ok("rtcNetSkad == NET_STEROWNIK" in _wc[:_puste[0].start()],
+           "skrot na poczatku dziala tylko po POTWIERDZONYM sukcesie tej drogi")
+    # I zapamietujemy wynik - inaczej skrot nigdy sie nie wlaczy.
+    ok("rtcNetSkad = skad" in _wc and "rtcNetSkadOstatni = skad" in _wc,
+       "zapamietujemy, ktora droga zadzialala - i mowimy o tym aplikacji")
 else:
     ok(False, "nie znaleziono wifiConnect() do sprawdzenia")
 

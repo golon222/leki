@@ -235,6 +235,9 @@ const PRZYKLAD_STATUSU = {
   /* Czuwanie przy otwartym wieczku (D99): ile ms do gotowego lacza i ile
      do potwierdzonego zapisu "otwarte". -1 = nie zdazylo w ogole.     */
   netMs: 1840, lidMs: 2610,
+  /* Pomiary z D112: odczyty kontaktronu bez ustalonego poziomu i to,
+     CZYM pudelko sie polaczylo (254 = poswiadczenia sterownika).    */
+  reedNiepewne: 0, netSkad: 254,
   /* Aktualizacja przez WiFi (D59). otaBad to suma MD5 wersji, ktora sie
      nie uruchomila - 32 znaki albo pusto, nigdy nic pomiedzy.         */
   otaMsg: "za malo baterii - postaw na ladowarke", otaWersja: "1.38.0",

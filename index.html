@@ -1903,7 +1903,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-30.76";
+const APP_VERSION = "2026-08-31.77";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -4527,6 +4527,29 @@ const NVS_MALO = 40;
    się przy każdym odłączeniu ogniwa; to liczba „od ostatniego resetu",
    nie „od zawsze".                                                     */
 const REED_DRGANIA_DUZO = 200;
+/* ODCZYTY, KTÓRE SIĘ NIE USTALIŁY — inna informacja niż drgnięcia.
+
+   Zgłoszenie Kuby: „jest problem żeby zamknąć, zakręcam po 10 razy
+   i pod każdym kątem", przy 17 drgnięciach. Same drgnięcia tego nie
+   rozstrzygają — styk, który drga i się uspokaja, to zwykłe odbicia
+   i pudełko sobie z nimi radzi. Dopiero odczyt, który NIE ustalił się
+   w limicie, znaczy, że styk nie uspokaja się wcale.
+
+   Próg 20: pudełko czyta kontaktron wielokrotnie na wybudzenie, więc
+   pojedyncze niepewne odczyty przy zakręcaniu są normalne. Dziesiątki
+   znaczą, że styk albo magnes nie trzymają pozycji — i wtedy to jest
+   sprawa mechaniczna, nie programowa (D112).                        */
+const REED_NIEPEWNE_DUZO = 20;
+
+/* Skąd pudełko wzięło połączenie. 254 = poświadczenia zapamiętane przez
+   sam sterownik WiFi, cokolwiek innego = pozycja na liście sieci.
+
+   To jest ta linijka, która tłumaczy „radio 35 s" przy sygnale -51 dBm:
+   35 sekund to nie jedna wolna próba, tylko SUMA prób nieudanych. Jeśli
+   łączy sterownik, a nie lista — wpis na liście sieci jest do niczego
+   i pudełko za każdym razem czeka, aż on zawiedzie (D112).          */
+const NET_STEROWNIK = 254;
+const NET_NIEZNANE  = 255;
 
 function nvsMalo(st){
   return typeof st?.nvsFree === "number" && st.nvsFree >= 0 && st.nvsFree < NVS_MALO;
@@ -5129,6 +5152,10 @@ function renderStatus(st){
        ? wiersz("Drgnięć styku", `${+st.reedBounce}` +
            (+st.reedBounce > REED_DRGANIA_DUZO
               ? ` <span style="color:var(--warn)">dużo — sprawdź magnes</span>` : "")) : "") +
+    (Number.isFinite(+st.reedNiepewne) && +st.reedNiepewne > 0
+       ? wiersz("Odczytów bez ustalenia", `${+st.reedNiepewne}` +
+           (+st.reedNiepewne > REED_NIEPEWNE_DUZO
+              ? ` <span style="color:var(--warn)">styk nie trzyma pozycji</span>` : "")) : "") +
     /* OD OTWARCIA WIECZKA DO APLIKACJI — dwie liczby, nie jedna.
 
        Kuba trzy razy z rzędu zgłosił to samo zdanie: „otwieram, pika,
@@ -5149,6 +5176,15 @@ function renderStatus(st){
               ? `<span class="dim2"> · </span>` +
                 (+st.lidMs < 0 ? `baza <span style="color:var(--bad)">bez odpowiedzi</span>`
                                : `baza ${(+st.lidMs / 1000).toFixed(1)} s`) : "")) : "") +
+    /* CZYM się połączyło — bez tego „radio 35 s" nie mówi, KTÓRA próba
+       zawiodła, a to cała różnica między „słaby zasięg" a „zły wpis na
+       liście sieci". Pokazujemy tylko wtedy, gdy pudełko to przysłało. */
+    (Number.isFinite(+st.netSkad) && +st.netSkad !== NET_NIEZNANE
+       ? wiersz("Połączyło się przez",
+           +st.netSkad === NET_STEROWNIK
+             ? `<span style="color:var(--warn)">pamięć sterownika</span>` +
+               `<br><span class="dim2">wpis na liście sieci nie zadziałał</span>`
+             : `sieć nr ${+st.netSkad + 1} z listy`) : "") +
     /* TWARDE RESTARTY. Pamięć RTC ich nie przeżywa, więc po restarcie
        pudełko zapomina, czy dawka była dziś wzięta — i przestaje ostrzegać
        przed drugą tabletką, dopóki nie odczyta znacznika z pamięci trwałej.

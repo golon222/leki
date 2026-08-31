@@ -15,6 +15,7 @@
 time_t FAKE_NOW = 0;
 int    FAKE_ADC = 0;
 uint16_t rtcReedDrgania = 0;
+uint16_t rtcReedNiepewne = 0;
 std::map<int, FakePinPlan> FAKE_PINY;   /* kontaktron i przycisk - stan zmienny w czasie */
 unsigned long FAKE_MILLIS = 0;
 FakeSerial Serial;
@@ -738,6 +739,33 @@ head("Kontaktron: odbicia styku przy zakrecaniu wieczka");
   boxIsOpen();
   CHECK(rtcReedDrgania == 0, "a spokojny styk nie podnosi licznika (%u)",
         (unsigned)rtcReedDrgania);
+
+  /* DRGANIA TO NIE TO SAMO CO ODCZYT BEZ USTALENIA, i na tej roznicy
+     stoi cala odpowiedz na pytanie "kod czy magnes" (D112).
+     Styk, ktory drga i sie uspokaja, podnosi TYLKO licznik drgan.
+     Styk, ktory nie uspokaja sie w limicie, podnosi TAKZE ten drugi. */
+  ustawPin(PIN_REED, ZAM);
+  FAKE_MILLIS = 30000; rtcReedNiepewne = 0; rtcReedDrgania = 0;
+  boxIsOpen();
+  CHECK(rtcReedNiepewne == 0, "spokojny styk nie podnosi licznika niepewnych (%u)",
+        (unsigned)rtcReedNiepewne);
+
+  ustawPinPrzebieg(PIN_REED, ZAM, bezKonca);
+  FAKE_MILLIS = 0; rtcReedNiepewne = 0;
+  boxIsOpen();
+  CHECK(rtcReedNiepewne == 1, "styk drgajacy bez konca liczy sie jako niepewny (%u)",
+        (unsigned)rtcReedNiepewne);
+
+  /* I NAJWAZNIEJSZY PRZYPADEK: styk SPOKOJNY, ale w zlej pozycji.
+     Magnes nie dosiega, wieczko jest zakrecone, a pudelko czyta
+     "otwarte" - i zaden filtr tego nie naprawi. Licznik niepewnych ma
+     wtedy STAC, bo problem nie jest w odbiciach.                     */
+  ustawPin(PIN_REED, OTW);
+  FAKE_MILLIS = 60000; rtcReedNiepewne = 0; rtcReedDrgania = 0;
+  CHECK(boxIsOpen(), "styk w pozycji 'otwarte' czyta sie jako otwarte");
+  CHECK(rtcReedNiepewne == 0 && rtcReedDrgania == 0,
+        "i nie wyglada na odbicia - oba liczniki stoja (%u/%u)",
+        (unsigned)rtcReedNiepewne, (unsigned)rtcReedDrgania);
 }
 ustawPin(PIN_REED, !REED_OPEN_LEVEL);   // stan wyjsciowy dla dalszych blokow
 

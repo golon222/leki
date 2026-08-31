@@ -20,6 +20,7 @@
 time_t FAKE_NOW = 0;
 int    FAKE_ADC = 0;
 uint16_t rtcReedDrgania = 0;
+uint16_t rtcReedNiepewne = 0;
 std::map<int, FakePinPlan> FAKE_PINY;   /* kontaktron i przycisk - stan zmienny w czasie */
 unsigned long FAKE_MILLIS = 0;
 FakeSerial Serial;
