@@ -163,74 +163,74 @@ pozycjom w pasku nawigacji i podekranom Ustawien.
 
 ---
 
-## `firmware/PillBox/PillBox.ino` — 6749 linii
+## `firmware/PillBox/PillBox.ino` — 6818 linii
 
 | od | do | blok |
 |---|---|---|
 | 1 | 64 | PillBox.ino  -  Inteligentne pudelko na leki / IoT Pill Reminder |
 | 65 | 309 | PAMIEC RTC  (przezywa deep sleep, ginie po odlaczeniu zasilania) |
-| 310 | 568 | STAN GLOBALNY |
-| 569 | 789 | 1.  POMIAR BATERII |
-| 790 | 952 | 2.  BUZZER  (pasywny piezo -> PWM przez LEDC) |
-| 953 | 1120 | 3.  GPIO / WYBUDZANIE |
-| 1121 | 1235 | 4.  HARMONOGRAM |
-| 1236 | 1361 | 4a.  DNI BEZ LEKU |
-| 1362 | 1383 | 4b.  PUDELKO ZOSTAWIONE OTWARTE |
-| 1384 | 1516 | 4c.  DZIENNIK WIECZKA - USUNIETY (D109) |
-| 1517 | 1768 | 5.  KOLEJKA OFFLINE  (Preferences / NVS - pierscien) |
-| 1769 | 2254 | 6.  WiFi |
-| 2255 | 3318 | 7.  FIREBASE  (REST: Auth email/haslo + Realtime Database) |
-| 3319 | 3699 | 8.  ZDARZENIA |
-| 3700 | 3755 | 9.  ALARM |
-| 3756 | 3974 | 10.  PORTAL KONFIGURACJI WiFi  (zamiast Bluetooth) |
-| 3975 | 4466 | 10a2. AKTUALIZACJA PROGRAMU PRZEZ WIFI  (OTA)   -  D59 |
-| 4467 | 4586 | 10b. CZARNA SKRZYNKA |
-| 4587 | 4983 | 10c. GESTY SERWISOWE I AUTOTEST |
-| 4984 | 5406 | 10b. POWIADOMIENIA NA TELEFON  (bot Telegram, D67) |
-| 5407 | 6004 | 11.  DEEP SLEEP |
-| 6005 | 6749 | 12.  SETUP  =  cala logika (loop() nigdy nie jest osiagany) |
+| 310 | 572 | STAN GLOBALNY |
+| 573 | 793 | 1.  POMIAR BATERII |
+| 794 | 956 | 2.  BUZZER  (pasywny piezo -> PWM przez LEDC) |
+| 957 | 1144 | 3.  GPIO / WYBUDZANIE |
+| 1145 | 1259 | 4.  HARMONOGRAM |
+| 1260 | 1385 | 4a.  DNI BEZ LEKU |
+| 1386 | 1407 | 4b.  PUDELKO ZOSTAWIONE OTWARTE |
+| 1408 | 1540 | 4c.  DZIENNIK WIECZKA - USUNIETY (D109) |
+| 1541 | 1792 | 5.  KOLEJKA OFFLINE  (Preferences / NVS - pierscien) |
+| 1793 | 2278 | 6.  WiFi |
+| 2279 | 3359 | 7.  FIREBASE  (REST: Auth email/haslo + Realtime Database) |
+| 3360 | 3744 | 8.  ZDARZENIA |
+| 3745 | 3800 | 9.  ALARM |
+| 3801 | 4019 | 10.  PORTAL KONFIGURACJI WiFi  (zamiast Bluetooth) |
+| 4020 | 4511 | 10a2. AKTUALIZACJA PROGRAMU PRZEZ WIFI  (OTA)   -  D59 |
+| 4512 | 4631 | 10b. CZARNA SKRZYNKA |
+| 4632 | 5028 | 10c. GESTY SERWISOWE I AUTOTEST |
+| 5029 | 5451 | 10b. POWIADOMIENIA NA TELEFON  (bot Telegram, D67) |
+| 5452 | 6049 | 11.  DEEP SLEEP |
+| 6050 | 6818 | 12.  SETUP  =  cala logika (loop() nigdy nie jest osiagany) |
 
-**Funkcje** (182):
+**Funkcje** (183):
 
-*STAN GLOBALNY* — `zanotujNvsFail`&nbsp;388, `nvsPutStr`&nbsp;407, `nvsPutU16`&nbsp;430, `nvsPutU32`&nbsp;453, `nvsPutI16`&nbsp;479, `nvsPutU8`&nbsp;486, `nvsWolneWpisy`&nbsp;501, `syncTimeNTP`&nbsp;544, `logbookJson`&nbsp;545, `setTakenDay`&nbsp;546, `note`&nbsp;548, `awakeTooLong`&nbsp;562, `extendAwake`&nbsp;564
+*STAN GLOBALNY* — `zanotujNvsFail`&nbsp;388, `nvsPutStr`&nbsp;407, `nvsPutU16`&nbsp;430, `nvsPutU32`&nbsp;453, `nvsPutI16`&nbsp;479, `nvsPutU8`&nbsp;486, `nvsWolneWpisy`&nbsp;501, `syncTimeNTP`&nbsp;544, `logbookJson`&nbsp;545, `setTakenDay`&nbsp;550, `note`&nbsp;552, `awakeTooLong`&nbsp;566, `extendAwake`&nbsp;568
 
-*1.  POMIAR BATERII* — `readBatteryRaw`&nbsp;577, `battPercentFromCurve`&nbsp;617, `resetBatteryFilter`&nbsp;649, `zapiszKoniecLadowania`&nbsp;672, `trackCharging`&nbsp;682, `battSmooth`&nbsp;736, `readBattery`&nbsp;767
+*1.  POMIAR BATERII* — `readBatteryRaw`&nbsp;581, `battPercentFromCurve`&nbsp;621, `resetBatteryFilter`&nbsp;653, `zapiszKoniecLadowania`&nbsp;676, `trackCharging`&nbsp;686, `battSmooth`&nbsp;740, `readBattery`&nbsp;771
 
-*2.  BUZZER  (pasywny piezo -> PWM przez LEDC)* — `buzzerInit`&nbsp;793, `buzzerTone`&nbsp;802, `buzzerTonCicho`&nbsp;813, `buzzerOff`&nbsp;822, `beepAck`&nbsp;834, `beepErr`&nbsp;858, `beepQueued`&nbsp;868, `beepAlreadyTaken`&nbsp;878, `beepNowaWersja`&nbsp;903, `beepLowStock`&nbsp;913, `beepLowBattery`&nbsp;922, `beepBoxOpen`&nbsp;938, `beepCharging`&nbsp;946
+*2.  BUZZER  (pasywny piezo -> PWM przez LEDC)* — `buzzerInit`&nbsp;797, `buzzerTone`&nbsp;806, `buzzerTonCicho`&nbsp;817, `buzzerOff`&nbsp;826, `beepAck`&nbsp;838, `beepErr`&nbsp;862, `beepQueued`&nbsp;872, `beepAlreadyTaken`&nbsp;882, `beepNowaWersja`&nbsp;907, `beepLowStock`&nbsp;917, `beepLowBattery`&nbsp;926, `beepBoxOpen`&nbsp;942, `beepCharging`&nbsp;950
 
-*3.  GPIO / WYBUDZANIE* — `configureInputs`&nbsp;956, `powodResetuOpis`&nbsp;978, `zanotujReset`&nbsp;996, `reedPoziomStabilny`&nbsp;1041, `boxIsOpen`&nbsp;1065, `buttonPressed`&nbsp;1068, `wakeName`&nbsp;1070
+*3.  GPIO / WYBUDZANIE* — `configureInputs`&nbsp;960, `powodResetuOpis`&nbsp;982, `zanotujReset`&nbsp;1000, `reedPoziomStabilny`&nbsp;1045, `boxIsOpen`&nbsp;1069, `boxIsOpenPewnie`&nbsp;1088, `buttonPressed`&nbsp;1092, `wakeName`&nbsp;1094
 
-*4.  HARMONOGRAM* — `godzinaPoprawna`&nbsp;1134, `parseSchedule`&nbsp;1143, `loadSchedule`&nbsp;1156, `saveSchedule`&nbsp;1179, `localMinutesOfDay`&nbsp;1190, `slotMinutes`&nbsp;1197, `localDayNumber`&nbsp;1206, `matchSlot`&nbsp;1214, `secondsToDayBoundary`&nbsp;1229
+*4.  HARMONOGRAM* — `godzinaPoprawna`&nbsp;1158, `parseSchedule`&nbsp;1167, `loadSchedule`&nbsp;1180, `saveSchedule`&nbsp;1203, `localMinutesOfDay`&nbsp;1214, `slotMinutes`&nbsp;1221, `localDayNumber`&nbsp;1230, `matchSlot`&nbsp;1238, `secondsToDayBoundary`&nbsp;1253
 
-*4a.  DNI BEZ LEKU* — `localWeekday`&nbsp;1256, `dateKeyToNum`&nbsp;1264, `dawkaNaDobe`&nbsp;1277, `dzisBezLeku`&nbsp;1287, `parseDoseWeek`&nbsp;1296, `parseDoseEx`&nbsp;1314, `saveDosing`&nbsp;1336, `loadDosing`&nbsp;1349
+*4a.  DNI BEZ LEKU* — `localWeekday`&nbsp;1280, `dateKeyToNum`&nbsp;1288, `dawkaNaDobe`&nbsp;1301, `dzisBezLeku`&nbsp;1311, `parseDoseWeek`&nbsp;1320, `parseDoseEx`&nbsp;1338, `saveDosing`&nbsp;1360, `loadDosing`&nbsp;1373
 
-*4b.  PUDELKO ZOSTAWIONE OTWARTE* — `openWarnSecondsLeft`&nbsp;1373
+*4b.  PUDELKO ZOSTAWIONE OTWARTE* — `openWarnSecondsLeft`&nbsp;1397
 
-*4c.  DZIENNIK WIECZKA - USUNIETY (D109)* — `jsonEscape`&nbsp;1407, `nvsFailLogDoWyslania`&nbsp;1423, `nvsFailLogJson`&nbsp;1433, `nvsFailLogOznaczWyslany`&nbsp;1451, `trackBoxOpen`&nbsp;1455, `secondsToNextSlot`&nbsp;1502
+*4c.  DZIENNIK WIECZKA - USUNIETY (D109)* — `jsonEscape`&nbsp;1431, `nvsFailLogDoWyslania`&nbsp;1447, `nvsFailLogJson`&nbsp;1457, `nvsFailLogOznaczWyslany`&nbsp;1475, `trackBoxOpen`&nbsp;1479, `secondsToNextSlot`&nbsp;1526
 
-*5.  KOLEJKA OFFLINE  (Preferences / NVS - pierscien)* — `rekordTs`&nbsp;1533, `rekordBezDaty`&nbsp;1540, `tsDoBazy`&nbsp;1549, `queuePush`&nbsp;1553, `queueCount`&nbsp;1576, `queuePeek`&nbsp;1583, `queuePop`&nbsp;1598, `queueDrop`&nbsp;1617, `przesunZnaczniki`&nbsp;1641, `queueShiftTimestamps`&nbsp;1656, `queueNadajCzas`&nbsp;1704, `queueEpokaSkasuj`&nbsp;1747
+*5.  KOLEJKA OFFLINE  (Preferences / NVS - pierscien)* — `rekordTs`&nbsp;1557, `rekordBezDaty`&nbsp;1564, `tsDoBazy`&nbsp;1573, `queuePush`&nbsp;1577, `queueCount`&nbsp;1600, `queuePeek`&nbsp;1607, `queuePop`&nbsp;1622, `queueDrop`&nbsp;1641, `przesunZnaczniki`&nbsp;1665, `queueShiftTimestamps`&nbsp;1680, `queueNadajCzas`&nbsp;1728, `queueEpokaSkasuj`&nbsp;1771
 
-*6.  WiFi* — `netKlucz`&nbsp;1786, `wifiSieciCount`&nbsp;1790, `wifiSiecSsid`&nbsp;1797, `wifiSiecPass`&nbsp;1806, `wifiListeZapisz`&nbsp;1833, `wifiListeCzytaj`&nbsp;1857, `wifiSiecDodaj`&nbsp;1870, `wifiSiecUsun`&nbsp;1901, `wifiSiecPriorytet`&nbsp;1934, `zapamietajAp`&nbsp;1964, `apPodpowiedzPasuje`&nbsp;1975, `wifiBeginZPodpowiedzia`&nbsp;1983, `wifiCzekajNaLacze`&nbsp;2016, `wifiSprobuj`&nbsp;2029, `wifiConnect`&nbsp;2065, `wifiOff`&nbsp;2186, `wifiUspij`&nbsp;2200, `syncTimeNTP`&nbsp;2205
+*6.  WiFi* — `netKlucz`&nbsp;1810, `wifiSieciCount`&nbsp;1814, `wifiSiecSsid`&nbsp;1821, `wifiSiecPass`&nbsp;1830, `wifiListeZapisz`&nbsp;1857, `wifiListeCzytaj`&nbsp;1881, `wifiSiecDodaj`&nbsp;1894, `wifiSiecUsun`&nbsp;1925, `wifiSiecPriorytet`&nbsp;1958, `zapamietajAp`&nbsp;1988, `apPodpowiedzPasuje`&nbsp;1999, `wifiBeginZPodpowiedzia`&nbsp;2007, `wifiCzekajNaLacze`&nbsp;2040, `wifiSprobuj`&nbsp;2053, `wifiConnect`&nbsp;2089, `wifiOff`&nbsp;2210, `wifiUspij`&nbsp;2224, `syncTimeNTP`&nbsp;2229
 
-*7.  FIREBASE  (REST: Auth email/haslo + Realtime Database)* — `tokenZPamieci`&nbsp;2272, `zapomnijToken`&nbsp;2281, `hasloJestPrawdziwe`&nbsp;2326, `hasloZPamieci`&nbsp;2331, `hasloWPamieci`&nbsp;2340, `hasloUtrwal`&nbsp;2344, `hasloDoLogowania`&nbsp;2357, `tgTokenZPamieci`&nbsp;2377, `tgChatZPamieci`&nbsp;2384, `tgSkonfigurowany`&nbsp;2393, `tgUtrwal`&nbsp;2400, `tgZapomnij`&nbsp;2412, `firebaseSignIn`&nbsp;2446, `rtdbUrl`&nbsp;2541, `rtdbSend`&nbsp;2563, `rekordKompletny`&nbsp;2590, `pushEventRecord`&nbsp;2599, `pushLidState`&nbsp;2656, `otaSumaZPamieci`&nbsp;2707, `otaSumaWgranej`&nbsp;2729, `pushStatus`&nbsp;2735, `fetchConfig`&nbsp;2952, `trwaleOdrzucony`&nbsp;3276, `flushQueue`&nbsp;3280
+*7.  FIREBASE  (REST: Auth email/haslo + Realtime Database)* — `tokenZPamieci`&nbsp;2296, `zapomnijToken`&nbsp;2305, `hasloJestPrawdziwe`&nbsp;2350, `hasloZPamieci`&nbsp;2355, `hasloWPamieci`&nbsp;2364, `hasloUtrwal`&nbsp;2368, `hasloDoLogowania`&nbsp;2381, `tgTokenZPamieci`&nbsp;2401, `tgChatZPamieci`&nbsp;2408, `tgSkonfigurowany`&nbsp;2417, `tgUtrwal`&nbsp;2424, `tgZapomnij`&nbsp;2436, `firebaseSignIn`&nbsp;2470, `rtdbUrl`&nbsp;2565, `rtdbSend`&nbsp;2587, `rekordKompletny`&nbsp;2614, `pushEventRecord`&nbsp;2623, `pushLidState`&nbsp;2680, `otaSumaZPamieci`&nbsp;2731, `otaSumaWgranej`&nbsp;2753, `pushStatus`&nbsp;2776, `fetchConfig`&nbsp;2993, `trwaleOdrzucony`&nbsp;3317, `flushQueue`&nbsp;3321
 
-*8.  ZDARZENIA* — `makeRecordAt`&nbsp;3322, `makeRecord`&nbsp;3344, `loadDayMarkers`&nbsp;3354, `clearDayMarkers`&nbsp;3373, `setTakenDay`&nbsp;3387, `setRolloverDay`&nbsp;3395, `zapiszDawke`&nbsp;3425, `oznaczAlarmObsluzony`&nbsp;3468, `alarmJuzObsluzony`&nbsp;3501, `ostatniSlotDoby`&nbsp;3527, `juzDzisBrane`&nbsp;3537, `checkDayRollover`&nbsp;3544, `reportEvent`&nbsp;3626
+*8.  ZDARZENIA* — `makeRecordAt`&nbsp;3363, `makeRecord`&nbsp;3385, `loadDayMarkers`&nbsp;3395, `clearDayMarkers`&nbsp;3414, `setTakenDay`&nbsp;3428, `setRolloverDay`&nbsp;3436, `zapiszDawke`&nbsp;3466, `oznaczAlarmObsluzony`&nbsp;3509, `alarmJuzObsluzony`&nbsp;3542, `ostatniSlotDoby`&nbsp;3568, `juzDzisBrane`&nbsp;3578, `checkDayRollover`&nbsp;3585, `reportEvent`&nbsp;3667
 
-*9.  ALARM* — `alarmPotwierdzony`&nbsp;3723, `runAlarmWindow`&nbsp;3728
+*9.  ALARM* — `alarmPotwierdzony`&nbsp;3768, `runAlarmWindow`&nbsp;3773
 
-*10.  PORTAL KONFIGURACJI WiFi  (zamiast Bluetooth)* — `htmlEscape`&nbsp;3769, `portalPage`&nbsp;3783, `startWifiPortal`&nbsp;3827
+*10.  PORTAL KONFIGURACJI WiFi  (zamiast Bluetooth)* — `htmlEscape`&nbsp;3814, `portalPage`&nbsp;3828, `startWifiPortal`&nbsp;3872
 
-*10a2. AKTUALIZACJA PROGRAMU PRZEZ WIFI  (OTA)   -  D59* — `otaOpisDecyzji`&nbsp;4099, `otaZanotujProbe`&nbsp;4125, `otaWyzerujLicznik`&nbsp;4133, `otaZlecenieWBazie`&nbsp;4163, `otaPobierzOpis`&nbsp;4178, `otaWgraj`&nbsp;4222, `otaSprawdzPoStarcie`&nbsp;4380, `otaPotwierdzDzialanie`&nbsp;4413
+*10a2. AKTUALIZACJA PROGRAMU PRZEZ WIFI  (OTA)   -  D59* — `otaOpisDecyzji`&nbsp;4144, `otaZanotujProbe`&nbsp;4170, `otaWyzerujLicznik`&nbsp;4178, `otaZlecenieWBazie`&nbsp;4208, `otaPobierzOpis`&nbsp;4223, `otaWgraj`&nbsp;4267, `otaSprawdzPoStarcie`&nbsp;4425, `otaPotwierdzDzialanie`&nbsp;4458
 
-*10b. CZARNA SKRZYNKA* — `note`&nbsp;4487, `wartoZapisac`&nbsp;4494, `logbookAdd`&nbsp;4506, `logbookPrint`&nbsp;4545, `logbookJson`&nbsp;4569
+*10b. CZARNA SKRZYNKA* — `note`&nbsp;4532, `wartoZapisac`&nbsp;4539, `logbookAdd`&nbsp;4551, `logbookPrint`&nbsp;4590, `logbookJson`&nbsp;4614
 
-*10c. GESTY SERWISOWE I AUTOTEST* — `netSkadOpis`&nbsp;4612, `lidMeldunek`&nbsp;4620, `dozorKrok`&nbsp;4647, `pikNumer`&nbsp;4813, `pikKoniecTestu`&nbsp;4825, `pikBrakSieci`&nbsp;4836, `wynikEtapu`&nbsp;4848, `etapTestu`&nbsp;4867, `autoTest`&nbsp;4872
+*10c. GESTY SERWISOWE I AUTOTEST* — `netSkadOpis`&nbsp;4657, `lidMeldunek`&nbsp;4665, `dozorKrok`&nbsp;4692, `pikNumer`&nbsp;4858, `pikKoniecTestu`&nbsp;4870, `pikBrakSieci`&nbsp;4881, `wynikEtapu`&nbsp;4893, `etapTestu`&nbsp;4912, `autoTest`&nbsp;4917
 
-*10b. POWIADOMIENIA NA TELEFON  (bot Telegram, D67)* — `tgWyslijTekst`&nbsp;5019, `tgZglosNieodebrane`&nbsp;5065, `tgSprawdzBaterie`&nbsp;5085, `tgSprawdzZapas`&nbsp;5104, `dniOdEry`&nbsp;5127, `dniDoDaty`&nbsp;5138, `inrPrzypomnienieTeraz`&nbsp;5172, `tgOznaczInrMiniete`&nbsp;5192, `sekundyDoInrPrzypomnienia`&nbsp;5201, `tgSprawdzInr`&nbsp;5223, `tgTekstZapas`&nbsp;5237, `tgTekstInr`&nbsp;5246, `tgTekstNieodebrane`&nbsp;5266, `tgTekstBateria`&nbsp;5275, `tgWyslijZalegle`&nbsp;5294
+*10b. POWIADOMIENIA NA TELEFON  (bot Telegram, D67)* — `tgWyslijTekst`&nbsp;5064, `tgZglosNieodebrane`&nbsp;5110, `tgSprawdzBaterie`&nbsp;5130, `tgSprawdzZapas`&nbsp;5149, `dniOdEry`&nbsp;5172, `dniDoDaty`&nbsp;5183, `inrPrzypomnienieTeraz`&nbsp;5217, `tgOznaczInrMiniete`&nbsp;5237, `sekundyDoInrPrzypomnienia`&nbsp;5246, `tgSprawdzInr`&nbsp;5268, `tgTekstZapas`&nbsp;5282, `tgTekstInr`&nbsp;5291, `tgTekstNieodebrane`&nbsp;5311, `tgTekstBateria`&nbsp;5320, `tgWyslijZalegle`&nbsp;5339
 
-*11.  DEEP SLEEP* — `otaZglos`&nbsp;5425, `skanujSieci`&nbsp;5453, `otaSprobuj`&nbsp;5502, `kolejnePrzesuniecie`&nbsp;5701, `goToSleep`&nbsp;5706, `planNextSleep`&nbsp;5924
+*11.  DEEP SLEEP* — `otaZglos`&nbsp;5470, `skanujSieci`&nbsp;5498, `otaSprobuj`&nbsp;5547, `kolejnePrzesuniecie`&nbsp;5746, `goToSleep`&nbsp;5751, `planNextSleep`&nbsp;5969
 
-*12.  SETUP  =  cala logika (loop() nigdy nie jest osiagany)* — `petlaLadowania`&nbsp;6017, `setup`&nbsp;6115, `loop`&nbsp;6746
+*12.  SETUP  =  cala logika (loop() nigdy nie jest osiagany)* — `petlaLadowania`&nbsp;6062, `setup`&nbsp;6160, `loop`&nbsp;6815
 
 
 ---

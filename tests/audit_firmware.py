@@ -319,6 +319,50 @@ ok(bool(_hint) and "rtcApKanal" in _hint and "rtcApBssid" in _hint,
    "laczymy sie ze ZNANEGO kanalu, zamiast przemiatac pasmo")
 ok(bool(_sprobuj) and "zapamietajAp()" in _sprobuj,
    "i zapamietujemy kanal routera po kazdym udanym polaczeniu")
+# ═══ JEDEN ODCZYT KONTAKTRONU NA JEDEN MELDUNEK (D113) ═══
+#
+# TU BYL BLAD i tlumaczy zdanie Kuby: *"na sekunde bylo widac, ze otwarte,
+# i zniklo na wziete, po czym za chwile pokazalo sie, ze pudelko otwarte"*.
+#
+# `pushLidState()` i `pushStatus()` pisza TO SAMO pole `boxOpen`, sekunde
+# po sobie. Dopoki kazde czytalo kontaktron OSOBNO, drugie nadpisywalo
+# pierwsze - a przy magnesie na granicy czulosci innym wynikiem. Potem
+# `rtcOpenReported` zapisywalo sie z tego samego blednego odczytu, wiec
+# warunek ponowienia (`rtcOpenReported != boxIsOpen()`) byl falszywy
+# i NIKT juz bazy nie prostowal. D96 naprawilo trzy odczyty WEWNATRZ
+# pushStatus(); te dwa POMIEDZY wywolaniami zostaly.
+_ps = cialo("bool pushStatus(int stanWieczka)")
+ok(bool(_ps), "pushStatus() przyjmuje zmierzony stan wieczka, zamiast czytac go sam")
+ok(bool(_ps) and "stanWieczka < 0" in _ps and _ps.count("boxIsOpen()") <= 1,
+   "i uzywa go zamiast drugiego odczytu pinu")
+# Miejsce, w ktorym stan wieczka jedzie do aplikacji na godziny.
+_setup_kon = cialo("void setup()")
+_kon = _setup_kon[_setup_kon.find("const bool bazaGotowa"):] if _setup_kon else ""
+_kon = _kon[:_kon.find("\n    }")] if _kon else ""
+ok("boxIsOpenPewnie(&stanPewny)" in _kon,
+   "stan koncowy mierzymy z rygorem przedsennym, nie odczytem 12 ms")
+ok("pushLidState(stanKoncowy)" in _kon and "pushStatus(stanKoncowy)" in _kon,
+   "i TEN SAM pomiar idzie do obu wysylek")
+ok(_kon.count("boxIsOpen()") == 0,
+   "zaden inny odczyt pinu nie wchodzi juz miedzy nie")
+# Patrzymy WYLACZNIE w galaz sukcesu. Pierwsza wersja tej kontroli szukala
+# `if (!stanPewny)` w calym bloku - i przechodzila, bo takie `if` stoi tam
+# takze przy samym LOG-u. Mutacja "niepewny odczyt zamyka sprawe" przeszla
+# przez nia bez mrugniecia (zlapane mutacja, nie okiem).
+_sukces = _kon[_kon.find("pushStatus(stanKoncowy)"):]
+_sukces = _sukces[:_sukces.find("} else {")] if "} else {" in _sukces else _sukces
+ok("!stanPewny" in _sukces and "rtcStatusDirty = true" in _sukces,
+   "a odczyt niepewny NIE zamyka sprawy - wroci przy nastepnym wybudzeniu")
+# Ta sama para na sciezce zapisu dawki.
+_re = cialo("void reportEvent(const char* type, int slot)")
+ok(bool(_re) and "pushLidState(stanWieczkaTeraz)" in _re
+   and "pushStatus(stanWieczkaTeraz ? 1 : 0)" in _re,
+   "zapis dawki tez melduje wieczko z jednego pomiaru")
+# Odczyt pewny ma byc surowszy od zwyklego, inaczej cala zmiana nic nie daje.
+_bp = cialo("bool boxIsOpenPewnie(bool* pewny)")
+ok(bool(_bp) and "REED_SPOKOJ_MS" in _bp and "REED_SPOKOJ_MAX_MS" in _bp,
+   "boxIsOpenPewnie() uzywa progow przedsennych, nie zwyklych")
+
 ok("msZamkniecia = millis();" in _doz,
    "zapamietujemy chwile zamkniecia - inaczej opoznienia nie da sie zmierzyc")
 ok("zamkn->wyslane" in ino,
@@ -350,7 +394,7 @@ plan = code[code.find("uint32_t planNextSleep("):]
 plan = plan[:plan.find("\n}")]
 ok("rtcStatusDirty" in plan,
    "nieaktualny stan w aplikacji wymusza wczesniejsze wybudzenie")
-ok("&& pushStatus()" in code,
+ok("&& pushStatus(stanKoncowy)" in code,
    "komunikat o powiadomieniu aplikacji tylko po potwierdzonej wysylce")
 # ── Token Firebase miedzy wybudzeniami ──
 # idToken jest zwykla zmienna, wiec deep sleep go kasuje. Przy budzeniu co
@@ -423,7 +467,7 @@ ok("logbookJson" not in lid, "szybka wysylka nie ciagnie za soba czarnej skrzynk
 rep = cialo("void reportEvent(const char* type, int slot)")
 ok(rep.find("pushLidState()") < rep.find("fetchConfig()"),
    "przy otwarciu stan wieczka leci PRZED pobraniem ustawien i kolejka")
-ok(re.search(r"pushLidState\([^)]*\)\s*&&\s*pushStatus\(\)", code) is not None,
+ok(re.search(r"pushLidState\([^)]*\)\s*&&\s*pushStatus\([^)]+\)", code) is not None,
    "przy zamknieciu tez najpierw krotki pakiet, potem pelny status")
 # STAN WYSYLANY JEST TEN ZMIERZONY, a nie odczytany jeszcze raz w srodku.
 # `pushLidState()` zapisuje go takze jako `rtcOpenReported` - czyli "co
@@ -444,7 +488,7 @@ ok("boxIsOpen()" not in _lid2,
 # ── Procent baterii przy ladowaniu ──
 # Uklad ladujacy trzyma na ogniwie swoje napiecie, wiec kazdy pomiar
 # wychodzi 100%. Pokazywanie tego byloby klamstwem.
-_pr = ino[ino.find("bool pushStatus() {"):]
+_pr = ino[ino.find("bool pushStatus(int stanWieczka) {"):]
 _pr = _pr[:_pr.find("\n}")]
 ok('doc["chargeSince"]' in _pr and 'doc["chargeFromPct"]' in _pr,
    "pudelko podaje moment i punkt startowy ladowania - z tego liczy sie czas")
@@ -972,7 +1016,9 @@ ok("rtcOpenReported != boxIsOpen()" in code,
    "rozjazd miedzy prawda a obrazem w aplikacji wymusza wyslanie statusu")
 # Stan zapamietujemy z chwili WYSYLKI (stanWyslany), nie z chwili zapisu -
 # wieczko mogloby sie w miedzyczasie ruszyc i zapisalibysmy nieprawde.
-ok("const bool stanWyslany = boxIsOpen();" in push
+# Od D113 pomiar moze przyjsc z zewnatrz (jeden na meldunek), ale zasada
+# zostaje ta sama: zapamietujemy DOKLADNIE to, co poszlo do bazy.
+ok("const bool stanWyslany = (stanWieczka < 0) ? boxIsOpen() : (stanWieczka != 0);" in push
    and "rtcOpenReported = stanWyslany;" in push,
    "pushStatus zapamietuje dokladnie ten stan, ktory poszedl do bazy")
 warn(val("OPEN_WARN_MAX") * val("OPEN_WARN_REPEAT_S") > 24 * 3600,
@@ -1373,7 +1419,7 @@ _suma_raw = cialo_surowe("String otaSumaWgranej()")
 ok('otaSumaZPamieci("otaFw")' in _suma_raw and "FW_VERSION" in _suma_raw,
    "otaSumaWgranej() oddaje sume tylko wtedy, gdy powstala dla biezacej wersji")
 
-_st_raw = cialo_surowe("bool pushStatus()")
+_st_raw = cialo_surowe("bool pushStatus(int stanWieczka)")
 ok("otaSumaWgranej()" in _st_raw,
    "status bierze sume z otaSumaWgranej(), nie z wlasnej kopii warunku")
 
@@ -1432,7 +1478,7 @@ else:
 _i = ino.find("wysylam stan koncowy")
 _blok_konc = ("\n".join(_bez_komentarzy(ino[_i:ino.find("planNextSleep", _i)].split("\n")))
               if _i >= 0 else "")
-ok(_blok_konc and "fetchConfig()" in _blok_konc and "pushStatus()" in _blok_konc,
+ok(_blok_konc and "fetchConfig()" in _blok_konc and "pushStatus(stanKoncowy)" in _blok_konc,
    "koncowy meldunek czyta ustawienia, a nie tylko melduje stan wieczka")
 
 ok("ota:naglowek" in _spr_raw and "getFreeHeap" in _spr_raw,
@@ -1595,7 +1641,7 @@ def _instrukcje_z(cialo, slowo):
         i = cialo.find(slowo, i + 1)
     return out
 
-for _f, _nazwa in ((cialo_surowe("bool pushStatus()"), "pushStatus()"),
+for _f, _nazwa in ((cialo_surowe("bool pushStatus(int stanWieczka)"), "pushStatus()"),
                    (cialo_surowe("bool pushLidState(bool stan)"), "pushLidState()")):
     _l = _instrukcje_z(_f, "lastSeen")
     ok(bool(_l) and all("rtcTimeValid" in x for x in _l),

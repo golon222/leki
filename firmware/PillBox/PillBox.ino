@@ -543,6 +543,10 @@ bool timeSyncedThisWake = false;
 
 bool syncTimeNTP();             // deklaracja - wifiConnect() wola ja od razu
 String logbookJson();           // czarna skrzynka - definicje nizej
+/* -1 = zmierz stan wieczka sam; 0/1 = uzyj TEGO pomiaru.
+   Wartosc domyslna stoi tutaj, a nie przy definicji, bo szkic .ino
+   dostaje wygenerowane prototypy PRZED nia (B21/D26).              */
+bool   pushStatus(int stanWieczka = -1);
 void   setTakenDay(uint32_t day);   // wola ja syncTimeNTP() przy odzyskaniu zegara
 void   logbookPrint();
 void   note(const char* co);    // odnotuj, co sie stalo w tym wybudzeniu
@@ -1064,6 +1068,26 @@ int reedPoziomStabilny(uint32_t stabilnoscMs, uint32_t limitMs, bool* spokojny) 
 
 bool boxIsOpen() {
   return reedPoziomStabilny(REED_STABIL_MS, REED_STABIL_MAX_MS, nullptr) == REED_OPEN_LEVEL;
+}
+
+/* Stan wieczka z RYGOREM UZYWANYM PRZED SNEM - i mowi, czy jest pewny.
+
+   Kuba, tlumaczac to od poczatku: *"gdy jest pole magnetyczne to znaczy,
+   ze jest zamkniete, gdy nie ma - otwarte"*. Dokladnie tak jest zlutowane
+   i tak czyta kod. Problem nie jest w polaryzacji, tylko w tym, KIEDY
+   pytamy i ILE RAZY.
+
+   `boxIsOpen()` daje odpowiedz w 12 ms i to jest wlasciwe w petli, ktora
+   pyta dziesiatki razy na sekunde. Ale odczyt, ktory pojedzie do
+   aplikacji i zostanie tam na GODZINY - bo nastepne wybudzenie moze byc
+   za pol dnia - zasluguje na ten sam rygor co decyzja przed snem:
+   REED_SPOKOJ_MS ciszy zamiast REED_STABIL_MS.
+
+   `pewny` mowi, czy styk sie w ogole uspokoil. Odczyt niepewny nie ma
+   prawa zamknac sprawy - patrz `rtcStatusDirty` w miejscu wywolania. */
+bool boxIsOpenPewnie(bool* pewny) {
+  return reedPoziomStabilny(REED_SPOKOJ_MS, REED_SPOKOJ_MAX_MS, pewny)
+         == REED_OPEN_LEVEL;
 }
 bool buttonPressed()  { return digitalRead(PIN_BUTTON) == BUTTON_PRESS_LEVEL; }
 
@@ -2732,7 +2756,24 @@ String otaSumaWgranej() {
   return otaSumaZPamieci("otaMd5");
 }
 
-bool pushStatus() {
+/* `stanWieczka`: -1 = zmierz sam, 0/1 = uzyj TEGO pomiaru.
+
+   TU BYL BLAD i to on tlumaczy zdanie Kuby: *"na sekunde bylo widac, ze
+   otwarte, i zniklo na wziete, po czym za chwile pokazalo sie, ze
+   pudelko otwarte"*.
+
+   D96 naprawilo TRZY osobne odczyty kontaktronu WEWNATRZ tej funkcji.
+   Ale miedzy `pushLidState()` a `pushStatus()` zostaly DWA - jeden na
+   wysylke, drugi tu, sekunde pozniej. Oba pisza to samo pole `boxOpen`,
+   wiec drugi NADPISUJE pierwszy. Wystarczy, ze w tej sekundzie styk
+   drgnie albo magnes stoi na granicy czulosci, a poprawne "zamkniete"
+   zostaje zamienione na "otwarte" - i juz nikt tego nie prostuje, bo
+   `rtcOpenReported` zapisuje sie z tego samego, blednego odczytu.
+
+   Miejsce wywolania na koncu setup() ma nawet komentarz "ten sam pomiar
+   idzie do obu wysylek". Komentarz mowil prawde o zamiarze, nie o kodzie:
+   `pushStatus()` nie przyjmowalo zadnego argumentu i czytalo pin samo. */
+bool pushStatus(int stanWieczka) {
   JsonDocument doc;
   doc["battery"]  = batteryPercentage;
   doc["battRaw"]  = batteryRawPercentage;   // przed wygladzeniem - do diagnostyki
@@ -2855,7 +2896,7 @@ bool pushStatus() {
      nizej ma odpowiadac dokladnie temu, co poszlo do bazy. Rozjazd tutaj
      znaczy, ze aplikacja i pudelko nie zgadzaja sie co do stanu wieczka
      i nikt tego nie prostuje.                                          */
-  const bool stanWyslany = boxIsOpen();
+  const bool stanWyslany = (stanWieczka < 0) ? boxIsOpen() : (stanWieczka != 0);
   doc["boxOpen"]   = stanWyslany;
   doc["openSince"] = stanWyslany ? rtcOpenSinceTs : 0;
   /* POMIAR, nie ozdoba: ile razy styk drgnal przy odczycie. Jesli po
@@ -3635,13 +3676,17 @@ void reportEvent(const char* type, int slot) {
 
     if (firebaseSignIn()) {
       /* Najpierw sam stan wieczka - to jedno male zapytanie, ktore
-         zapala wskaznik w telefonie. Reszta moze poczekac.          */
-      pushLidState(boxIsOpen());
+         zapala wskaznik w telefonie. Reszta moze poczekac.
+
+         JEDEN pomiar na obie wysylki: `pushStatus()` nizej pisze to samo
+         pole, wiec drugi odczyt nadpisalby pierwszy innym wynikiem. */
+      const bool stanWieczkaTeraz = boxIsOpen();
+      pushLidState(stanWieczkaTeraz);
       fetchConfig();
       flushQueue();
       if (pushEventRecord(rec) == 200) {
         note("wyslane");
-        pushStatus();
+        pushStatus(stanWieczkaTeraz ? 1 : 0);
         rtcRetryCount = 0;                 // sukces - kasujemy backoff
         beepAck();
         if (strcmp(type, "open") == 0) {
@@ -6672,8 +6717,7 @@ void setup() {
       /* Radio zdazylo zasnac podczas czuwania - budzimy je i dajemy
          uczciwy zapas czasu na polaczenie oraz wyslanie.               */
       extendAwake(60000);
-      LOG("[OPN] wysylam stan koncowy: pudelko %s\n",
-          boxIsOpen() ? "OTWARTE" : "zamkniete");   // tuz przed pomiarem nizej
+      LOGLN("[OPN] wysylam stan koncowy wieczka");
       /* Zamkniecie wieczka: najpierw krotki PATCH, zeby aplikacja
          zareagowala natychmiast, a dopiero potem pelny status.      */
       /* USTAWIENIA CZYTAMY TAKZE TUTAJ - i to jest naprawa prawdziwej
@@ -6707,8 +6751,14 @@ void setup() {
          do obu wysylek. Dwa osobne odczyty moglyby dac dwie rozne
          odpowiedzi, a wtedy szybki PATCH i pelny status mowilyby
          aplikacji co innego.                                         */
-      const bool stanKoncowy = boxIsOpen();
-      if (bazaGotowa && pushLidState(stanKoncowy) && pushStatus()) {
+      /* Rygor jak przed snem: ten odczyt zostanie w aplikacji do
+         nastepnego wybudzenia, czyli moze i na pol dnia.            */
+      bool stanPewny = false;
+      const bool stanKoncowy = boxIsOpenPewnie(&stanPewny);
+      if (!stanPewny)
+        LOG("[REED] stan koncowy NIEPEWNY (drgan lacznie %u) - dosle sprostowanie\n",
+            (unsigned)rtcReedDrgania);
+      if (bazaGotowa && pushLidState(stanKoncowy) && pushStatus(stanKoncowy)) {
         /* Ile naprawde uplynelo od zamkniecia wieczka do potwierdzenia
            z bazy. Bez tej liczby "za wolno" jest nie do zdiagnozowania:
            nie wiadomo, czy zwleka pudelko, czy telefon.               */
@@ -6722,7 +6772,26 @@ void setup() {
         }
         rtcOpenClearPend = false;
         LOG("[OPN] aplikacja powiadomiona: pudelko %s\n",
-            boxIsOpen() ? "OTWARTE" : "zamkniete");
+            stanKoncowy ? "OTWARTE" : "zamkniete");
+        /* ODCZYT NIEPEWNY NIE ZAMYKA SPRAWY.
+
+           Zglosil to Kuba, opisujac wieczor z tabletka: *"na sekunde
+           bylo widac, ze otwarte, i zniklo na wziete, po czym za chwile
+           pokazalo sie, ze pudelko otwarte"* - i potem juz tak zostalo.
+
+           Wyslany stan zapisuje sie jako `rtcOpenReported`, a warunek
+           ponowienia brzmi `rtcOpenReported != boxIsOpen()`. Gdy oba
+           pochodza z tego samego, watpliwego odczytu, warunek jest
+           falszywy i NIKT juz bazy nie prostuje - przez godziny, bo
+           nastepne wybudzenie moze byc dopiero przy nastepnej dawce.
+
+           Dlatego niepewny odczyt zostawia `rtcStatusDirty`: wyslalismy
+           najlepsza odpowiedz, jaka mamy, ale nie uznajemy sprawy za
+           zamknieta i wrocimy do niej przy najblizszym wybudzeniu.  */
+        if (!stanPewny) {
+          rtcStatusDirty = true;
+          LOGLN("[OPN] ...ale odczyt byl niepewny - sprawdze to jeszcze raz");
+        }
       } else {
         /* Nie udalo sie TERAZ - ale to nie znaczy, ze sie nie uda.
            planNextSleep() widzi rtcStatusDirty i ustawi wczesniejsze

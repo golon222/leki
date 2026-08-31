@@ -760,6 +760,28 @@ head("Kontaktron: odbicia styku przy zakrecaniu wieczka");
      Magnes nie dosiega, wieczko jest zakrecone, a pudelko czyta
      "otwarte" - i zaden filtr tego nie naprawi. Licznik niepewnych ma
      wtedy STAC, bo problem nie jest w odbiciach.                     */
+  /* ODCZYT PEWNY: ten sam rygor co przed snem (D113).
+     Ten odczyt zostaje w aplikacji do nastepnego wybudzenia, wiec ma
+     kosztowac wiecej niz 12 ms i ma UCZCIWIE mowic, czy jest pewny. */
+  ustawPin(PIN_REED, ZAM);
+  FAKE_MILLIS = 40000;
+  {
+    bool pewny = false;
+    const unsigned long tp = FAKE_MILLIS;
+    CHECK(!boxIsOpenPewnie(&pewny), "spokojny styk: zamkniete");
+    CHECK(pewny, "i odczyt jest zglaszany jako pewny");
+    CHECK(FAKE_MILLIS - tp >= REED_SPOKOJ_MS,
+          "pewny odczyt czeka na dluzsza cisze niz zwykly (%lu ms)",
+          FAKE_MILLIS - tp);
+  }
+  ustawPinPrzebieg(PIN_REED, ZAM, bezKonca);
+  FAKE_MILLIS = 0;
+  {
+    bool pewny = true;
+    boxIsOpenPewnie(&pewny);
+    CHECK(!pewny, "styk drgajacy bez konca: odczyt zglaszany jako NIEPEWNY");
+  }
+
   ustawPin(PIN_REED, OTW);
   FAKE_MILLIS = 60000; rtcReedNiepewne = 0; rtcReedDrgania = 0;
   CHECK(boxIsOpen(), "styk w pozycji 'otwarte' czyta sie jako otwarte");

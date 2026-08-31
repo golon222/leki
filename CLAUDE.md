@@ -38,8 +38,8 @@ bash tests/run_all.sh
 ```
 
 Musi przejść przed zmianą i po zmianie. Stan wyjściowy:
-**630 + 52 firmware, 1264 (×6 pór doby) + 92 + 52 aplikacja, 48 zgodności,
-133 reguły bazy, 350 kontroli audytu, 30 kontroli statycznych — 0 błędów.**
+**634 + 52 firmware, 1264 (×6 pór doby) + 92 + 52 aplikacja, 48 zgodności,
+133 reguły bazy, 358 kontroli audytu, 30 kontroli statycznych — 0 błędów.**
 
 **Runner jest cichy przy sukcesie i głośny przy błędzie** (D66). Udany przebieg
 to 12 linii — **i te 12 linii TO JEST potwierdzenie, nie jego skrót.** Nie
@@ -254,7 +254,7 @@ na `esp32:esp32@3.3.11` i z **ustawieniami płytki z nagłówka `PillBox.ino`**.
 Nie jest częścią `run_all.sh`: wymaga sieci i ~500 MB toolchainu.
 **Uruchom to po każdej zmianie w firmware.**
 
-Stan: `PillBox.ino` **64% flasha** (1 264 515 B z 1,875 MB), `PillBoxTest.ino` 20%
+Stan: `PillBox.ino` **64% flasha** (1 264 771 B z 1,875 MB), `PillBoxTest.ino` 20%
 bez `config.h` i **57%** z nim. Szkic diagnostyczny budujemy w OBU
 konfiguracjach — bez tego drugiego przebiegu 722 kB jego kodu (logowanie do
 bazy, zapis wyniku) nie było kompilowane ani razu (D103).
@@ -281,6 +281,10 @@ nie do publikacji. Szczegóły obejść — D17.
 - **Powiadomienia Telegram (1.45.0) — ani jedna wiadomość nie wyszła jeszcze
   z płytki.** Kod się kompiluje i ma 82 kontrole, ale to nie jest dowód.
   Rozstrzygnie przycisk „wyślij wiadomość próbną" — po to powstał.
+- **Że pierwsze otwarcie w dobie melduje poprawnie — TO BYŁO FAŁSZ.**
+  Zakładałem to w D111 i zbudowałem na tym całą diagnozę. Kuba sprostował:
+  *„nie idzie wszystko i jest tam samo zjebanie"*. Nie przyjmuj, że
+  którakolwiek ścieżka meldowania działa, dopóki on tego nie potwierdzi.
 - **Dlaczego łączenie w tle nie działało — HIPOTEZA, nie pewnik.** D112
   mówi: bo próbowało wyłącznie podpowiedzi i sieci z listy, a u Kuby łączą
   poświadczenia zapamiętane przez sterownik. Tłumaczy wszystko naraz, ale

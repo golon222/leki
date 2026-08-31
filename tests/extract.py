@@ -22,7 +22,7 @@ WANTED = [
     "openWarnSecondsLeft", "kolejnePrzesuniecie",
     "jsonEscape",   # przed nvsFailLogJson - ta go wola
     # reedPoziomStabilny MUSI byc przed boxIsOpen - to ono go wola.
-    "reedPoziomStabilny", "boxIsOpen", "wakeName",
+    "reedPoziomStabilny", "boxIsOpen", "boxIsOpenPewnie", "wakeName",
     # Historia nieudanych zapisow NVS - tez wola jsonEscape.
     "nvsFailLogDoWyslania", "nvsFailLogJson", "nvsFailLogOznaczWyslany",
     "trackBoxOpen",

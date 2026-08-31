@@ -9,7 +9,7 @@ zamiast 60 tys. tokenów wchodzi 2,5 tys. plus jeden obszar.
 
 | plik | o czym | ile |
 |---|---|---|
-| `decyzje/pudelko.md` | Pudełko — sen, alarm, NVS, WiFi | 33 |
+| `decyzje/pudelko.md` | Pudełko — sen, alarm, NVS, WiFi | 34 |
 | `decyzje/ota.md` | Aktualizacja przez WiFi i skan sieci | 8 |
 | `decyzje/telegram.md` | Powiadomienia Telegram | 5 |
 | `decyzje/aplikacja.md` | Aplikacja — ekrany i wygląd | 37 |
@@ -63,6 +63,7 @@ Od najnowszej. Kolumna „gdzie" mówi, który plik w `decyzje/` trzymać otwart
 
 | # | O co chodziło | gdzie |
 |---|---|---|
+| **D113** | `pushLidState()` i `pushStatus()` czytały kontaktron OSOBNO i pisały to samo pole — drugi odczyt nadpisywał pierwszy, a błąd zapisywał się jako prawda i nikt go już nie prostował. Niedokończone D96 (firmware `1.53.0`) | `pudelko` |
 | **D112** | `radio 35,2 s` przy -51 dBm to suma prób NIEUDANYCH: pudełko co otwarcie szło przez podpowiedź i listę, zanim sięgnęło po poświadczenia sterownika, które jedyne działają. Pamiętamy, co zadziałało; do tego `netSkad` i `reedNiepewne` (firmware `1.52.0`, aplikacja `2026-08-31.77`) | `pudelko` |
 | **D111** | Koniec drugiego mechanizmu łączenia: przez sześć wersji nie zameldował otwarcia ani razu, a blokujące `wifiConnect()` obok ściągało 1,2 MB aktualizacji. Ślepotę na wieczko zdejmuje dozorca wołany z wnętrza czekania (firmware `1.51.0`) | `pudelko` |
 | **D110** | Ponawiamy łączenie po zdarzeniu `STA_DISCONNECTED`, nie po zegarze — 1.49.1 przy jednej zapisanej sieci nie ponawiało **ani razu** i otwarcie nie docierało nigdy (firmware `1.50.0`) | `pudelko` |
