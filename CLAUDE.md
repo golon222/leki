@@ -281,11 +281,15 @@ nie do publikacji. Szczegóły obejść — D17.
 - **Powiadomienia Telegram (1.45.0) — ani jedna wiadomość nie wyszła jeszcze
   z płytki.** Kod się kompiluje i ma 82 kontrole, ale to nie jest dowód.
   Rozstrzygnie przycisk „wyślij wiadomość próbną" — po to powstał.
-- **Meldunek o wieczku — POTWIERDZONY na płytce 2026-08-31**, po `1.53.0`:
-  `radio 3,3 s · baza 3,7 s` przy -56 dBm, wieczko pokazuje się jako
-  zamknięte i **takie zostaje**. Droga: 82,4 s (1.49.0) → 35,2 s (1.51.0)
-  → **3,3 s**. Kuba: *„wygląda, że chyba mamy sukces"* — przy trzech
-  otwarciach, więc mocna przesłanka, nie komplet.
+- **Meldunek o wieczku — DZIAŁA, potwierdzone przez Kubę 2026-08-31**, po
+  `1.53.0`, na trzech otwarciach: *„po 3 sek pokazało się, że otwarte,
+  zamknąłem i od razu pokazało — o to mi chodziło"*. Obie połowy, o które
+  prosił od początku: „od razu, że otwarte" i „od razu, że zamknięte".
+  Pomiar z tego samego zrzutu: `radio 3,3 s · baza 3,7 s` przy -56 dBm.
+  Droga: 82,4 s (1.49.0) → 35,2 s (1.51.0) → **3,3 s** (1.53.0).
+  To była **najważniejsza funkcja urządzenia** i naprawiało ją siedem
+  wersji — nie ruszaj tej ścieżki bez potrzeby, a jeśli musisz, przeczytaj
+  najpierw D111, D112 i D113 razem.
 - **Dlaczego łączenie w tle nie działało — JUŻ WIADOMO** (D112,
   potwierdzone tym samym zrzutem). `netSkad` powiedział: **„pamięć
   sterownika — wpis na liście sieci nie zadziałał"**. Mechanizm w tle
