@@ -317,11 +317,16 @@ nie do publikacji. Szczegóły obejść — D17.
   400 — bo tylko wtedy `trwaleOdrzucony()` zdejmie wpis z kolejki. Nikt tego
   nie zmierzył. `pushEventRecord()` loguje odpowiedź bazy przy każdym
   niepowodzeniu, więc pierwszy log z pudełka to rozstrzygnie.
-- **`setCACert()` — niespłacony dług, i to jedyna prawdziwa obrona.**
-  Pudełko łączy się bez weryfikacji certyfikatu **ze wszystkim**: z Firebase
+- **`setCACert()` — ŚWIADOMIE ODRZUCONE przez Kubę (D115), nie dług.**
+  *„Jebać te certyfikaty, jak wygasają, to pasujemy z tego pomysłu"* —
+  powiedziane po tym, jak dostał pełny opis skutków. Pudełko łączy się bez
+  weryfikacji certyfikatu **ze wszystkim**: z Firebase
   (`rtdbClient.setInsecure()`) i z GitHub Pages przy pobieraniu programu.
   Przed uszkodzonym pobraniem chroni `Update.setMD5()`; przed **podmianą**
-  nie chroni dziś nic (D59). Nie udawaj, że jest inaczej.
+  nie chroni nic, i tak zostaje. Powód jest mocny: certyfikaty wygasają,
+  a pudełko ma stać zaklejone latami — zabezpieczenie z terminem ważności
+  unieruchomiłoby je w losowym dniu. **Nie wracaj z tym pomysłem** bez
+  nowej okoliczności (np. praca na stałe w cudzej sieci).
 - **Aktualizacja przez WiFi z przycisku — DZIAŁA, potwierdzone na płytce
   2026-08-16** (1.43.1 → 1.43.2), a wybudzenie o 3:00 też ją dowozi
   (`MIDNIGHT_CHECK`, potwierdzone 2026-08-17). Cała droga przeszła od początku do końca —

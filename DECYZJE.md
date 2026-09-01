@@ -9,7 +9,7 @@ zamiast 60 tys. tokenów wchodzi 2,5 tys. plus jeden obszar.
 
 | plik | o czym | ile |
 |---|---|---|
-| `decyzje/pudelko.md` | Pudełko — sen, alarm, NVS, WiFi | 35 |
+| `decyzje/pudelko.md` | Pudełko — sen, alarm, NVS, WiFi | 36 |
 | `decyzje/ota.md` | Aktualizacja przez WiFi i skan sieci | 8 |
 | `decyzje/telegram.md` | Powiadomienia Telegram | 5 |
 | `decyzje/aplikacja.md` | Aplikacja — ekrany i wygląd | 37 |
@@ -63,6 +63,7 @@ Od najnowszej. Kolumna „gdzie" mówi, który plik w `decyzje/` trzymać otwart
 
 | # | O co chodziło | gdzie |
 |---|---|---|
+| **D115** | Certyfikatów nie wgrywamy — **decyzja Kuby**. Wygasają, a pudełko ma stać zaklejone latami: zabezpieczenie z terminem ważności unieruchomiłoby je w losowym dniu. Przyjęte ryzyko, nie dług | `pudelko` |
 | **D114** | Droga do sieci zapamiętana też w pamięci trwałej — RTC nie przeżywa restartu, więc po każdej aktualizacji pierwsze otwarcie znowu kosztowało ~30 s (firmware `1.54.0`) | `pudelko` |
 | **D113** | `pushLidState()` i `pushStatus()` czytały kontaktron OSOBNO i pisały to samo pole — drugi odczyt nadpisywał pierwszy, a błąd zapisywał się jako prawda i nikt go już nie prostował. Niedokończone D96 (firmware `1.53.0`) | `pudelko` |
 | **D112** | `radio 35,2 s` przy -51 dBm to suma prób NIEUDANYCH: pudełko co otwarcie szło przez podpowiedź i listę, zanim sięgnęło po poświadczenia sterownika, które jedyne działają. Pamiętamy, co zadziałało; do tego `netSkad` i `reedNiepewne` (firmware `1.52.0`, aplikacja `2026-08-31.77`) | `pudelko` |
