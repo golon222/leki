@@ -281,24 +281,26 @@ nie do publikacji. Szczegóły obejść — D17.
 - **Powiadomienia Telegram (1.45.0) — ani jedna wiadomość nie wyszła jeszcze
   z płytki.** Kod się kompiluje i ma 82 kontrole, ale to nie jest dowód.
   Rozstrzygnie przycisk „wyślij wiadomość próbną" — po to powstał.
-- **Że pierwsze otwarcie w dobie melduje poprawnie — TO BYŁO FAŁSZ.**
-  Zakładałem to w D111 i zbudowałem na tym całą diagnozę. Kuba sprostował:
-  *„nie idzie wszystko i jest tam samo zjebanie"*. Nie przyjmuj, że
-  którakolwiek ścieżka meldowania działa, dopóki on tego nie potwierdzi.
-- **Dlaczego łączenie w tle nie działało — HIPOTEZA, nie pewnik.** D112
-  mówi: bo próbowało wyłącznie podpowiedzi i sieci z listy, a u Kuby łączą
-  poświadczenia zapamiętane przez sterownik. Tłumaczy wszystko naraz, ale
-  rozstrzygnie dopiero pole `netSkad` z pudełka. Do tego czasu opisuj to
-  jako hipotezę.
-- **Czy wieczko domyka się mechanicznie — OTWARTE PYTANIE.** Kuba: *„jest
-  problem żeby zamknąć, zakręcam po 10 razy i pod każdym kątem"*, przy
-  `reedBounce` = 17. `reedNiepewne` (D112) rozdziela odbicia od styku,
-  który nie trzyma pozycji. Nie przesądzaj, dopóki nie ma tej liczby.
-- **Czy meldunek o otwartym wieczku dochodzi po D111 — NIESPRAWDZONE na
-  płytce.** Wiadomo tylko tyle, że idzie teraz tą samą drogą, którą
-  potwierdzono w terenie dla zapisu dawki i dla aktualizacji. Nie wiadomo
-  natomiast, **dlaczego** usunięty mechanizm w tle nie łączył się nigdy —
-  to zostaje niewyjaśnione i tak ma być opisywane.
+- **Meldunek o wieczku — POTWIERDZONY na płytce 2026-08-31**, po `1.53.0`:
+  `radio 3,3 s · baza 3,7 s` przy -56 dBm, wieczko pokazuje się jako
+  zamknięte i **takie zostaje**. Droga: 82,4 s (1.49.0) → 35,2 s (1.51.0)
+  → **3,3 s**. Kuba: *„wygląda, że chyba mamy sukces"* — przy trzech
+  otwarciach, więc mocna przesłanka, nie komplet.
+- **Dlaczego łączenie w tle nie działało — JUŻ WIADOMO** (D112,
+  potwierdzone tym samym zrzutem). `netSkad` powiedział: **„pamięć
+  sterownika — wpis na liście sieci nie zadziałał"**. Mechanizm w tle
+  próbował wyłącznie podpowiedzi i listy, a u Kuby łączą tylko
+  poświadczenia sterownika. Sześć wersji ciszy z jednego pominiętego
+  kandydata.
+- **Dlaczego wpis na liście sieci nie działa — OTWARTE.** Najpewniej złe
+  hasło w NVS. Nie boli, dopóki działa pamięć sterownika, ale ta ginie przy
+  pełnym kasowaniu układu — więc pudełko stoi dziś na jednej nodze.
+- **Czy wieczko domyka się mechanicznie — RACZEJ TAK, bez kompletu danych.**
+  Po `1.53.0`: 60 drgnięć styku i tylko **3** odczyty bez ustalenia na 10
+  wybudzeń. Styk drga (normalne przy zakręcaniu), ale niemal zawsze się
+  uspokaja — to wskazuje na odbicia, nie na magnes, który nie dosięga.
+  Kuba zgłaszał siłowanie przy zakręcaniu, więc nie zamykaj tematu;
+  obserwuj `reedNiepewne` (próg 20).
 - Prąd ładowania 350 mA to wartość katalogowa, nie pomiar.
 - **Jakim kodem baza odrzuca wpis łamiący reguły.** Cała decyzja D13 zakłada
   400 — bo tylko wtedy `trwaleOdrzucony()` zdejmie wpis z kolejki. Nikt tego
