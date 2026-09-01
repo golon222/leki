@@ -39,7 +39,7 @@ bash tests/run_all.sh
 
 Musi przejść przed zmianą i po zmianie. Stan wyjściowy:
 **634 + 52 firmware, 1264 (×6 pór doby) + 92 + 52 aplikacja, 48 zgodności,
-133 reguły bazy, 358 kontroli audytu, 30 kontroli statycznych — 0 błędów.**
+133 reguły bazy, 363 kontrole audytu, 30 kontroli statycznych — 0 błędów.**
 
 **Runner jest cichy przy sukcesie i głośny przy błędzie** (D66). Udany przebieg
 to 12 linii — **i te 12 linii TO JEST potwierdzenie, nie jego skrót.** Nie
@@ -254,7 +254,7 @@ na `esp32:esp32@3.3.11` i z **ustawieniami płytki z nagłówka `PillBox.ino`**.
 Nie jest częścią `run_all.sh`: wymaga sieci i ~500 MB toolchainu.
 **Uruchom to po każdej zmianie w firmware.**
 
-Stan: `PillBox.ino` **64% flasha** (1 264 771 B z 1,875 MB), `PillBoxTest.ino` 20%
+Stan: `PillBox.ino` **64% flasha** (1 265 085 B z 1,875 MB), `PillBoxTest.ino` 20%
 bez `config.h` i **57%** z nim. Szkic diagnostyczny budujemy w OBU
 konfiguracjach — bez tego drugiego przebiegu 722 kB jego kodu (logowanie do
 bazy, zapis wyniku) nie było kompilowane ani razu (D103).
@@ -278,9 +278,10 @@ nie do publikacji. Szczegóły obejść — D17.
 
 - Firmware **się kompiluje**, ale **nigdy nie było uruchomione z tego repo** na
   płytce. Kompilacja niczego nie wgrywa. Nie twierdź, że „działa".
-- **Powiadomienia Telegram (1.45.0) — ani jedna wiadomość nie wyszła jeszcze
-  z płytki.** Kod się kompiluje i ma 82 kontrole, ale to nie jest dowód.
-  Rozstrzygnie przycisk „wyślij wiadomość próbną" — po to powstał.
+- **Powiadomienia Telegram — DZIAŁAJĄ, potwierdzone przez Kubę 2026-09-01:**
+  *„Telegram działa jak coś, przypomnienia wysyłają się, kopie też się
+  wysyłają"*. Wysyła je **pudełko**, z `goToSleep()`. To był najdłużej
+  wiszący dług „kod się kompiluje, ale nic nie wyszło z płytki" — spłacony.
 - **Meldunek o wieczku — DZIAŁA, potwierdzone przez Kubę 2026-08-31**, po
   `1.53.0`, na trzech otwarciach: *„po 3 sek pokazało się, że otwarte,
   zamknąłem i od razu pokazało — o to mi chodziło"*. Obie połowy, o które
@@ -325,8 +326,20 @@ nie do publikacji. Szczegóły obejść — D17.
   2026-08-16** (1.43.1 → 1.43.2), a wybudzenie o 3:00 też ją dowozi
   (`MIDNIGHT_CHECK`, potwierdzone 2026-08-17). Cała droga przeszła od początku do końca —
   przebieg i wcześniejsze fałszywe „sukcesy" opisuje D63 w `decyzje/ota.md`.
-  **Nadal niesprawdzone:** rollback po nieudanym starcie, czarna lista
-  zepsutych sum i zachowanie przy przerwanym pobieraniu.
+  **Przerwane pobieranie — przeczytane i bezpieczne, choć niewywołane
+  celowo:** `Update.writeStream()` oddaje mniej bajtów, wchodzi
+  `Update.abort()`, nowa partycja nigdy nie zostaje oznaczona jako
+  rozruchowa i pudełko dalej chodzi na starej wersji, meldując „pobrano
+  X kB z Y kB". Plik kompletny, ale z niezgodnym MD5, odrzuca
+  `Update.end(true)` — tak samo bez szkody.
+  **Nadal niesprawdzone na płytce:** rollback po nieudanym starcie i czarna
+  lista zepsutych sum. Logika przeczytana i spójna (`otaSprawdzPoStarcie()`
+  liczy starty, `otaPotwierdzDzialanie()` zeruje licznik przy pierwszym
+  zaśnięciu, więc działająca wersja nie ma jak zostać cofnięta), ale ma
+  jedną dziurę **nie do zaklejenia bez rollbacku bootloadera**: program,
+  który wysypie się ZANIM dojdzie do `otaSprawdzPoStarcie()`, nigdy nie
+  podniesie licznika i pętli startów nikt nie przerwie. Wtedy zostaje
+  kabel. Nie udawaj, że jest inaczej.
 
 ---
 

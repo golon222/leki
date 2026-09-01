@@ -147,6 +147,17 @@ RTC_DATA_ATTR uint8_t  rtcNetOstatnia   = 0;
 #define NET_STEROWNIK 254
 #define NET_NIEZNANE  255
 RTC_DATA_ATTR uint8_t  rtcNetSkad       = NET_NIEZNANE;
+/* ...a takze W PAMIECI TRWALEJ (D114).
+
+   Pamiec RTC nie przezywa restartu, a KAZDA aktualizacja konczy sie
+   restartem. Bez tego pierwsze otwarcie wieczka po kazdej aktualizacji
+   znowu kosztowaloby ~30 s: pudelko musialoby od nowa przejsc przez
+   podpowiedz i liste, zanim doszloby do drogi, ktora u Kuby dziala.
+   Zglosil to sam: *"pierwsze otwarcie po aktualizacji poprawiamy"*.
+
+   Zapis idzie TYLKO przy zmianie wartosci, czyli raz na kilka miesiecy -
+   nie dokladamy cykli flasha na sciezce, ktora ma byc najszybsza.    */
+static bool netSkadSprawdzony = false;   // czy siegalismy juz do NVS w tym wybudzeniu
 /* Ta sama liczba dla OSTATNIEGO polaczenia - idzie do aplikacji i do
    czarnej skrzynki, zeby nie trzeba bylo jej zgadywac z czasu.       */
 RTC_DATA_ATTR uint8_t  rtcNetSkadOstatni = NET_NIEZNANE;
@@ -2086,6 +2097,34 @@ static bool wifiSprobuj(const String& ssid, const String& pass, uint32_t limitMs
    slepote na wieczko, dla ktorej ten mechanizm w ogole powstal, usuwa
    `wifiDozorca` wyzej. Patrz D111.                                    */
 
+/* Droga, ktora zadziala ostatnio - z pamieci RTC, a po restarcie z NVS. */
+static uint8_t netSkadZnany() {
+  if (rtcNetSkad == NET_NIEZNANE && !netSkadSprawdzony) {
+    netSkadSprawdzony = true;
+    prefs.begin(NVS_NAMESPACE, true);
+    rtcNetSkad = prefs.getUChar("netSkad", NET_NIEZNANE);
+    prefs.end();
+    if (rtcNetSkad != NET_NIEZNANE)
+      LOG("[NET] po restarcie pamietam droge z pamieci trwalej (%u)\n",
+          (unsigned)rtcNetSkad);
+  }
+  return rtcNetSkad;
+}
+
+/* Zapisujemy WYLACZNIE przy zmianie - inaczej dokladalibysmy zapis do
+   flasha przy kazdym udanym polaczeniu, czyli kilka razy dziennie.   */
+static void netSkadZapamietaj(uint8_t skad) {
+  rtcNetSkadOstatni = skad;
+  if (skad == NET_NIEZNANE || skad == rtcNetSkad) return;
+  rtcNetSkad = skad;
+  netSkadSprawdzony = true;
+  prefs.begin(NVS_NAMESPACE, false);
+  nvsPutU8("netSkad", skad);
+  prefs.end();
+  LOG("[NET] zapamietalem droge do sieci (%u) - przetrwa restart\n",
+      (unsigned)skad);
+}
+
 bool wifiConnect() {
   if (batterySaver) {
     LOGLN("[NET] tryb oszczedzania baterii - radio pozostaje wylaczone");
@@ -2125,7 +2164,7 @@ bool wifiConnect() {
      dawna (`rtcNetOstatnia`), ale "poswiadczenia sterownika" nie byly
      na tej liscie w ogole - wiec jedyna dzialajaca droga byla za kazdym
      razem probowana OSTATNIA.                                        */
-  if (rtcNetSkad == NET_STEROWNIK && !awakeTooLong()) {
+  if (netSkadZnany() == NET_STEROWNIK && !awakeTooLong()) {
     LOGLN("[NET] ostatnio laczyly poswiadczenia sterownika - zaczynam od nich");
     ok = wifiSprobuj("", "", WIFI_TIMEOUT_MS);
     if (ok) skad = NET_STEROWNIK;
@@ -2190,7 +2229,7 @@ bool wifiConnect() {
   /* Zapamietujemy, CO zadzialalo - nastepnym razem zaczniemy od tego.
      Nieudane wybudzenie nie kasuje pamieci: brak zasiegu nie znaczy, ze
      droga byla zla.                                                   */
-  if (ok && skad != NET_NIEZNANE) { rtcNetSkad = skad; rtcNetSkadOstatni = skad; }
+  if (ok && skad != NET_NIEZNANE) netSkadZapamietaj(skad);
   if (ok) WiFi.setSleep(true);              // modem-sleep dopiero po polaczeniu
   LOG("[NET] %s%s\n", ok ? "polaczono, IP=" : "BRAK POLACZENIA",
       ok ? WiFi.localIP().toString().c_str() : "");

@@ -1232,11 +1232,29 @@ if _wc:
     # wiemy, ze poswiadczenia sterownika zadzialaly ostatnio. Bez tego
     # warunku byloby to ciche wylaczenie listy sieci.
     if len(_puste) > 1:
-        ok("rtcNetSkad == NET_STEROWNIK" in _wc[:_puste[0].start()],
+        ok("netSkadZnany() == NET_STEROWNIK" in _wc[:_puste[0].start()],
            "skrot na poczatku dziala tylko po POTWIERDZONYM sukcesie tej drogi")
     # I zapamietujemy wynik - inaczej skrot nigdy sie nie wlaczy.
-    ok("rtcNetSkad = skad" in _wc and "rtcNetSkadOstatni = skad" in _wc,
+    ok("netSkadZapamietaj(skad)" in _wc,
        "zapamietujemy, ktora droga zadzialala - i mowimy o tym aplikacji")
+    # ...I PRZEZ RESTART, bo kazda aktualizacja konczy sie restartem, a ten
+    # kasuje pamiec RTC. Bez tego pierwsze otwarcie po kazdej aktualizacji
+    # znowu kosztowaloby ~30 s. Prosba Kuby wprost: "pierwsze otwarcie po
+    # aktualizacji poprawiamy" (D114).
+    def _surowe(naglowek):
+        i = ino.find(naglowek + " {")
+        if i < 0: return ""
+        r = ino[i:]; k = r.find("\n}")
+        return r[:k] if k > 0 else r
+    _zap = _surowe("static void netSkadZapamietaj(uint8_t skad)")
+    ok(bool(_zap) and 'nvsPutU8("netSkad"' in _zap,
+       "droga do sieci przezywa restart, nie tylko deep sleep")
+    ok(bool(_zap) and "skad == rtcNetSkad) return" in _zap,
+       "a zapis do flasha idzie WYLACZNIE przy zmianie wartosci")
+    _zna = _surowe("static uint8_t netSkadZnany()")
+    ok(bool(_zna) and 'prefs.getUChar("netSkad"' in _zna
+       and "netSkadSprawdzony" in _zna,
+       "po restarcie czytamy ja z pamieci trwalej, i tylko raz na wybudzenie")
 else:
     ok(False, "nie znaleziono wifiConnect() do sprawdzenia")
 
