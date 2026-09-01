@@ -296,9 +296,15 @@ nie do publikacji. Szczegóły obejść — D17.
   próbował wyłącznie podpowiedzi i listy, a u Kuby łączą tylko
   poświadczenia sterownika. Sześć wersji ciszy z jednego pominiętego
   kandydata.
-- **Dlaczego wpis na liście sieci nie działa — OTWARTE.** Najpewniej złe
-  hasło w NVS. Nie boli, dopóki działa pamięć sterownika, ale ta ginie przy
-  pełnym kasowaniu układu — więc pudełko stoi dziś na jednej nodze.
+- **Czy lista sieci w ogóle ma wpis — NIEZMIERZONE, i to był mój błąd
+  w diagnostyce.** `netSkad = 254` znaczy tylko „połączyła pamięć
+  sterownika" i wychodzi tak samo, gdy lista jest **pusta** (nic się nie
+  zepsuło), jak i gdy ma **zły wpis**. Aplikacja pisała zawsze to drugie,
+  czyli straszyła awarią, której może nie być — poprawione w
+  `2026-09-01.78`, rozróżnia po polu `nets`. Rozstrzygnie kafelek WiFi
+  w Ustawieniach: „zna N sieci". Dopóki pamięć sterownika działa, nic nie
+  boli — ale ginie ona przy pełnym kasowaniu układu, więc warto to
+  domknąć.
 - **Czy wieczko domyka się mechanicznie — RACZEJ TAK, bez kompletu danych.**
   Po `1.53.0`: 60 drgnięć styku i tylko **3** odczyty bez ustalenia na 10
   wybudzeń. Styk drga (normalne przy zakręcaniu), ale niemal zawsze się

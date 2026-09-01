@@ -1903,7 +1903,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-08-31.77";
+const APP_VERSION = "2026-09-01.78";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -5179,11 +5179,27 @@ function renderStatus(st){
     /* CZYM się połączyło — bez tego „radio 35 s" nie mówi, KTÓRA próba
        zawiodła, a to cała różnica między „słaby zasięg" a „zły wpis na
        liście sieci". Pokazujemy tylko wtedy, gdy pudełko to przysłało. */
+    /* DWA POWODY, NIE JEDEN — i pierwsza wersja tej linijki je myliła.
+
+       „Poświadczenia sterownika" znaczy tylko tyle, że połączyła się
+       pamięć samego układu WiFi, a nie lista sieci. Ale to samo dzieje
+       się w DWÓCH zupełnie różnych sytuacjach:
+         • lista jest PUSTA — nikt jej nie wypełnił, nic się nie zepsuło,
+         • lista ma wpis i ten wpis NIE DZIAŁA (najpewniej złe hasło).
+       Pierwsza wersja pisała zawsze to drugie, czyli straszyła awarią
+       tam, gdzie awarii nie ma. Liczbę znanych sieci pudełko i tak
+       przysyła w `nets`, więc rozróżnienie nic nie kosztuje.
+
+       Zasada, ta sama co przy „pudełko milczy od 20 tysięcy dni" (D101):
+       diagnostyka, która zgaduje gorszy z dwóch powodów, jest gorsza niż
+       jej brak — bo każe szukać usterki, której nie ma.               */
     (Number.isFinite(+st.netSkad) && +st.netSkad !== NET_NIEZNANE
        ? wiersz("Połączyło się przez",
            +st.netSkad === NET_STEROWNIK
-             ? `<span style="color:var(--warn)">pamięć sterownika</span>` +
-               `<br><span class="dim2">wpis na liście sieci nie zadziałał</span>`
+             ? `pamięć sterownika` +
+               (String(st.nets || "").split("|").filter(Boolean).length
+                  ? `<br><span style="color:var(--warn)">wpis na liście sieci nie zadziałał</span>`
+                  : `<br><span class="dim2">lista sieci jest pusta — to normalne</span>`)
              : `sieć nr ${+st.netSkad + 1} z listy`) : "") +
     /* TWARDE RESTARTY. Pamięć RTC ich nie przeżywa, więc po restarcie
        pudełko zapomina, czy dawka była dziś wzięta — i przestaje ostrzegać
