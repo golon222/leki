@@ -20,7 +20,7 @@
  * 1. IDENTYFIKATOR URZADZENIA
  * ------------------------------------------------------------------ */
 #define DEVICE_ID           "pillbox01"     // klucz w /devices/<DEVICE_ID>
-#define FW_VERSION          "1.54.0"   // widoczna w aplikacji - po wgraniu sprawdz, czy sie zmienila
+#define FW_VERSION          "1.55.0"   // widoczna w aplikacji - po wgraniu sprawdz, czy sie zmienila
 
 /* ---------------------------------------------------------------------
  * 2. FIREBASE  (Realtime Database + Auth email/haslo)
@@ -340,20 +340,39 @@
  *     pudelko dodaje charakterystyczny sygnal. Ponizej progu krytycznego
  *     sygnal jest dluzszy i powtarzany takze przy alarmie.
  *
- *     UWAGA: te progi znacza cos zupelnie innego niz przed wprowadzeniem
- *     krzywej LiPo. Przy dawnym liniowym przeliczaniu 10% wypadalo przy
- *     3,39 V - czyli tuz nad napieciem odciecia, gdy do konca zostawal
- *     mniej wiecej dzien. Teraz 10% to ok. 3,69 V i realnie okolo tygodnia
- *     zapasu, a 25% to ok. 3,75 V, czyli jakies trzy tygodnie.
+ *     PROGI SA W DNIACH, NIE W PROCENTACH - i dlatego zostaly podniesione.
+ *     Do 1.54.0 stalo tu 25 i 10 z komentarzem "okolo tygodnia" i "jakies
+ *     trzy tygodnie" zapasu. Ten rachunek stal na zalozeniu, ze pelne
+ *     ogniwo starcza na 90 dni. POMIAR (Kuba, 2026-09-08): 25.08 pelne,
+ *     31.08 58%, 08.09 5% - czyli 7,2 punktu na dobe i CZTERNASCIE dni.
+ *     Przy tym tempie stare progi znaczyly 3,5 dnia i 1,4 dnia, a nie
+ *     trzy tygodnie i tydzien. "Naladuj teraz" przychodzilo na dobe przed
+ *     zgasnieciem - czyli praktycznie razem z awaria, nie przed nia.
+ *
+ *     Nowe progi odtwarzaja to, co obiecywal tamten komentarz: 40% to
+ *     ok. 5,5 dnia ("naladuj w tych dniach"), 20% to ok. 2,8 dnia
+ *     ("naladuj teraz"). Liczba dni jest tu trescia - gdy zmieni sie
+ *     tempo rozladowania, te progi trzeba przeliczyc od nowa.
  * ------------------------------------------------------------------ */
-#define BATT_WARN_PCT       25              // ok. 3,75 V - "naladuj w tych dniach"
-#define BATT_CRIT_PCT       10              // ok. 3,69 V - "naladuj teraz"
+#define BATT_WARN_PCT       40              // ok. 5,5 dnia - "naladuj w tych dniach"
+#define BATT_CRIT_PCT       20              // ok. 2,8 dnia - "naladuj teraz"
 
-/* Maksymalna zmiana wskazania miedzy dwoma wybudzeniami. Realne zuzycie
-   to okolo 1 punkt na dobe, wiec 5 w dol zostawia spory zapas, a odcina
-   skoki z pojedynczego zaklocenia. Ruch w gore o 1 punkt pozwala takiemu
-   zakloceniu samemu sie zagoic, zamiast zostac w pamieci na stale.     */
-#define BATT_STEP_DOWN      5
+/* Maksymalna zmiana wskazania miedzy dwoma wybudzeniami.
+
+   TA STALA TEZ BYLA LICZONA OD 90 DNI. Komentarz mowil "realne zuzycie to
+   okolo 1 punkt na dobe, wiec 5 w dol zostawia spory zapas" - pieciokrotny.
+   Realne zuzycie to 7,2 punktu na dobe (pomiar 2026-09-08), a pudelko potrafi
+   spac HOUSEKEEP_MAX_S, czyli 12 h. Prawdziwy spadek miedzy dwoma
+   wybudzeniami siega wiec 3,6 punktu przy limicie 5 - zapas zrobil sie
+   1,4-krotny zamiast pieciokrotnego.
+
+   To nie jest teoria: filtr, ktory obcina prawdziwy spadek, zostawia na
+   ekranie procent WYZSZY niz w ogniwie - czyli dokladnie to ciche klamstwo,
+   przez ktore 5% potrafi zaskoczyc rano. 12 przywraca zapas, dla ktorego ten
+   filtr powstal, i nadal odcina skok z pojedynczego zaklocenia ADC (te sa
+   rzedu 2-3 punktow). Ruch w gore o 1 punkt pozwala zakloceniu samemu sie
+   zagoic, zamiast zostac w pamieci na stale.                           */
+#define BATT_STEP_DOWN      12
 #define BATT_STEP_UP        1
 
 /* Martwa strefa: roznica mniejsza niz tyle punktow to szum, a nie zmiana.
@@ -411,17 +430,36 @@
  * ------------------------------------------------------------------ */
 /* Jak dlugo pudelko CZUWA przy otwartym wieczku, zamiast isc spac.
    Dzieki temu w chwili zamkniecia od razu wysyla wszystko i aplikacja
-   pokazuje prawde bez opoznienia. Rownolegle liczy sie czas do pierwszego
-   ostrzezenia o zostawionym wieczku - wiec te dwie rzeczy sa celowo tej
-   samej dlugosci: jesli w 15 minut nie zamkniesz, przechodzimy w tryb
-   przypominania i dalej juz spimy miedzy sygnalami.                    */
+   pokazuje prawde bez opoznienia.
+
+   Czuwanie i prog ostrzezenia BYLY tej samej dlugosci (15 min) i to bylo
+   celowe. Od 1.55.0 sa rozdzielone, bo maja rozna cene - patrz
+   CZEKAJ_ZAMKNIECIE_MS nizej. Ostrzezenie nadal przychodzi po kwadransie:
+   pudelko po prostu przesypia reszte tego czasu zamiast czuwac, a
+   planNextSleep (punkt 5) skraca sen dokladnie do chwili sygnalu.      */
 /*     RADIO_OTWARTE_S - jak dlugo przy otwartym wieczku radio zostaje
  *     wlaczone. Przez ten czas polaczenie jest gotowe, wiec po zamknieciu
  *     stan leci do aplikacji od razu, bez czekania na logowanie do sieci.
- *     Potem radio gasnie, bo to ono zjada tu wiekszosc pradu - a jesli
- *     pudelko stoi otwarte kwadrans, to i tak nikt nie patrzy w telefon.
- *     Po zamknieciu radio wraca samo.                                    */
-#define RADIO_OTWARTE_S     600             // 10 minut
+ *     Potem radio gasnie, bo to ono zjada tu wiekszosc pradu.
+ *     Po zamknieciu radio wraca samo.
+ *
+ *     BYLO 600 s I TO MIALO SENS, DOPOKI LACZENIE TRWALO 82 SEKUNDY.
+ *     Trzymanie radia dziesiec minut kupowalo wtedy oszczedzenie prawie
+ *     polutorej minuty przy zamknieciu - uczciwy interes. Po D111-D114
+ *     laczenie trwa 3,3 s (pomiar z plytki, -56 dBm), a droga do sieci
+ *     przezywa restart w pamieci trwalej. Placimy wiec dziesiec minut
+ *     radia za oszczedzenie trzech sekund.
+ *
+ *     Ile to jest naprawde: czuwanie z gotowym laczem to rzad 60 mA, czyli
+ *     okolo 10 mAh za pelne dziesiec minut - JEDNA TRZECIA dobowego
+ *     budzetu pudelka (34 mAh/doba, pomiar 2026-09-08). W normalnym dniu
+ *     nie placimy tego wcale, bo zamkniecie wieczka przerywa czekanie
+ *     natychmiast (dozorca, D111). Placimy w dniu, w ktorym wieczko
+ *     zostalo otwarte - i wtedy jest to najdrozsza pojedyncza rzecz,
+ *     jaka to pudelko robi.
+ *
+ *     Minuta wystarcza z zapasem na kilkanascie sekund odkrecania.      */
+#define RADIO_OTWARTE_S     60              // 1 minuta
 
 /* ---------------------------------------------------------------------
  * 6f. PODGLAD LADOWANIA NA ZYWO
@@ -463,7 +501,26 @@
  *     czekamy, zanim zmierzymy stan naladowania i wyslemy go do aplikacji. */
 #define CHARGE_SETTLE_S     20
 
-#define CZEKAJ_ZAMKNIECIE_MS (OPEN_WARN_FIRST_S * 1000UL)
+/* Jak dlugo pudelko CZUWA, czekajac na zakrecenie wieczka.
+
+   DO 1.54.0 BYLO TO `OPEN_WARN_FIRST_S * 1000`, czyli 15 minut, i te dwie
+   rzeczy byly celowo tej samej dlugosci: czekamy dokladnie do chwili, w
+   ktorej i tak zaczelibysmy przypominac o otwartym wieczku.
+
+   Rozdzielam je, bo maja rozna cene. Ostrzezenie o zostawionym wieczku ma
+   przyjsc po kwadransie - to jest dobry moment i nie zmieniam go. Ale
+   CZUWANIE przez ten kwadrans kosztuje: procesor nie spi (petla z delay(25)),
+   a przez pierwsza minute stoi jeszcze radio. Pelne pietnascie minut to
+   okolo 12 mAh, czyli ponad jedna trzecia dobowego budzetu (34 mAh/doba,
+   pomiar 2026-09-08).
+
+   Trzy minuty czuwania obsluguja kazde normalne otwarcie z ogromnym
+   zapasem - zamkniecie i tak przerywa je natychmiast (dozorca, D111).
+   Po tym czasie pudelko idzie spac i dalej pilnuje wieczka timerem, tak
+   jak robilo to zawsze po przekroczeniu tego progu: OPEN_WARN_FIRST_S
+   dowozi sygnal o kwadransie niezaleznie od tego, czy pudelko czuwalo,
+   czy spalo (patrz planNextSleep, punkt 5).                           */
+#define CZEKAJ_ZAMKNIECIE_MS (180UL * 1000UL)   // 3 minuty
 #define GEST_KLIKNIEC       3               // tyle nacisniec = autotest
 #define GEST_PRZYTRZYM_MS   1800            // tyle trzymania = portal WiFi
 

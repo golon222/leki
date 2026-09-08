@@ -9,7 +9,7 @@ zamiast 60 tys. tokenów wchodzi 2,5 tys. plus jeden obszar.
 
 | plik | o czym | ile |
 |---|---|---|
-| `decyzje/pudelko.md` | Pudełko — sen, alarm, NVS, WiFi | 36 |
+| `decyzje/pudelko.md` | Pudełko — sen, alarm, NVS, WiFi | 37 |
 | `decyzje/ota.md` | Aktualizacja przez WiFi i skan sieci | 8 |
 | `decyzje/telegram.md` | Powiadomienia Telegram | 5 |
 | `decyzje/aplikacja.md` | Aplikacja — ekrany i wygląd | 38 |
@@ -63,6 +63,7 @@ Od najnowszej. Kolumna „gdzie" mówi, który plik w `decyzje/` trzymać otwart
 
 | # | O co chodziło | gdzie |
 |---|---|---|
+| **D117** | Progi baterii i czasy czuwania przeliczone na **realne 14 dni** — pięć stałych stało na nieistniejących 90 z D116, przez co „naładuj teraz" znaczyło 1,4 dnia zamiast tygodnia. Do tego pudełko **mierzy wreszcie, ile czuwa** (`awakeS`/`radioS`) — bez tego nie dało się rozstrzygnąć, czy prąd zjada spoczynek, czy czuwanie (firmware `1.55.0`) | `pudelko` |
 | **D116** | Prognoza „ile jeszcze do ładowania" liczona z **historii ładowań tego pudełka**, nie ze stałej z arkusza: pomiar dał 14 dni na pełnym ogniwie zamiast obiecywanych 90, a przy 58% ekran mówił 52 dni, gdy zostało osiem (aplikacja `2026-09-08.79`) | `aplikacja` |
 | **D115** | Certyfikatów nie wgrywamy — **decyzja Kuby**. Wygasają, a pudełko ma stać zaklejone latami: zabezpieczenie z terminem ważności unieruchomiłoby je w losowym dniu. Przyjęte ryzyko, nie dług | `pudelko` |
 | **D114** | Droga do sieci zapamiętana też w pamięci trwałej — RTC nie przeżywa restartu, więc po każdej aktualizacji pierwsze otwarcie znowu kosztowało ~30 s (firmware `1.54.0`) | `pudelko` |

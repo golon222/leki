@@ -1903,7 +1903,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-09-08.79";
+const APP_VERSION = "2026-09-08.80";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -5053,6 +5053,47 @@ function opisPrognozy(st, pct){
                       : " Szacunek wstępny — uściśli się po drugim ładowaniu.");
 }
 
+/* CZUWANIE OD OSTATNIEGO ŁADOWANIA (firmware 1.55.0).
+
+   To jest liczba, na którą czekała cała diagnostyka baterii. Wiedzieliśmy,
+   że ogniwo starcza na 14 dni zamiast obiecywanych 90 i że pudełko budzi się
+   8,9 raza na dobę — czyli dokładnie tyle, ile ma. Nie dało się natomiast
+   rozstrzygnąć, GDZIE ten prąd idzie, bo rachunek opierał się na oszacowaniu
+   długości wybudzenia, nie na pomiarze.
+
+   Czytanie jest proste i o to chodzi:
+     kilka minut na dobę → prąd zjada SPOCZYNEK płytki, kod nic nie poradzi;
+     godziny            → zjada CZUWANIE i jest co poprawiać.
+
+   Licznik zeruje się przy odpięciu kabla i ginie przy restarcie pudełka
+   (pamięć RTC), więc świeżo po aktualizacji liczy od nowa — widać to po
+   liczbie wybudzeń, która zeruje się razem z nim.                       */
+function czasKrotko(s){
+  s = Math.max(0, Math.round(Number(s) || 0));
+  if (s < 60) return `${s} s`;
+  const m = Math.round(s / 60);
+  if (m < 90) return `${m} min`;
+  return `${Math.floor(m / 60)} h ${m % 60} min`;
+}
+
+function opisCzuwania(st){
+  const aw = Number(st?.awakeS);
+  if (!Number.isFinite(aw) || aw <= 0) return "";
+  const rd = Number(st?.radioS);
+  let txt = czasKrotko(aw);
+  if (Number.isFinite(rd) && rd >= 0)
+    txt += ` <span class="dim2">· z radiem ${czasKrotko(rd)}</span>`;
+  /* Przelicznik na dobę tylko wtedy, gdy jest od czego liczyć: przy cyklu
+     krótszym niż doba dzielenie robi z kilku minut „godziny na dobę”. */
+  const ost = Number(st?.lastCharge) || 0;
+  const teraz = Math.floor(Date.now()/1000);
+  if (ost && ost < teraz) {
+    const d = (teraz - ost) / 86400;
+    if (d >= 1) txt += `<br><span class="dim2">ok. ${czasKrotko(aw / d)} na dobę</span>`;
+  }
+  return txt;
+}
+
 function renderStatus(st){
   ostatniStatus = st;
   const chip = document.getElementById("batChip");
@@ -5199,6 +5240,10 @@ function renderStatus(st){
     wiersz("Sieć WiFi", `${esc(st.ssid) || "—"}` +
            (Number.isFinite(+st.rssi) ? ` <span class="dim2">${+st.rssi} dBm</span>` : "")) +
     wiersz("Wybudzeń", String(st.boots || 0)) +
+    /* Wybudzenia mówią ILE RAZY, czuwanie mówi JAK DŁUGO — i dopiero to
+       drugie rozstrzyga, dokąd idzie prąd. Stoją obok siebie celowo:
+       „62 wybudzenia" bez czasu czuwania nie znaczy nic (D117).        */
+    (opisCzuwania(st) ? wiersz("Czuwanie od ładowania", opisCzuwania(st)) : "") +
     wiersz("W kolejce pudełka", String(q)) +
     (typeof st.nvsFree === "number" && st.nvsFree >= 0
        ? wiersz("Wolnej pamięci", `${st.nvsFree}` +

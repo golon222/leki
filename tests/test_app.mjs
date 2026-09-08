@@ -2088,6 +2088,50 @@ head("Prognoza czasu do ladowania");
         `prognoza z historii widac na karcie baterii (${txt})`);
 }
 
+/* ── Czuwanie od ostatniego ladowania (firmware 1.55.0) ──
+
+   Liczba, ktora rozstrzyga cala diagnostyke baterii: kilka minut na dobe
+   znaczy, ze prad zjada spoczynek plytki (kod nic nie poradzi), godziny -
+   ze zjada czuwanie (jest co poprawiac). Musi wiec byc czytelna i musi
+   milczec, gdy pudelko jeszcze jej nie przysyla - stara wersja firmware
+   nie ma tych pol i "0 s" byloby wtedy klamstwem.                     */
+head("Czuwanie od ladowania");
+{
+  const doba = 86400, ter = Math.floor(Date.now()/1000);
+  check(A.czasKrotko(45) === "45 s", "sekundy zostaja sekundami");
+  check(A.czasKrotko(600) === "10 min", "minuty tam, gdzie sa czytelniejsze");
+  check(A.czasKrotko(7200) === "2 h 0 min", "godziny przy dluzszym czuwaniu");
+  check(A.czasKrotko(-5) === "0 s" && A.czasKrotko("x") === "0 s",
+        "smiec nie produkuje NaN");
+
+  check(A.opisCzuwania({}) === "",
+        "starsze pudelko tych pol nie przysyla - wtedy milczymy zamiast pisac zero");
+  check(A.opisCzuwania({ awakeS: 0 }) === "", "zero tez nie jest odpowiedzia");
+
+  const st = { awakeS: 2280, radioS: 660, lastCharge: ter - 6*doba };
+  const t = A.opisCzuwania(st);
+  check(/38 min/.test(t), `suma czuwania widoczna (${t})`);
+  check(/z radiem 11 min/.test(t), "i ile z tego zjadlo radio");
+  check(/na dobę/.test(t), "przelicznik na dobe, bo to on odpowiada na pytanie");
+
+  /* Przy cyklu krotszym niz doba dzielenie robi z kilku minut "godziny
+     na dobe" - liczba prawdziwa arytmetycznie i myslaca w skutkach.  */
+  check(!/na dobę/.test(A.opisCzuwania({ awakeS: 300, lastCharge: ter - 3600 })),
+        "swiezo po ladowaniu nie przeliczamy na dobe");
+  check(!/na dobę/.test(A.opisCzuwania({ awakeS: 300, lastCharge: 0 })),
+        "bez daty ladowania tez nie ma z czego liczyc");
+  check(!/NaN|undefined/.test(A.opisCzuwania({ awakeS: 60, radioS: "x", lastCharge: "y" })),
+        "smiec w polach nie przecieka na ekran");
+
+  A.renderStatus({ battery: 58, volt: 3.78, boots: 62,
+                   awakeS: 2280, radioS: 660, lastCharge: ter - 6*doba });
+  check(/Czuwanie od ładowania/.test(document.getElementById("devInfo").innerHTML),
+        "czuwanie stoi w Diagnostyce obok liczby wybudzen");
+  A.renderStatus({ battery: 58, volt: 3.78, boots: 62 });
+  check(!/Czuwanie od ładowania/.test(document.getElementById("devInfo").innerHTML),
+        "a bez danych wiersz w ogole sie nie pojawia");
+}
+
 /* ── Tabletka na ekranie glownym ── */
 /* ── Siatka bezpieczenstwa uzupelniania ──
    Dawka, ktora nie trafila do kalendarza, wyglada jak zapomniana

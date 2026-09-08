@@ -38,6 +38,11 @@ uint8_t  rtcWysokieZRzedu = 0;
 bool     rtcBlokWysokie   = false;
 uint32_t rtcChargeSinceTs = 0;
 uint8_t  rtcChargeFromPct = 255;
+/* Liczniki czuwania (1.55.0). Odpiecie kabla zaczyna nowy cykl, wiec
+   `zapiszKoniecLadowania()` je zeruje - i to jest sprawdzane nizej. */
+uint32_t rtcCzuwanieS = 0;
+uint32_t rtcRadioS    = 0;
+uint32_t msRadioOd    = 0;
 bool    rtcTimeValid = true;
 int16_t rtcTzOffsetMin = 120;
 /* Powiadomienia o zapasie i o terminie INR (D83). Ten sam zestaw znacznikow

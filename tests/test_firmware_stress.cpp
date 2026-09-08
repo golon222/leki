@@ -55,6 +55,9 @@ uint8_t  rtcWysokieZRzedu = 0;
 bool     rtcBlokWysokie   = false;
 uint32_t rtcChargeSinceTs = 0;
 uint8_t  rtcChargeFromPct = 255;
+uint32_t rtcCzuwanieS = 0;
+uint32_t rtcRadioS    = 0;
+uint32_t msRadioOd    = 0;
 
 uint32_t rtcLastOpenTs    = 0;
 uint32_t rtcLastPushTs    = 0;

@@ -238,6 +238,10 @@ const PRZYKLAD_STATUSU = {
   /* Pomiary z D112: odczyty kontaktronu bez ustalonego poziomu i to,
      CZYM pudelko sie polaczylo (254 = poswiadczenia sterownika).    */
   reedNiepewne: 0, netSkad: 254,
+  /* Liczniki czuwania od ostatniego odpiecia kabla (1.55.0). To one
+     rozstrzygaja, czy prad zjada spoczynek plytki, czy czuwanie -
+     bez nich diagnostyka baterii konczy sie na dwoch hipotezach.   */
+  awakeS: 3600, radioS: 420,
   /* Aktualizacja przez WiFi (D59). otaBad to suma MD5 wersji, ktora sie
      nie uruchomila - 32 znaki albo pusto, nigdy nic pomiedzy.         */
   otaMsg: "za malo baterii - postaw na ladowarke", otaWersja: "1.38.0",
@@ -258,6 +262,15 @@ ok("status z pomiarem 'nie zdazylo'", "devices/pillbox1/status",
    { ...PRZYKLAD_STATUSU, netMs: -1, lidMs: -1 });
 odrzuc("pomiar czuwania nie moze byc napisem", "devices/pillbox1/status",
     { ...PRZYKLAD_STATUSU, netMs: "dlugo" });
+/* Licznik czuwania rosnie od zera i nigdy nie cofa sie ponizej niego.
+   Wartosc ujemna znaczylaby przekrecony licznik, a taka liczba trafiaja
+   do rachunku "ile mAh na dobe" i zatrulaby caly wniosek.            */
+odrzuc("licznik czuwania nie moze byc ujemny", "devices/pillbox1/status",
+    { ...PRZYKLAD_STATUSU, awakeS: -1 });
+odrzuc("licznik radia nie moze byc ujemny", "devices/pillbox1/status",
+    { ...PRZYKLAD_STATUSU, radioS: -5 });
+ok("swiezo po ladowaniu oba liczniki sa zerowe", "devices/pillbox1/status",
+   { ...PRZYKLAD_STATUSU, awakeS: 0, radioS: 0 });
 
 /* Lista sieci widzianych przez pudelko (D65). Zapis odrzucony przez reguly
    wyglada DOKLADNIE tak samo jak "nic sie nie stalo" - a tego objawu

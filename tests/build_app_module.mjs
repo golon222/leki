@@ -27,7 +27,7 @@ import "./dom_stub.mjs";
 `;
 
 const footer = `
-export { renderSkan, brakujePokrycia, doReconcile, reconcileDecyzja, opisLadowan, minutyDoPelna, opisLadowania, tempoZHistorii, prognozaDni, opisPrognozy, renderAll, toast, tablet3D, cieniuj, TAB3D_SEGMENTOW, busy, seriaDni, doNastepnej, opisCzasu,
+export { renderSkan, brakujePokrycia, doReconcile, reconcileDecyzja, opisLadowan, minutyDoPelna, opisLadowania, tempoZHistorii, prognozaDni, opisPrognozy, czasKrotko, opisCzuwania, renderAll, toast, tablet3D, cieniuj, TAB3D_SEGMENTOW, busy, seriaDni, doNastepnej, opisCzasu,
          cfg, doses, inr, events, tabletSVG, doseGraphic,
          dayDose, dayStatus, devKey, devHM, devDate, inrState,
          dawkaNaDzien, tydzienDawek, dzienBezLeku, wyjatekNaDzien, opisDawkowania,

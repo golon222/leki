@@ -590,6 +590,42 @@ ok("meldunekLadowania" in code and "CHARGE_PUSH_MAX_S" in code,
 ok("bool trackCharging(" in code, "stan ladowania jest osobna, testowalna funkcja")
 ok("rtcCharging && CHARGE_POLL_S < s" in plan,
    "na ladowarce pudelko melduje sie czesto - prad jest za darmo")
+
+# ── LICZNIKI CZUWANIA (1.55.0) ────────────────────────────────────────
+# Odpowiadaja na jedyne pytanie, ktorego diagnostyka baterii nie umiala
+# rozstrzygnac: czy prad zjada spoczynek plytki, czy czuwanie. Kazda z tych
+# kontroli sprawdzona mutacja.
+_sleep = code[code.find("void goToSleep("):]
+_sleep = _sleep[:_sleep.find("esp_deep_sleep_start();")]
+ok("radioDolicz();" in _sleep and "rtcCzuwanieS +=" in _sleep,
+   "pomiar czuwania domyka sie przed snem - jedynym miejscem, przez ktore "
+   "przechodzi kazda sciezka wybudzenia")
+_wc = code[code.find("bool wifiConnect("):]
+_wc = _wc[:_wc.find("\n}")]
+ok("msRadioOd = millis();" in _wc,
+   "czas radia liczy sie od wejscia w laczenie, nie od udanego polaczenia "
+   "- proby NIEUDANE tez trzymaja nadajnik (D112)")
+_us = code[code.find("void wifiUspij("):]
+_us = _us[:_us.find("\n}")]
+ok("radioDolicz();" in _us, "zgaszenie radia domyka jego pomiar")
+_kl = code[code.find("void zapiszKoniecLadowania("):]
+_kl = _kl[:_kl.find("\n}")]
+ok("rtcCzuwanieS = 0;" in _kl and "rtcRadioS    = 0;" in _kl,
+   "odpiecie kabla zaczyna nowy cykl licznikow - inaczej nie da sie ich "
+   "zestawic ze spadkiem procentu")
+# ZASADA 8: narzedzie diagnostyczne nie moze tykac drogi dawki. Dziennik
+# wieczka polegl wlasnie na tym (D109) - dwa zapisy do flasha przy kazdym
+# ruchu wieczka, przed startem radia. Te liczniki siedza w pamieci RTC.
+_rtc = code[:code.find("void setup(")]
+ok("RTC_DATA_ATTR uint32_t rtcCzuwanieS" in _rtc
+   and "RTC_DATA_ATTR uint32_t rtcRadioS" in _rtc,
+   "liczniki czuwania siedza w pamieci RTC, nie w NVS (zasada 8, D109)")
+ok("nvsPutU32(\"awake" not in code and "nvsPutU32(\"radio" not in code,
+   "i nic ich nie zapisuje do flasha przy zasypianiu")
+_ps = ino[ino.find("bool pushStatus("):]
+_ps = _ps[:_ps.find("\n}")]
+ok('doc["awakeS"]' in _ps and 'doc["radioS"]' in _ps,
+   "oba liczniki jada do aplikacji w statusie")
 pushRaw = ino[ino.find("bool pushStatus("):]
 pushRaw = pushRaw[:pushRaw.find("\n}")]
 ok('doc["charging"] = rtcCharging' in pushRaw, "stan ladowania trafia do aplikacji")
@@ -609,8 +645,21 @@ ok("byloOtwarte" in code,
    "pudelko pamieta, ze wieczko bylo otwarte w tym wybudzeniu")
 ok("|| byloOtwarte" in code,
    "po zamknieciu stan jest wysylany ZAWSZE, bez dodatkowych warunkow")
-ok("OPEN_WARN_FIRST_S * 1000UL" in cfg,
-   "czuwanie trwa dokladnie do pierwszego ostrzezenia o otwartym wieczku")
+# Czuwanie przy otwartym wieczku i prog ostrzezenia byly do 1.54.0 ta sama
+# liczba. Sa rozdzielone, bo maja rozna cene - ale rozdzielenie tylko wtedy
+# jest bezpieczne, gdy ostrzezenie NADAL dochodzi po zaparciu czuwania.
+# Dlatego pilnujemy trzech rzeczy naraz, kazdej z osobna sprawdzonej mutacja.
+_cz = re.search(r"#define CZEKAJ_ZAMKNIECIE_MS\s+\((\d+)UL \* 1000UL\)", cfg)
+ok(_cz is not None, "czas czuwania przy otwartym wieczku jest podany wprost w sekundach")
+_ow = re.search(r"#define OPEN_WARN_FIRST_S\s+(\d+)", cfg)
+ok(_ow is not None, "prog pierwszego ostrzezenia o otwartym wieczku nadal istnieje")
+if _cz and _ow:
+    ok(int(_cz.group(1)) <= int(_ow.group(1)),
+       "czuwanie nie trwa dluzej niz do pierwszego ostrzezenia (inaczej sygnal "
+       "wypadalby w srodku czuwania i nie byloby wiadomo, co go dowozi)")
+ok("openWarnSecondsLeft()" in plan,
+   "po zasnieciu z otwartym wieczkiem sen jest skracany do chwili ostrzezenia "
+   "- to jest jedyne, co dowozi sygnal po skroceniu czuwania")
 ok("while (boxIsOpen() && millis()" not in code,
    "stare petle czekania zastapione - inaczej gest bylby ignorowany")
 ok("autoTest();" in code and "GEST_TEST" in code, "trzy klikniecia uruchamiaja autotest")

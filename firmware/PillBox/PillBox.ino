@@ -66,6 +66,27 @@
  *  PAMIEC RTC  (przezywa deep sleep, ginie po odlaczeniu zasilania)
  * ===================================================================== */
 RTC_DATA_ATTR uint32_t rtcBootCount     = 0;
+
+/* ILE PUDELKO CZUWA, A ILE SPI - jedyna liczba, ktorej brak zamykal
+   diagnostyke baterii (2026-09-08).
+
+   Wiedzielismy, ze ogniwo starcza na 14 dni zamiast obiecywanych 90, i ze
+   pudelko budzi sie 8,9 raza na dobe - czyli dokladnie tyle, ile ma. Nie
+   dalo sie natomiast rozstrzygnac, GDZIE ten prad idzie: czy w spoczynek
+   (wtedy sprawa jest sprzetowa i kod nic nie zrobi), czy w czuwanie
+   (wtedy jest co poprawiac). Rachunek dopuszczal obie skrajnosci, bo
+   opieral sie na oszacowaniu czasu wybudzenia, a nie na pomiarze.
+
+   Te dwie liczby to rozstrzygaja i sa DARMOWE: pamiec RTC, zero zapisow
+   do flasha, zero ruchu w sieci poza polem w statusie, ktory i tak leci.
+   Zasada 8 (narzedzie diagnostyczne nie tyka drogi dawki) nietknieta -
+   dlatego wlasnie nie ma tu NVS, na ktorym polegl dziennik wieczka (D109).
+
+   Licza od ostatniego ODPIECIA KABLA, bo tylko wtedy porownanie z procentem
+   baterii ma sens. Pamiec RTC nie przezywa restartu, wiec po aktualizacji
+   licza od nowa - widac to po `boots`, ktory zeruje sie razem z nimi.   */
+RTC_DATA_ATTR uint32_t rtcCzuwanieS     = 0;   // sekundy czuwania od ladowania
+RTC_DATA_ATTR uint32_t rtcRadioS        = 0;   // z tego: sekundy z wlaczonym radiem
 RTC_DATA_ATTR int8_t   rtcPendingSlot   = -1;   // slot ktory wlasnie dzwoni
 RTC_DATA_ATTR uint8_t  rtcAlarmRetries  = 0;    // ile prob juz bylo
 RTC_DATA_ATTR bool     rtcTimeValid     = false;
@@ -550,6 +571,22 @@ Gest gestPoOtwarciu  = GEST_BRAK;  // co uzytkownik pokazal po otwarciu wieczka
 uint32_t msPrzyciskOd = 0;
 
 bool batterySaver = false;      // true = za niskie napiecie, nie wlaczamy radia
+
+/* Znacznik chwili, w ktorej radio ruszylo w TYM wybudzeniu (0 = stoi zgaszone).
+
+   Liczymy od wejscia w `wifiConnect()`, a nie od udanego polaczenia - bo
+   nieudana proba tez trzyma nadajnik wlaczony i tez kosztuje. Wlasnie takie
+   proby okazaly sie glowna strata przy meldunku o wieczku (D112: "35,2 s to
+   byla suma prob NIEUDANYCH"), wiec licznik, ktory je pomija, mierzylby
+   nie to, co trzeba.                                                     */
+uint32_t msRadioOd = 0;
+
+void radioDolicz() {
+  if (!msRadioOd) return;
+  const uint32_t s = (millis() - msRadioOd) / 1000;
+  if (rtcRadioS + s >= rtcRadioS) rtcRadioS += s;    // bez przekrecenia licznika
+  msRadioOd = 0;
+}
 bool timeSyncedThisWake = false;
 
 bool syncTimeNTP();             // deklaracja - wifiConnect() wola ja od razu
@@ -691,6 +728,11 @@ void zapiszKoniecLadowania() {
   if (poprzednie) nvsPutU32("chgPrev", poprzednie);
   nvsPutU32("chgEnd", (uint32_t)time(nullptr));
   prefs.end();
+  /* Kabel odpiety = poczatek nowego cyklu. Liczniki czuwania odnosza sie
+     do TEGO cyklu, bo tylko wtedy da sie je zestawic ze spadkiem procentu. */
+  rtcCzuwanieS = 0;
+  rtcRadioS    = 0;
+  msRadioOd    = millis();      // radio stoi - wlasnie meldujemy odlaczenie
   LOGLN("[CHG] zapisano date ladowania");
 }
 
@@ -2130,6 +2172,8 @@ bool wifiConnect() {
     LOGLN("[NET] tryb oszczedzania baterii - radio pozostaje wylaczone");
     return false;
   }
+  /* Od tej chwili nadajnik chodzi - takze wtedy, gdy laczenie sie nie uda. */
+  if (!msRadioOd) msRadioOd = millis();
   if (WiFi.status() == WL_CONNECTED) return true;
   /* Nowe laczenie - poprzedni werdykt dozorcy juz nie obowiazuje.     */
   wifiDozorcaPrzerwal = false;
@@ -2261,6 +2305,7 @@ void wifiOff() {
    Samo przelaczenie trybu na WIFI_OFF gasi nadajnik, a sterownik zostaje
    gotowy do pracy.                                                      */
 void wifiUspij() {
+  radioDolicz();
   WiFi.disconnect(false, false);
   WiFi.mode(WIFI_OFF);
 }
@@ -2958,6 +3003,15 @@ bool pushStatus(int stanWieczka) {
      wiadomo, czy zwleka radio, baza, czy telefon. -1 = nie zdazylo.  */
   doc["netMs"] = rtcNetMs;
   doc["lidMs"] = rtcLidMs;
+  /* ILE CZUWA, A ILE Z TEGO Z RADIEM - od ostatniego odpiecia kabla.
+
+     Bez tych dwoch liczb "bateria starcza na 14 dni zamiast 90" nie da sie
+     doprowadzic do konca: 8,9 wybudzenia na dobe to wartosc prawidlowa, wiec
+     pytanie nie brzmi ILE RAZY, tylko JAK DLUGO. Czuwanie liczone w minutach
+     na dobe znaczy, ze prad zjada spoczynek plytki i kod nic nie poradzi;
+     liczone w godzinach - ze jest co poprawiac.                          */
+  doc["awakeS"] = rtcCzuwanieS;
+  doc["radioS"] = rtcRadioS;
   /* Twarde restarty i powod OSTATNIEGO. Pamiec RTC ich nie przezywa, wiec
      bez tego nie da sie odroznic "pudelko sie zrestartowalo" od "pudelko
      zachowalo sie dziwnie" - a to zupelnie rozne tropy (D96).         */
@@ -5997,6 +6051,16 @@ void goToSleep(uint32_t seconds) {
   LOG("[SLP] stan pinow teraz: kontaktron=%d, przycisk=%d\n",
       digitalRead(PIN_REED), digitalRead(PIN_BUTTON));
   LOG("[SLP] deep sleep na %lu s\n", (unsigned long)seconds);
+  /* Domkniecie pomiaru czuwania. TUTAJ, bo to jedyne miejsce, przez ktore
+     przechodzi kazda sciezka wybudzenia - ta sama wlasciwosc, na ktorej stoi
+     zasada 11. millis() liczy od startu plytki, wiec to jest dokladnie czas
+     tego wybudzenia, razem z radiem, alarmem i czekaniem na wieczko.
+     Status poszedl wczesniej, wiec aplikacja zobaczy te sekundy przy
+     nastepnym meldunku - jedno wybudzenie opoznienia na liczniku, ktory
+     sluzy do porownywania tygodni.                                      */
+  radioDolicz();
+  rtcCzuwanieS += millis() / 1000;
+
 #if DEBUG_SERIAL
   Serial.flush();
 #endif
