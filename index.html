@@ -1903,7 +1903,7 @@ const DEVICE_ID = "pillbox01";
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-09-01.78";
+const APP_VERSION = "2026-09-08.79";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -4989,6 +4989,70 @@ function opisLadowan(st){
   return txt;
 }
 
+/* ILE JESZCZE DNI DO ŁADOWANIA — z historii TEGO pudełka, nie z arkusza.
+
+   Stało tu `pct * 0.9`, czyli „pełne ogniwo = 90 dni". Ta liczba nigdy
+   nie była pomiarem — wyszła z policzonego poboru prądu i zakładała
+   44 µA spoczynku, czyli katalogową wartość gołego układu, a nie tej
+   płytki z podpiętym ogniwem.
+
+   Pomiar z życia (Kuba, 2026-09-08): 25.08 pełne → 31.08 58% → 08.09 5%.
+   Dwa niezależne odcinki dają 7,0 i 7,3 punktu na dobę, czyli **czternaście
+   dni**, nie dziewięćdziesiąt. Przy 58% ekran obiecywał 52 dni, a zostało
+   osiem — i to jest jedyny powód, dla którego rozładowane pudełko było
+   zaskoczeniem. Prognoza, która myli się sześciokrotnie, jest gorsza niż
+   jej brak, bo człowiek na niej polega.
+
+   Dlatego liczymy z dat, które pudełko już przysyła: odstęp
+   `prevCharge` → `lastCharge` to długość POPRZEDNIEGO cyklu. Stała
+   zostaje wyłącznie jako zapas, dopóki nie ma dwóch dat — i jest teraz
+   zmierzona, a nie policzona.
+
+   ZAŁOŻENIE, ŚWIADOMIE OSTROŻNE: poprzedni cykl bierzemy za pełny zjazd
+   od 100%. Gdy ładujesz wcześniej — powiedzmy przy 40% — ten sam czas
+   odpowiada wolniejszemu zużyciu, więc prognoza wyjdzie ZANIŻONA i
+   pudełko upomni się o kabel za wcześnie. Przy leku przeciwzakrzepowym
+   to jest właściwa strona pomyłki: alarm o dzień za wcześnie kosztuje
+   jedno ładowanie, o dzień za późno — dawkę.
+
+   Domykałby to procent w chwili podpięcia kabla; pudełko go zna
+   (`rtcChargeFromPct`), ale trwale nie zapisuje. Do rozważenia w
+   firmware — dopóki go nie ma, ostrożność jest w tę stronę, w którą ma być. */
+const DNI_NA_PROCENT_ZAPAS = 0.14;   // 14 dni na pełnym ogniwie (pomiar 2026-09-08)
+const CYKL_MIN_DNI = 2, CYKL_MAX_DNI = 400;
+
+/* Dni na jeden procent, wyliczone z poprzedniego cyklu. 0 = nie ma z czego.
+   Odsiewamy cykle absurdalnie krótkie (kabel wpięty i wypięty tego samego
+   dnia) i absurdalnie długie (zegar pudełka bez synchronizacji) — jedno
+   i drugie zatruwałoby prognozę na cały następny cykl.                */
+function tempoZHistorii(st){
+  const ost   = Number(st?.lastCharge) || 0;
+  const poprz = Number(st?.prevCharge) || 0;
+  if (!ost || !poprz || poprz >= ost) return 0;
+  const d = dni(poprz, ost);
+  if (d < CYKL_MIN_DNI || d > CYKL_MAX_DNI) return 0;
+  return d / 100;
+}
+
+function prognozaDni(st, pct){
+  const zHist = tempoZHistorii(st);
+  const wsp   = zHist || DNI_NA_PROCENT_ZAPAS;
+  return {
+    dni: Math.max(1, Math.round(Math.max(0, Number(pct) || 0) * wsp)),
+    zHistorii: !!zHist,
+    cykl: zHist ? Math.round(zHist * 100) : 0
+  };
+}
+
+/* Jedno zdanie na ekran. Źródło liczby podajemy, bo „ok. 8 dni" bez
+   podstawy to znowu obietnica z powietrza — a tej właśnie się pozbywamy. */
+function opisPrognozy(st, pct){
+  const p = prognozaDni(st, pct);
+  return `Szacunkowo ok. ${p.dni} ${p.dni === 1 ? "dzień" : "dni"} do ładowania.` +
+         (p.zHistorii ? ` Poprzednie starczyło na ${p.cykl} dni.`
+                      : " Szacunek wstępny — uściśli się po drugim ładowaniu.");
+}
+
 function renderStatus(st){
   ostatniStatus = st;
   const chip = document.getElementById("batChip");
@@ -5051,10 +5115,12 @@ function renderStatus(st){
   chip.textContent = (laduje ? "ładuje · " : "") + pct + "%";
   chip.className = "chip " + (laduje ? "on" : pct > 40 ? "on" : pct > 15 ? "warn" : "off");
 
-  /* Szacunek: pełne ogniwo 470 mAh starczy około 90 dni przy obecnym poborze.
-     Odkąd procent liczony jest z krzywej LiPo, a nie z prostej, odpowiada
-     mniej więcej realnie pozostałemu ładunkowi — więc mnożenie razy 0,9
-     dnia ma sens także w dolnej połowie skali, gdzie wcześniej zawyżało. */
+  /* Prognoza idzie przez `opisPrognozy()` — liczy z historii ładowań tego
+     pudełka, nie ze stałej. Powód i pomiar stoją przy tamtej funkcji.
+     Tutaj zostaje to, co nadal obowiązuje: procent liczony jest z krzywej
+     LiPo, a nie z prostej, więc odpowiada mniej więcej realnie pozostałemu
+     ładunkowi — i mnożenie przez współczynnik dni ma sens także w dolnej
+     połowie skali, gdzie liczenie z napięcia wprost zawyżało.          */
   const eta = document.getElementById("batEta");
   const odlicz = laduje ? opisLadowania(st) : null;
   eta.textContent = laduje
@@ -5064,7 +5130,7 @@ function renderStatus(st){
                 "Powyżej widać odczyt sprzed ładowania — prawdziwy pojawi się " +
                 "kilkanaście sekund po odłączeniu.")
     : pct > 15
-      ? `Szacunkowo ok. ${Math.round(pct * 0.9)} dni do ładowania.`
+      ? opisPrognozy(st, pct)
       : "Czas naładować pudełko przez USB-C.";
   eta.style.color = laduje ? "var(--ok)" : pct > 15 ? "" : "var(--bad)";
 

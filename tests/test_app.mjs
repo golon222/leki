@@ -2035,6 +2035,59 @@ A.renderStatus({ battery: 62, volt: 4.19, charging: true, chargeSince: teraz, ch
 check(/do pełna/.test(document.getElementById("batEta").textContent),
       "odliczanie widac na karcie baterii");
 
+/* ── Ile jeszcze do ladowania: PROGNOZA Z HISTORII, nie ze stalej ──
+
+   Stary wzor `pct * 0.9` obiecywal 90 dni na pelnym ogniwie. Pomiar
+   z zycia dal CZTERNASCIE: 25.08 pelne -> 31.08 58% -> 08.09 5%, czyli
+   7,0 i 7,3 punktu na dobe na dwoch niezaleznych odcinkach. Przy 58%
+   ekran mowil 52 dni, a zostalo osiem. Te testy pilnuja, ze prognoza
+   liczy sie z dat pudelka i ze zapas jest zmierzony, a nie policzony. */
+head("Prognoza czasu do ladowania");
+{
+  const doba = 86400, ter = Math.floor(Date.now()/1000);
+  const cykl = (d) => ({ lastCharge: ter, prevCharge: ter - d*doba });
+
+  check(A.tempoZHistorii({}) === 0, "bez dat nie ma czego liczyc");
+  check(A.tempoZHistorii(cykl(13)) === 0.13, "cykl 13 dni to 0,13 dnia na procent");
+  check(A.tempoZHistorii(cykl(1)) === 0, "kabel wpiety i wypiety tego samego dnia odpada");
+  check(A.tempoZHistorii(cykl(500)) === 0, "cykl z niezsynchronizowanego zegara odpada");
+  check(A.tempoZHistorii({ lastCharge: ter - doba, prevCharge: ter }) === 0,
+        "poprzednie ladowanie pozniejsze niz ostatnie to smiec");
+  check(A.tempoZHistorii({ lastCharge: "wczoraj", prevCharge: {} }) === 0,
+        "tekst zamiast daty nie produkuje NaN");
+
+  const bezHist = A.prognozaDni({}, 100);
+  check(bezHist.dni === 14 && !bezHist.zHistorii,
+        `zapas to 14 dni na pelnym ogniwie, nie 90 (${bezHist.dni})`);
+
+  const zHist = A.prognozaDni(cykl(13), 58);
+  check(zHist.dni === 8 && zHist.zHistorii && zHist.cykl === 13,
+        `przy 58% i cyklu 13 dni zostaje osiem (${zHist.dni})`);
+
+  /* REGRESJA, i to jest powod calej tej zmiany: stary wzor mowil tu 52. */
+  check(A.prognozaDni(cykl(13), 58).dni < 15,
+        "prognoza nie wraca do obietnicy z arkusza");
+
+  check(A.prognozaDni(cykl(2), 16).dni >= 1,
+        "nigdy nie mowimy 'ok. 0 dni' - to nie jest odpowiedz");
+  let rosnie = true;
+  for (let p = 1; p < 100; p++)
+    if (A.prognozaDni(cykl(13), p).dni > A.prognozaDni(cykl(13), p+1).dni) rosnie = false;
+  check(rosnie, "wiecej procentow nigdy nie znaczy mniej dni");
+
+  check(/Poprzednie starczyło na 13 dni/.test(A.opisPrognozy(cykl(13), 58)),
+        "ekran podaje, skad wzieta jest liczba");
+  check(/wstępny/.test(A.opisPrognozy({}, 58)),
+        "bez historii mowimy wprost, ze to szacunek wstepny");
+  check(!/NaN|undefined/.test(A.opisPrognozy({ lastCharge: "x" }, "y")),
+        "smiec w danych nie produkuje NaN na ekranie");
+
+  A.renderStatus({ battery: 58, volt: 3.78, lastCharge: ter, prevCharge: ter - 13*doba });
+  const txt = document.getElementById("batEta").textContent;
+  check(/ok\. 8 dni/.test(txt) && /13 dni/.test(txt),
+        `prognoza z historii widac na karcie baterii (${txt})`);
+}
+
 /* ── Tabletka na ekranie glownym ── */
 /* ── Siatka bezpieczenstwa uzupelniania ──
    Dawka, ktora nie trafila do kalendarza, wyglada jak zapomniana
