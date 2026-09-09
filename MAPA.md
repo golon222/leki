@@ -163,7 +163,7 @@ pozycjom w pasku nawigacji i podekranom Ustawien.
 
 ---
 
-## `firmware/PillBox/PillBox.ino` — 6958 linii
+## `firmware/PillBox/PillBox.ino` — 6981 linii
 
 | od | do | blok |
 |---|---|---|
@@ -187,8 +187,8 @@ pozycjom w pasku nawigacji i podekranom Ustawien.
 | 4642 | 4761 | 10b. CZARNA SKRZYNKA |
 | 4762 | 5158 | 10c. GESTY SERWISOWE I AUTOTEST |
 | 5159 | 5581 | 10b. POWIADOMIENIA NA TELEFON  (bot Telegram, D67) |
-| 5582 | 6189 | 11.  DEEP SLEEP |
-| 6190 | 6958 | 12.  SETUP  =  cala logika (loop() nigdy nie jest osiagany) |
+| 5582 | 6212 | 11.  DEEP SLEEP |
+| 6213 | 6981 | 12.  SETUP  =  cala logika (loop() nigdy nie jest osiagany) |
 
 **Funkcje** (186):
 
@@ -230,7 +230,7 @@ pozycjom w pasku nawigacji i podekranom Ustawien.
 
 *11.  DEEP SLEEP* — `otaZglos`&nbsp;5600, `skanujSieci`&nbsp;5628, `otaSprobuj`&nbsp;5677, `kolejnePrzesuniecie`&nbsp;5876, `goToSleep`&nbsp;5881, `planNextSleep`&nbsp;6109
 
-*12.  SETUP  =  cala logika (loop() nigdy nie jest osiagany)* — `petlaLadowania`&nbsp;6202, `setup`&nbsp;6300, `loop`&nbsp;6955
+*12.  SETUP  =  cala logika (loop() nigdy nie jest osiagany)* — `petlaLadowania`&nbsp;6225, `setup`&nbsp;6323, `loop`&nbsp;6978
 
 
 ---

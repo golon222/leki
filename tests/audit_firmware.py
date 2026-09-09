@@ -590,6 +590,14 @@ ok("meldunekLadowania" in code and "CHARGE_PUSH_MAX_S" in code,
 ok("bool trackCharging(" in code, "stan ladowania jest osobna, testowalna funkcja")
 ok("rtcCharging && CHARGE_POLL_S < s" in plan,
    "na ladowarce pudelko melduje sie czesto - prad jest za darmo")
+# Nic nie budzi pudelka na wetkniecie wtyczki: nie ma przerwania od zasilania,
+# a trackCharging() porownuje napiecie z POPRZEDNIM wybudzeniem. Przy niskiej
+# baterii sen musi wiec byc krotki, inaczej podpiecie kabla widac dopiero po
+# kilku godzinach - a wtedy nie wiadomo, czy pudelko sie laduje, czy padlo (D119).
+ok("BATT_CRIT_PCT" in plan and "CUTOFF_RECHECK_S" in plan,
+   "przy niskiej baterii pudelko dopytuje czesto, czy pojawil sie kabel (D119)")
+ok("!rtcCharging" in plan,
+   "i przestaje dopytywac, gdy kabel juz wykryty - dalej pyta punkt o ladowaniu")
 
 # ── LICZNIKI CZUWANIA (1.55.0) ────────────────────────────────────────
 # Odpowiadaja na jedyne pytanie, ktorego diagnostyka baterii nie umiala

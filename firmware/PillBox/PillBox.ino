@@ -6170,6 +6170,29 @@ uint32_t planNextSleep() {
          aplikacji bylo widac rosnacy procent na zywo, bez klikania. */
   if (rtcCharging && CHARGE_POLL_S < s) s = CHARGE_POLL_S;
 
+  /* 3d. BATERIA NA WYKONCZENIU, A KABLA NIE MA - pytamy czesciej, czy sie
+         pojawil. Zgloszenie Kuby (2026-09-09): "podpialem a aplikacja nie
+         pokazuje ze sie laduje".
+
+         Nic nie budzi pudelka na wetkniecie wtyczki - nie ma przerwania od
+         zasilania, a `trackCharging()` porownuje napiecie z POPRZEDNIM
+         wybudzeniem. Przy 5% baterii najblizsze wybudzenie wypadalo za
+         kilka godzin (slot albo granica doby), wiec czlowiek podpinal kabel
+         i przez ten czas nie mial ZADNEGO potwierdzenia, ze cokolwiek sie
+         dzieje. Przy leku przeciwzakrzepowym to jest zla cisza: nie wiadomo,
+         czy pudelko sie laduje, czy juz padlo.
+
+         Co 15 minut wychodzi kwadrans niepewnosci zamiast kilku godzin.
+         Kosztuje to okolo 2 mAh na dobe (wybudzenie bez zmian stanu nie
+         wlacza radia), i tylko w strefie, w ktorej kabel i tak zaraz
+         wchodzi - a gdy wejdzie, `rtcCharging` przejmuje pytanie 3c.
+
+         Ten sam odstep co po odcieciu (CUTOFF_RECHECK_S) i z tego samego
+         powodu: to jest to samo pytanie, zadane troche wczesniej.      */
+  if (!rtcCharging && batteryPercentage > 0 && batteryPercentage <= BATT_CRIT_PCT
+      && CUTOFF_RECHECK_S < s)
+    s = CUTOFF_RECHECK_S;
+
   /* 4. Rolowanie doby minute po jej koncu (DAY_START_HOUR). */
 #if MIDNIGHT_CHECK
   uint32_t m = secondsToDayBoundary(now);
