@@ -1392,6 +1392,109 @@ CHECK(battPercentFromCurve(4.135f)>90 && battPercentFromCurve(4.135f)<95,
         "nowa skala mowi %d%% - i to jest prawda", battPercentFromCurve(3.70f));
 }
 
+/* ── DOL SKALI MUSI SIE RUSZAC ──────────────────────────────────────
+   Blad zgloszony przez Kube 2026-09-09: "5% ma od 2 dni jakos, wiec
+   dlugie to 5%". Mial racje i przyczyny byly dwie, obie tutaj.
+
+   PIERWSZA, mniejsza: krzywa miala miedzy 5% a 0% JEDEN odcinek dlugosci
+   340 mV (3,61 -> 3,27 V), czyli 68 mV na punkt przy 4 mV w srodku skali.
+   Zaden test tego nie lapal, bo wszystkie sprawdzaly pojedyncze punkty
+   i monotonicznosc, a nie ROWNOMIERNOSC. Sprawdzone mutacja: samo to
+   objawu NIE dawalo (interpolacja i tak produkowala posrednie procenty),
+   wiec ta kontrola pilnuje dokladnosci, a nie naprawy.                */
+{
+  float najgorszy = 0; int wA = 0, wB = 0;
+  for (int pct = 1; pct <= 10; pct++) {
+    float vHi = -1, vLo = -1;
+    for (float v = 3.20f; v <= 3.80f; v += 0.001f) {
+      if (vLo < 0 && battPercentFromCurve(v) >= pct)     vLo = v;
+      if (battPercentFromCurve(v) <= pct)                vHi = v;
+    }
+    (void)vHi;
+    float vNast = -1;
+    for (float v = 3.20f; v <= 3.80f; v += 0.001f)
+      if (vNast < 0 && battPercentFromCurve(v) >= pct + 1) vNast = v;
+    if (vLo > 0 && vNast > 0) {
+      float mv = (vNast - vLo) * 1000.0f;
+      if (mv > najgorszy) { najgorszy = mv; wA = pct; wB = pct + 1; }
+    }
+  }
+  /* 70 mV na punkt to juz duzo, ale jeszcze pozwala wskazaniu zejsc
+     stopniowo. 340 mV, jak bylo, zamraza je na cale dnie.            */
+  CHECK(najgorszy <= 70.0f,
+        "na dole skali jeden punkt to najwyzej %.0f mV (najszerzej miedzy %d%% a %d%%)",
+        najgorszy, wA, wB);
+}
+
+/* TEST NA OBJAW, NIE NA STRUKTURE - i dopiero on lapie prawdziwa przyczyne.
+
+   Powyzsze kontrole sprawdzaja krzywa i filtr OSOBNO, a Kube zabolo ich
+   POLACZENIE: 68 mV na punkt razy trzy punkty martwej strefy to bylo
+   204 mV, przez ktore wskazanie przechodzilo bez drgniecia. Sama krzywa
+   nie byla wiec zla "wystarczajaco", zeby ktorykolwiek osobny prog ja
+   odrzucil - i dlatego pierwsza wersja tego testu przepuscila mutacje
+   przywracajaca stary ksztalt.
+
+   Mierzymy wiec to, co widzi czlowiek: ILE MILIWOLTOW moze spasc ogniwo,
+   zanim procent na ekranie sie ruszy.                                  */
+{
+  rtcBattPct = (uint8_t)battPercentFromCurve(3.61f);
+  rtcBattUp  = 0;
+  const int start = rtcBattPct;
+  float vZmiany = -1;
+  for (float v = 3.61f; v >= 3.30f; v -= 0.001f) {
+    if (battSmooth(battPercentFromCurve(v)) != start) { vZmiany = v; break; }
+  }
+  const float mv = vZmiany > 0 ? (3.61f - vZmiany) * 1000.0f : 999.0f;
+  /* 60 mV to przy realnym zuzyciu kilka godzin. 204 mV, jak bylo, to
+     ponad doba stania na tej samej liczbie - i wtedy pudelko zdazylo
+     po cichu zjechac do trybu oszczedzania i zamilknac.               */
+  CHECK(mv <= 60.0f,
+        "od 3,61 V wskazanie rusza sie po %.0f mV (bylo 204 - stad zamrozone 5%%)", mv);
+}
+/* Kazdy punkt od 0 do 10 musi byc OSIAGALNY - inaczej wskazanie skacze
+   ponad nim i nie da sie zobaczyc, ze ogniwo schodzi.                */
+{
+  bool wszystkie = true; int brak = -1;
+  for (int pct = 0; pct <= 10; pct++) {
+    bool jest = false;
+    for (float v = 3.20f; v <= 3.75f; v += 0.001f)
+      if (battPercentFromCurve(v) == pct) { jest = true; break; }
+    if (!jest) { wszystkie = false; brak = pct; break; }
+  }
+  CHECK(wszystkie, "kazdy procent na dole skali jest osiagalny (brakuje %d%%)", brak);
+}
+
+/* DRUGA PRZYCZYNA: martwa strefa jest w PUNKTACH, a punkt na dole skali
+   znaczy kilkadziesiat miliwoltow. Trzy punkty nieczulosci to bylo tam
+   165 mV, czyli wskazanie nie moglo drgnac az do progu, przy ktorym
+   pudelko wylacza radio - i milklo z zamrozonymi 5% na ekranie.      */
+{
+  rtcBattPct = 5; rtcBattUp = 0;
+  int wynik = battSmooth(4);
+  CHECK(wynik == 4, "na dole skali spadek o JEDEN punkt jest widoczny (5%% -> %d%%)", wynik);
+
+  rtcBattPct = 3; rtcBattUp = 0;
+  CHECK(battSmooth(2) == 2, "i kazdy nastepny tez");
+
+  /* W srodku skali strefa ZOSTAJE - tam jeden punkt to 4 mV i szum ADC
+     naprawde przesuwalby wskazanie o kilka punktow co wybudzenie.    */
+  rtcBattPct = 50; rtcBattUp = 0;
+  CHECK(battSmooth(48) == 50, "w srodku skali szum dwoch punktow nadal jest tlumiony");
+  rtcBattPct = 50; rtcBattUp = 0;
+  CHECK(battSmooth(45) == 45, "ale prawdziwy spadek przechodzi tam nadal");
+}
+/* Regresja wprost na objaw: ogniwo schodzi z 3,61 V do 3,45 V - czyli
+   przez wieksza czesc tego, co zostalo - i wskazanie MUSI to pokazac.
+   Przed naprawa nie ruszalo sie ani o punkt na calym tym odcinku.   */
+{
+  rtcBattPct = (uint8_t)battPercentFromCurve(3.61f);
+  rtcBattUp = 0;
+  int start = rtcBattPct;
+  int po = battSmooth(battPercentFromCurve(3.45f));
+  CHECK(po < start, "zjazd 3,61 V -> 3,45 V widac na wskazaniu (%d%% -> %d%%)", start, po);
+}
+
 /* Progi dzwiekowe musza teraz wypadac wyraznie nad napieciem odciecia,
    inaczej ostrzezenie odzywaloby sie, gdy jest juz za pozno.         */
 {

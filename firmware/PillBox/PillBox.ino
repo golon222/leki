@@ -656,12 +656,28 @@ int readBatteryRaw() {
    --------------------------------------------------------------------- */
 /* @extract-begin */
 struct BattCurvePoint { float v; uint8_t pct; };
+/* DOL SKALI, po zgloszeniu Kuby z 2026-09-09 ("5% ma od 2 dni jakos").
+
+   ZERO TO TERAZ 3,35 V, czyli dokladnie BATT_SAFE_V - napiecie, przy
+   ktorym pudelko przestaje wlaczac radio. Bylo 3,27 V i to bylo mylace:
+   ogniwo ma tam jeszcze troche energii, ale pudelko juz jej NIE UZYJE,
+   bo nie gada i nie melduje dawek. Zero znaczy wiec "koniec uzytecznej
+   pracy", a nie "koniec chemii".
+
+   Odcinek 5%-0% mial dotad JEDEN krok dlugosci 340 mV, czyli 68 mV na
+   punkt przy 4 mV w srodku skali. UCZCIWA UWAGA: sam ten ksztalt NIE
+   zamrazal wskazania i sprawdzilem to mutacja - interpolacja liniowa
+   i tak dawala posrednie procenty co kilkadziesiat miliwoltow.
+   Prawdziwa przyczyna objawu byla martwa strefa filtru (patrz
+   battSmooth); te punkty dokladaja dokladnosci tam, gdzie zostalo
+   najmniej zapasu, i nic wiecej. Nie przypisuj im naprawy.           */
 static const BattCurvePoint BATT_CURVE[] = {
   {4.20f,100}, {4.15f, 95}, {4.11f, 90}, {4.08f, 85}, {4.02f, 80},
   {3.98f, 75}, {3.95f, 70}, {3.91f, 65}, {3.87f, 60}, {3.85f, 55},
   {3.84f, 50}, {3.82f, 45}, {3.80f, 40}, {3.79f, 35}, {3.77f, 30},
-  {3.75f, 25}, {3.73f, 20}, {3.71f, 15}, {3.69f, 10}, {3.61f,  5},
-  {3.27f,  0}
+  {3.75f, 25}, {3.73f, 20}, {3.71f, 15}, {3.69f, 10}, {3.66f,  8},
+  {3.63f,  6}, {3.61f,  5}, {3.56f,  4}, {3.50f,  3}, {3.44f,  2},
+  {3.38f,  1}, {3.35f,  0}
 };
 static const int BATT_CURVE_N = sizeof(BATT_CURVE) / sizeof(BATT_CURVE[0]);
 /* @extract-end */
@@ -798,8 +814,29 @@ int battSmooth(int raw) {
 
   /* Martwa strefa. Poprzednia wersja poprawiala wskazanie przy kazdej
      roznicy, wiec przy szumie rzedu kilku punktow procent drgal w gore
-     i w dol praktycznie co wybudzenie - dokladnie to, czego mial nie robic. */
-  if (diff > -BATT_DEADBAND && diff < BATT_DEADBAND) { rtcBattUp = 0; return prev; }
+     i w dol praktycznie co wybudzenie - dokladnie to, czego mial nie robic.
+
+     NA DOLE SKALI JEJ NIE MA, i to jest naprawa bledu zgloszonego przez
+     Kube 2026-09-09: "5% ma od 2 dni jakos, wiec dlugie to 5%".
+
+     Martwa strefa jest w PUNKTACH, a punkt znaczy co innego w kazdej
+     czesci krzywej. W srodku skali jeden punkt to 4 mV, wiec szum ADC
+     rzedu 10 mV naprawde przesuwalby wskazanie o kilka punktow i strefa
+     jest tam potrzebna. Ale ponizej 10% jeden punkt to 50-60 mV - trzy
+     punkty nieczulosci znaczyly tam 165 mV, czyli wskazanie fizycznie
+     NIE MOGLO sie ruszyc na calym odcinku od 3,61 V do progu, przy
+     ktorym pudelko wylacza radio (BATT_SAFE_V, 3,35 V).
+
+     Skutek byl gorszy niz sam zamrozony procent: pudelko po cichu
+     zjezdzalo do trybu oszczedzania i milklo, a w aplikacji zostawal
+     ostatni wyslany stan - te same 5% co dwa dni wczesniej. Wskazanie
+     nie tyle klamalo, co PRZESTAWALO BYC POMIAREM.
+
+     Na dole szum jest wiec mniejszym zlem niz cisza: przy 50-60 mV na
+     punkt te same 10 mV szumu to jedna piata punktu, czyli strefa
+     chroni tam przed czyms, czego nie ma.                            */
+  const int strefa = prev > BATT_CRIT_PCT ? BATT_DEADBAND : 1;
+  if (diff > -strefa && diff < strefa) { rtcBattUp = 0; return prev; }
 
   int out;
   if (diff < 0) {

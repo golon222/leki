@@ -9,7 +9,7 @@ zamiast 60 tys. tokenów wchodzi 2,5 tys. plus jeden obszar.
 
 | plik | o czym | ile |
 |---|---|---|
-| `decyzje/pudelko.md` | Pudełko — sen, alarm, NVS, WiFi | 37 |
+| `decyzje/pudelko.md` | Pudełko — sen, alarm, NVS, WiFi | 38 |
 | `decyzje/ota.md` | Aktualizacja przez WiFi i skan sieci | 8 |
 | `decyzje/telegram.md` | Powiadomienia Telegram | 5 |
 | `decyzje/aplikacja.md` | Aplikacja — ekrany i wygląd | 38 |
@@ -63,6 +63,7 @@ Od najnowszej. Kolumna „gdzie" mówi, który plik w `decyzje/` trzymać otwart
 
 | # | O co chodziło | gdzie |
 |---|---|---|
+| **D118** | Wskazanie baterii **zamarzało na 5% na całe dni**: martwa strefa filtru jest w punktach, a punkt na dole skali to 68 mV — trzy punkty znaczyły tam 204 mV nieczułości. Pudełko po cichu milkło z zamrożonym procentem na ekranie. Mutacja obaliła moją pierwszą diagnozę (firmware `1.56.0`) | `pudelko` |
 | **D117** | Progi baterii i czasy czuwania przeliczone na **realne 14 dni** — pięć stałych stało na nieistniejących 90 z D116, przez co „naładuj teraz" znaczyło 1,4 dnia zamiast tygodnia. Do tego pudełko **mierzy wreszcie, ile czuwa** (`awakeS`/`radioS`) — bez tego nie dało się rozstrzygnąć, czy prąd zjada spoczynek, czy czuwanie (firmware `1.55.0`) | `pudelko` |
 | **D116** | Prognoza „ile jeszcze do ładowania" liczona z **historii ładowań tego pudełka**, nie ze stałej z arkusza: pomiar dał 14 dni na pełnym ogniwie zamiast obiecywanych 90, a przy 58% ekran mówił 52 dni, gdy zostało osiem (aplikacja `2026-09-08.79`) | `aplikacja` |
 | **D115** | Certyfikatów nie wgrywamy — **decyzja Kuby**. Wygasają, a pudełko ma stać zaklejone latami: zabezpieczenie z terminem ważności unieruchomiłoby je w losowym dniu. Przyjęte ryzyko, nie dług | `pudelko` |
