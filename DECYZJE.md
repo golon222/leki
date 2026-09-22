@@ -63,7 +63,7 @@ Od najnowszej. Kolumna „gdzie" mówi, który plik w `decyzje/` trzymać otwart
 
 | # | O co chodziło | gdzie |
 |---|---|---|
-| **D120** | Dochodzi **drugie pudełko — tygodniowe, siedem klapek, „otwarte = wzięte”**. Jedna aplikacja obsługuje oba: `DEVICE_ID` wynika z zalogowanego konta, a `config/profil` decyduje, które ekrany powstają. Brak pola znaczy `warfin`, więc pudełko Kuby nie traci niczego (aplikacja `2026-09-22.81`) | `aplikacja` |
+| **D120** | Dochodzi **drugie pudełko — tygodniowe, siedem klapek, „otwarte = wzięte”**. Jedna aplikacja obsługuje oba: urządzenie wybiera się **w Ustawieniach** (jedno konto, dwa `deviceUid`), a `config/profil` decyduje, które ekrany powstają. Zmiana pudełka przeładowuje aplikację, żeby dane jednego nie zostały w pamięci pod datami drugiego (aplikacja `2026-09-22.81`) | `aplikacja` |
 | **D119** | Przy niskiej baterii pudełko **dopytuje co 15 minut, czy pojawił się kabel** — nic nie budzi go na wetknięcie wtyczki, więc podpięcie ładowarki przy 5% było widoczne w aplikacji dopiero po kilku godzinach (firmware `1.56.0`) | `pudelko` |
 | **D118** | Wskazanie baterii **zamarzało na 5% na całe dni**: martwa strefa filtru jest w punktach, a punkt na dole skali to 68 mV — trzy punkty znaczyły tam 204 mV nieczułości. Pudełko po cichu milkło z zamrożonym procentem na ekranie. Mutacja obaliła moją pierwszą diagnozę (firmware `1.56.0`) | `pudelko` |
 | **D117** | Progi baterii i czasy czuwania przeliczone na **realne 14 dni** — pięć stałych stało na nieistniejących 90 z D116, przez co „naładuj teraz" znaczyło 1,4 dnia zamiast tygodnia. Do tego pudełko **mierzy wreszcie, ile czuwa** (`awakeS`/`radioS`) — bez tego nie dało się rozstrzygnąć, czy prąd zjada spoczynek, czy czuwanie (firmware `1.55.0`) | `pudelko` |

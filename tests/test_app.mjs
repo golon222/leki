@@ -4762,24 +4762,25 @@ check(!document.getElementById("todayPill").innerHTML.includes("zazyta"),
  * ===================================================================== */
 head("Profil urzadzenia i wybor pudelka (D120)");
 
-check(A.deviceIdZEmaila("pillbox01@device.local") === "pillbox01",
-      "konto pierwszego pudelka daje pillbox01");
-check(A.deviceIdZEmaila("pillbox02@device.local") === "pillbox02",
-      "konto drugiego pudelka daje pillbox02");
-check(A.deviceIdZEmaila("PillBox02@Device.Local") === "pillbox02",
-      "wielkosc liter w adresie bez znaczenia");
+/* Nieznane, puste i podrobione wartosci MUSZA wrocic do pillbox01.
+   To jest domyslne urzadzenie - pudelko Kuby, ktore juz dziala.
+   `localStorage` na iOS w trybie prywatnym potrafi rzucic wyjatkiem
+   zamiast zwrocic null, a aplikacja nie ma prawa zostac bez urzadzenia:
+   DEVICE_ID wchodzi do sciezek wszystkich naslauchow i zapisow. */
+check(A.pudelkoZnane("pillbox01") === true,  "pillbox01 jest na liscie");
+check(A.pudelkoZnane("pillbox02") === true,  "pillbox02 jest na liscie");
+check(A.pudelkoZnane("pillbox99") === false, "nieznane id odrzucone");
+check(A.pudelkoZnane("")          === false, "puste id odrzucone");
+check(A.pudelkoZnane(null)        === false, "null odrzucony");
+check(A.pudelkoZnane("../admin")  === false, "sciezka w id odrzucona");
 
-/* Nieznany format MUSI wrocic do pillbox01. Tak aplikacja dzialala, zanim
-   pojawilo sie drugie urzadzenie - i tak samo widza ja testy, ktore
-   logowania nie przechodza wcale. Inaczej pudelko Kuby trafiloby w pustke. */
-check(A.deviceIdZEmaila("kuba@gmail.com")  === "pillbox01", "obcy adres wraca do pillbox01");
-check(A.deviceIdZEmaila("")                === "pillbox01", "pusty adres wraca do pillbox01");
-check(A.deviceIdZEmaila(null)              === "pillbox01", "brak adresu wraca do pillbox01");
-check(A.deviceIdZEmaila(undefined)         === "pillbox01", "undefined wraca do pillbox01");
-check(A.deviceIdZEmaila("@device.local")   === "pillbox01", "sama domena wraca do pillbox01");
-check(A.deviceIdZEmaila("a b@device.local")=== "pillbox01", "spacja w nazwie wraca do pillbox01");
-check(A.deviceIdZEmaila("pillbox01@device.local.evil.com") === "pillbox01",
-      "doklejona domena nie przechodzi - kotwica konca wzorca dziala");
+check(A.PUDELKA.length >= 2, "sa co najmniej dwa pudelka do wyboru");
+check(A.PUDELKA[0].id === "pillbox01",
+      "pierwsze na liscie to pudelko dzienne - ono jest domyslne przy braku wyboru");
+check(A.PUDELKA.every(p => p.id && p.nazwa && p.opis),
+      "kazde pudelko ma id, nazwe i opis");
+check(new Set(A.PUDELKA.map(p => p.id)).size === A.PUDELKA.length,
+      "identyfikatory pudelek sie nie powtarzaja");
 
 /* Brak pola `profil` znaczy "warfin" i to nie jest wygoda. Config Kuby
    nie ma tego pola, wiec kazda inna wartosc domyslna zabralaby mu INR

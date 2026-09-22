@@ -1058,6 +1058,15 @@ nav button .kropka-nav{position:absolute;top:6px;right:50%;margin-right:-16px;
 
   <!-- Ustawienia to SPIS TRESCI. Kazda pozycja przenosi na swoj ekran,
        zamiast rozwijac sie w miejscu (D43). -->
+  <!-- Wybór pudełka stoi NA SAMEJ GÓRZE, bo zmienia wszystko pod spodem:
+       kalendarz, ustawienia, diagnostykę. Pozycja niżej sugerowałaby, że to
+       drobiazg obok innych, a to jest przełącznik całego ekranu. -->
+  <button class="kafel" onclick="showTab('pud')">
+    <span class="ikonka" style="--ikol:var(--acc)"><svg viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="12" rx="2.2"/><path d="M3 11h18"/><path d="M9 7V5.5h6V7"/></svg></span>
+    <span class="kop">Pudełko
+      <div class="dim2" id="kafelPud">—</div></span></button>
+
   <button class="kafel" onclick="showTab('lek')">
     <span class="ikonka" style="--ikol:var(--pill)"><svg viewBox="0 0 24 24" fill="none"
       stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="2.6" y="8.4" width="18.8" height="7.2" rx="3.6"
@@ -1190,6 +1199,15 @@ nav button .kropka-nav{position:absolute;top:6px;right:50%;margin-right:-16px;
       <div id="exList" style="margin-top:10px"></div>
     </div>
   </details>
+</section>
+
+<section id="tab-pud" class="hide">
+  <div class="card">
+    <label style="margin-top:0">Które pudełko oglądasz</label>
+    <div class="dim2" style="margin:-4px 0 10px">Wybór dotyczy tego telefonu.
+      Zmiana przeładowuje aplikację, żeby nic z poprzedniego urządzenia nie zostało na ekranie.</div>
+    <div id="pudList"></div>
+  </div>
 </section>
 
 <section id="tab-sinr" class="hide">
@@ -1898,20 +1916,49 @@ const firebaseConfig = {
   messagingSenderId: "122871594657",
   appId:             "1:122871594657:web:b35f059bf46c50a0bb7ae0"
 };
-/* Identyfikator pudełka. NIE jest stałą, bo jedno konto to jedno urządzenie,
-   a aplikacja obsługuje dwa: dzienne (Warfin) i tygodniowe. Wynika wprost
-   z zalogowanego konta — `pillbox01@device.local` daje `pillbox01`.
+/* ───────── KTÓRE PUDEŁKO OGLĄDAMY (D120) ─────────
+   Jedno konto, dwa urządzenia. Wybór siedzi w Ustawieniach, a nie w koncie,
+   bo to jest wybór WIDOKU — te same oczy patrzą raz na jedno pudełko, raz
+   na drugie. Reguły bazy już to dopuszczają: `owner` jest wspólny, a każde
+   pudełko ma własne `deviceUid`, którym zapisuje wyłącznie do siebie.
 
-   Format nierozpoznany zostawia `pillbox01`. Tak aplikacja działała, zanim
-   pojawiło się drugie urządzenie, i tak samo zachowują się testy, które
-   logowania nie przechodzą wcale. Dzięki temu dołożenie drugiego pudełka
-   nie zmienia niczego dla pierwszego.                                    */
-let DEVICE_ID = "pillbox01";
+   Trzymamy to w `localStorage`, nie w bazie, bo to ustawienie TEGO telefonu.
+   Zapisane w bazie przełączałoby ekran na wszystkich urządzeniach naraz.
 
-function deviceIdZEmaila(email){
-  const m = String(email || "").match(/^([a-z0-9_-]{1,32})@device\.local$/i);
-  return m ? m[1].toLowerCase() : "pillbox01";
+   Każdy odczyt jest w try/catch i każdy nieznany wynik wraca do `pillbox01`.
+   Na iOS w trybie prywatnym `localStorage` potrafi rzucić wyjątkiem zamiast
+   zwrócić null, a wtedy aplikacja nie ma prawa zostać bez urządzenia —
+   bo `DEVICE_ID` wchodzi do ścieżek wszystkich nasłuchów i zapisów.      */
+const PUDELKA = [
+  { id:"pillbox01", nazwa:"Dzienne",     opis:"Warfin, jedna komora, INR"     },
+  { id:"pillbox02", nazwa:"Tygodniowe",  opis:"siedem klapek, otwarte = wzięte" }
+];
+const PUDELKO_KLUCZ = "pillbox.device";
+
+function pudelkoZnane(id){ return PUDELKA.some(p => p.id === id); }
+
+function wybranePudelko(){
+  try {
+    const v = localStorage.getItem(PUDELKO_KLUCZ);
+    return pudelkoZnane(v) ? v : PUDELKA[0].id;
+  } catch { return PUDELKA[0].id; }
 }
+
+let DEVICE_ID = wybranePudelko();
+
+/* Zmiana pudełka PRZEŁADOWUJE aplikację i to jest celowe.
+   `boot()` rejestruje nasłuchy na `devices/<id>/...` i trzyma w pamięci
+   dawki, zdarzenia oraz kolejkę zapisów tego urządzenia. Podmiana samego
+   `DEVICE_ID` w locie zostawiłaby stare nasłuchy żywe, a w `doses` dane
+   jednego pudełka pod datami drugiego — czyli najgorszy możliwy błąd
+   w aplikacji, która pilnuje leków. Przeładowanie kosztuje ułamek sekundy
+   i gwarantuje, że nic ze starego urządzenia nie zostaje.                */
+window.wybierzPudelko = (id) => {
+  if (!pudelkoZnane(id) || id === DEVICE_ID) return;
+  try { localStorage.setItem(PUDELKO_KLUCZ, id); }
+  catch { toast("Nie udało się zapamiętać wyboru"); return; }
+  location.reload();
+};
 
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
@@ -2383,10 +2430,6 @@ onAuthStateChanged(auth, u => {
   if (!u){ uid=null; document.getElementById("login").classList.remove("hide");
            document.getElementById("app").classList.add("hide"); return; }
   uid = u.uid;
-  /* Konto wskazuje urządzenie. Ustawiamy PRZED `boot()`, bo boot rejestruje
-     nasłuchy na `devices/<id>/...` — po jego starcie zmiana byłaby spóźniona
-     i aplikacja słuchałaby cudzego pudełka.                              */
-  DEVICE_ID = deviceIdZEmaila(u.email);
   document.getElementById("login").classList.add("hide");
   document.getElementById("app").classList.remove("hide");
   boot();
@@ -5512,8 +5555,28 @@ function renderKafelki(){
   }
 }
 
+/* Lista pudełek do wyboru. Aktualnie oglądane NIE jest przyciskiem — kliknięcie
+   w to, co już widzisz, przeładowałoby aplikację bez żadnego powodu. */
+function renderPudelka(){
+  const lista = document.getElementById("pudList");
+  if (lista) lista.innerHTML = PUDELKA.map(p => {
+    const teraz = p.id === DEVICE_ID;
+    return `<button class="kafel"${teraz ? ` style="border-color:var(--ok)"`
+              : ` onclick="wybierzPudelko('${esc(p.id)}')"`}>
+      <span class="ikonka" style="--ikol:var(${teraz ? "--ok" : "--dim"})"><svg viewBox="0 0 24 24" fill="none"
+        stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="12" rx="2.2"/><path d="M3 11h18"/><path d="M9 7V5.5h6V7"/></svg></span>
+      <span class="kop">${esc(p.nazwa)}${teraz ? " — oglądane teraz" : ""}
+        <div class="dim2">${esc(p.opis)}</div></span></button>`;
+  }).join("");
+
+  const kafel = document.getElementById("kafelPud");
+  if (kafel) kafel.textContent =
+    PUDELKA.find(p => p.id === DEVICE_ID)?.nazwa || DEVICE_ID;
+}
+
 function renderSettings(){
   renderKafelki();
+  renderPudelka();
   renderPlanList();
   document.getElementById("slotEditor").innerHTML = cfg.schedule.map((h,i)=>
     `<div class="row" style="margin-top:8px">
@@ -8239,6 +8302,7 @@ const EKRANY = {
   inr:  { tytul:"Pomiary INR",         nav:"inr" },
   ana:  { tytul:"Analiza",             nav:"ana" },
   set:  { tytul:"Ustawienia",          nav:"set" },
+  pud:  { tytul:"Pudełko",             nav:"set", wraca:"set" },
   lek:  { tytul:"Lek i dawkowanie",    nav:"set", wraca:"set" },
   sinr: { tytul:"INR",                 nav:"set", wraca:"set" },
   wifi: { tytul:"Sieć WiFi pudełka",   nav:"set", wraca:"set" },
@@ -8272,6 +8336,7 @@ window.showTab = t => {
   }
 
   if (t === "ana")  renderAnalysis();
+  if (t === "pud")  renderPudelka();
   if (t === "set")  renderSettings();
   if (t === "lek")  renderSettings();
   if (t === "sinr") renderSettings();
