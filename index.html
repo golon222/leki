@@ -1898,12 +1898,25 @@ const firebaseConfig = {
   messagingSenderId: "122871594657",
   appId:             "1:122871594657:web:b35f059bf46c50a0bb7ae0"
 };
-const DEVICE_ID = "pillbox01";
+/* Identyfikator pudełka. NIE jest stałą, bo jedno konto to jedno urządzenie,
+   a aplikacja obsługuje dwa: dzienne (Warfin) i tygodniowe. Wynika wprost
+   z zalogowanego konta — `pillbox01@device.local` daje `pillbox01`.
+
+   Format nierozpoznany zostawia `pillbox01`. Tak aplikacja działała, zanim
+   pojawiło się drugie urządzenie, i tak samo zachowują się testy, które
+   logowania nie przechodzą wcale. Dzięki temu dołożenie drugiego pudełka
+   nie zmienia niczego dla pierwszego.                                    */
+let DEVICE_ID = "pillbox01";
+
+function deviceIdZEmaila(email){
+  const m = String(email || "").match(/^([a-z0-9_-]{1,32})@device\.local$/i);
+  return m ? m[1].toLowerCase() : "pillbox01";
+}
 
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-09-08.80";
+const APP_VERSION = "2026-09-22.81";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -1925,6 +1938,21 @@ let uid = null;
 let cfg = { schedule:["08:00"], tz:"Europe/Warsaw", tzOffsetMin:120,
             trackingSince:"2026-08-01", defaultDose:1,
             drugName:"Warfin", drugStrength:5, inrMin:2.0, inrMax:3.0 };
+
+/* ───────── PROFIL URZĄDZENIA (D120) ─────────
+   Decyduje, co aplikacja w ogóle buduje na ekranie.
+
+     "warfin"   pudełko dzienne — INR, raport dla lekarza, zapas tabletek,
+                zmienne dawki, jedna komora
+     "tydzien"  pudełko tygodniowe — siedem klapek, otwarte = wzięte,
+                bez INR, bez raportu, bez liczenia tabletek
+
+   BRAK POLA ZNACZY "warfin" i to nie jest wygoda, tylko warunek
+   bezpieczeństwa: pudełko Kuby ma w bazie config bez tego pola, więc każda
+   inna wartość domyślna zabrałaby mu połowę ekranów przy pierwszym
+   wczytaniu nowej wersji aplikacji — łącznie z INR, czyli danymi, których
+   nie da się odtworzyć z pamięci pudełka.                                */
+const profilTydzien = () => cfg.profil === "tydzien";
 let doses = {};      // { "2026-07-31": { "0": {dose, status, source, ts, note} } }
 let inr   = {};      // { "2026-07-20": { value, ts, note } }
 let events = [];
@@ -2355,6 +2383,10 @@ onAuthStateChanged(auth, u => {
   if (!u){ uid=null; document.getElementById("login").classList.remove("hide");
            document.getElementById("app").classList.add("hide"); return; }
   uid = u.uid;
+  /* Konto wskazuje urządzenie. Ustawiamy PRZED `boot()`, bo boot rejestruje
+     nasłuchy na `devices/<id>/...` — po jego starcie zmiana byłaby spóźniona
+     i aplikacja słuchałaby cudzego pudełka.                              */
+  DEVICE_ID = deviceIdZEmaila(u.email);
   document.getElementById("login").classList.add("hide");
   document.getElementById("app").classList.remove("hide");
   boot();

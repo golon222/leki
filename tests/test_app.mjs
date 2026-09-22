@@ -21,7 +21,11 @@ const DEF_CFG = { schedule:["08:00"], tz:"Europe/Warsaw",
   pillsCountedUntil:undefined, pillsBase:undefined, pillsBaseFrom:undefined,
   /* Bez tych dwoch schemat tygodniowy z jednego testu zostawalby w cfg na
      wszystkie nastepne - `__setState` DOKLADA pola, a nie podmienia calosc. */
-  doseWeek:undefined, doseDays:undefined, wifiNowa:undefined, wifiCmd:undefined };
+  doseWeek:undefined, doseDays:undefined, wifiNowa:undefined, wifiCmd:undefined,
+  /* Z tego samego powodu co wyzej: bez `profil:undefined` test, ktory ustawi
+     profil tygodniowy, zostawialby go w cfg na wszystkie nastepne - i polowa
+     zestawu sprawdzalaby nagle drugie pudelko zamiast pierwszego (D120). */
+  profil:undefined };
 const D = (o={}) => A.__setState({ doses:{}, inr:{}, events:[], ...o,
                                    cfg:{ ...DEF_CFG, ...(o.cfg||{}) } });
 
@@ -4748,6 +4752,51 @@ D({ doses:{} });
 A.renderToday();
 check(!document.getElementById("todayPill").innerHTML.includes("zazyta"),
       "przed wzieciem tabletka stoi");
+
+/* =====================================================================
+ *  PROFIL URZADZENIA — jedna aplikacja, dwa pudelka (D120)
+ *
+ *  Obie funkcje maja jedno zadanie: NIE zmienic niczego dla pudelka,
+ *  ktore juz dziala. Dlatego wiekszosc testow sprawdza wlasnie to -
+ *  co sie dzieje, gdy wejscie jest nieznane albo puste.
+ * ===================================================================== */
+head("Profil urzadzenia i wybor pudelka (D120)");
+
+check(A.deviceIdZEmaila("pillbox01@device.local") === "pillbox01",
+      "konto pierwszego pudelka daje pillbox01");
+check(A.deviceIdZEmaila("pillbox02@device.local") === "pillbox02",
+      "konto drugiego pudelka daje pillbox02");
+check(A.deviceIdZEmaila("PillBox02@Device.Local") === "pillbox02",
+      "wielkosc liter w adresie bez znaczenia");
+
+/* Nieznany format MUSI wrocic do pillbox01. Tak aplikacja dzialala, zanim
+   pojawilo sie drugie urzadzenie - i tak samo widza ja testy, ktore
+   logowania nie przechodza wcale. Inaczej pudelko Kuby trafiloby w pustke. */
+check(A.deviceIdZEmaila("kuba@gmail.com")  === "pillbox01", "obcy adres wraca do pillbox01");
+check(A.deviceIdZEmaila("")                === "pillbox01", "pusty adres wraca do pillbox01");
+check(A.deviceIdZEmaila(null)              === "pillbox01", "brak adresu wraca do pillbox01");
+check(A.deviceIdZEmaila(undefined)         === "pillbox01", "undefined wraca do pillbox01");
+check(A.deviceIdZEmaila("@device.local")   === "pillbox01", "sama domena wraca do pillbox01");
+check(A.deviceIdZEmaila("a b@device.local")=== "pillbox01", "spacja w nazwie wraca do pillbox01");
+check(A.deviceIdZEmaila("pillbox01@device.local.evil.com") === "pillbox01",
+      "doklejona domena nie przechodzi - kotwica konca wzorca dziala");
+
+/* Brak pola `profil` znaczy "warfin" i to nie jest wygoda. Config Kuby
+   nie ma tego pola, wiec kazda inna wartosc domyslna zabralaby mu INR
+   i raport dla lekarza przy pierwszym wczytaniu nowej wersji. */
+D({});
+check(A.profilTydzien() === false, "brak pola profil to pudelko dzienne");
+D({ cfg:{ profil:"warfin" } });
+check(A.profilTydzien() === false, "profil warfin to pudelko dzienne");
+D({ cfg:{ profil:"tydzien" } });
+check(A.profilTydzien() === true,  "profil tydzien to pudelko tygodniowe");
+D({ cfg:{ profil:"Tydzien" } });
+check(A.profilTydzien() === false, "wielka litera to nie jest profil tygodniowy");
+D({ cfg:{ profil:"cokolwiek" } });
+check(A.profilTydzien() === false, "nieznana wartosc profilu to pudelko dzienne");
+D({ cfg:{ profil:null } });
+check(A.profilTydzien() === false, "null w profilu to pudelko dzienne");
+D({});
 
 head("Zgodnosc wersji aplikacji");
 check(/const APP_VERSION = "([\d.\-]+)"/.test(html), "index.html deklaruje wersje");

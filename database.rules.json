@@ -134,6 +134,9 @@
           "inrMax": {
             ".validate": "newData.isNumber() && newData.val() >= 0.5 && newData.val() <= 12"
           },
+          "profil": {
+            ".validate": "newData.isString() && (newData.val() === 'warfin' || newData.val() === 'tydzien')"
+          },
           "$other": {
             ".validate": true
           },
