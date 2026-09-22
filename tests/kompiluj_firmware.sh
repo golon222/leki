@@ -24,6 +24,7 @@ ROOT="$(pwd)"
 # zeby plik do aktualizacji przez WiFi powstal z DOKLADNIE tymi ustawieniami
 # plytki co reszta skryptu - jedno zrodlo prawdy zamiast drugiej kopii.
 OTA_OUT="${OTA_OUT:-}"
+OTA_WEEK_OUT="${OTA_WEEK_OUT:-}"      # to samo dla pudelka tygodniowego
 
 ACLI_DIR="${ACLI_DIR:-$HOME/.pillbox-arduino}"
 ACLI="$ACLI_DIR/arduino-cli"
@@ -56,7 +57,8 @@ FQBN="esp32:esp32:XIAO_ESP32C3:PartitionScheme=$PART,CDCOnBoot=default"
 # czyli mowil Kubie co innego, niz ten skrypt buduje i sprawdza. Szkic
 # diagnostyczny wgrywa sie recznie, wiec to jego naglowek jest instrukcja.
 for _szkic in "$ROOT/firmware/PillBox/PillBox.ino" \
-              "$ROOT/firmware/PillBoxTest/PillBoxTest.ino"; do
+              "$ROOT/firmware/PillBoxTest/PillBoxTest.ino" \
+              "$ROOT/firmware/PillBoxWeek/PillBoxWeek.ino"; do
   if ! grep -qF "$PART_OPIS" "$_szkic"; then
     echo "BLAD: naglowek $(basename "$_szkic") nie zapowiada podzialu '$PART_OPIS'."
     echo "      Kompilowanie na innym podziale mierzy nie to urzadzenie."
@@ -218,6 +220,13 @@ zbuduj pillboxtestcfg "$ROOT/firmware/PillBoxTest/PillBoxTest.ino" "$ROOT/firmwa
        "PillBoxTest.ino  (szkic diagnostyczny, Z config.h - czesc Firebase)" \
        "$ROOT/firmware/PillBox"
 
+# --- Pudelko TYGODNIOWE ----------------------------------------------
+# Osobne urzadzenie, osobny szkic, WLASNY config.h. Ma byc budowane tym
+# samym toolchainem i na tych samych ustawieniach plytki co pudelko
+# dzienne: to ta sama plytka, tylko z siedmioma klapkami na drabince.
+zbuduj pillboxweek "$ROOT/firmware/PillBoxWeek/PillBoxWeek.ino" "$ROOT/firmware/PillBoxWeek" \
+       "PillBoxWeek.ino  (pudelko tygodniowe, rdzen $CORE_VER, $PART_OPIS)"
+
 # ── 6. Kompilacja przez PRAWDZIWA sciezke .ino ────────────────────────
 # Kompilacja jako .cpp powyzej odpowiada na pytanie "czy kod sie buduje".
 # NIE odpowiada na pytanie "czy Kuba to wgra" - a to dwie rozne rzeczy.
@@ -269,6 +278,8 @@ zbudujIno pbtino "$ROOT/firmware/PillBoxTest/PillBoxTest.ino" "$ROOT/firmware/Pi
        "PillBoxTest.ino  Z PROTOTYPAMI (bez config.h)" ""
 zbudujIno pbtinocfg "$ROOT/firmware/PillBoxTest/PillBoxTest.ino" "$ROOT/firmware/PillBoxTest" \
        "PillBoxTest.ino  Z PROTOTYPAMI (z config.h)" "" "$ROOT/firmware/PillBox"
+zbudujIno pbwino "$ROOT/firmware/PillBoxWeek/PillBoxWeek.ino" "$ROOT/firmware/PillBoxWeek" \
+       "PillBoxWeek.ino  Z PROTOTYPAMI, tak jak wgrywa Arduino IDE" "$OTA_WEEK_OUT"
 
 echo
 echo "✔  Firmware kompiluje sie toolchainem Arduino (rdzen $CORE_VER)."

@@ -9,12 +9,12 @@ zamiast 60 tys. tokenów wchodzi 2,5 tys. plus jeden obszar.
 
 | plik | o czym | ile |
 |---|---|---|
-| `decyzje/pudelko.md` | Pudełko — sen, alarm, NVS, WiFi | 39 |
+| `decyzje/pudelko.md` | Pudełko — sen, alarm, NVS, WiFi | 40 |
 | `decyzje/ota.md` | Aktualizacja przez WiFi i skan sieci | 8 |
 | `decyzje/telegram.md` | Powiadomienia Telegram | 5 |
 | `decyzje/aplikacja.md` | Aplikacja — ekrany i wygląd | 39 |
 | `decyzje/dane.md` | Dane, kolejka, dawkowanie | 18 |
-| `decyzje/testy.md` | Testy, audyt, kompilacja | 13 |
+| `decyzje/testy.md` | Testy, audyt, kompilacja | 14 |
 | `decyzje/bugi.md` | Błędy **zamknięte** — historia objawów | 25 |
 | `decyzje/cofniete.md` | Cofnięte — **nie próbować drugi raz** | 5 |
 
@@ -63,6 +63,8 @@ Od najnowszej. Kolumna „gdzie" mówi, który plik w `decyzje/` trzymać otwart
 
 | # | O co chodziło | gdzie |
 |---|---|---|
+| **D122** | Generator prototypów (`proto_arduino.py`) robił śmieć z funkcji jednolinijkowej zawierającej pętlę — brał **ostatnią** klamrę w linii zamiast pierwszej po nazwie. `PillBox.ino` takiej funkcji nie ma, więc wzorzec nie trafił ani razu; wyszło przy pierwszym nowym szkicu | `testy` |
+| **D121** | Pudełko tygodniowe dostaje **własny szkic** (`PillBoxWeek.ino`), nie tryb w `PillBox.ino`: siedem klapek na jednym pinie, zasada „otwarte = wzięte”, odczyt ADC jako pierwsza instrukcja `setup()`, czekanie na zamknięcie klapki przed snem (wybudzanie reaguje na poziom, więc otwarta klapka budziłaby w kółko), doba domykana z jej **końcem** i numer komory w polu `slot`, bo `events` ma `$other: false` | `pudelko` |
 | **D120** | Dochodzi **drugie pudełko — tygodniowe, siedem klapek, „otwarte = wzięte”**. Jedna aplikacja obsługuje oba: urządzenie wybiera się **w Ustawieniach** (jedno konto, dwa `deviceUid`), a `config/profil` decyduje, które ekrany powstają. Zmiana pudełka przeładowuje aplikację, żeby dane jednego nie zostały w pamięci pod datami drugiego (aplikacja `2026-09-22.81`) | `aplikacja` |
 | **D119** | Przy niskiej baterii pudełko **dopytuje co 15 minut, czy pojawił się kabel** — nic nie budzi go na wetknięcie wtyczki, więc podpięcie ładowarki przy 5% było widoczne w aplikacji dopiero po kilku godzinach (firmware `1.56.0`) | `pudelko` |
 | **D118** | Wskazanie baterii **zamarzało na 5% na całe dni**: martwa strefa filtru jest w punktach, a punkt na dole skali to 68 mV — trzy punkty znaczyły tam 204 mV nieczułości. Pudełko po cichu milkło z zamrożonym procentem na ekranie. Mutacja obaliła moją pierwszą diagnozę (firmware `1.56.0`) | `pudelko` |

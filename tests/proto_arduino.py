@@ -65,7 +65,12 @@ def przetworz(zrodlo, nazwa_pliku="szkic.ino"):
     for i, l in enumerate(linie):
         m = DEF.match(l)
         if m and m.group(1) not in NIE_FUNKCJA:
-            definicje.append((i, l[:l.rindex("{")].rstrip()))
+            # PIERWSZA klamra po nazwie funkcji, nie ostatnia w linii.
+            # Przy `void beepAlarm() { for (...) { ... } }` rindex("{")
+            # trafial w klamre PETLI, a prototypem stawalo sie
+            # "void beepAlarm() { for (int i=0;i<3;i++);" - czyli smiec,
+            # ktory wywracal kompilacje dopiero u Kuby, w Arduino IDE.
+            definicje.append((i, l[:l.index("{", m.end(1))].rstrip()))
 
     if not definicje:
         return "#include <Arduino.h>\n" + zrodlo

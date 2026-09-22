@@ -38,8 +38,8 @@ bash tests/run_all.sh
 ```
 
 Musi przejść przed zmianą i po zmianie. Stan wyjściowy:
-**634 + 52 firmware, 1264 (×6 pór doby) + 92 + 52 aplikacja, 48 zgodności,
-133 reguły bazy, 363 kontrole audytu, 30 kontroli statycznych — 0 błędów.**
+**642 + 52 firmware, 1312 (×6 pór doby) + 92 + 52 aplikacja, 48 zgodności,
+136 reguł bazy, 375 kontroli audytu, 30 kontroli statycznych — 0 błędów.**
 
 **Runner jest cichy przy sukcesie i głośny przy błędzie** (D66). Udany przebieg
 to 12 linii — **i te 12 linii TO JEST potwierdzenie, nie jego skrót.** Nie
@@ -77,7 +77,11 @@ odrzuca **cały** wpis kodem 400, a `trwaleOdrzucony(400)` go wtedy **kasuje**
 
 ## Twarde ograniczenia — NIE ŁAMAĆ
 
-1. **Firmware to dokładnie dwa pliki**: `PillBox.ino` + `config.h`. Scalanie odrzucone.
+1. **Firmware pudełka dziennego to dokładnie dwa pliki**: `PillBox.ino` + `config.h`.
+   Scalanie odrzucone. Pudełko **tygodniowe** ma własną parę plików w
+   `firmware/PillBoxWeek/` — i to też jest decyzja, nie przypadek (D121):
+   wspólny szkic z rozgałęzieniem znaczyłby, że każda zmiana w pudełku
+   dziewczyny dotyka kodu pilnującego Warfinu.
 2. **Żadnych zmian sprzętowych.** Płytka jest zlutowana i docelowo zaklejona.
 3. **`config.h` JEST w repo — celowo, i tak ma zostać.**
    Trzyma wyłącznie placeholder `TUTAJ_WPISZ_HASLO`, nigdy prawdziwego hasła.
@@ -218,9 +222,10 @@ zgłasza tylko uwagę, żeby zmiana przypadkowa nie wyglądała jak świadoma.
 ## Struktura
 
 ```
-firmware/PillBox/PillBox.ino     główny kod (~6050 linii)
+firmware/PillBox/PillBox.ino     główny kod pudełka DZIENNEGO (~6050 linii)
 firmware/PillBox/config.h        ustawienia (w repo, bez hasła)
 firmware/PillBoxTest/            osobny szkic diagnostyczny
+firmware/PillBoxWeek/            pudełko TYGODNIOWE - siedem klapek (D121)
 index.html                       cała PWA w jednym pliku
 sw.js, tabletka.webp             service worker + tabletka na ekranie głównym
 tabletka.gif                     zapas dla przeglądarki bez WEBP (D72)
@@ -254,8 +259,8 @@ na `esp32:esp32@3.3.11` i z **ustawieniami płytki z nagłówka `PillBox.ino`**.
 Nie jest częścią `run_all.sh`: wymaga sieci i ~500 MB toolchainu.
 **Uruchom to po każdej zmianie w firmware.**
 
-Stan: `PillBox.ino` **64% flasha** (1 265 085 B z 1,875 MB), `PillBoxTest.ino` 20%
-bez `config.h` i **57%** z nim. Szkic diagnostyczny budujemy w OBU
+Stan: `PillBox.ino` **64% flasha** (1 265 417 B z 1,875 MB), `PillBoxWeek.ino` **58%**,
+`PillBoxTest.ino` 20% bez `config.h` i **57%** z nim. Szkic diagnostyczny budujemy w OBU
 konfiguracjach — bez tego drugiego przebiegu 722 kB jego kodu (logowanie do
 bazy, zapis wyniku) nie było kompilowane ani razu (D103).
 Zapas ~700 kB.
