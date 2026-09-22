@@ -46,6 +46,38 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # CZY JEST Z CZEGO ZROBIC INNA BINARKE
+      #
+      # Guard "binarka bez zmian" stal nizej i NIE MIAL JAK sie odezwac
+      # ani razu - a to, ze nie ma, zobaczyl Kuba: aplikacja meldowala
+      # "jest nowa wersja" o tej samej wersji, a pudelko sciagalo 1,2 MB
+      # przez WiFi z baterii, zeby zrestartowac sie na to samo.
+      #
+      # ZMIERZONE (D123): binarka NIE MOZE byc powtarzalna. Rdzen ESP32
+      # wkompilowuje __DATE__ i __TIME__ ("Compile Date/Time" w Esp.cpp),
+      # a naglowek obrazu niesie `app_elf_sha256`. Dwie kompilacje tego
+      # samego zrodla w rozne dni roznia sie zawsze. D106 widziala same
+      # bajty odcisku ELF i na nich poprzestala - stad diagnoza "staly
+      # katalog budowania wystarczy". Nie wystarcza.
+      #
+      # Wiec nie pytamy o binarke, tylko o ZRODLO. Odcisk liczy
+      # tests/zrodlo_firmware.sh i on jest jedynym zrodlem prawdy -
+      # ten sam skrypt policzy go czlowiekowi.
+      - name: Czy zrodlo firmware sie zmienilo
+        run: |
+          set -e
+          TERAZ=$(bash tests/zrodlo_firmware.sh)
+          POPRZEDNI=$(python3 -c "import json;print(json.load(open('firmware/PillBox.json')).get('zrodlo',''))" 2>/dev/null || true)
+          echo "zrodlo teraz:      $TERAZ"
+          echo "zrodlo opublikowane: ${POPRZEDNI:-(brak)}"
+          if [ -n "$POPRZEDNI" ] && [ "$TERAZ" = "$POPRZEDNI" ]; then
+            echo "POMIN=1" >> "$GITHUB_ENV"
+            echo "-> zrodlo pudelka dziennego bez zmian, nie ma czego publikowac"
+          else
+            echo "-> zrodlo inne (albo nieznane) - binarka pojdzie na Pages"
+          fi
+          echo "ZRODLO=$TERAZ" >> "$GITHUB_ENV"
+
       # Toolchain wazy ~500 MB, wiec trzymamy go miedzy uruchomieniami.
       # Klucz zawiera wersje rdzenia - jej podbicie ma unieważnić cache.
       - name: Cache toolchainu Arduino
@@ -100,12 +132,17 @@ jobs:
             "md5": "$MD5",
             "rozmiar": $ROZMIAR,
             "zbudowano": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-            "commit": "${GITHUB_SHA}"
+            "commit": "${GITHUB_SHA}",
+            "zrodlo": "${ZRODLO}"
           }
           EOF
           echo "wersja $WERSJA, $ROZMIAR B, md5 $MD5"
 
+      # Kompilacja wyzej idzie ZAWSZE - to jedyne automatyczne sprawdzenie,
+      # czy firmware sie buduje, i obejmuje takze pudelko tygodniowe.
+      # Warunek wisi dopiero tutaj, na publikacji.
       - name: Publikacja
+        if: env.POMIN != '1'
         run: |
           set -e
           git config user.name  "github-actions[bot]"
@@ -129,11 +166,11 @@ jobs:
           cp "${{ runner.temp }}/ota/PillBox.bin"  firmware/PillBox.bin
           cp "${{ runner.temp }}/ota/PillBox.json" firmware/PillBox.json
 
+          # Tu NIE MA juz guarda porownujacego pliki - stal tu i nie dzialal,
+          # bo PillBox.json trzyma date budowania, wiec zmienial sie co
+          # przebieg niezaleznie od binarki. O tym, czy w ogole tu wchodzimy,
+          # decyduje odcisk zrodla policzony na samym poczatku.
           git add firmware/PillBox.bin firmware/PillBox.json
-          if git diff --cached --quiet; then
-            echo "binarka bez zmian - nie ma czego publikowac"
-            exit 0
-          fi
           # [skip ci] zamyka petle: ten commit dotyka firmware/, wiec bez
           # tego wyzwolilby ten sam workflow jeszcze raz, i tak w kolko.
           git commit -m "Firmware $WERSJA do aktualizacji przez WiFi [skip ci]"
