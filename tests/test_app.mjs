@@ -4942,6 +4942,53 @@ head("Ustawienia wracaja z kopii");
   A.__resetDb();
 }
 
+/* ═══════════ LISTA PUDELEK NIE MOZE KLAMAC (D124, druga runda) ═══════════
+
+   Zgloszenie Kuby z telefonu dziewczyny: "pokazuje sie jako pillbox01
+   i nie ma dostepu do tygodniowego, a ma do dziennego". Nie miala dostepu
+   do ZADNEGO - ale kafelek AKTUALNEGO pudelka rysowal sie na zielono bez
+   sprawdzania uprawnien, bo warunek `teraz` wygrywal z `moze`. Wygladalo
+   to na dostep do cudzych danych o leku, czyli na najgorsza mozliwa
+   usterke w tej aplikacji.                                             */
+head("Lista pudelek mowi prawde o dostepie");
+{
+  A.__setPudelko("pillbox01");
+
+  /*  Konto bez dostepu do NICZEGO - dokladnie ten przypadek. */
+  A.__setWidoczne([]);
+  A.renderPudelka();
+  let html = document.getElementById("pudList").innerHTML;
+  check((html.match(/to konto nie ma dostępu/g) || []).length === 2,
+        "oba pudelka opisane jako niedostepne");
+  check(!html.includes("oglądane teraz"),
+        "zadne nie udaje ogladanego, skoro nie ma do niego dostepu");
+  check((html.match(/disabled/g) || []).length === 2, "oba kafelki nieklikalne");
+  check(document.getElementById("pudStan").innerHTML.includes("nie ma dostępu do żadnego"),
+        "ekran mowi wprost, ze to konto nic nie widzi");
+  check(document.getElementById("pudStan").innerHTML.includes("testuid"),
+        "i pokazuje identyfikator konta - to on idzie do `owners` w bazie");
+
+  /*  Konto z dostepem tylko do tygodniowego: dzienne wygaszone,
+      tygodniowe klikalne.                                            */
+  A.__setWidoczne(["pillbox02"]);
+  A.renderPudelka();
+  html = document.getElementById("pudList").innerHTML;
+  check((html.match(/to konto nie ma dostępu/g) || []).length === 1,
+        "tylko jedno pudelko niedostepne");
+  check(html.includes("wybierzPudelko('pillbox02')"), "dostepne da sie wybrac");
+  check(!html.includes("oglądane teraz"),
+        "ogladane pudelko, do ktorego nie ma dostepu, nie jest 'ogladane'");
+
+  /*  Normalny przypadek - konto widzi oba. */
+  A.__setWidoczne(["pillbox01","pillbox02"]);
+  A.renderPudelka();
+  html = document.getElementById("pudList").innerHTML;
+  check(!html.includes("to konto nie ma dostępu"), "przy pelnym dostepie zadnych ostrzezen");
+  check(html.includes("oglądane teraz"), "aktualne pudelko jest oznaczone");
+  check(!document.getElementById("pudStan").innerHTML.includes("nie ma dostępu do żadnego"),
+        "i nie ma ostrzezenia o braku dostepu");
+}
+
 head("Zgodnosc wersji aplikacji");
 check(/const APP_VERSION = "([\d.\-]+)"/.test(html), "index.html deklaruje wersje");
 const av = html.match(/const APP_VERSION = "([\d.\-]+)"/)?.[1];

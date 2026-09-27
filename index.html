@@ -1207,6 +1207,7 @@ nav button .kropka-nav{position:absolute;top:6px;right:50%;margin-right:-16px;
     <div class="dim2" style="margin:-4px 0 10px">Wybór dotyczy tego telefonu.
       Zmiana przeładowuje aplikację, żeby nic z poprzedniego urządzenia nie zostało na ekranie.</div>
     <div id="pudList"></div>
+    <div id="pudStan" class="dim2" style="margin-top:10px"></div>
   </div>
 </section>
 
@@ -2021,7 +2022,7 @@ window.wybierzPudelko = (id) => {
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-09-27.83";
+const APP_VERSION = "2026-09-27.84";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -5640,15 +5641,37 @@ function renderPudelka(){
   if (lista) lista.innerHTML = PUDELKA.map(p => {
     const teraz = p.id === DEVICE_ID;
     const moze  = pudelkaWidoczne.includes(p.id);
-    const kolor = teraz ? "--ok" : moze ? "--dim" : "--dim";
-    return `<button class="kafel"${teraz ? ` style="border-color:var(--ok)"`
+    const kolor = !moze ? "--bad" : teraz ? "--ok" : "--dim";
+    /*  TU BYŁO KŁAMSTWO, zgłoszone przez Kubę z telefonu dziewczyny:
+        „pokazuje się jako pillbox01 i nie ma dostępu do tygodniowego,
+        a ma do dziennego". Nie miała dostępu do ŻADNEGO — ale kafelek
+        aktualnego pudełka rysował się na zielono bez sprawdzania
+        uprawnień, bo `teraz` wygrywało z `moze`. Wyglądało to na dostęp
+        do cudzych danych o leku, czyli na najgorszą możliwą usterkę.   */
+    return `<button class="kafel"${teraz && moze ? ` style="border-color:var(--ok)"`
               : moze ? ` onclick="wybierzPudelko('${esc(p.id)}')"`
-              : ` disabled style="opacity:.45"`}>
+              : ` disabled style="opacity:.45;border-color:var(--bad-edge)"`}>
       <span class="ikonka" style="--ikol:var(${kolor})"><svg viewBox="0 0 24 24" fill="none"
         stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="12" rx="2.2"/><path d="M3 11h18"/><path d="M9 7V5.5h6V7"/></svg></span>
-      <span class="kop">${esc(p.nazwa)}${teraz ? " — oglądane teraz" : ""}
+      <span class="kop">${esc(p.nazwa)}${teraz && moze ? " — oglądane teraz" : ""}
         <div class="dim2">${moze ? esc(p.opis) : "to konto nie ma dostępu"}</div></span></button>`;
   }).join("");
+
+  /*  KTO JEST ZALOGOWANY I CO TO KONTO WIDZI.
+
+      Przy drugim człowieku to przestaje być ciekawostką i staje się jedyną
+      rzeczą, która rozstrzyga zgłoszenie „nie mam dostępu". Identyfikator
+      konta jest tym, co wpisuje się w bazie do `owners` — bez pokazania go
+      nie da się sprawdzić, czy wpisano właściwy, inaczej niż zgadując.   */
+  const stan = document.getElementById("pudStan");
+  if (stan){
+    const mail = auth.currentUser?.email || "—";
+    const bez  = !pudelkaWidoczne.includes(DEVICE_ID);
+    stan.innerHTML =
+      `Zalogowany: <b>${esc(mail)}</b><br>Identyfikator konta: <code>${esc(uid || "—")}</code>` +
+      (bez ? `<br><b style="color:var(--bad)">To konto nie ma dostępu do żadnego pudełka.</b>`
+           : "");
+  }
 
   const kafel = document.getElementById("kafelPud");
   if (kafel) kafel.textContent =
