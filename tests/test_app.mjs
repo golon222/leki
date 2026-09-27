@@ -5136,6 +5136,22 @@ head("Pudelko tygodniowe: liczby tabletek znikaja z ekranu");
   check(/pomiarów INR/.test(A.opisKopii({ doses:{ "2026-09-27":{} }, inr:{} })),
         "a w pudelku dziennym liczy je dalej");
 
+  /* NAZWA LEKU NIE MA WARTOSCI DOMYSLNEJ POZA PUDELKIEM DZIENNYM (D134).
+
+     Zrzut Kuby: naglowek na pudelku tygodniowym mowil "Warfin · jedna
+     komora dziennie". Konfiguracja tamtego pudelka nie ma `drugName`, wiec
+     zostawala wartosc domyslna - i aplikacja nazywala lek dziewczyny lekiem
+     przeciwzakrzepowym. Zla nazwa leku w aplikacji od leku to dokladnie ten
+     rodzaj klamstwa, ktorego ten projekt unika.                        */
+  check(/drugName: DEVICE_ID === PUDELKA\[0\]\.id \? "Warfin" : ""/.test(html),
+        "domyslna nazwa leku nalezy do pudelka dziennego, nie do kazdego");
+  check(!/drugName\s*\|\|\s*"Warfin"/.test(html),
+        "zadne pole nie podstawia Warfinu bez sprawdzenia profilu");
+  /* A gdy nazwy nie ma, na ekranie stoi "Lek" - w obu miejscach, ktore
+     ja pisza (naglowek i kafelek leku).                               */
+  check((html.match(/cfg\.drugName \|\| "Lek"/g) || []).length === 2,
+        "bez nazwy oba miejsca pokazuja \u201eLek\u201d, nie cudzy lek");
+
   A.__setState({ cfg:{ profil:undefined }, doses:{}, events:[] });
 }
 

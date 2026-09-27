@@ -12,7 +12,7 @@ zamiast 60 tys. tokenów wchodzi 2,5 tys. plus jeden obszar.
 | `decyzje/pudelko.md` | Pudełko — sen, alarm, NVS, WiFi | 41 |
 | `decyzje/ota.md` | Aktualizacja przez WiFi i skan sieci | 9 |
 | `decyzje/telegram.md` | Powiadomienia Telegram | 6 |
-| `decyzje/aplikacja.md` | Aplikacja — ekrany i wygląd | 43 |
+| `decyzje/aplikacja.md` | Aplikacja — ekrany i wygląd | 44 |
 | `decyzje/dane.md` | Dane, kolejka, dawkowanie | 20 |
 | `decyzje/testy.md` | Testy, audyt, kompilacja | 16 |
 | `decyzje/bugi.md` | Błędy **zamknięte** — historia objawów | 26 |
@@ -63,6 +63,7 @@ Od najnowszej. Kolumna „gdzie" mówi, który plik w `decyzje/` trzymać otwart
 
 | # | O co chodziło | gdzie |
 |---|---|---|
+| **D134** | **Domyślna nazwa leku („Warfin") należy do pudełka dziennego**, nie do każdego — zrzut pokazał „Warfin" na koncie dziewczyny. Każde inne pudełko zaczyna bez nazwy i pokazuje „Lek". Plus dwa puste miejsca pod Instrukcją (`visibility:hidden`, więc poza kolejnością dotykania) | `aplikacja` |
 | **D133** | **Znika to, czego pudełko tygodniowe NIE UMIE** — sieć WiFi, autotest z bazy, historia wybudzeń. D126 zdjęło to, czego nie potrzebuje; to zdejmuje to, za czym nic nie stoi. Ekran, który nic nie robi, wygląda jak zepsuty i każe szukać usterki. `showTab()` odsyła z czterech ekranów, nie z dwóch | `aplikacja` |
 | **D132** | **Telegram w pudełku tygodniowym**: nieodebrane przypomnienie (z **nazwą klapki**) i słaba bateria — bez zapasu i INR. `tgDecyzja()` znak w znak ta sama co w pudełku dziennym, wysyłka pierwsza i tylko ze snu, token ani do logu, ani do statusu. Sześć kontroli, pięć mutacji | `telegram` |
 | **D131** | **Portal WiFi z przycisku** w pudełku tygodniowym, i przycisk **budzący z głębokiego snu** — tu się dało, bo oba piny budzą stanem niskim (w dziennym poziomy były przeciwne). Trzy drogi do portalu, sieć zapisywana dopiero po potwierdzonym połączeniu (zasada 9). Niesprawdzone na płytce | `pudelko` |

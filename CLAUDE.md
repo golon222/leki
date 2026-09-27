@@ -41,6 +41,12 @@ Musi przejść przed zmianą i po zmianie. Stan wyjściowy:
 **642 + 52 firmware, 1423 (×6 pór doby) + 92 + 52 aplikacja, 48 zgodności,
 156 reguł bazy, 375 kontroli audytu, 44 kontrole statyczne — 0 błędów.**
 
+**Nazwa leku nie ma wartości domyślnej poza pudełkiem dziennym** (D134):
+„Warfin" należy do `pillbox01`, bo to ono ma za sobą kilkaset wpisów z tą
+nazwą. Każde inne zaczyna bez nazwy i pokazuje „Lek". Zrzut pokazał
+„Warfin · jedna komora dziennie" na koncie dziewczyny — to jest kłamstwo
+o leku, nie literówka.
+
 **Pudełko tygodniowe widzi mniej z DWÓCH powodów i to są różne powody**
 (D126 i D133): czego nie potrzebuje (INR, zapas, raport) i czego nie umie
 (sieć WiFi, autotest w bazie, historia wybudzeń). Ekran, za którym nic nie
