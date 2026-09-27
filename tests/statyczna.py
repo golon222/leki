@@ -853,6 +853,52 @@ if w.exists():
     else:
         print('  OK   aktualizacja tygodniowego rusza tylko ze snu, po zapisie zdarzenia')
 
+    # ── PORTAL WiFi: CZTERY RZECZY, KTORE ODCINAJA PUDELKO ──────────
+    #
+    # Portal jest jedyna droga do pudelka, ktora nie potrzebuje ani sieci,
+    # ani bazy, ani kabla (zasada 9). Kazda z tych kontroli pilnuje bledu,
+    # ktory by te droge zamknal - albo zamienil pudelko w cegle piszczaca
+    # przez petle wybudzen (B30, tylko z drugiego pinu).
+    _portal = _bez(_cialo(src, 'void startPortalWifi') or '')
+    _zle = []
+
+    # 1. Siec zapisujemy DOPIERO po udanym polaczeniu. Odwrotna kolejnosc
+    #    kasuje dzialajaca siec na rzecz literowki - i nie ma jak wrocic.
+    _polaczono = _portal.find('WiFi.status() != WL_CONNECTED')
+    _zapis     = _portal.find('nvs.putString("ssid"')
+    if _zapis < 0:
+        _zle.append('portal nie zapisuje sieci do pamieci trwalej')
+    elif _polaczono < 0 or _zapis < _polaczono:
+        _zle.append('siec zapisywana PRZED potwierdzeniem polaczenia (zasada 9)')
+
+    # 2. Haslo urzadzenia podane w portalu jest KANDYDATEM: gdy baza je
+    #    odrzuci, musi zniknac. Zostawione blokuje to poprawne z config.h.
+    if 'nvs.remove("haslo")' not in _portal:
+        _zle.append('portal nie kasuje hasla, ktorego baza nie przyjela')
+
+    # 3. Przycisku WCISNIETEGO nie uzbrajamy - obudzilby uklad w tej samej
+    #    milisekundzie, w ktorej zasnal.
+    if 'przyciskWolny' not in _sen or 'gpio_pullup_en((gpio_num_t)PIN_PRZYCISK)' not in _sen:
+        _zle.append('przycisk uzbrajany bez podciagniecia albo bez sprawdzenia stanu')
+    if 'gpio_hold_en((gpio_num_t)PIN_PRZYCISK)' not in _sen:
+        _zle.append('podciagniecie przycisku nie przezyje snu (brak zatrzasku)')
+
+    # 4. Placeholder sieci musi zgadzac sie z config.h z repozytorium -
+    #    inaczej pudelko wgrane "jak jest" nie otworzy portalu nigdy.
+    _ph_ino = re.search(r'#\s*define\s+SSID_PLACEHOLDER\s+"([^"]+)"', src)
+    _ph_cfg = re.search(r'#\s*define\s+WIFI_SSID\s+"([^"]+)"', _cfgW)
+    if not _ph_ino or not _ph_cfg:
+        _zle.append('brak SSID_PLACEHOLDER albo WIFI_SSID')
+    elif _ph_ino.group(1) != _ph_cfg.group(1):
+        _zle.append(f'placeholder sieci: kod ma "{_ph_ino.group(1)}", '
+                    f'config.h "{_ph_cfg.group(1)}"')
+    if _zle:
+        bad += 1
+        print('  BLAD portal WiFi pudelka tygodniowego:')
+        for _z in _zle: print('       ' + _z)
+    else:
+        print('  OK   portal WiFi: siec po potwierdzeniu, przycisk bez petli')
+
 t = root/"firmware/PillBoxTest/PillBoxTest.ino"
 if t.exists():
     src = t.read_text(encoding="utf-8")

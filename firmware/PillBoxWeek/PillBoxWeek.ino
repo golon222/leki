@@ -43,6 +43,10 @@
   #include "esp_ota_ops.h"
   #include "esp_partition.h"
 #endif
+#if PORTAL_ENABLED
+  #include <WebServer.h>
+  #include <DNSServer.h>
+#endif
 
 #if !defined(PILLBOX_WEEK_CONFIG_VERSION)
 #error "config.h nie pasuje do tego szkicu - pobierz oba pliki na nowo."
@@ -58,7 +62,17 @@
 
     Numer wersji, ktory mieszka w NAGLOWKU, opisuje naglowek. Ten opisuje
     program. Gdy sie rozjada, log krzyczy o tym w pierwszej linii.        */
-#define KOD_WERSJA "0.4.0"
+#define KOD_WERSJA "0.5.0"
+
+/*  Po tym napisie pudelko poznaje config.h wzięty prosto z repozytorium -
+    czyli "nie ma zadnej sieci", a nie "ma siec o takiej nazwie". Bez tego
+    rozroznienia pudelko wgrane "jak jest" probowaloby laczyc sie
+    z placeholderem w kolko, zamiast otworzyc portal.
+
+    MUSI zgadzac sie z wartoscia WIFI_SSID w config.h z repozytorium
+    i kontrola statyczna to sprawdza - rozjazd sprawilby, ze portal nie
+    otworzy sie nigdy, a to jedyna droga bez kabla.                    */
+#define SSID_PLACEHOLDER "TUTAJ_WPISZ_SIEC"
 
 #define LOG(...)  Serial.printf(__VA_ARGS__)
 
@@ -112,6 +126,11 @@ RTC_DATA_ATTR uint32_t rtcOtaTs         = 0;    // kiedy zlozono zlecenie
 RTC_DATA_ATTR int32_t  rtcOtaNagl       = 0;    // ile bajtow zapowiedzial serwer
 RTC_DATA_ATTR char     rtcOtaMsg[64]    = "";
 RTC_DATA_ATTR char     rtcOtaWersja[16] = "";
+
+/*  Przycisk zwarty na stale budzilby uklad w kolko - ten sam rodzaj petli
+    co pusta klapka (B30), tylko z innego pinu. Licznik rosnie przy kazdym
+    wybudzeniu, po ktorym styk nadal jest zwarty.                        */
+RTC_DATA_ATTR uint8_t  rtcPrzyciskZwarty = 0;
 
 /* =====================================================================
  *  STAN BIEZACEGO WYBUDZENIA
@@ -393,15 +412,19 @@ String hasloDoLogowania() {
 
 bool hasloWPamieci() { return nvs.getString("haslo", "").length() > 0; }
 
-void hasloUtrwal(const String& h) {
-  if (h == "TUTAJ_WPISZ_HASLO" || !h.length()) return;
-  if (nvs.getString("haslo", "") == h) return;
+/* ZWRACA WYNIK, i to nie jest kosmetyka (zasada 9, D38): portal kasuje
+   haslo z powrotem, gdy baza je odrzuci, a do tego musi wiedziec, czy
+   w ogole sie zapisalo. Zapis do NVS potrafi sie nie udac po cichu.  */
+bool hasloUtrwal(const String& h) {
+  if (h == "TUTAJ_WPISZ_HASLO" || !h.length()) return false;
+  if (nvs.getString("haslo", "") == h) return true;
   nvs.putString("haslo", h);
   /* Potwierdzenie ODCZYTEM ZWROTNYM. Zapis do NVS potrafi sie nie udac
      po cichu, a haslo, ktorego pudelko nie ma, odcina je od bazy - czyli
      od jedynej drogi naprawy bez kabla.                               */
-  if (nvs.getString("haslo", "") == h) LOG("[FB ] haslo zapisane w pamieci\n");
-  else                                 LOG("[FB ] UWAGA: haslo NIE zapisalo sie\n");
+  if (nvs.getString("haslo", "") == h) { LOG("[FB ] haslo zapisane w pamieci\n"); return true; }
+  LOG("[FB ] UWAGA: haslo NIE zapisalo sie\n");
+  return false;
 }
 
 bool firebaseZaloguj() {
@@ -1127,7 +1150,231 @@ void otaSprobuj() {
 #endif  /* OTA_ENABLED */
 
 /* =====================================================================
- *  12.  SEN
+ *  12.  PORTAL KONFIGURACJI WiFi
+ *
+ *      Pudelko tworzy wlasna siec WiFi. Laczysz sie z nia telefonem,
+ *      otwiera sie strona, wybierasz siec z listy i wpisujesz haslo.
+ *      Zadnej aplikacji, zadnego kabla, zadnego komputera.
+ *
+ *      PO CO TO TU JEST: pudelko stoi u kogos innego. Zmiana routera,
+ *      przeprowadzka albo zabranie go do siebie znaczyly dotad "przynies
+ *      mi je, wgram nowy config.h". Portal fizyczny zostaje na zawsze
+ *      (zasada 9) wlasnie dlatego, ze jest jedyna droga niezalezna od
+ *      sieci i od bazy.
+ *
+ *      DLACZEGO NIE BLUETOOTH: kontroler BLE w rdzeniu arduino-esp32
+ *      3.3.x wywala sie na ESP32-C3 juz przy inicjalizacji i restartuje
+ *      plytke w petli. Sprawdzone w pudelku dziennym.
+ * ===================================================================== */
+#if PORTAL_ENABLED
+
+static String htmlEscape(const String& in) {
+  String o;
+  for (size_t i = 0; i < in.length(); i++) {
+    char c = in[i];
+    if      (c == '&')  o += "&amp;";
+    else if (c == '<')  o += "&lt;";
+    else if (c == '>')  o += "&gt;";
+    else if (c == '"')  o += "&quot;";
+    else if (c == '\'') o += "&#39;";
+    else o += c;
+  }
+  return o;
+}
+
+/* Strona jest JASNA i rozowa, a nie granatowa jak w pudelku dziennym -
+   ten sam motyw co aplikacja tego konta (D129). Nie chodzi o ozdobe:
+   czlowiek, ktory otwiera te strone, widzi ja obok aplikacji i ma od
+   razu wiedziec, ze to to samo urzadzenie.                           */
+static String portalPage(int found) {
+  String o = F("<!doctype html><html lang=pl><meta charset=utf-8>"
+      "<meta name=viewport content='width=device-width,initial-scale=1'>"
+      "<title>Pudelko</title><style>"
+      "body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#fbeef2;"
+      "color:#3a2230;padding:26px 20px;max-width:420px;margin:0 auto}"
+      "h2{font-size:20px;margin:0 0 4px}p{color:#7c6070;font-size:14px;margin:0 0 20px}"
+      "label{font-size:12px;color:#7a6270;text-transform:uppercase;letter-spacing:.06em}"
+      "select,input{width:100%;padding:13px;margin:6px 0 16px;border-radius:11px;"
+      "border:1px solid #e3c8d4;background:#fff;color:#3a2230;font-size:16px;"
+      "box-sizing:border-box;-webkit-appearance:none}"
+      "button{width:100%;padding:15px;border:0;border-radius:11px;background:#a74f80;"
+      "color:#fff6fa;font-size:16px;font-weight:600}</style>"
+      "<h2>Pudelko na leki</h2><p>Wybierz siec WiFi.</p>"
+      "<form action='/save' method='POST'><label>Siec</label><select name='s'>");
+  for (int i = 0; i < found; i++) {
+    String e = htmlEscape(WiFi.SSID(i));
+    o += "<option value=\"" + e + "\">" + e + "  (" + String((int)WiFi.RSSI(i)) + " dBm)</option>";
+  }
+  o += F("</select><label>Haslo</label><input name='p' type='password' autocomplete='off'>");
+
+  /* Haslo urzadzenia do bazy - pole pojawia sie TYLKO wtedy, gdy pamiec
+     trwala go nie ma. Binarka z automatu hasla nie zna (ograniczenie 3),
+     wiec gdyby pamiec kiedys przepadla, pudelko nie mialoby czym zalogowac
+     sie do bazy - a bez bazy nie ma zdalnej drogi, zeby mu je podac.
+     Ukrywamy je, dopoki haslo siedzi w pamieci, zeby nie kusilo do
+     wpisywania czegokolwiek przy zwyklej zmianie sieci.               */
+  if (!hasloWPamieci())
+    o += F("<label>Haslo urzadzenia (baza)</label>"
+           "<input name='d' type='password' autocomplete='off'>"
+           "<p style='margin:-8px 0 16px;font-size:12px'>Pudelko nie ma zapisanego "
+           "hasla do bazy. Bez niego polaczy sie z WiFi, ale nie z aplikacja.</p>");
+
+  o += F("<button type=submit>Polacz</button></form>");
+  return o;
+}
+
+void startPortalWifi() {
+  /* Trzy pikniecia = "jestem w trybie konfiguracji". */
+  for (int i = 0; i < 3; i++) { pik(2200, 90); delay(90); }
+
+  WiFi.persistent(true);
+  WiFi.disconnect(true, false);
+  WiFi.mode(WIFI_AP_STA);
+
+  /* Skan PRZED uruchomieniem punktu dostepowego - pozniej jest wolniejszy
+     i potrafi zrywac polaczenie telefonu.                              */
+  int found = WiFi.scanNetworks();
+  if (found < 0) found = 0;
+  LOG("[AP ] znaleziono %d sieci\n", found);
+
+  WiFi.softAP(AP_SSID, AP_PASS);
+  IPAddress ip = WiFi.softAPIP();
+  LOG("[AP ] siec '%s', otworz http://%s\n", AP_SSID, ip.toString().c_str());
+
+  DNSServer dns;
+  dns.start(53, "*", ip);            // kazda domena -> nasza strona
+  WebServer server(80);
+
+  bool done = false;
+  String pendingSsid, pendingPass, pendingDevPass;
+
+  server.on("/", [&]() { server.send(200, "text/html; charset=utf-8", portalPage(found)); });
+
+  server.on("/save", HTTP_POST, [&]() {
+    pendingSsid    = server.arg("s");
+    pendingPass    = server.arg("p");
+    pendingDevPass = server.arg("d");   // puste, gdy pole bylo ukryte
+    server.send(200, "text/html; charset=utf-8",
+      F("<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width'>"
+        "<body style='font-family:-apple-system,sans-serif;background:#fbeef2;color:#3a2230;"
+        "padding:40px 24px;text-align:center'>"
+        "<h2>Lacze sie...</h2><p style='color:#7c6070'>Mozesz zamknac to okno.<br>"
+        "Pudelko potwierdzi dzwiekiem.</p>"));
+    done = true;
+  });
+
+  /* iOS sprawdza polaczenie pod losowymi adresami - kazdy odsylamy na strone. */
+  server.onNotFound([&]() {
+    server.sendHeader("Location", String("http://") + ip.toString(), true);
+    server.send(302, "text/plain", "");
+  });
+
+  server.begin();
+
+  /* DRUGIE NACISNIECIE PRZYCISKU KONCZY PAROWANIE.
+
+     Punkt dostepowy to najdrozszy tryb pracy tego ukladu, wiec kazda
+     sekunda krocej to realna oszczednosc. W pudelku dziennym te role
+     pelni zamkniecie wieczka; tutaj wieczka nie ma (siedem klapek,
+     kazda osobno), wiec zostaje przycisk - ten sam, ktorym sie tu
+     weszlo. Czekamy najpierw, az zostanie PUSZCZONY, inaczej jedno
+     przytrzymanie zamykaloby portal natychmiast po otwarciu.         */
+  while (digitalRead(PIN_PRZYCISK) == LOW) delay(20);
+
+  bool przerwane = false;
+  uint32_t t0 = millis();
+  while (!done && millis() - t0 < (uint32_t)PORTAL_TIMEOUT_S * 1000UL) {
+    dns.processNextRequest();
+    server.handleClient();
+    if (digitalRead(PIN_PRZYCISK) == LOW) {
+      delay(120);                                  // odbicie styku
+      if (digitalRead(PIN_PRZYCISK) == LOW) { przerwane = true; break; }
+    }
+    delay(5);
+  }
+
+  server.stop();
+  dns.stop();
+  WiFi.softAPdisconnect(true);
+  WiFi.mode(WIFI_STA);
+
+  if (przerwane) {
+    LOG("[AP ] przycisk - koncze parowanie\n");
+    /* Dwa opadajace tony: "zamykam sklep". Latwe do odroznienia od
+       trzech wznoszacych, ktore oznaczaly wejscie w tryb konfiguracji. */
+    pik(3000, 120); pik(2300, 200);
+    return;
+  }
+  if (!done) {
+    LOG("[AP ] czas minal - nikt sie nie polaczyl\n");
+    beepBlad();
+    return;
+  }
+
+  LOG("[AP ] lacze z siecia '%s'...\n", pendingSsid.c_str());
+  WiFi.begin(pendingSsid.c_str(), pendingPass.c_str());
+
+  uint32_t t1 = millis();
+  while (WiFi.status() != WL_CONNECTED && millis() - t1 < WIFI_TIMEOUT_S * 1000UL + 10000UL)
+    delay(200);
+
+  if (WiFi.status() != WL_CONNECTED) {
+    LOG("[AP ] nie udalo sie - zle haslo albo siec 5 GHz\n");
+    beepBlad(); delay(300); beepBlad();
+    return;
+  }
+  LOG("[AP ] polaczono, IP=%s\n", WiFi.localIP().toString().c_str());
+
+  /* SIEC ZAPISUJEMY DOPIERO PO UDANYM POLACZENIU.
+
+     Odwrotna kolejnosc kasowalaby dzialajaca siec na rzecz literowki -
+     a razem z nia jedyna droge do pudelka poza portalem. To jest
+     zasada 9 z CLAUDE.md, widziana od strony portalu. `wifiPolacz()`
+     czyta dokladnie te dwa klucze, wiec nowa siec obowiazuje od
+     nastepnego wybudzenia bez zadnego dodatkowego kroku.             */
+  nvs.putString("ssid",  pendingSsid);
+  nvs.putString("wpass", pendingPass);
+  if (nvs.getString("ssid", "") == pendingSsid) LOG("[AP ] siec zapisana w pamieci\n");
+  else                                          LOG("[AP ] UWAGA: siec NIE zapisala sie\n");
+
+  /* Zegar przy okazji - radio i tak stoi. */
+  configTime(0, 0, "pool.ntp.org", "time.google.com");
+  setenv("TZ", "CET-1CEST,M3.5.0,M10.5.0/3", 1);
+  tzset();
+  for (int i = 0; i < 40 && time(nullptr) < 1600000000; i++) delay(150);
+  if (time(nullptr) > 1600000000) { czasZsync = true; rtcCzasPewny = true; }
+
+  /* Haslo urzadzenia podane w portalu jest KANDYDATEM, nie prawda.
+     Zapisujemy je, probujemy zalogowac - i jesli baza je odrzuci,
+     kasujemy z powrotem. Zostawione blokowaloby na stale to poprawne
+     z config.h przy nastepnym wgraniu kablem, czyli literowka
+     w portalu kosztowalaby cala droge powrotna.                      */
+  bool zPortalu = false;
+  if (pendingDevPass.length() && !hasloWPamieci()) {
+    if (hasloUtrwal(pendingDevPass)) {
+      zPortalu = true;
+      LOG("[AP ] haslo urzadzenia zapisane - sprawdzam je w bazie\n");
+    } else {
+      LOG("[AP ] haslo urzadzenia NIE zapisalo sie do pamieci\n");
+    }
+  }
+
+  if (firebaseZaloguj()) {
+    pobierzUstawienia();
+    oproznijKolejke();
+    wyslijStatus();
+  } else if (zPortalu) {
+    nvs.remove("haslo");
+    LOG("[AP ] baza odrzucila to haslo - skasowane, sprobuj jeszcze raz\n");
+    beepBlad();
+  }
+  beepAck();
+}
+
+#endif  /* PORTAL_ENABLED */
+
+/* =====================================================================
+ *  13.  SEN
  * ===================================================================== */
 uint64_t sekundDoNastepnego() {
   /*  Przypomnienie, ktore nikogo nie zastalo, wraca za chwile - to jest
@@ -1248,17 +1495,63 @@ void idzSpac() {
   gpio_pullup_dis((gpio_num_t)PIN_KLAPKI);
   gpio_pulldown_dis((gpio_num_t)PIN_KLAPKI);
 
-  if (!otwarte && !hamulec)
-    esp_deep_sleep_enable_gpio_wakeup(BIT(PIN_KLAPKI), ESP_GPIO_WAKEUP_GPIO_LOW);
+  /* =================================================================
+     PRZYCISK TEZ BUDZI - I TU AKURAT SIE DA.
+
+     W pudelku dziennym sie NIE DALO i to jest wazna roznica, a nie
+     niedopatrzenie: `esp_deep_sleep_enable_gpio_wakeup()` przyjmuje
+     JEDNA maske i JEDEN wspolny poziom, a tam kontaktron budzi stanem
+     WYSOKIM (magnes odsuniety), przycisk NISKIM (zwarcie do masy).
+     Pogodzic sie tego nie dalo bez lutowania, wiec przycisk dostal tam
+     inny gest - przytrzymanie przy resecie.
+
+     Tutaj OBA piny budza stanem niskim: drabinka klapek spada ponizej
+     progu zera, przycisk zwiera do masy. Jedna maska, jeden poziom,
+     jedno wywolanie - i pudelko reaguje na przycisk natychmiast, a nie
+     dopiero przy najblizszym wybudzeniu z zegara.
+
+     DWA WARUNKI, BEZ KTORYCH TO SIE ZAPETLA:
+       1. podciagniecie przycisku musi PRZEZYC sen (`gpio_pullup_en`
+          + zatrzask) - pin bez niego plywa i czyta sie jako zero;
+       2. nie uzbrajamy przycisku, ktory WLASNIE jest wcisniety ani
+          zwartego od kilku wybudzen - inaczej uklad budzi sie
+          w tej samej milisekundzie, w ktorej zasnal.
+     ================================================================= */
+  gpio_pullup_en((gpio_num_t)PIN_PRZYCISK);
+  gpio_pulldown_dis((gpio_num_t)PIN_PRZYCISK);
+
+  /*  Przycisk WCISNIETY w chwili zasypiania uzbraja sie na wlasne
+      zwarcie - obudzilby uklad w tej samej milisekundzie. Licznik
+      `rtcPrzyciskZwarty` lapie drugi przypadek: styk, ktory budzi raz
+      za razem, choc przy odczycie zdazyl juz odskoczyc.               */
+  const bool przyciskWolny = digitalRead(PIN_PRZYCISK) == HIGH;
+
+  uint64_t maska = 0;
+  if (!otwarte && !hamulec) maska |= BIT(PIN_KLAPKI);
+#if PORTAL_ENABLED
+  if (hamulec || !przyciskWolny) {
+    if (!przyciskWolny) LOG("[SEN] przycisk wcisniety - nie uzbrajam go\n");
+  } else if (rtcPrzyciskZwarty >= PRZYCISK_ZWARTY_MAX) {
+    /* Po drzemce probujemy jeszcze raz - tak samo jak przy pustych
+       wybudzeniach z klapki. Cena: jedno nacisniecie moze przepasc.   */
+    rtcPrzyciskZwarty = 0;
+    LOG("[SEN] przycisk budzil %d razy z rzedu - rozbrajam go na ten sen\n",
+        PRZYCISK_ZWARTY_MAX);
+  } else {
+    maska |= BIT(PIN_PRZYCISK);
+  }
+#endif
+  if (maska) esp_deep_sleep_enable_gpio_wakeup(maska, ESP_GPIO_WAKEUP_GPIO_LOW);
   esp_sleep_enable_timer_wakeup(sek * 1000000ULL);
 
   gpio_hold_en((gpio_num_t)PIN_KLAPKI);
+  gpio_hold_en((gpio_num_t)PIN_PRZYCISK);
   gpio_deep_sleep_hold_en();
   esp_deep_sleep_start();
 }
 
 /* =====================================================================
- *  13.  SETUP  -  cala logika. loop() nigdy nie jest osiagany.
+ *  14.  SETUP  -  cala logika. loop() nigdy nie jest osiagany.
  * ===================================================================== */
 void setup() {
   /* ---- ODCZYT KLAPKI JEST PIERWSZY I TO NIE JEST KOSMETYKA ----
@@ -1274,6 +1567,12 @@ void setup() {
       nienaruszona.                                                    */
   gpio_deep_sleep_hold_dis();
   gpio_hold_dis((gpio_num_t)PIN_KLAPKI);
+  gpio_hold_dis((gpio_num_t)PIN_PRZYCISK);
+
+  /*  KTORY PIN NAS OBUDZIL - odczyt rejestru, mikrosekundy. Musi byc
+      TU, przed czymkolwiek, co dotyka pinow: stan jest zatrzasniety
+      z chwili wybudzenia i nic go pozniej nie odtworzy.               */
+  const uint32_t maskaWybudzenia = (uint32_t)esp_sleep_get_gpio_wakeup_status();
 
   analogSetAttenuation(ADC_2_5db);
   analogReadResolution(12);
@@ -1310,6 +1609,23 @@ void setup() {
       wychodzi wtedy chronologiczna sama z siebie: wczorajsze "missed",
       potem dzisiejsze otwarcie.                                        */
   domknijDoby();
+
+#if PORTAL_ENABLED
+  /* ---------- A0. OBUDZIL NAS PRZYCISK ----------
+     Jedna maska budzi z dwoch pinow, wiec `powod` mowi tylko "GPIO".
+     Ktory to byl, wie zatrzasniety rejestr odczytany na samym poczatku.
+     Gdy zapalily sie OBA bity, pierwszenstwo ma klapka: dane o leku ida
+     przed konfiguracja sieci, zawsze.                                 */
+  if (powod == ESP_SLEEP_WAKEUP_GPIO && (maskaWybudzenia & BIT(PIN_PRZYCISK))
+      && !(maskaWybudzenia & BIT(PIN_KLAPKI))) {
+    if (rtcPrzyciskZwarty < 255) rtcPrzyciskZwarty++;
+    LOG("[BTN] przycisk - portal konfiguracji WiFi (%u z rzedu)\n",
+        (unsigned)rtcPrzyciskZwarty);
+    startPortalWifi();
+    idzSpac();
+  }
+  rtcPrzyciskZwarty = 0;        // obudzilo nas cokolwiek innego
+#endif
 
   /* ---------- A. OBUDZILA NAS KLAPKA ---------- */
   if (powod == ESP_SLEEP_WAKEUP_GPIO) {
@@ -1397,6 +1713,22 @@ void setup() {
      odczyt drabinki na glos - zeby dalo sie sprawdzic pudelko bez
      komputera, juz zamkniete w obudowie.                             */
   if (digitalRead(PIN_PRZYCISK) == LOW) {
+#if PORTAL_ENABLED
+    /*  DLUGIE PRZYTRZYMANIE = PORTAL, krotkie = autotest.
+
+        Oba gesty wchodza przez ten sam przycisk, bo innego nie ma.
+        Rozroznia je czas, a nie kolejnosc - dzieki temu nikt nie musi
+        pamietac, w ktorej chwili puscic. Trzymasz dalej: portal.
+        Puszczasz: pudelko sprawdza sie na sluch, jak dotad.          */
+    uint32_t trzymam = millis();
+    while (digitalRead(PIN_PRZYCISK) == LOW && millis() - trzymam < PORTAL_HOLD_MS)
+      delay(20);
+    if (digitalRead(PIN_PRZYCISK) == LOW) {
+      LOG("[BTN] przytrzymany przycisk - portal konfiguracji WiFi\n");
+      startPortalWifi();
+      idzSpac();
+    }
+#endif
     LOG("[TST] autotest\n");
     delay(400);
     for (int i = 0; i < 3; i++) { pik(BUZZER_HZ, 120); delay(160); }
@@ -1408,6 +1740,19 @@ void setup() {
     delay(500);
     beepBateria();
   }
+
+#if PORTAL_ENABLED
+  /*  BEZ ZAPISANEJ SIECI NIE MA CZEGO PROBOWAC.
+
+      `config.h` z repozytorium trzyma placeholder, wiec pudelko wgrane
+      "jak jest" nie zna zadnej sieci - i bez portalu nie mialoby jak
+      sie jej dowiedziec. To jest ta sama droga powrotna co przy hasle:
+      jedyna, ktora nie potrzebuje ani sieci, ani bazy, ani kabla.    */
+  if (nvs.getString("ssid", WIFI_SSID) == String(SSID_PLACEHOLDER)) {
+    LOG("[BTN] brak zapisanej sieci - portal konfiguracji\n");
+    startPortalWifi();
+  }
+#endif
 
   zglos("boot", 0);
   /*  Po zimnym starcie pamiec RTC jest pusta. domknijDoby() zapisze

@@ -262,7 +262,7 @@ Menu **Narzędzia** — identycznie jak przy pudełku dziennym:
 | Partition Scheme | **Minimal SPIFFS (1.9MB APP with OTA/190KB SPIFFS)** |
 | Erase All Flash Before Sketch Upload | **Disabled** |
 
-Program zajmuje **58%** pierwszej partycji. Podłącz kablem, wybierz port,
+Program zajmuje **61%** pierwszej partycji. Podłącz kablem, wybierz port,
 **Wgraj**.
 
 **To jest ostatnie wgranie kablem, którego potrzebuje to pudełko.** Od
@@ -283,12 +283,50 @@ i przejdzie całą swoją drogę.
 
 ---
 
+# 4a. Zmiana WiFi bez kabla — ukryty przycisk
+
+Od `0.5.0` **nie musisz już wpisywać sieci w `config.h`**. Wpisz ją raz
+przy pierwszym wgraniu albo zostaw placeholder i ustaw wszystko
+przyciskiem — pudełko zapamiętuje sieć w swojej pamięci trwałej.
+
+**Trzy drogi do portalu:**
+
+| kiedy | co zrobić |
+|---|---|
+| pudełko śpi, chcesz zmienić sieć | **naciśnij ukryty przycisk** — pudełko budzi się od razu |
+| pudełko właśnie startuje (reset, kabel) | **trzymaj przycisk ponad 3 sekundy** |
+| pudełko nie zna żadnej sieci | otwiera portal **samo**, przy zimnym starcie |
+
+Krótkie naciśnięcie przy starcie to dalej **autotest** — rozróżnia je
+czas trzymania, więc nie musisz pamiętać, kiedy puścić.
+
+**Co się dzieje dalej:**
+
+1. Trzy piknięcia = jestem w trybie konfiguracji
+2. W telefonie wybierz sieć **`Pudelko-na-leki`**, hasło **`pudelko123`**
+3. Strona otworzy się sama (jeśli nie — wpisz `http://192.168.4.1`)
+4. Wybierz swoją sieć z listy, wpisz hasło, **Połącz**
+5. Jedno piknięcie = połączone i zapisane
+
+**Sieć zapisuje się dopiero po udanym połączeniu.** Literówka w haśle nie
+skasuje więc tej, która działa — usłyszysz dwa sygnały błędu i stara sieć
+zostaje. Portal zamkniesz w każdej chwili **drugim naciśnięciem
+przycisku** (dwa opadające tony); sam zamknie się po 5 minutach.
+
+Pole **„hasło urządzenia"** pojawia się tylko wtedy, gdy pudełko nie ma
+go w pamięci — czyli praktycznie nigdy. Jeśli je zobaczysz, znaczy to, że
+pamięć przepadła (np. „Erase All Flash" przy wgrywaniu) i trzeba wpisać
+hasło konta `pillbox02@device.local`. Jeśli baza go nie przyjmie, pudełko
+je skasuje i będzie można spróbować jeszcze raz.
+
+---
+
 # 5. Czy się zameldowało
 
 Otwórz **Monitor portu szeregowego, 115200**:
 
 ```
-===== PillBoxWeek 0.4.0  (wybudzenie 1) =====
+===== PillBoxWeek 0.5.0  (wybudzenie 1) =====
 [BAT] 87%  4.08 V
 [   ] zimny start
 [NET] lacze z 'TwojaSiec'

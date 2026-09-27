@@ -19,7 +19,7 @@
  *    miejsce w bazie i kalendarze wymieszalyby sie po cichu.
  * ------------------------------------------------------------------ */
 #define DEVICE_ID           "pillbox02"     // klucz w /devices/<DEVICE_ID>
-#define FW_VERSION          "0.4.0"         // widoczna w aplikacji
+#define FW_VERSION          "0.5.0"         // widoczna w aplikacji
 
 /* ---------------------------------------------------------------------
  * 2. FIREBASE
@@ -105,7 +105,34 @@
 #define WIFI_TIMEOUT_S      20
 
 /* ---------------------------------------------------------------------
- * 7. AKTUALIZACJA PROGRAMU PRZEZ WIFI  (OTA)
+ * 7. PORTAL KONFIGURACJI WiFi
+ *
+ *  Pudelko tworzy wlasna siec, telefon laczy sie z nia i otwiera strone
+ *  z lista sieci. Jedyna droga do zmiany WiFi, ktora nie potrzebuje ani
+ *  sieci, ani bazy, ani kabla - a pudelko stoi u kogos innego.
+ *
+ *  AP_PASS musi miec co najmniej 8 znakow (wymog WPA2). Jest jawne
+ *  w repozytorium i tak ma zostac: zabezpiecza siec, ktora zyje kilka
+ *  minut, stoi na wyciagniecie reki i niczego nie udostepnia. Prawdziwa
+ *  bariera to reguly bazy i haslo urzadzenia, nie to.
+ * ------------------------------------------------------------------ */
+#define PORTAL_ENABLED      1
+#define AP_SSID             "Pudelko-na-leki"
+#define AP_PASS             "pudelko123"
+#define PORTAL_TIMEOUT_S    300    // po tylu sekundach bez nikogo zamykamy AP
+
+/*  Ile trzymac przycisk przy zimnym starcie, zeby wejsc w portal zamiast
+ *  w autotest. Krotkie nacisniecie zostaje autotestem - do sprawdzenia
+ *  pudelka na sluch, juz zamknietego w obudowie.                      */
+#define PORTAL_HOLD_MS      3000
+
+/*  Przycisk zwarty na stale budzilby uklad w kolko. Po tylu wybudzeniach
+ *  z rzedu, przy ktorych styk nadal jest zwarty, przestajemy go uzbrajac
+ *  - dokladnie tak samo jak pusta klapka (B30).                        */
+#define PRZYCISK_ZWARTY_MAX 3
+
+/* ---------------------------------------------------------------------
+ * 8. AKTUALIZACJA PROGRAMU PRZEZ WIFI  (OTA)
  *
  *  Binarke buduje automat na GitHubie i kladzie ja obok aplikacji na
  *  GitHub Pages. Pudelko pobiera najpierw MALY plik z opisem, a caly

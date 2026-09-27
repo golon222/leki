@@ -39,7 +39,7 @@ bash tests/run_all.sh
 
 Musi przejść przed zmianą i po zmianie. Stan wyjściowy:
 **642 + 52 firmware, 1423 (×6 pór doby) + 92 + 52 aplikacja, 48 zgodności,
-156 reguł bazy, 375 kontroli audytu, 42 kontrole statyczne — 0 błędów.**
+156 reguł bazy, 375 kontroli audytu, 43 kontrole statyczne — 0 błędów.**
 
 **Runner jest cichy przy sukcesie i głośny przy błędzie** (D66). Udany przebieg
 to 12 linii — **i te 12 linii TO JEST potwierdzenie, nie jego skrót.** Nie
@@ -322,7 +322,7 @@ na `esp32:esp32@3.3.11` i z **ustawieniami płytki z nagłówka `PillBox.ino`**.
 Nie jest częścią `run_all.sh`: wymaga sieci i ~500 MB toolchainu.
 **Uruchom to po każdej zmianie w firmware.**
 
-Stan: `PillBox.ino` **64% flasha** (1 265 417 B z 1,875 MB), `PillBoxWeek.ino` **58%** (1 158 477 B),
+Stan: `PillBox.ino` **64% flasha** (1 265 417 B z 1,875 MB), `PillBoxWeek.ino` **61%** (1 200 423 B),
 `PillBoxTest.ino` 20% bez `config.h` i **57%** z nim. Szkic diagnostyczny budujemy w OBU
 konfiguracjach — bez tego drugiego przebiegu 722 kB jego kodu (logowanie do
 bazy, zapis wyniku) nie było kompilowane ani razu (D103).
@@ -370,7 +370,17 @@ nie do publikacji. Szczegóły obejść — D17.
   statyczna tego pilnuje — ale żadna jej część nie została uruchomiona
   na tym urządzeniu. Warunkiem jest hasło w NVS; bez niego `otaDecyzja()`
   odmawia i to jest celowe.
-  **Czego nadal nie ma:** portalu sieci i powiadomień Telegram.
+  **Portal WiFi z przycisku — dodany w `0.5.0` (D131), NIESPRAWDZONY na
+  płytce, i jest tu jedna rzecz warta uwagi przed wgraniem:** przycisk
+  jest teraz **źródłem wybudzenia z głębokiego snu**, razem z klapkami,
+  jedną maską na wspólnym poziomie niskim. W pudełku dziennym się tego
+  nie dało (przeciwne poziomy), więc ta ścieżka nie ma za sobą żadnego
+  przebiegu na sprzęcie. To ta sama rodzina co B30 — jeśli pudełko po
+  wgraniu zacznie budzić się w kółko, **najpierw zobacz w logu, czy
+  meldunek mówi `[BTN]`**, i napisz. Zabezpieczenia są dwa: przycisku
+  wciśniętego przy zasypianiu nie uzbrajamy, a po trzech wybudzeniach
+  z rzędu odpoczywa jeden sen.
+  **Czego nadal nie ma:** powiadomień Telegram.
 - **Pomiar baterii pudełka tygodniowego — NIEWYJAŚNIONY.** Melduje `2,32 V`,
   czyli napięcie, przy którym płytka by nie chodziła. Program zgłasza to
   uczciwie jako brak danych (`-1%`), ale **przyczyny nie znamy**. Najpierw
