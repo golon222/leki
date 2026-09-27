@@ -709,6 +709,150 @@ if w.exists():
     else:
         print("  OK   pudelko tygodniowe usypia z pinem w trybie cyfrowym")
 
+    # ── DWIE KOPIE DECYZJI O AKTUALIZACJI MUSZA BYC IDENTYCZNE ──────
+    #
+    # `otaDecyzja()` stoi w obu szkicach, bo ograniczenie 1 z CLAUDE.md
+    # zabrania wspolnego pliku: zmiana w pudelku dziewczyny nie ma prawa
+    # dotykac kodu pilnujacego Warfinu. Cena za to jest znana z D111 -
+    # dwie kopie rozjada sie przy pierwszej poprawce, a ta decyduje
+    # o tym, czy pudelko pobierze 1,1 MB i zrestartuje sie na nowy program.
+    #
+    # Porownujemy SAM KOD, bez komentarzy i bez odstepow: oryginal ma
+    # w srodku kilkadziesiat linii opisu, ktorych nie ma po co dublowac.
+    # Testy C++ uruchamiaja te funkcje raz - identycznosc rozciaga ich
+    # wynik na oba pudelka i to jest caly sens tej kontroli.
+    def _cialo(tekst, nazwa):
+        i = tekst.find(nazwa + '(')
+        if i < 0: return None
+        i = tekst.index('{', i)
+        gl, j = 0, i
+        while j < len(tekst):
+            if tekst[j] == '{': gl += 1
+            elif tekst[j] == '}':
+                gl -= 1
+                if gl == 0: return tekst[i:j+1]
+            j += 1
+        return None
+
+    def _sameKod(t):
+        t = re.sub(r'/\*.*?\*/', '', t, flags=re.S)
+        t = re.sub(r'//[^\n]*', '', t)
+        return ' '.join(t.split())
+
+    _a = _cialo(ino, 'OtaDecyzja otaDecyzja')
+    _b = _cialo(src, 'OtaDecyzja otaDecyzja')
+    if not _a or not _b:
+        bad += 1; print('  BLAD nie znalazlem otaDecyzja() w obu szkicach')
+    elif _sameKod(_a) != _sameKod(_b):
+        bad += 1
+        print('  BLAD otaDecyzja() w obu pudelkach ROZJECHALA SIE - jedno z nich')
+        print('       zdecyduje inaczej o pobraniu programu. Wyrownaj kod.')
+    else:
+        print('  OK   decyzja o aktualizacji identyczna w obu pudelkach')
+
+    # ── KAZDE PUDELKO POBIERA SWOJ PLIK ─────────────────────────────
+    #
+    # Wgranie pudelku tygodniowemu programu dziennego (albo odwrotnie)
+    # konczy sie dwiema ceglami: piny, drabinka i cala logika sa inne,
+    # a OTA nie ma jak tego rozpoznac - sprawdza sume pliku, ktory sam
+    # wskazal. Rozroznienie jest WYLACZNIE w nazwie pliku, wiec ta nazwa
+    # jest czescia bezpieczenstwa, a nie kosmetyka.
+    _cfgW = (root/"firmware/PillBoxWeek/config.h").read_text(encoding="utf-8")
+    def _defW(n, tekst):
+        m = re.search(rf'#\s*define\s+{n}\s+"?([^"\s]+)"?', tekst)
+        return m.group(1) if m else None
+    _zle = []
+    for _n in ('OTA_BIN_FILE', 'OTA_JSON_FILE'):
+        _d, _t = _defW(_n, cfg), _defW(_n, _cfgW)
+        if not _t:      _zle.append(f'{_n}: nie ma w config.h pudelka tygodniowego')
+        elif _t == _d:  _zle.append(f'{_n}: oba pudelka pobieraja "{_t}"')
+        elif _wf_p.exists() and _t not in _wf_p.read_text(encoding='utf-8'):
+            _zle.append(f'{_n}="{_t}" - automat go nie buduje')
+    for _n in ('OTA_MIN_BIN_SIZE', 'OTA_MAX_BIN_SIZE', 'OTA_MAX_FAILS', 'OTA_BOOT_TRIES'):
+        _d, _t = _defW(_n, cfg), _defW(_n, _cfgW)
+        if _d != _t: _zle.append(f'{_n}: dzienne {_d}, tygodniowe {_t}')
+    if 'TUTAJ_WPISZ_HASLO' not in _cfgW:
+        _zle.append('config.h pudelka tygodniowego nie ma placeholdera hasla')
+    if _zle:
+        bad += 1
+        print('  BLAD aktualizacja pudelka tygodniowego:')
+        for _z in _zle: print('       ' + _z)
+    else:
+        print('  OK   pudelko tygodniowe pobiera wlasny plik, tymi samymi progami')
+
+    # ── APLIKACJA I PUDELKO MUSZA WSKAZYWAC TEN SAM PLIK ────────────
+    #
+    # Aplikacja pokazuje "jest nowa wersja" na podstawie opisu, ktory
+    # pobiera SAMA; pudelko pobiera program na podstawie opisu, ktory
+    # pobiera SAMO. Gdyby te dwie nazwy sie rozjechaly, ekran mowilby
+    # o jednej wersji, a pudelko sciagaloby inna - w najgorszym razie
+    # program DRUGIEGO pudelka, czyli dwie cegly.
+    _pud = dict(re.findall(r'id:"(pillbox\d+)",[^}]*?fw:"([^"]+)"', _html, re.S))
+    _kfg = {'pillbox01': cfg, 'pillbox02': _cfgW}
+    _zle = []
+    for _id, _tekst in _kfg.items():
+        _wFirmware = _defW('OTA_JSON_FILE', _tekst)
+        _wAplikacji = _pud.get(_id)
+        _devId = _defW('DEVICE_ID', _tekst)
+        if _devId != _id:
+            _zle.append(f'{_id}: config.h mowi DEVICE_ID="{_devId}"')
+        if not _wAplikacji:
+            _zle.append(f'{_id}: aplikacja nie zna pliku opisu wersji')
+        elif _wAplikacji != _wFirmware:
+            _zle.append(f'{_id}: aplikacja czyta "{_wAplikacji}", pudelko "{_wFirmware}"')
+    if _zle:
+        bad += 1
+        print('  BLAD aplikacja i pudelko o roznych programach:')
+        for _z in _zle: print('       ' + _z)
+    else:
+        print(f'  OK   aplikacja i pudelka wskazuja te same programy ({len(_kfg)})')
+
+    # ── OKABLOWANIE AKTUALIZACJI W PUDELKU TYGODNIOWYM ──────────────
+    #
+    # Audyt firmware (krok 3/10) czyta wylacznie pudelko dzienne, a to sa
+    # te jego reguly, ktorych zlamanie w pudelku tygodniowym kosztowaloby
+    # dokladnie tyle samo. Kazda byla w pudelku dziennym BLEDEM, nie
+    # przewidywaniem: minuta radia miedzy otwarciem a zapisem (zasada 11),
+    # ufanie pamieci sprzed wybudzenia (D62), licznik prob podniesiony po
+    # pobraniu zamiast przed (aktualizacja wieszajaca plytke probowalaby
+    # w kolko), i dobra wersja cofajaca sie, bo nikt jej nie potwierdzil.
+    _bez = lambda t: re.sub(r'//[^\n]*', '', re.sub(r'/\*.*?\*/', '', t, flags=re.S))
+    _kod = _bez(src)
+    _sen = _cialo(src, 'void idzSpac') or ''
+    _sen = _bez(_sen)
+    _setup = _bez(_cialo(src, 'void setup') or '')
+    _spr = _bez(_cialo(src, 'void otaSprobuj') or '')
+    _zle = []
+
+    if len(re.findall(r'\botaSprobuj\s*\(\s*\)', _kod)) != 2:   # definicja + jedno wolanie
+        _zle.append('otaSprobuj() nie jest wolane z dokladnie jednego miejsca')
+    elif 'otaSprobuj()' not in _sen:
+        _zle.append('otaSprobuj() nie jest wolane z idzSpac()')
+    _p, _s2 = _sen.find('otaPotwierdzDzialanie()'), _sen.find('otaSprobuj()')
+    if _p < 0 or _s2 < 0 or _p > _s2:
+        _zle.append('otaPotwierdzDzialanie() nie idzie PRZED otaSprobuj()')
+    if 'otaZlecenieWBazie' not in _spr:
+        _zle.append('otaSprobuj() ufa pamieci sprzed wybudzenia zamiast dopytac baze')
+    # Licznik proby musi rosnac MIEDZY decyzja a pobraniem. Pierwsze
+    # wystapienie `otaZanotujProbe` w tej funkcji lezy na sciezce "nie
+    # udalo sie pobrac opisu" i jest PRZED `otaWgraj()` zawsze - wiec
+    # szukanie po nim nie pilnowaloby niczego. Patrzymy dokladnie w okno
+    # miedzy zerowaniem licznika a pobraniem.
+    _wg  = _spr.find('otaWgraj(')
+    _dec = _spr.find('OTA_MAX_FAILS')
+    if _wg < 0 or _dec < 0 or _dec > _wg:
+        _zle.append('nie rozpoznaje sciezki pobierania w otaSprobuj()')
+    elif 'otaZanotujProbe' not in _spr[_dec:_wg]:
+        _zle.append('licznik proby podnoszony PO pobraniu, nie przed')
+    if 'otaSprawdzPoStarcie()' not in _setup:
+        _zle.append('setup() nie sprawdza, czy swiezo wgrana wersja w ogole wstaje')
+    if _zle:
+        bad += 1
+        print('  BLAD okablowanie aktualizacji w pudelku tygodniowym:')
+        for _z in _zle: print('       ' + _z)
+    else:
+        print('  OK   aktualizacja tygodniowego rusza tylko ze snu, po zapisie zdarzenia')
+
 t = root/"firmware/PillBoxTest/PillBoxTest.ino"
 if t.exists():
     src = t.read_text(encoding="utf-8")

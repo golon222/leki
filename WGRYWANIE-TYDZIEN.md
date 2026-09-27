@@ -265,6 +265,22 @@ Menu **Narzędzia** — identycznie jak przy pudełku dziennym:
 Program zajmuje **58%** pierwszej partycji. Podłącz kablem, wybierz port,
 **Wgraj**.
 
+**To jest ostatnie wgranie kablem, którego potrzebuje to pudełko.** Od
+`0.4.0` umie się aktualizować przez WiFi — tak samo jak dzienne. Warunek
+jest jeden i jest nie do obejścia: **hasło musi wylądować w jego pamięci
+trwałej**, a trafia tam przy pierwszym udanym logowaniu do bazy. Dlatego
+krok 5 („czy się zameldowało") nie jest formalnością — dopóki w logu nie
+zobaczysz `haslo zapisane w pamieci`, aktualizacja przez WiFi odmówi
+i słusznie: binarka z automatu hasła nie zna, więc wgranie jej pudełku,
+które też go nie ma, odcięłoby je od bazy. Czyli od jedynej drogi naprawy
+bez kabla.
+
+Aktualizację zlecasz potem z aplikacji: **Ustawienia → Urządzenie →
+Aktualizuj program pudełka**. Pudełko wykona ją przed zaśnięciem, przy
+najbliższym połączeniu — w praktyce po otwarciu klapki. Usłyszysz dwa
+piknięcia na start i trzy wznoszące tony, gdy nowa wersja wstanie
+i przejdzie całą swoją drogę.
+
 ---
 
 # 5. Czy się zameldowało
@@ -272,7 +288,7 @@ Program zajmuje **58%** pierwszej partycji. Podłącz kablem, wybierz port,
 Otwórz **Monitor portu szeregowego, 115200**:
 
 ```
-===== PillBoxWeek 0.1.0  (wybudzenie 1) =====
+===== PillBoxWeek 0.4.0  (wybudzenie 1) =====
 [BAT] 87%  4.08 V
 [   ] zimny start
 [NET] lacze z 'TwojaSiec'

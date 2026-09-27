@@ -5222,6 +5222,39 @@ head("Chrom idzie przez zmienne");
         "oba kolory paska statusu zgadzaja sie z tlem swojego motywu");
 }
 
+/* ═══════════ KAZDE PUDELKO MA SWOJ PROGRAM (D130) ═══════════
+
+   Aplikacja pokazuje "jest nowa wersja" na podstawie opisu, ktory pobiera
+   SAMA, a pudelko pobiera program na podstawie opisu, ktory pobiera SAMO.
+   Gdyby te dwie nazwy sie rozjechaly, ekran mowilby o jednej wersji,
+   a pudelko sciagaloby inna - w najgorszym razie program DRUGIEGO
+   pudelka. Piny, drabinka i cala logika sa inne, wiec skonczyloby sie to
+   dwiema ceglami, a OTA nie ma jak tego rozpoznac: sprawdza sume pliku,
+   ktory sam wskazal.
+
+   Czy nazwy zgadzaja sie z config.h obu szkicow, pilnuje kontrola
+   statyczna. Tutaj pilnujemy tego, co widac z aplikacji.              */
+head("Opis wersji osobny dla kazdego pudelka");
+{
+  check(/fetch\("\.\/firmware\/" \+ plik/.test(html),
+        "aplikacja sklada sciezke z nazwy naleznej pudelku");
+  check(!/fetch\("\.\/firmware\/PillBox\.json"/.test(html),
+        "i nie ma juz nazwy wpisanej na sztywno");
+
+  const m = html.match(/const PUDELKA = \[([\s\S]*?)\n\];/);
+  check(!!m, "lista pudelek istnieje");
+  const lista = m ? m[1] : "";
+  const pary = [...lista.matchAll(/id:"(pillbox\d+)"[\s\S]*?fw:"([^"]+)"/g)].map(x => [x[1], x[2]]);
+  check(pary.length >= 2, `kazde pudelko ma swoj opis wersji (${pary.length})`);
+  check(new Set(pary.map(p => p[1])).size === pary.length,
+        "zadne dwa pudelka nie pobieraja tego samego programu");
+
+  /* Nieznane pudelko nie dostaje opisu pudelka dziennego. Lepiej nie
+     zaproponowac aktualizacji wcale niz zaproponowac cudza.          */
+  check(/return p && p\.fw \? p\.fw : null/.test(html),
+        "pudelko bez wlasnego programu nie dziedziczy cudzego");
+}
+
 head("Zgodnosc wersji aplikacji");
 check(/const APP_VERSION = "([\d.\-]+)"/.test(html), "index.html deklaruje wersje");
 const av = html.match(/const APP_VERSION = "([\d.\-]+)"/)?.[1];

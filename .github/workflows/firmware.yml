@@ -2,9 +2,14 @@
 #  Buduje binarke firmware i kladzie ja obok aplikacji na GitHub Pages,
 #  zeby pudelko moglo sie zaktualizowac przez WiFi (D59).
 #
-#  Efektem sa DWA pliki w firmware/:
-#    PillBox.bin   - sam program (~1,2 MB)
-#    PillBox.json  - opis: wersja, suma MD5, rozmiar, data, commit
+#  Efektem sa DWA PLIKI NA PUDELKO w firmware/:
+#    PillBox.bin      + PillBox.json       - pudelko dzienne  (~1,2 MB)
+#    PillBoxWeek.bin  + PillBoxWeek.json   - pudelko tygodniowe (~1,1 MB)
+#  Opis to wersja, suma MD5, rozmiar, data, commit i odcisk zrodla.
+#
+#  KAZDE PUDELKO MA WLASNY ODCISK ZRODLA i wlasny warunek publikacji.
+#  Wspolny kazalby pudelku dziewczyny sciagac megabajt przez WiFi za
+#  kazda poprawka w kodzie pilnujacym Warfinu - i odwrotnie.
 #
 #  Pudelko pobiera najpierw opis (kilkaset bajtow) i caly program sciaga
 #  dopiero wtedy, gdy suma rozni sie od tej, ktora juz ma. Suma z opisu idzie
@@ -66,17 +71,22 @@ jobs:
       - name: Czy zrodlo firmware sie zmienilo
         run: |
           set -e
-          TERAZ=$(bash tests/zrodlo_firmware.sh)
-          POPRZEDNI=$(python3 -c "import json;print(json.load(open('firmware/PillBox.json')).get('zrodlo',''))" 2>/dev/null || true)
-          echo "zrodlo teraz:      $TERAZ"
-          echo "zrodlo opublikowane: ${POPRZEDNI:-(brak)}"
-          if [ -n "$POPRZEDNI" ] && [ "$TERAZ" = "$POPRZEDNI" ]; then
-            echo "POMIN=1" >> "$GITHUB_ENV"
-            echo "-> zrodlo pudelka dziennego bez zmian, nie ma czego publikowac"
-          else
-            echo "-> zrodlo inne (albo nieznane) - binarka pojdzie na Pages"
-          fi
-          echo "ZRODLO=$TERAZ" >> "$GITHUB_ENV"
+          sprawdz() {           # $1 = dzienne|tygodniowe, $2 = plik opisu, $3 = przyrostek
+            TERAZ=$(bash tests/zrodlo_firmware.sh "$1")
+            POPRZEDNI=$(python3 -c "import json;print(json.load(open('firmware/$2')).get('zrodlo',''))" 2>/dev/null || true)
+            echo "[$1] zrodlo teraz:        $TERAZ"
+            echo "[$1] zrodlo opublikowane: ${POPRZEDNI:-(brak)}"
+            if [ -n "$POPRZEDNI" ] && [ "$TERAZ" = "$POPRZEDNI" ]; then
+              echo "POMIN_$3=1" >> "$GITHUB_ENV"
+              echo "[$1] -> bez zmian, nie ma czego publikowac"
+            else
+              echo "[$1] -> zrodlo inne (albo nieznane) - binarka pojdzie na Pages"
+              echo "COKOLWIEK=1" >> "$GITHUB_ENV"
+            fi
+            echo "ZRODLO_$3=$TERAZ" >> "$GITHUB_ENV"
+          }
+          sprawdz dzienne    PillBox.json     D
+          sprawdz tygodniowe PillBoxWeek.json T
 
       # Toolchain wazy ~500 MB, wiec trzymamy go miedzy uruchomieniami.
       # Klucz zawiera wersje rdzenia - jej podbicie ma unieważnić cache.
@@ -92,57 +102,70 @@ jobs:
       - name: Kompilacja
         env:
           OTA_OUT: ${{ runner.temp }}/ota
+          OTA_WEEK_OUT: ${{ runner.temp }}/ota
         run: bash tests/kompiluj_firmware.sh
 
       - name: Opis wersji
         run: |
           set -e
-          BIN="${{ runner.temp }}/ota/pbino.ino.bin"
-          test -f "$BIN" || { echo "BLAD: kompilacja nie zostawila binarki"; exit 1; }
-
-          WERSJA=$(grep -oP '#define\s+FW_VERSION\s+"\K[^"]+' firmware/PillBox/config.h)
-          MD5=$(md5sum "$BIN" | cut -d' ' -f1)
-          ROZMIAR=$(stat -c%s "$BIN")
-
-          # Zdrowy rozsadek: te same granice, ktorych pilnuje firmware
-          # (OTA_MIN_BIN_SIZE / OTA_MAX_BIN_SIZE). Lepiej zatrzymac sie
-          # tutaj niz wypuscic plik, ktorego pudelko i tak odrzuci.
-          if [ "$ROZMIAR" -lt 300000 ] || [ "$ROZMIAR" -gt 1900000 ]; then
-            echo "BLAD: rozmiar $ROZMIAR poza zakresem, ktory przyjmuje pudelko"
-            exit 1
-          fi
-
-          # Placeholder MUSI zostac. Gdyby ktos kiedys wrzucil config.h
-          # z prawdziwym haslem, ten krok zatrzyma automat, zanim haslo
-          # trafi do binarki lezacej publicznie na GitHub Pages.
-          if ! grep -q 'TUTAJ_WPISZ_HASLO' firmware/PillBox/config.h; then
-            echo "BLAD: config.h nie ma placeholdera - czy ktos wrzucil prawdziwe haslo?"
-            exit 1
-          fi
-
-          # Skladamy artefakty POZA repo. Krok publikacji przestawia galaz
-          # na najswiezszy main i dopiero wtedy je tam kopiuje - inaczej
-          # `reset --hard` skasowalby wlasnie to, co zbudowalismy.
           OUT="${{ runner.temp }}/ota"
-          cp "$BIN" "$OUT/PillBox.bin"
-          echo "WERSJA=$WERSJA" >> "$GITHUB_ENV"
-          cat > "$OUT/PillBox.json" <<EOF
+
+          # Funkcje wolamy WPROST, nie przez $(...): w podpowloce `exit 1`
+          # konczy tylko ja, a komunikat "BLAD: ..." wpadlby do zmiennej
+          # zamiast do logu - czyli automat zatrzymalby sie bez powodu na
+          # ekranie. Numer wersji idzie do GITHUB_ENV pod nazwa z $5.
+          opis() {   # $1 = plik .bin z kompilacji, $2 = katalog szkicu,
+                     # $3 = nazwa docelowa (bez rozszerzenia), $4 = odcisk
+                     # zrodla, $5 = nazwa zmiennej na numer wersji
+            BIN="$OUT/$1"
+            test -f "$BIN" || { echo "BLAD: kompilacja nie zostawila $1"; exit 1; }
+
+            WERSJA=$(grep -oP '#define\s+FW_VERSION\s+"\K[^"]+' "$2/config.h")
+            MD5=$(md5sum "$BIN" | cut -d' ' -f1)
+            ROZMIAR=$(stat -c%s "$BIN")
+
+            # Zdrowy rozsadek: te same granice, ktorych pilnuje firmware
+            # (OTA_MIN_BIN_SIZE / OTA_MAX_BIN_SIZE). Lepiej zatrzymac sie
+            # tutaj niz wypuscic plik, ktorego pudelko i tak odrzuci.
+            if [ "$ROZMIAR" -lt 300000 ] || [ "$ROZMIAR" -gt 1900000 ]; then
+              echo "BLAD: rozmiar $ROZMIAR poza zakresem, ktory przyjmuje pudelko"
+              exit 1
+            fi
+
+            # Placeholder MUSI zostac. Gdyby ktos kiedys wrzucil config.h
+            # z prawdziwym haslem, ten krok zatrzyma automat, zanim haslo
+            # trafi do binarki lezacej publicznie na GitHub Pages.
+            if ! grep -q 'TUTAJ_WPISZ_HASLO' "$2/config.h"; then
+              echo "BLAD: $2/config.h nie ma placeholdera - czy ktos wrzucil prawdziwe haslo?"
+              exit 1
+            fi
+
+            # Skladamy artefakty POZA repo. Krok publikacji przestawia galaz
+            # na najswiezszy main i dopiero wtedy je tam kopiuje - inaczej
+            # `reset --hard` skasowalby wlasnie to, co zbudowalismy.
+            cp "$BIN" "$OUT/$3.bin"
+            cat > "$OUT/$3.json" <<EOF
           {
             "wersja": "$WERSJA",
             "md5": "$MD5",
             "rozmiar": $ROZMIAR,
             "zbudowano": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
             "commit": "${GITHUB_SHA}",
-            "zrodlo": "${ZRODLO}"
+            "zrodlo": "$4"
           }
           EOF
-          echo "wersja $WERSJA, $ROZMIAR B, md5 $MD5"
+            echo "$3: wersja $WERSJA, $ROZMIAR B, md5 $MD5"
+            echo "$5=$WERSJA" >> "$GITHUB_ENV"
+          }
+
+          opis pbino.ino.bin  firmware/PillBox     PillBox     "$ZRODLO_D" WERSJA_D
+          opis pbwino.ino.bin firmware/PillBoxWeek PillBoxWeek "$ZRODLO_T" WERSJA_T
 
       # Kompilacja wyzej idzie ZAWSZE - to jedyne automatyczne sprawdzenie,
       # czy firmware sie buduje, i obejmuje takze pudelko tygodniowe.
       # Warunek wisi dopiero tutaj, na publikacji.
       - name: Publikacja
-        if: env.POMIN != '1'
+        if: env.COKOLWIEK == '1'
         run: |
           set -e
           git config user.name  "github-actions[bot]"
@@ -163,17 +186,30 @@ jobs:
           git fetch origin main
           git reset --hard origin/main
 
-          cp "${{ runner.temp }}/ota/PillBox.bin"  firmware/PillBox.bin
-          cp "${{ runner.temp }}/ota/PillBox.json" firmware/PillBox.json
+          # KOPIUJEMY TYLKO TO, CO SIE ZMIENILO. Kazde pudelko ma wlasny
+          # odcisk zrodla, wiec poprawka w jednym nie kaze drugiemu sciagac
+          # megabajta przez WiFi z baterii.
+          OPIS=""
+          if [ "${POMIN_D:-0}" != "1" ]; then
+            cp "${{ runner.temp }}/ota/PillBox.bin"  firmware/PillBox.bin
+            cp "${{ runner.temp }}/ota/PillBox.json" firmware/PillBox.json
+            git add firmware/PillBox.bin firmware/PillBox.json
+            OPIS="dzienne $WERSJA_D"
+          fi
+          if [ "${POMIN_T:-0}" != "1" ]; then
+            cp "${{ runner.temp }}/ota/PillBoxWeek.bin"  firmware/PillBoxWeek.bin
+            cp "${{ runner.temp }}/ota/PillBoxWeek.json" firmware/PillBoxWeek.json
+            git add firmware/PillBoxWeek.bin firmware/PillBoxWeek.json
+            OPIS="${OPIS:+$OPIS, }tygodniowe $WERSJA_T"
+          fi
 
           # Tu NIE MA juz guarda porownujacego pliki - stal tu i nie dzialal,
-          # bo PillBox.json trzyma date budowania, wiec zmienial sie co
-          # przebieg niezaleznie od binarki. O tym, czy w ogole tu wchodzimy,
-          # decyduje odcisk zrodla policzony na samym poczatku.
-          git add firmware/PillBox.bin firmware/PillBox.json
+          # bo opis trzyma date budowania, wiec zmienial sie co przebieg
+          # niezaleznie od binarki. O tym, czy w ogole tu wchodzimy,
+          # decyduja odciski zrodel policzone na samym poczatku.
           # [skip ci] zamyka petle: ten commit dotyka firmware/, wiec bez
           # tego wyzwolilby ten sam workflow jeszcze raz, i tak w kolko.
-          git commit -m "Firmware $WERSJA do aktualizacji przez WiFi [skip ci]"
+          git commit -m "Firmware ($OPIS) do aktualizacji przez WiFi [skip ci]"
 
           # Nawet z odswiezona galezia ktos moze zdazyc wejsc miedzy fetch
           # a push. Trzy podejscia zamiast jednego i przegranej calej budowy.

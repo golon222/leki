@@ -38,6 +38,11 @@
 #include <time.h>
 #include "esp_sleep.h"
 #include "driver/gpio.h"
+#if OTA_ENABLED
+  #include <Update.h>
+  #include "esp_ota_ops.h"
+  #include "esp_partition.h"
+#endif
 
 #if !defined(PILLBOX_WEEK_CONFIG_VERSION)
 #error "config.h nie pasuje do tego szkicu - pobierz oba pliki na nowo."
@@ -53,9 +58,32 @@
 
     Numer wersji, ktory mieszka w NAGLOWKU, opisuje naglowek. Ten opisuje
     program. Gdy sie rozjada, log krzyczy o tym w pierwszej linii.        */
-#define KOD_WERSJA "0.3.0"
+#define KOD_WERSJA "0.4.0"
 
 #define LOG(...)  Serial.printf(__VA_ARGS__)
+
+#if OTA_ENABLED
+/*  TYP STOI TU, A NIE PRZY SWOJEJ SEKCJI - i to nie jest kwestia gustu.
+
+    Arduino generuje prototypy WSZYSTKICH funkcji i wkleja je na poczatek
+    pliku, przed pierwsza linijka kodu. Prototyp `otaOpisDecyzji(OtaDecyzja)`
+    trafial wiec nad definicje typu i kompilacja konczyla sie bledem
+    "'OtaDecyzja' was not declared in this scope" - ale WYLACZNIE przy
+    budowaniu przez sciezke .ino. Ten sam plik jako .cpp budowal sie bez
+    slowa (B21/D26: przez miesiac sprawdzalismy tylko .cpp i firmware nie
+    dawal sie wgrac). Pudelko dzienne trzyma ten typ wysoko z tego samego
+    powodu.                                                             */
+enum OtaDecyzja {
+  OTA_ROB = 0,          // wszystko sie zgadza - pobieraj
+  OTA_NIC_NOWEGO,       // ta sama suma co juz mam
+  OTA_BEZ_HASLA,        // pamiec trwala nie ma hasla do bazy
+  OTA_KOLEJKA,          // sa niewyslane zdarzenia - one maja pierwszenstwo
+  OTA_BATERIA,          // za malo pradu i nie stoi na ladowarce
+  OTA_PODDANO,          // OTA_MAX_FAILS prob z rzedu bez skutku
+  OTA_ZEPSUTA,          // ta wersja juz raz nie wstala
+  OTA_ZLY_OPIS          // plik z opisem nie ma sensu (rozmiar, suma)
+};
+#endif
 
 static const char* NAZWY_DNI[7] = { "PON","WT","SR","CZW","PT","SOB","ND" };
 static const uint16_t PROGI[8]  = PROGI_KLAPEK;
@@ -74,6 +102,16 @@ RTC_DATA_ATTR uint8_t  rtcAlarmPonowien = 0;
 RTC_DATA_ATTR bool     rtcCzasPewny     = false;
 RTC_DATA_ATTR uint8_t  rtcPuste         = 0;    // wybudzenia z pinu, ktore nic nie wykryly
 RTC_DATA_ATTR uint16_t rtcPusteRazem    = 0;    // ile ich bylo w ogole - idzie do statusu
+
+/*  AKTUALIZACJA PRZEZ WIFI. `rtcOtaMsg` przezywa sen, zeby powod odmowy
+    dojechal do aplikacji takze wtedy, gdy w chwili odmowy nie bylo juz
+    sieci. "Nie podalo powodu" jest najgorsza z mozliwych odpowiedzi dla
+    kogos, kto stoi nad pudelkiem.                                       */
+RTC_DATA_ATTR bool     rtcOtaProsba     = false;
+RTC_DATA_ATTR uint32_t rtcOtaTs         = 0;    // kiedy zlozono zlecenie
+RTC_DATA_ATTR int32_t  rtcOtaNagl       = 0;    // ile bajtow zapowiedzial serwer
+RTC_DATA_ATTR char     rtcOtaMsg[64]    = "";
+RTC_DATA_ATTR char     rtcOtaWersja[16] = "";
 
 /* =====================================================================
  *  STAN BIEZACEGO WYBUDZENIA
@@ -353,6 +391,8 @@ String hasloDoLogowania() {
   return String(DEVICE_PASSWORD);
 }
 
+bool hasloWPamieci() { return nvs.getString("haslo", "").length() > 0; }
+
 void hasloUtrwal(const String& h) {
   if (h == "TUTAJ_WPISZ_HASLO" || !h.length()) return;
   if (nvs.getString("haslo", "") == h) return;
@@ -482,6 +522,15 @@ void oproznijKolejke() {
   }
 }
 
+#if OTA_ENABLED
+/*  Deklaracja zapowiadajaca. Status stoi w tym pliku PRZED sekcja
+    aktualizacji, a potrzebuje z niej jednej funkcji. Szkic .ino dostaje
+    prototypy od preprocesora Arduino, ale ten sam plik kompilujemy TAKZE
+    jako .cpp (B21/D26) - a tam ich nie ma i brak tej linijki zatrzymalby
+    budowanie.                                                          */
+String otaSumaWgranej();
+#endif
+
 void wyslijStatus() {
   JsonDocument doc;
   /*  `status/battery` ma w regulach zakres 0..100, wiec -1 odrzucilby
@@ -500,6 +549,19 @@ void wyslijStatus() {
       pudelko budzi sie z pinu bez powodu i trzeba na to spojrzec.      */
   doc["puste"]   = (uint32_t)rtcPusteRazem;
   doc["ts"]      = (uint32_t)time(nullptr);
+#if OTA_ENABLED
+  /*  Stan aktualizacji jedzie TYMI SAMYMI polami co w pudelku dziennym -
+      aplikacja czyta oba urzadzenia jednym kodem. `otaMsg` to jedyne
+      miejsce, z ktorego czlowiek dowiaduje sie, DLACZEGO pudelko nie
+      zaktualizowalo sie po nacisnieciu przycisku.                      */
+  doc["otaMsg"]    = rtcOtaMsg;
+  doc["otaWersja"] = rtcOtaWersja;
+  doc["otaHaslo"]  = hasloWPamieci();
+  doc["otaProsba"] = rtcOtaProsba;
+  doc["otaFail"]   = nvs.getUShort("otaFail", 0);
+  doc["otaBad"]    = nvs.getString("otaBad", "");
+  doc["otaMd5"]    = otaSumaWgranej();
+#endif
   String body; serializeJson(doc, body);
   rtdbWyslij("PATCH", "/devices/" DEVICE_ID "/status.json", body);
 }
@@ -513,6 +575,18 @@ void pobierzUstawienia() {
 
   JsonDocument doc;
   if (deserializeJson(doc, odp)) return;
+
+#if OTA_ENABLED
+  /*  Zlecenie aktualizacji. To tylko PRZYSPIESZACZ - `otaSprobuj()` i tak
+      dopyta baze tuz przed proba, bo zlecenie moze dojechac w trakcie
+      tego wybudzenia (D62). Bez tego dopytania "kliknij i pudelko
+      przyjmie" nie dzialalo w pudelku dziennym przez kilka wersji.     */
+  if (!doc["otaCmd"].isNull()) {
+    rtcOtaProsba = true;
+    rtcOtaTs     = doc["otaCmd"]["ts"] | (uint32_t)0;
+    LOG("[OTA] w bazie stoi zlecenie aktualizacji (z %lu)\n", (unsigned long)rtcOtaTs);
+  }
+#endif
 
   JsonArray sch = doc["schedule"].as<JsonArray>();
   if (!sch.isNull() && sch.size()) {
@@ -667,7 +741,393 @@ int zagrajAlarm() {
 }
 
 /* =====================================================================
- *  11.  SEN
+ *  11.  AKTUALIZACJA PROGRAMU PRZEZ WIFI  (OTA)
+ *
+ *  Przeniesione z pudelka dziennego (D59, D63) i dzialajace tam samo -
+ *  potwierdzone na plytce 2026-08-16. Tutaj powod jest jeszcze mocniejszy
+ *  niz tam: pudelko tygodniowe stoi u kogos innego, a jedyna droga do
+ *  poprawki byl dotad kabel i moj komputer.
+ *
+ *  DLACZEGO KOD JEST SKOPIOWANY, A NIE WSPOLNY: ograniczenie 1 z CLAUDE.md.
+ *  Wspolny szkic z rozgalezieniem znaczylby, ze kazda zmiana w pudelku
+ *  dziewczyny dotyka kodu pilnujacego Warfinu.
+ *
+ *  Zeby kopia nie rozjechala sie z oryginalem, `otaDecyzja()` jest tu
+ *  ZNAK W ZNAK ta sama funkcja co w PillBox.ino - i kontrola statyczna
+ *  to sprawdza, porownujac oba ciala. Dwie kopie decyzji, ktore moga sie
+ *  rozjechac, to ten sam blad co dwie kopie obserwacji wieczka (D111).
+ *  Testy C++ uruchamiaja te funkcje raz; identycznosc rozciaga ich wynik
+ *  na oba pudelka.
+ * ===================================================================== */
+#if OTA_ENABLED
+
+OtaDecyzja otaDecyzja(bool hasloJest, int wKolejce, int battPct, bool naLadowarce,
+                      uint8_t nieudane, uint32_t teraz, uint32_t ostatniaProba,
+                      uint32_t rozmiar, uint32_t tsZlecenia,
+                      const String& sumaZdalna, const String& sumaLokalna,
+                      const String& sumaZla) {
+  if (sumaZdalna.length() != 32) return OTA_ZLY_OPIS;
+  if (rozmiar < OTA_MIN_BIN_SIZE || rozmiar > OTA_MAX_BIN_SIZE) return OTA_ZLY_OPIS;
+  if (sumaZdalna == sumaLokalna) return OTA_NIC_NOWEGO;
+  if (sumaZla.length() == 32 && sumaZdalna == sumaZla) return OTA_ZEPSUTA;
+  if (!hasloJest)   return OTA_BEZ_HASLA;
+  if (wKolejce > 0) return OTA_KOLEJKA;
+  if (!naLadowarce && battPct >= 0 && battPct < OTA_MIN_BATT_PCT) return OTA_BATERIA;
+  const bool swiezeZlecenie = tsZlecenia && tsZlecenia > ostatniaProba;
+  if (!swiezeZlecenie && nieudane >= OTA_MAX_FAILS) return OTA_PODDANO;
+  (void)teraz;
+  return OTA_ROB;
+}
+
+const char* otaOpisDecyzji(OtaDecyzja d) {
+  switch (d) {
+    case OTA_ROB:         return "pobieram";
+    case OTA_NIC_NOWEGO:  return "aktualne";
+    case OTA_BEZ_HASLA:   return "brak hasla w pamieci pudelka";
+    case OTA_KOLEJKA:     return "czekam na wyslanie zaleglych zdarzen";
+    case OTA_BATERIA:     return "za malo baterii - postaw na ladowarke";
+    case OTA_PODDANO:     return "trzy proby bez skutku - poddalem sie";
+    case OTA_ZEPSUTA:     return "ta wersja juz raz nie wstala";
+    case OTA_ZLY_OPIS:    return "opis wersji na serwerze jest niepoprawny";
+  }
+  return "nieznany stan";
+}
+
+/* Suma programu, ktory NAPRAWDE siedzi w pudelku - albo pusty napis.
+   Zapisana suma obowiazuje WYLACZNIE dla wersji, przy ktorej powstala:
+   wgranie kablem nie przechodzi tedy, wiec bez tego warunku pudelko
+   liczyloby po sumie programu, ktorego juz w nim nie ma (D59).       */
+String otaSumaWgranej() {
+  if (nvs.getString("otaFw", "") != String(FW_VERSION)) return String("");
+  return nvs.getString("otaMd5", "");
+}
+
+/* Licznik proby PODNOSIMY PRZED pobraniem, nie po nim. Aktualizacja,
+   ktora zawiesza plytke w polowie, nie podniosłaby go nigdy - i pudelko
+   wchodziloby w to samo zawieszenie przy kazdym wybudzeniu.          */
+void otaZanotujProbe(uint32_t teraz) {
+  nvs.putUShort("otaFail", nvs.getUShort("otaFail", 0) + 1);
+  if (teraz) nvs.putUInt("otaTs", teraz);
+}
+
+void otaWyzerujLicznik() { nvs.putUShort("otaFail", 0); }
+
+/* CZY W BAZIE STOI ZLECENIE - pytamy TU, tuz przed proba.
+   `pobierzUstawienia()` leci na POCZATKU wybudzenia, a aktualizacja na
+   koncu; zlecenie zlozone w miedzyczasie byloby niewidoczne i pudelko
+   wychodzilo by po cichu, a aplikacja pisalaby "laczylo sie i nic nie
+   zrobilo" (D62).                                                     */
+bool otaZlecenieWBazie(uint32_t& tsZlecenia) {
+  String odp;
+  const int code = rtdbWyslij("GET", "/devices/" DEVICE_ID "/config/otaCmd.json", "", &odp);
+  if (code != 200 || odp.length() < 2 || odp == "null") return false;
+
+  JsonDocument doc;
+  if (deserializeJson(doc, odp) != DeserializationError::Ok) return false;
+  if (!doc["ts"].isNull()) tsZlecenia = doc["ts"].as<uint32_t>();
+  return true;
+}
+
+/* Pobiera SAM OPIS - kilkaset bajtow zamiast 1,1 MB. */
+bool otaPobierzOpis(String& wersja, String& md5, uint32_t& rozmiar) {
+  WiFiClientSecure c;
+  c.setInsecure();
+  c.setTimeout(15);
+
+  HTTPClient http;
+  http.setConnectTimeout(8000);
+  http.setTimeout(12000);
+  http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
+
+  String url = String(OTA_BASE_URL) + OTA_JSON_FILE;
+  if (!http.begin(c, url)) { LOG("[OTA] nie moge otworzyc polaczenia\n"); return false; }
+
+  int code = http.GET();
+  String payload = (code > 0) ? http.getString() : String();
+  http.end();
+
+  if (code != 200) { LOG("[OTA] opis wersji: HTTP %d\n", code); return false; }
+
+  JsonDocument doc;
+  if (deserializeJson(doc, payload) != DeserializationError::Ok) {
+    LOG("[OTA] opis wersji nie jest poprawnym JSON-em\n");
+    return false;
+  }
+  wersja  = doc["wersja"]  | "";
+  md5     = doc["md5"]     | "";
+  rozmiar = doc["rozmiar"] | 0UL;
+  md5.toLowerCase();
+  LOG("[OTA] serwer ma wersje %s (%lu B, %s)\n",
+      wersja.c_str(), (unsigned long)rozmiar, md5.c_str());
+  return true;
+}
+
+bool otaWgraj(const String& md5, uint32_t rozmiar) {
+  /* ZWALNIAMY KANAL DO BAZY, ZANIM OTWORZYMY DRUGI. Dwa polaczenia TLS
+     naraz to okolo 100 kB samych buforow mbedTLS na ukladzie, ktory ma
+     400 kB - a rownolegle leci zapis do flasha i stos WiFi. W pudelku
+     dziennym to byla najprawdopodobniejsza przyczyna restartu w trakcie
+     pobierania. `rtdbWyslij()` odbuduje polaczenie samo.              */
+  const uint32_t wolnePrzed = ESP.getFreeHeap();
+  klient.stop();
+  LOG("[OTA] pamiec przed pobieraniem: %u B (po zamknieciu bazy: %u B)\n",
+      (unsigned)wolnePrzed, (unsigned)ESP.getFreeHeap());
+
+  WiFiClientSecure c;
+  c.setInsecure();
+  c.setTimeout(20);
+
+  HTTPClient http;
+  http.setConnectTimeout(10000);
+  /* Limit na POJEDYNCZY odczyt. `setTimeout()` bierze uint16_t, wiec
+     90000 obciela by sie po cichu do 24464 ms (B21 w innym przebraniu). */
+  http.setTimeout(OTA_HTTP_READ_MS);
+  http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
+  /* HTTP/1.0: w tej wersji protokolu serwer nie ma jak wybrac trybu
+     "chunked", ktorego zapis firmware nie obsluguje. Bez tej linii
+     GitHub Pages potrafi odpowiedziec chunkiem i pobranie konczy sie,
+     zanim ruszy.                                                      */
+  http.useHTTP10(true);
+
+  String url = String(OTA_BASE_URL) + OTA_BIN_FILE;
+  if (!http.begin(c, url)) return false;
+
+  int code = http.GET();
+  if (code != 200) {
+    LOG("[OTA] pobieranie programu: HTTP %d\n", code);
+    http.end();
+    return false;
+  }
+
+  /* Brak dlugosci w naglowku to NIE jest blad - znamy ja z opisu, ktory
+     pobralismy chwile wczesniej, i to on jest zrodlem prawdy.         */
+  const int len = http.getSize();
+  rtcOtaNagl = (int32_t)len;
+  if (len > 0 && (uint32_t)len != rozmiar) {
+    LOG("[OTA] rozmiar sie nie zgadza: opis %lu, naglowek %d\n",
+        (unsigned long)rozmiar, len);
+    snprintf(rtcOtaMsg, sizeof(rtcOtaMsg), "plik na serwerze ma inny rozmiar");
+    http.end();
+    return false;
+  }
+
+  if (!Update.begin((size_t)rozmiar)) {
+    LOG("[OTA] partycja nie przyjmuje %lu B - czy podzial to na pewno min_spiffs?\n",
+        (unsigned long)rozmiar);
+    snprintf(rtcOtaMsg, sizeof(rtcOtaMsg), "program nie miesci sie w partycji");
+    http.end();
+    return false;
+  }
+  Update.setMD5(md5.c_str());
+
+  LOG("[OTA] pobieram %d B...\n", len);
+  size_t zapisane = Update.writeStream(http.getStream());
+  http.end();
+
+  if (zapisane != (size_t)rozmiar) {
+    /* ILE udalo sie pobrac rozroznia dwie zupelnie rozne sytuacje:
+       "0 z 1,1 MB" znaczy, ze polaczenie nie ruszylo, a "900 kB z 1,1 MB"
+       - ze urwalo sie w trakcie i warto podejsc blizej routera.       */
+    snprintf(rtcOtaMsg, sizeof(rtcOtaMsg),
+             "pobrano %u kB z %lu kB - podejdz blizej routera",
+             (unsigned)(zapisane / 1024), (unsigned long)(rozmiar / 1024));
+    LOG("[OTA] przerwane po %u B z %lu\n", (unsigned)zapisane, (unsigned long)rozmiar);
+    Update.abort();
+    return false;
+  }
+  if (!Update.end(true)) {
+    const uint8_t blad = Update.getError();
+    if (blad == UPDATE_ERROR_MD5)
+      snprintf(rtcOtaMsg, sizeof(rtcOtaMsg), "plik dojechal uszkodzony - sprobuj ponownie");
+    else
+      snprintf(rtcOtaMsg, sizeof(rtcOtaMsg), "ESP32 odrzucil zapis (blad %u)", blad);
+    LOG("[OTA] suma kontrolna albo zapis odrzucone (blad %u)\n", blad);
+    return false;
+  }
+  return Update.isFinished();
+}
+
+/* --- Po restarcie: czy nowa wersja w ogole wstaje ---------------------
+   Arduino buduje ESP32 BEZ automatycznego rollbacku bootloadera, wiec
+   robimy wlasny licznik. Kazdy start z niepotwierdzona wersja go podnosi,
+   dojscie do `idzSpac()` - kasuje. Po OTA_BOOT_TRIES wersja ladzie na
+   czarnej liscie i wracamy na poprzednia partycje.
+
+   ZOSTAJE DZIURA, ktorej bez rollbacku bootloadera nie da sie zakleic:
+   program, ktory wysypie sie ZANIM dojdzie tutaj, nie podniesie licznika
+   i petli startow nikt nie przerwie. Wtedy zostaje kabel.            */
+void otaSprawdzPoStarcie() {
+  const String pend = nvs.getString("otaPend", "");
+  if (pend.length() != 32) return;
+
+  uint16_t proby = nvs.getUShort("otaBoot", 0) + 1;
+  nvs.putUShort("otaBoot", proby);
+
+  LOG("[OTA] start %u z niepotwierdzona wersja %s\n", proby, pend.c_str());
+  if (proby <= OTA_BOOT_TRIES) return;
+
+  LOG("[OTA] ta wersja nie dochodzi do konca - wracam do poprzedniej\n");
+  nvs.putString("otaBad", pend);
+  nvs.remove("otaPend");
+  nvs.putUShort("otaBoot", 0);
+
+  const esp_partition_t* poprzednia = esp_ota_get_next_update_partition(nullptr);
+  if (poprzednia && esp_ota_set_boot_partition(poprzednia) == ESP_OK) {
+    LOG("[OTA] przelaczono - restart\n");
+    delay(100);
+    esp_restart();
+  }
+  LOG("[OTA] nie udalo sie przelaczyc partycji - zostaje jak jest\n");
+}
+
+/* Program przeszedl cala swoja droge i zasypia normalnie. To jest dowod,
+   ze wersja dziala - mocniejszy niz "wstala", a nie wymagajacy zasiegu
+   WiFi (pudelko bez sieci tez musi moc potwierdzic).                  */
+void otaPotwierdzDzialanie() {
+  const String pend = nvs.getString("otaPend", "");
+  if (pend.length() != 32) return;
+
+  nvs.putString("otaMd5", pend);
+  nvs.putString("otaFw",  FW_VERSION);     // dla KTOREJ wersji ta suma jest prawdziwa
+  nvs.remove("otaPend");
+  nvs.putUShort("otaBoot", 0);
+  nvs.putUShort("otaFail", 0);
+  nvs.remove("otaTs");                     // sukces nie jest powodem do przerwy
+
+  esp_ota_mark_app_valid_cancel_rollback();
+  LOG("[OTA] wersja %s potwierdzona jako dzialajaca\n", FW_VERSION);
+
+  /* Slyszalny dowod, ze aktualizacja przez WiFi doszla do konca. Gra raz
+     w zyciu kazdej wersji - dokladnie tutaj, bo dopiero tu wiadomo, ze
+     nowy program nie tylko sie zapisal, ale i przezyl cala swoja pierwsza
+     droge. Wersja cofnieta przez licznik startow nigdy tu nie dojdzie,
+     wiec cisza tez cos znaczy.                                        */
+  pik(1600, 120); delay(60); pik(2100, 120); delay(60); pik(2700, 220);
+}
+
+/* Powod odmowy idzie do aplikacji OD RAZU. `otaSprobuj()` chodzi
+   w `idzSpac()`, czyli JUZ PO zwyklym statusie - bez tego aplikacja
+   pokazywalaby pogodne "zlecone, czekaj" jeszcze przez wiele godzin,
+   podczas gdy pudelko wlasnie odmowilo i nie zamierza nic robic.     */
+void otaZglos() {
+  if (WiFi.status() == WL_CONNECTED && idToken.length()) wyslijStatus();
+}
+
+/* --- CALOSC: sprawdz, zdecyduj, ewentualnie wgraj --------------------
+   Wolane z jednego miejsca - z `idzSpac()`, czyli po tym, jak pudelko
+   zrobilo juz wszystko, po co wstalo: zdarzenie zapisane i potwierdzone,
+   kolejka oprozniona, status wyslany. To jest zasada 11 z CLAUDE.md:
+   minuta radia nie moze wcisnac sie miedzy otwarcie klapki a zapis.
+
+   Nie wraca, jesli aktualizacja sie powiodla - konczy restartem.      */
+void otaSprobuj() {
+  /* Bez radia nie ma jak zapytac i nie ma jak pobrac. Zlecenie poczeka
+     do nastepnego wybudzenia - nic nie ginie.                         */
+  if (!rtcOtaProsba && WiFi.status() != WL_CONNECTED) return;
+
+  if (WiFi.status() != WL_CONNECTED && !wifiPolacz()) {
+    snprintf(rtcOtaMsg, sizeof(rtcOtaMsg), "nie zlapalem sieci przed snem");
+    LOG("[OTA] brak sieci przy zasypianiu - sprobuje przy nastepnym wybudzeniu\n");
+    return;
+  }
+  if (!firebaseZaloguj()) {
+    snprintf(rtcOtaMsg, sizeof(rtcOtaMsg), "nie moge sie zalogowac do bazy");
+    LOG("[OTA] brak logowania - aktualizacja czeka\n");
+    return;
+  }
+
+  /* Dopytanie o zlecenie - dopiero tutaj, bo dopiero tu mamy pewny token. */
+  if (!rtcOtaProsba) {
+    uint32_t tsSwieze = 0;
+    if (!otaZlecenieWBazie(tsSwieze)) return;   // aplikacja naprawde o nic nie prosi
+    rtcOtaProsba = true;
+    rtcOtaTs     = tsSwieze;
+    LOG("[OTA] zlecenie dojechalo w trakcie wybudzenia (z %lu) - biore je teraz\n",
+        (unsigned long)tsSwieze);
+  }
+
+  const uint32_t teraz = rtcCzasPewny ? (uint32_t)time(nullptr) : 0;
+
+  String wersja, md5;
+  uint32_t rozmiar = 0;
+  if (!otaPobierzOpis(wersja, md5, rozmiar)) {
+    snprintf(rtcOtaMsg, sizeof(rtcOtaMsg), "nie moge pobrac opisu wersji");
+    otaZanotujProbe(teraz);
+    otaZglos();
+    return;
+  }
+
+  const uint16_t nieudane = nvs.getUShort("otaFail", 0);
+  const uint32_t ostatnia = nvs.getUInt("otaTs", 0);
+
+  /* `naLadowarce` to twarde `false`: to pudelko nie wie, czy stoi na
+     ladowarce - nie ma pomiaru pradu ladowania. Falsz jest tu strona
+     OSTROZNA (prog baterii obowiazuje zawsze), a nie wygodna.         */
+  const OtaDecyzja d = otaDecyzja(
+      hasloWPamieci(), kolejkaIle(), battProcent, false,
+      (uint8_t)(nieudane > 255 ? 255 : nieudane), teraz, ostatnia, rozmiar,
+      rtcOtaTs, md5, otaSumaWgranej(), nvs.getString("otaBad", ""));
+
+  snprintf(rtcOtaWersja, sizeof(rtcOtaWersja), "%s", wersja.c_str());
+  snprintf(rtcOtaMsg, sizeof(rtcOtaMsg), "%s", otaOpisDecyzji(d));
+  LOG("[OTA] decyzja: %s\n", otaOpisDecyzji(d));
+
+  /* Prosbe spelniona - albo taka, ktorej dalsze proby nic nie dadza -
+     kasujemy, zeby przycisk w aplikacji nie zostal wcisniety na zawsze. */
+  if (d == OTA_NIC_NOWEGO || d == OTA_ZEPSUTA || d == OTA_PODDANO) {
+    rtdbWyslij("DELETE", "/devices/" DEVICE_ID "/config/otaCmd.json", "");
+    rtcOtaProsba = false;
+    if (d == OTA_NIC_NOWEGO) otaWyzerujLicznik();
+    otaZglos();
+    return;
+  }
+  if (d != OTA_ROB) { otaZglos(); return; }
+
+  if (nieudane >= OTA_MAX_FAILS) {
+    otaWyzerujLicznik();
+    LOG("[OTA] nowe zlecenie po serii niepowodzen - licznik od zera\n");
+  }
+
+  otaZanotujProbe(teraz);
+
+  /* Dwa pikniecia: "zaczynam, zaraz zamilkne na minute". Bez tego pudelko
+     wyglada na zawieszone, a brzeczyk jest jedynym kanalem, ktorym mowi
+     cokolwiek bez telefonu.                                           */
+  beepAck(); delay(150); beepAck();
+
+  if (!otaWgraj(md5, rozmiar)) {
+    if (!rtcOtaMsg[0] || strstr(rtcOtaMsg, "pobieram"))
+      snprintf(rtcOtaMsg, sizeof(rtcOtaMsg), "pobieranie nie doszlo do konca");
+    LOG("[OTA] nieudane (%s) - stary program zostaje bez zmian\n", rtcOtaMsg);
+    LOG("[OTA] naglowek %ld, wolne %u kB\n",
+        (long)rtcOtaNagl, (unsigned)(ESP.getFreeHeap() / 1024));
+    beepBlad();
+    otaZglos();
+    return;
+  }
+
+  /* Wgrane. Suma idzie do pamieci jako NIEPOTWIERDZONA - potwierdzi ja
+     dopiero nowy program, gdy dojdzie do konca swojej pierwszej drogi. */
+  nvs.putString("otaPend", md5);
+  nvs.putUShort("otaBoot", 0);
+
+  /* Polecenie kasujemy PRZED restartem - po nim nie wrocimy juz tutaj.
+     Gdyby kasowanie nie doszlo, nowy program zobaczy te sama prosbe,
+     policzy sume jako "aktualne" i skasuje ja wtedy. Samo sie naprawia. */
+  rtdbWyslij("DELETE", "/devices/" DEVICE_ID "/config/otaCmd.json", "");
+
+  LOG("[OTA] wgrane %s - restart na nowa wersje\n",
+      rtcOtaWersja[0] ? rtcOtaWersja : "?");
+  nvs.end();                      // za esp_restart() nie ma juz nic
+  beepAck();
+  delay(200);
+  esp_restart();
+}
+
+#endif  /* OTA_ENABLED */
+
+/* =====================================================================
+ *  12.  SEN
  * ===================================================================== */
 uint64_t sekundDoNastepnego() {
   /*  Przypomnienie, ktore nikogo nie zastalo, wraca za chwile - to jest
@@ -696,6 +1156,22 @@ uint64_t sekundDoNastepnego() {
 bool klapkiOtwarte() { return ktoraKomora(czytajKlapki(16)) != -1; }
 
 void idzSpac() {
+#if OTA_ENABLED
+  /*  KOLEJNOSC JEST TU CALA TRESCIA (zasada 11 z CLAUDE.md).
+
+      `otaPotwierdzDzialanie()` idzie PIERWSZE i bezwarunkowo: dojscie
+      do tego miejsca znaczy, ze program przeszedl cala swoja droge -
+      i to jest jedyny dowod, jakiego potrzebujemy, zeby uznac swiezo
+      wgrana wersje za dzialajaca. Nie wymaga sieci, wiec pudelko bez
+      zasiegu tez potrafi potwierdzic.
+
+      `otaSprobuj()` idzie DRUGIE i tylko stad. Wywolane z obslugi klapki
+      wcisneloby minute radia miedzy otwarcie a zapis zdarzenia - a to
+      jest dokladnie ta jedna sciezka, ktora ma byc najszybsza.
+      Nie wraca, jesli wgralo nowa wersje: konczy restartem.            */
+  otaPotwierdzDzialanie();
+  otaSprobuj();
+#endif
   wifiWylacz();
 
   /*  KLAPKA ZOSTAWIONA OTWARTA JEST PULAPKA, i to nie teoretyczna.
@@ -782,7 +1258,7 @@ void idzSpac() {
 }
 
 /* =====================================================================
- *  12.  SETUP  -  cala logika. loop() nigdy nie jest osiagany.
+ *  13.  SETUP  -  cala logika. loop() nigdy nie jest osiagany.
  * ===================================================================== */
 void setup() {
   /* ---- ODCZYT KLAPKI JEST PIERWSZY I TO NIE JEST KOSMETYKA ----
@@ -811,6 +1287,12 @@ void setup() {
   rtcWybudzen++;
 
   nvs.begin("pbweek", false);
+#if OTA_ENABLED
+  /*  PIERWSZE, co robimy po otwarciu pamieci - zanim cokolwiek innego
+      zdazy sie wysypac. Licznik startow z niepotwierdzona wersja jest
+      jedyna obrona przed programem, ktory sie nie uruchamia.          */
+  otaSprawdzPoStarcie();
+#endif
   wczytajHarmonogram();
   pinMode(PIN_PRZYCISK, INPUT_PULLUP);
   czytajBaterie();

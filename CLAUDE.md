@@ -38,8 +38,8 @@ bash tests/run_all.sh
 ```
 
 Musi przejść przed zmianą i po zmianie. Stan wyjściowy:
-**642 + 52 firmware, 1417 (×6 pór doby) + 92 + 52 aplikacja, 48 zgodności,
-156 reguł bazy, 375 kontroli audytu, 38 kontroli statycznych — 0 błędów.**
+**642 + 52 firmware, 1423 (×6 pór doby) + 92 + 52 aplikacja, 48 zgodności,
+156 reguł bazy, 375 kontroli audytu, 42 kontrole statyczne — 0 błędów.**
 
 **Runner jest cichy przy sukcesie i głośny przy błędzie** (D66). Udany przebieg
 to 12 linii — **i te 12 linii TO JEST potwierdzenie, nie jego skrót.** Nie
@@ -322,7 +322,7 @@ na `esp32:esp32@3.3.11` i z **ustawieniami płytki z nagłówka `PillBox.ino`**.
 Nie jest częścią `run_all.sh`: wymaga sieci i ~500 MB toolchainu.
 **Uruchom to po każdej zmianie w firmware.**
 
-Stan: `PillBox.ino` **64% flasha** (1 265 417 B z 1,875 MB), `PillBoxWeek.ino` **58%** (1 142 325 B),
+Stan: `PillBox.ino` **64% flasha** (1 265 417 B z 1,875 MB), `PillBoxWeek.ino` **58%** (1 158 477 B),
 `PillBoxTest.ino` 20% bez `config.h` i **57%** z nim. Szkic diagnostyczny budujemy w OBU
 konfiguracjach — bez tego drugiego przebiegu 722 kB jego kodu (logowanie do
 bazy, zapis wyniku) nie było kompilowane ani razu (D103).
@@ -334,9 +334,13 @@ bo tak jest w nagłówku szkicu i bo OTA zapisuje program do **drugiej** partycj
 mylące nazwy opcji: `CDCOnBoot=default` znaczy **włączone**, `CDCOnBoot=cdc`
 wyłączone.
 
-**Binarkę do aktualizacji buduje automat** (`.github/workflows/firmware.yml`)
-przy każdej zmianie w `firmware/**` i kładzie ją jako `firmware/PillBox.bin`
-+ `PillBox.json` na GitHub Pages. Nigdy nie buduj jej ręcznie do repo —
+**Binarki do aktualizacji buduje automat** (`.github/workflows/firmware.yml`)
+przy każdej zmianie w `firmware/**` i kładzie je na GitHub Pages:
+`firmware/PillBox.bin` + `PillBox.json` (dzienne) oraz `PillBoxWeek.bin`
++ `PillBoxWeek.json` (tygodniowe). **Każde pudełko ma własny odcisk źródła**
+(`tests/zrodlo_firmware.sh dzienne|tygodniowe`) i publikuje się niezależnie —
+wspólny kazałby pudełku dziewczyny ściągać megabajt z baterii przy każdej
+poprawce Warfinu (D130). Nigdy nie buduj jej ręcznie do repo —
 `OTA_OUT=<katalog> bash tests/kompiluj_firmware.sh` służy do sprawdzenia,
 nie do publikacji. Szczegóły obejść — D17.
 
@@ -360,8 +364,13 @@ nie do publikacji. Szczegóły obejść — D17.
   przypomnienie o 20:00 (Kuba: *„cały czas nie ma 20, jest 13:15"*), potem
   szukałem błędu w kodzie, którego na płytce nie było, bo numer wersji
   mieszkał w `config.h` i kłamał.
-  **Czego nadal nie ma:** aktualizacji przez WiFi, portalu sieci
-  i powiadomień Telegram.
+  **Aktualizacja przez WiFi — dodana w `0.4.0` (D130), NIESPRAWDZONA na
+  płytce.** Kod jest kopią tej z pudełka dziennego (tam potwierdzona
+  2026-08-16), `otaDecyzja()` jest znak w znak ta sama i kontrola
+  statyczna tego pilnuje — ale żadna jej część nie została uruchomiona
+  na tym urządzeniu. Warunkiem jest hasło w NVS; bez niego `otaDecyzja()`
+  odmawia i to jest celowe.
+  **Czego nadal nie ma:** portalu sieci i powiadomień Telegram.
 - **Pomiar baterii pudełka tygodniowego — NIEWYJAŚNIONY.** Melduje `2,32 V`,
   czyli napięcie, przy którym płytka by nie chodziła. Program zgłasza to
   uczciwie jako brak danych (`-1%`), ale **przyczyny nie znamy**. Najpierw

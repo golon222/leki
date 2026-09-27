@@ -19,7 +19,7 @@
  *    miejsce w bazie i kalendarze wymieszalyby sie po cichu.
  * ------------------------------------------------------------------ */
 #define DEVICE_ID           "pillbox02"     // klucz w /devices/<DEVICE_ID>
-#define FW_VERSION          "0.3.0"         // widoczna w aplikacji
+#define FW_VERSION          "0.4.0"         // widoczna w aplikacji
 
 /* ---------------------------------------------------------------------
  * 2. FIREBASE
@@ -103,3 +103,46 @@
 /*  Ile sekund pudelko probuje zlapac siec. Dluzej nie ma sensu:
  *  zdarzenie i tak trafi do kolejki i pojdzie przy nastepnym wybudzeniu. */
 #define WIFI_TIMEOUT_S      20
+
+/* ---------------------------------------------------------------------
+ * 7. AKTUALIZACJA PROGRAMU PRZEZ WIFI  (OTA)
+ *
+ *  Binarke buduje automat na GitHubie i kladzie ja obok aplikacji na
+ *  GitHub Pages. Pudelko pobiera najpierw MALY plik z opisem, a caly
+ *  program dopiero wtedy, gdy suma kontrolna rozni sie od tej, ktora juz
+ *  ma. Rozstrzyga SUMA, nie numer wersji: numer pisze czlowiek i da sie
+ *  go zapomniec podbic, suma liczy sie z pliku i sklamac nie umie.
+ *
+ *  NAZWY PLIKOW SA INNE NIZ W PUDELKU DZIENNYM i to nie jest kosmetyka:
+ *  wgranie sobie nawzajem programow konczy sie dwoma cegłami. Pudelko
+ *  dzienne pobiera PillBox.bin, tygodniowe PillBoxWeek.bin.
+ * ------------------------------------------------------------------ */
+#define OTA_ENABLED         1
+#define OTA_BASE_URL        "https://golon222.github.io/leki/firmware/"
+#define OTA_JSON_FILE       "PillBoxWeek.json"  // opis wersji: kilkaset bajtow
+#define OTA_BIN_FILE        "PillBoxWeek.bin"   // sam program: ~1,1 MB
+
+/*     Ponizej tego progu tylko na ladowarce - a poniewaz to pudelko nie
+ *     wie, czy na niej stoi, prog obowiazuje zawsze. Sama aktualizacja to
+ *     okolo 1-2 mAh, ale na wyczerpanym ogniwie kazdy grosz jest pozyczka. */
+#define OTA_MIN_BATT_PCT    25
+
+/*     Po tylu nieudanych probach z rzedu pudelko przestaje samo probowac.
+ *     Zdejmuje to dopiero SWIEZE zlecenie z aplikacji - czyli swiadoma
+ *     prosba czlowieka, a nie petla urzadzenia.                        */
+#define OTA_MAX_FAILS       3
+
+/*     Zdrowy rozsadek co do rozmiaru. Plik mniejszy to prawie na pewno
+ *     nie program (np. strona bledu 404 zapisana jako plik), a wiekszy
+ *     nie zmiesci sie w partycji.                                      */
+#define OTA_MIN_BIN_SIZE    300000
+#define OTA_MAX_BIN_SIZE    1900000
+
+/*     Limit na POJEDYNCZY odczyt ze strumienia. Musi miescic sie
+ *     w uint16_t - `HTTPClient::setTimeout()` bierze wlasnie tyle
+ *     i wieksza wartosc obcina sie po cichu.                           */
+#define OTA_HTTP_READ_MS    30000
+
+/*     Ile razy nowy program moze wystartowac i NIE dojsc do zasniecia,
+ *     zanim uznamy go za zepsuty i wrocimy na poprzednia partycje.     */
+#define OTA_BOOT_TRIES      3

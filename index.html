@@ -2064,10 +2064,26 @@ const firebaseConfig = {
    Na iOS w trybie prywatnym `localStorage` potrafi rzucić wyjątkiem zamiast
    zwrócić null, a wtedy aplikacja nie ma prawa zostać bez urządzenia —
    bo `DEVICE_ID` wchodzi do ścieżek wszystkich nasłuchów i zapisów.      */
+/*  `fw` to nazwa opisu wersji na GitHub Pages — OSOBNA DLA KAŻDEGO
+    PUDEŁKA i to nie jest porządkowanie plików. Programy różnią się
+    pinami, drabinką i całą logiką; wgranie jednego drugiemu kończy się
+    dwiema cegłami, a aktualizacja nie ma jak tego rozpoznać, bo sprawdza
+    sumę pliku, który sama wskazała. Rozróżnienie jest wyłącznie w tej
+    nazwie, więc nazwa jest częścią bezpieczeństwa.                    */
 const PUDELKA = [
-  { id:"pillbox01", nazwa:"Dzienne",     opis:"Warfin, jedna komora, INR"     },
-  { id:"pillbox02", nazwa:"Tygodniowe",  opis:"siedem klapek, otwarte = wzięte" }
+  { id:"pillbox01", nazwa:"Dzienne",     opis:"Warfin, jedna komora, INR",
+    fw:"PillBox.json" },
+  { id:"pillbox02", nazwa:"Tygodniowe",  opis:"siedem klapek, otwarte = wzięte",
+    fw:"PillBoxWeek.json" }
 ];
+
+/*  Opis wersji dla WYBRANEGO pudełka. Pudełko nieznane (gdyby kiedyś
+    doszło trzecie) nie dostaje opisu pudełka dziennego — wtedy lepiej
+    nie zaproponować aktualizacji wcale niż zaproponować cudzą.        */
+function opisPlikFirmware(){
+  const p = PUDELKA.find(x => x.id === DEVICE_ID);
+  return p && p.fw ? p.fw : null;
+}
 const PUDELKO_KLUCZ = "pillbox.device";
 
 function pudelkoZnane(id){ return PUDELKA.some(p => p.id === id); }
@@ -2156,7 +2172,7 @@ window.wybierzPudelko = (id) => {
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-09-27.91";
+const APP_VERSION = "2026-09-27.92";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -6458,7 +6474,9 @@ async function pobierzOpisFirmware(){
     /* `no-store`, bo service worker cache'uje powłokę aplikacji i bez tego
        podałby stary opis jeszcze długo po wypuszczeniu nowej wersji —
        czyli dokładnie wtedy, gdy przycisk ma coś zrobić.               */
-    const r = await fetch("./firmware/PillBox.json", { cache: "no-store" });
+    const plik = opisPlikFirmware();
+    if (!plik) throw new Error("nie wiem, jaki program należy do tego pudełka");
+    const r = await fetch("./firmware/" + plik, { cache: "no-store" });
     if (!r.ok) throw new Error("HTTP " + r.status);
     const j = await r.json();
     if (typeof j.md5 !== "string" || j.md5.length !== 32)
