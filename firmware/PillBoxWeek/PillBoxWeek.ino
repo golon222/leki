@@ -62,7 +62,7 @@
 
     Numer wersji, ktory mieszka w NAGLOWKU, opisuje naglowek. Ten opisuje
     program. Gdy sie rozjada, log krzyczy o tym w pierwszej linii.        */
-#define KOD_WERSJA "0.7.0"
+#define KOD_WERSJA "0.8.0"
 
 /*  Po tym napisie pudelko poznaje config.h wzięty prosto z repozytorium -
     czyli "nie ma zadnej sieci", a nie "ma siec o takiej nazwie". Bez tego
@@ -155,6 +155,16 @@ RTC_DATA_ATTR bool     rtcTgBattZgloszona = false;
 RTC_DATA_ATTR bool     rtcTgTestProsba  = false;
 RTC_DATA_ATTR char     rtcTgMsg[48]     = "";
 
+/*  STAN KLAPEK ZGLOSZONY DO APLIKACJI (D137).
+
+    `rtcKlapkiZglosz` to nie jest „stan klapek", tylko „stan, ktory baza
+    NA PEWNO przyjela": -1 nic nie zglaszalismy, 0 zamkniete, 1 otwarte.
+    Roznica jest cala tresc tej zmiennej - meldunek uznajemy za dostarczony
+    dopiero po potwierdzonym zapisie, wiec nieudany wraca przy nastepnym
+    wybudzeniu zamiast przepasc (zasada 6, ta sama lekcja co D111).     */
+RTC_DATA_ATTR int8_t   rtcKlapkiZglosz  = -1;
+RTC_DATA_ATTR uint32_t rtcOpenSince     = 0;    // od kiedy otwarte
+
 /* =====================================================================
  *  STAN BIEZACEGO WYBUDZENIA
  * ===================================================================== */
@@ -165,6 +175,12 @@ float   battVolt      = 0;
 int     komoraPoStarcie = -3;      // -1 zamkniete, -2 kilka naraz, 0..6 komora
 uint16_t mvPoStarcie   = 0;        // surowy odczyt drabinki z chwili wybudzenia
 bool    czasZsync     = false;
+/*  JEDEN POMIAR NA WYBUDZENIE, nie odczyt w kazdym miejscu, ktore go
+    potrzebuje. W pudelku dziennym dwa odczyty kontaktronu oddalone
+    o sekunde pisaly to samo pole i drugi nadpisywal pierwszy - poprawne
+    „zamkniete" zamienialo sie w „otwarte" i nikt tego juz nie prostowal
+    (D96). Tutaj ten sam blad byl do popelnienia dokladnie tak samo.  */
+bool    otwarteTeraz  = false;
 
 /* Harmonogram przypomnien. To sa godziny PRZYPOMNIEN, nie pory brania -
    dokladnie jak w pudelku dziennym. Domyslnie jedna, 20:00.            */
@@ -195,11 +211,18 @@ int ktoraKomora(uint16_t mV) {
   return -2;
 }
 
+/* Czy ktorakolwiek klapka jest teraz otwarta. */
+bool klapkiOtwarte();
+
 const char* opisKomory(int k) {
   if (k == -1) return "zamkniete";
   if (k == -2) return "kilka naraz";
   return (k >= 0 && k < 7) ? NAZWY_DNI[k] : "?";
 }
+
+/* Czy ktorakolwiek klapka jest teraz otwarta. Stoi wysoko, bo korzysta
+   z niej takze status wysylany do aplikacji - a ten jest w sekcji 7. */
+bool klapkiOtwarte() { return ktoraKomora(czytajKlapki(16)) != -1; }
 
 /* =====================================================================
  *  2.  BUZZER
@@ -649,7 +672,7 @@ void oproznijKolejke() {
 String otaSumaWgranej();
 #endif
 
-void wyslijStatus() {
+bool wyslijStatus() {
   JsonDocument doc;
   /*  `status/battery` ma w regulach zakres 0..100, wiec -1 odrzucilby
       CALY status - a razem z nim wersje programu, sile sygnalu i stan
@@ -677,7 +700,25 @@ void wyslijStatus() {
   /*  Puste wybudzenia sa OBJAWEM, nie ciekawostka: jesli ta liczba rosnie,
       pudelko budzi sie z pinu bez powodu i trzeba na to spojrzec.      */
   doc["puste"]   = (uint32_t)rtcPusteRazem;
-  doc["ts"]      = (uint32_t)time(nullptr);
+  /*  `lastSeen`, NIE `ts` - i to nie jest kosmetyka (D137).
+
+      Do 0.7.0 pudelko tygodniowe wysylalo w statusie pole `ts`, ktorego
+      aplikacja NIE CZYTA NIGDZIE. Chwile „ostatnio widziane" bierze
+      z `lastSeen` - w kilkunastu miejscach naraz: ostatnia synchronizacja,
+      ostrzezenie o milczeniu, swiezosc meldunku o klapce, prognoza
+      baterii. Wszystkie one dostawaly zero i zachowywaly sie tak, jakby
+      pudelko nie odezwalo sie nigdy.
+
+      Jedno zle nazwane pole, a objawow tyle, ile miejsc je czyta.     */
+  doc["lastSeen"] = (uint32_t)time(nullptr);
+  /*  OTWARTA KLAPKA - to pole aplikacja pokazuje jako baner „Pudelko jest
+      otwarte". Do 0.7.0 pudelko tygodniowe NIE WYSYLALO GO W OGOLE, wiec
+      baner nie mial jak sie zapalic ani razu (D137).
+
+      Bierzemy `otwarteTeraz`, a nie swiezy odczyt pinu: jeden pomiar na
+      wybudzenie, jedna prawda.                                        */
+  doc["boxOpen"]   = otwarteTeraz;
+  if (otwarteTeraz && rtcOpenSince) doc["openSince"] = rtcOpenSince;
 #if OTA_ENABLED
   /*  Stan aktualizacji jedzie TYMI SAMYMI polami co w pudelku dziennym -
       aplikacja czyta oba urzadzenia jednym kodem. `otaMsg` to jedyne
@@ -700,7 +741,39 @@ void wyslijStatus() {
   doc["tgMsg"] = rtcTgMsg;
 #endif
   String body; serializeJson(doc, body);
-  rtdbWyslij("PATCH", "/devices/" DEVICE_ID "/status.json", body);
+  const int code = rtdbWyslij("PATCH", "/devices/" DEVICE_ID "/status.json", body);
+  /*  Za zgloszone uznajemy DOPIERO potwierdzony zapis. Bez tego warunku
+      nieudany meldunek o otwartej klapce przepadlby po cichu, a pudelko
+      uznaloby sprawe za zalatwiona.                                    */
+  if (code == 200) rtcKlapkiZglosz = otwarteTeraz ? 1 : 0;
+  return code == 200;
+}
+
+/*  MELDUNEK O KLAPCE - obie polowy, o ktore chodzi: „od razu, ze otwarte"
+    i „od razu, ze zamkniete".
+
+    Wysylamy WYLACZNIE przy zmianie stanu wzgledem tego, co baza na pewno
+    ma. Status i tak jedzie przy kazdym zdarzeniu, wiec zwykle nie kosztuje
+    to nic dodatkowego; radio wlaczamy sami tylko wtedy, gdy klapka
+    zmienila stan, a nic innego nie kazalo nam sie tym razem laczyc.   */
+void zglosKlapki(bool otwarte) {
+  otwarteTeraz = otwarte;
+  if (otwarte && !rtcOpenSince)
+    rtcOpenSince = rtcCzasPewny ? (uint32_t)time(nullptr) : 0;
+  if (!otwarte) rtcOpenSince = 0;
+
+  if (rtcKlapkiZglosz == (otwarte ? 1 : 0)) return;    // baza juz to wie
+
+  if (WiFi.status() != WL_CONNECTED && !wifiPolacz()) {
+    LOG("[LID] brak sieci - stan klapki zglosze przy nastepnym wybudzeniu\n");
+    return;
+  }
+  if (!firebaseZaloguj()) {
+    LOG("[LID] brak logowania - stan klapki poczeka\n");
+    return;
+  }
+  LOG("[LID] zglaszam: klapka %s\n", otwarte ? "OTWARTA" : "zamknieta");
+  wyslijStatus();
 }
 
 /* Pobiera harmonogram przypomnien z bazy i zapisuje w NVS, zeby pudelko
@@ -1790,10 +1863,36 @@ uint64_t sekundDoNastepnego() {
   return (uint64_t)najblizej * 60;
 }
 
-/* Czy ktorakolwiek klapka jest teraz otwarta. */
-bool klapkiOtwarte() { return ktoraKomora(czytajKlapki(16)) != -1; }
-
 void idzSpac() {
+  /*  Kolejnosc w tej funkcji, od gory: czekanie na zamkniecie klapki
+      i meldunek o niej, potem powiadomienie na telefon, potem
+      aktualizacja, dopiero na koncu wylaczenie radia i sen.          */
+  /*  KLAPKA ZOSTAWIONA OTWARTA JEST PULAPKA, i to nie teoretyczna.
+      Wybudzanie reaguje na POZIOM niski, nie na zbocze: przy otwartej
+      klapce pin jest nisko caly czas, wiec pudelko obudziloby sie
+      natychmiast po zasnieciu - i tak w kolko, az do rozladowania
+      ogniwa, zasmiecajac po drodze kolejke powtorzonymi otwarciami.
+
+      Czekamy wiec chwile na zamkniecie. Gdy nie nastepuje (ktos wlasnie
+      napelnia pudelko), zasypiamy na SAM ZEGAR i wracamy za chwile.
+
+      TO CZEKANIE STOI TERAZ PRZED WYLACZENIEM RADIA i to jest cala
+      naprawa D137. Wczesniej szlo za `wifiWylacz()`, wiec w chwili,
+      w ktorej klapka sie zamykala, nie bylo juz czym tego zglosic -
+      aplikacja dowiadywalaby sie o zamknieciu dopiero przy nastepnym
+      wybudzeniu z zegara, czyli za godziny. Kosztuje to kilkanascie
+      sekund radia przy otwartej klapce; Kuba prosil o obie polowy
+      naraz ("od razu, ze otwarte" i "od razu, ze zamkniete") i to jest
+      ich cena.                                                        */
+  uint32_t start = millis();
+  while (klapkiOtwarte() && millis() - start < CZEKAJ_ZAMKNIECIE_S * 1000UL) delay(200);
+  const bool otwarte = klapkiOtwarte();
+  if (otwarte) LOG("[SEN] klapka nadal otwarta - usypiam na sam zegar\n");
+
+  /*  Stan koncowy idzie do aplikacji ZANIM zgasimy radio. Wysyla sie
+      tylko wtedy, gdy rozni sie od tego, co baza na pewno ma.        */
+  zglosKlapki(otwarte);
+
 #if TG_ENABLED
   /*  POWIADOMIENIE IDZIE PIERWSZE Z TRZECH RZECZY PRZED SNEM (zasada 12).
 
@@ -1820,19 +1919,6 @@ void idzSpac() {
   otaSprobuj();
 #endif
   wifiWylacz();
-
-  /*  KLAPKA ZOSTAWIONA OTWARTA JEST PULAPKA, i to nie teoretyczna.
-      Wybudzanie reaguje na POZIOM niski, nie na zbocze: przy otwartej
-      klapce pin jest nisko caly czas, wiec pudelko obudziloby sie
-      natychmiast po zasnieciu - i tak w kolko, az do rozladowania
-      ogniwa, zasmiecajac po drodze kolejke powtorzonymi otwarciami.
-
-      Czekamy wiec chwile na zamkniecie. Gdy nie nastepuje (ktos wlasnie
-      napelnia pudelko), zasypiamy na SAM ZEGAR i wracamy za chwile.   */
-  uint32_t start = millis();
-  while (klapkiOtwarte() && millis() - start < CZEKAJ_ZAMKNIECIE_S * 1000UL) delay(200);
-  const bool otwarte = klapkiOtwarte();
-  if (otwarte) LOG("[SEN] klapka nadal otwarta - usypiam na sam zegar\n");
 
   /*  HAMULEC NA PETLE WYBUDZEN.
 
@@ -1995,6 +2081,20 @@ void setup() {
   wczytajHarmonogram();
   pinMode(PIN_PRZYCISK, INPUT_PULLUP);
   czytajBaterie();
+
+  /*  STAN KLAPEK USTALAMY RAZ, TU - zanim cokolwiek wysle status.
+
+      Przy wybudzeniu z pinu wiemy to juz z pomiaru zrobionego w pierwszej
+      linijce setup(): komora rozpoznana znaczy klapke otwarta. Przy kazdym
+      innym wybudzeniu trzeba spytac drabinki.
+
+      Jeden pomiar, jedna prawda (D96): status wysylany z `zglos()` niesie
+      dokladnie to samo, co pozniejszy meldunek z `idzSpac()`.         */
+  otwarteTeraz = (powod == ESP_SLEEP_WAKEUP_GPIO && komoraPoStarcie >= 0)
+                 ? true : klapkiOtwarte();
+  if (otwarteTeraz && !rtcOpenSince && rtcCzasPewny)
+    rtcOpenSince = (uint32_t)time(nullptr);
+  if (!otwarteTeraz) rtcOpenSince = 0;
 
   LOG("\n===== PillBoxWeek %s  (wybudzenie %lu) =====\n",
       KOD_WERSJA, (unsigned long)rtcWybudzen);

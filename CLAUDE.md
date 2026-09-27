@@ -38,8 +38,8 @@ bash tests/run_all.sh
 ```
 
 Musi przejść przed zmianą i po zmianie. Stan wyjściowy:
-**642 + 52 firmware, 1451 (×6 pór doby) + 92 + 52 aplikacja, 48 zgodności,
-156 reguł bazy, 375 kontroli audytu, 44 kontrole statyczne — 0 błędów.**
+**642 + 52 firmware, 1458 (×6 pór doby) + 92 + 52 aplikacja, 48 zgodności,
+156 reguł bazy, 375 kontroli audytu, 45 kontroli statycznych — 0 błędów.**
 
 **Nazwy leku w pudełku tygodniowym NIE MA** (D135, cofnięte z D126 na
 wyraźną prośbę Kuby — nie przywracaj). Nazwa jest potrzebna tam, gdzie się
@@ -346,7 +346,7 @@ na `esp32:esp32@3.3.11` i z **ustawieniami płytki z nagłówka `PillBox.ino`**.
 Nie jest częścią `run_all.sh`: wymaga sieci i ~500 MB toolchainu.
 **Uruchom to po każdej zmianie w firmware.**
 
-Stan: `PillBox.ino` **64% flasha** (1 265 417 B z 1,875 MB), `PillBoxWeek.ino` **61%** (1 207 055 B),
+Stan: `PillBox.ino` **64% flasha** (1 265 417 B z 1,875 MB), `PillBoxWeek.ino` **61%** (1 207 709 B),
 `PillBoxTest.ino` 20% bez `config.h` i **57%** z nim. Szkic diagnostyczny budujemy w OBU
 konfiguracjach — bez tego drugiego przebiegu 722 kB jego kodu (logowanie do
 bazy, zapis wyniku) nie było kompilowane ani razu (D103).
@@ -409,6 +409,13 @@ nie do publikacji. Szczegóły obejść — D17.
   klapki**, słaba bateria), nie o czterech — bez zapasu tabletek i INR.
   `tgDecyzja()` jest znak w znak ta sama co w pudełku dziennym i kontrola
   statyczna to porównuje. Wymaga podłączenia bota w aplikacji.
+  **Meldunek o otwartej klapce — dodany w `0.8.0` (D137).** Kuba: *„w
+  aplikacji nie pokazuje się, że jest otwarte, jak jest otwarte"*.
+  Przyczyny były dwie i obie po stronie pudełka: `boxOpen` nie było
+  wysyłane w ogóle, a chwilę „ostatnio widziane" pudełko słało jako `ts`
+  — pole, którego aplikacja **nie czyta nigdzie** (czyta `lastSeen`,
+  w kilkunastu miejscach). **Jeśli dokładasz pole do statusu, sprawdź
+  nazwę w aplikacji** — kontrola statyczna porównuje je teraz po nazwach.
   **Pudełko tygodniowe ma teraz wszystko, co dzienne** poza skanem sieci
   (niepotrzebnym, bo ma portal) i dziennikiem wieczka.
 - **Pomiar baterii pudełka tygodniowego — NIEWYJAŚNIONY, ale od `0.7.0`

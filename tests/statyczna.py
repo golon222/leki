@@ -980,6 +980,32 @@ if w.exists():
     else:
         print('  OK   Telegram: token tylko w NVS, wysylka pierwsza i tylko ze snu')
 
+    # ── STATUS MUSI NIESC POLA, KTORE APLIKACJA NAPRAWDE CZYTA ──────
+    #
+    # Zgloszenie Kuby: "w aplikacji nie pokazuje sie, ze jest otwarte, jak
+    # jest otwarte". Przyczyny byly DWIE i obie tego samego rodzaju:
+    # `boxOpen` nie bylo wysylane w ogole, a chwile "ostatnio widziane"
+    # pudelko slalo jako `ts` - pole, ktorego aplikacja nie czyta nigdzie.
+    # Czyta `lastSeen`, i to w kilkunastu miejscach naraz.
+    #
+    # Jedno zle nazwane pole daje tyle objawow, ile miejsc je czyta - i ani
+    # jednego bledu po drodze. Dlatego ta kontrola porownuje NAZWY: bierze
+    # pola, po ktore aplikacja siega w statusie, i sprawdza, ze pudelko
+    # tygodniowe je wysyla.
+    _st = _bez(_cialo(src, 'bool wyslijStatus') or '')
+    _brak = [f for f in ('lastSeen', 'boxOpen', 'fw', 'rssi', 'queue')
+             if f'doc["{f}"]' not in _st]
+    # Pole czytane przez aplikacje, ktorego nikt nie wysyla, to ekran
+    # mowiacy "nigdy" bez zadnego powodu.
+    _czytane = set(re.findall(r'st\.([A-Za-z][A-Za-z0-9]*)', _html))
+    if 'lastSeen' not in _czytane:
+        _brak.append('aplikacja nie czyta juz lastSeen - sprawdz, czy ta kontrola ma sens')
+    if _brak:
+        bad += 1
+        print('  BLAD status pudelka tygodniowego bez pol, ktore czyta aplikacja:', _brak)
+    else:
+        print('  OK   status tygodniowego niesie pola czytane przez aplikacje')
+
 t = root/"firmware/PillBoxTest/PillBoxTest.ino"
 if t.exists():
     src = t.read_text(encoding="utf-8")

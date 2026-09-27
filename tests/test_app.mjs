@@ -5370,6 +5370,49 @@ head("Godziny brania znikaja z analizy");
         "regularnosc bierze cala szerokosc, gdy traci sasiada");
 }
 
+/* ═══════════ BANER "OTWARTE" DZIALA W OBU PUDELKACH (D137) ═══════════
+
+   Zgloszenie Kuby: "w aplikacji nie pokazuje sie, ze jest otwarte, jak jest
+   otwarte". Przyczyny byly dwie, obie po stronie pudelka tygodniowego:
+   `boxOpen` nie bylo wysylane w ogole, a chwile "ostatnio widziane" slalo
+   ono jako `ts` - pole, ktorego aplikacja nie czyta nigdzie.
+
+   Czy pudelko je teraz wysyla, pilnuje kontrola statyczna. Tutaj pilnujemy
+   tego, co robi z nimi aplikacja - bo baner sam w sobie dziala od dawna
+   i nikt nie zauwazyl, ze druga polowa ukladu go nie karmi.           */
+head("Baner o otwartej klapce");
+{
+  const baner = () => document.getElementById("openWarn").classList.contains("hide");
+  const tekst = () => document.getElementById("openWarnWhen").textContent;
+  const teraz = Math.round(Date.now()/1000);
+
+  A.__setState({ cfg:{ profil:"tydzien" } });
+  A.renderOpenWarn({ boxOpen:true, openSince: teraz - 600, lastSeen: teraz });
+  check(!baner(), "otwarta klapka zapala baner");
+  check(/Otwarte od 10 min/.test(tekst()), `i liczy czas od otwarcia ("${tekst()}")`);
+
+  A.renderOpenWarn({ boxOpen:false, lastSeen: teraz });
+  check(baner(), "zamknieta klapka gasi baner");
+
+  /* Bez `openSince` zostaje samo zdanie - i ma mowic o KLAPCE, bo pudelko
+     tygodniowe nie ma wieczka. Zdanie o cudzej czesci urzadzenia czyta sie
+     jak blad aplikacji, a nie jak ostrzezenie. */
+  A.renderOpenWarn({ boxOpen:true, lastSeen: teraz });
+  check(/klapkę/.test(tekst()), `pudelko tygodniowe mowi o klapce ("${tekst()}")`);
+  A.__setState({ cfg:{ profil:"warfin" } });
+  A.renderOpenWarn({ boxOpen:true, lastSeen: teraz });
+  check(/wieczko/.test(tekst()), "a dzienne dalej o wieczku");
+
+  /* Milczace pudelko nie moze twierdzic, ze wie, co sie dzieje TERAZ. */
+  A.renderOpenWarn({ boxOpen:true, openSince: teraz - 600, lastSeen: teraz - 6*3600 });
+  check(/milczy/.test(tekst()), "po dlugiej ciszy baner mowi, ze nie wie");
+
+  /* I to jest polowa, ktora byla zepsuta: bez `lastSeen` licznik rosnie
+     sam z siebie, bo nie ma do czego liczyc.                          */
+  check(/lastSeen/.test(html), "aplikacja liczy swiezosc z lastSeen");
+  A.__setState({ cfg:{ profil:undefined } });
+}
+
 head("Zgodnosc wersji aplikacji");
 check(/const APP_VERSION = "([\d.\-]+)"/.test(html), "index.html deklaruje wersje");
 const av = html.match(/const APP_VERSION = "([\d.\-]+)"/)?.[1];

@@ -19,7 +19,7 @@
  *    miejsce w bazie i kalendarze wymieszalyby sie po cichu.
  * ------------------------------------------------------------------ */
 #define DEVICE_ID           "pillbox02"     // klucz w /devices/<DEVICE_ID>
-#define FW_VERSION          "0.7.0"         // widoczna w aplikacji
+#define FW_VERSION          "0.8.0"         // widoczna w aplikacji
 
 /* ---------------------------------------------------------------------
  * 2. FIREBASE
