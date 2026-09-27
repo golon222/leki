@@ -2295,7 +2295,7 @@ window.wybierzPudelko = (id) => {
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-09-27.100";
+const APP_VERSION = "2026-09-27.101";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -6778,7 +6778,24 @@ function renderOta(){
      Lista jest dokładnym odbiciem `otaDecyzja()` w firmware. Gdyby któryś
      warunek tam się zmienił, ten tekst musi pójść za nim — inaczej ekran
      zacznie obiecywać coś, czego pudełko nie robi.                      */
-  const warunki = `
+  /*  WARUNKI SĄ INNE DLA KAŻDEGO PUDEŁKA i muszą iść za firmware, nie obok
+      niego. Pudełko tygodniowe nie ma wieczka, nie wie, czy stoi na
+      ładowarce, i nie stosuje progu baterii — bo jego pomiar baterii jest
+      zepsuty, a próg oparty na liczbie, której nie rozumiemy, to loteria
+      z jedyną zdalną drogą naprawy w stawce (D138).                   */
+  const warunki = profilTydzien() ? `
+    <div class="dim2" style="margin-top:8px;font-size:12px;line-height:1.55">
+      Pudełko zrobi to samo, gdy spełni wszystko naraz:<br>
+      • <b>otworzysz i zamkniesz klapkę</b> — to jest okazja, bo poza nią
+        pudełko śpi. Samo otwarcie nie wystarczy: przy otwartej klapce
+        pudełko czeka na zamknięcie i dopiero potem bierze się
+        za aktualizację;<br>
+      • ma zasięg swojej sieci WiFi;<br>
+      • nie ma zaległych otwarć czekających na wysłanie — one idą pierwsze.<br>
+      Progu baterii nie stosuje: jej pomiar w tym pudełku nie działa,
+      a blokada oparta na zepsutym pomiarze odcięłaby aktualizacje
+      bez powodu.
+    </div>` : `
     <div class="dim2" style="margin-top:8px;font-size:12px;line-height:1.55">
       Pudełko zrobi to samo, gdy spełni wszystko naraz:<br>
       • <b>otworzysz i ZAMKNIESZ wieczko</b> albo <b>postawisz je na

@@ -12,7 +12,7 @@ sed -n '2800,2960p' index.html          # jeden obszar
 grep -n "nazwaFunkcji" index.html       # gdy znasz nazwe
 ```
 
-## `index.html` — 8958 linii, ~130 tys. tokenow
+## `index.html` — 8975 linii, ~130 tys. tokenow
 
 Ekrany (`<section>`) i dwa duze bloki. Zakladki `tab-*` odpowiadaja
 pozycjom w pasku nawigacji i podekranom Ustawien.
@@ -67,19 +67,19 @@ pozycjom w pasku nawigacji i podekranom Ustawien.
 | 5853 | 5971 | ZAPAS TABLETEK |
 | 5972 | 6326 | USTAWIENIA |
 | 6327 | 6634 | POWIADOMIENIA NA TELEFON — BOT TELEGRAM (D67) |
-| 6635 | 7093 | AKTUALIZACJA PROGRAMU PUDEŁKA (D59) |
-| 7094 | 7465 | SIECI WIDZIANE PRZEZ PUDEŁKO |
-| 7466 | 7676 | ANALIZA |
-| 7677 | 8062 | WYKRESY ANALIZY |
-| 8063 | 8219 | RAPORT |
-| 8220 | 8281 | KONTEKST DNIA (TAGI) |
-| 8282 | 8332 | KOPIA ZAPASOWA |
-| 8333 | 8546 | KOPIA NA TELEGRAM |
-| 8547 | 8612 | WIEK KOPII |
-| 8613 | 8753 | ODTWARZANIE Z KOPII |
-| 8754 | 8828 | KOPIE Z BAZY |
-| 8829 | 8916 | NAWIGACJA |
-| 8917 | 8958 | AUTOMATYCZNA AKTUALIZACJA |
+| 6635 | 7110 | AKTUALIZACJA PROGRAMU PUDEŁKA (D59) |
+| 7111 | 7482 | SIECI WIDZIANE PRZEZ PUDEŁKO |
+| 7483 | 7693 | ANALIZA |
+| 7694 | 8079 | WYKRESY ANALIZY |
+| 8080 | 8236 | RAPORT |
+| 8237 | 8298 | KONTEKST DNIA (TAGI) |
+| 8299 | 8349 | KOPIA ZAPASOWA |
+| 8350 | 8563 | KOPIA NA TELEGRAM |
+| 8564 | 8629 | WIEK KOPII |
+| 8630 | 8770 | ODTWARZANIE Z KOPII |
+| 8771 | 8845 | KOPIE Z BAZY |
+| 8846 | 8933 | NAWIGACJA |
+| 8934 | 8975 | AUTOMATYCZNA AKTUALIZACJA |
 
 **Funkcje** (228) — nazwa i linia deklaracji:
 
@@ -139,29 +139,29 @@ pozycjom w pasku nawigacji i podekranom Ustawien.
 
 *POWIADOMIENIA NA TELEFON — BOT TELEGRAM (D67)* — `tgTokenPoprawny`&nbsp;6344, `tgZapytaj`&nbsp;6354, `tgKodParowania`&nbsp;6394, `tgZnajdzCzat`&nbsp;6410, `tgPolacz`&nbsp;6478, `tgProbna`&nbsp;6511, `tgOdlacz`&nbsp;6518, `renderTgStan`&nbsp;6540
 
-*AKTUALIZACJA PROGRAMU PUDEŁKA (D59)* — `sprawdzAktualizacje`&nbsp;6655, `pobierzOpisFirmware`&nbsp;6661, `wyslijAktualizacje`&nbsp;6684, `anulujAktualizacje`&nbsp;6729, `renderOta`&nbsp;6735, `renderNetStan`&nbsp;7020
+*AKTUALIZACJA PROGRAMU PUDEŁKA (D59)* — `sprawdzAktualizacje`&nbsp;6655, `pobierzOpisFirmware`&nbsp;6661, `wyslijAktualizacje`&nbsp;6684, `anulujAktualizacje`&nbsp;6729, `renderOta`&nbsp;6735, `renderNetStan`&nbsp;7037
 
-*SIECI WIDZIANE PRZEZ PUDEŁKO* — `opisSygnalu`&nbsp;7105, `renderSkan`&nbsp;7111, `szukajSieci`&nbsp;7163, `wybierzSiec`&nbsp;7171, `wyslijPolecenieSieci`&nbsp;7189, `siecZIndeksu`&nbsp;7199, `tzChanged`&nbsp;7233, `cfgTime`&nbsp;7238, `addSlot`&nbsp;7246, `zapiszPlanDnia`&nbsp;7259, `saveConfig`&nbsp;7277, `inrKrokiZakresu`&nbsp;7348, `opcjeInr`&nbsp;7355, `inrZakresZmieniony`&nbsp;7366, `wypelnijListyZakresu`&nbsp;7379, `saveInrRange`&nbsp;7390, `wypelnijListeOdstepu`&nbsp;7424, `saveInrEvery`&nbsp;7437, `odswiezPodpowiedzInr`&nbsp;7447
+*SIECI WIDZIANE PRZEZ PUDEŁKO* — `opisSygnalu`&nbsp;7122, `renderSkan`&nbsp;7128, `szukajSieci`&nbsp;7180, `wybierzSiec`&nbsp;7188, `wyslijPolecenieSieci`&nbsp;7206, `siecZIndeksu`&nbsp;7216, `tzChanged`&nbsp;7250, `cfgTime`&nbsp;7255, `addSlot`&nbsp;7263, `zapiszPlanDnia`&nbsp;7276, `saveConfig`&nbsp;7294, `inrKrokiZakresu`&nbsp;7365, `opcjeInr`&nbsp;7372, `inrZakresZmieniony`&nbsp;7383, `wypelnijListyZakresu`&nbsp;7396, `saveInrRange`&nbsp;7407, `wypelnijListeOdstepu`&nbsp;7441, `saveInrEvery`&nbsp;7454, `odswiezPodpowiedzInr`&nbsp;7464
 
-*ANALIZA* — `openTimeOf`&nbsp;7472, `openMinutes`&nbsp;7478, `sredniaPora`&nbsp;7502, `kwantyl`&nbsp;7510, `dniMiedzy`&nbsp;7518, `odstepyZPunktow`&nbsp;7532, `analyze`&nbsp;7541, `inrContext`&nbsp;7643
+*ANALIZA* — `openTimeOf`&nbsp;7489, `openMinutes`&nbsp;7495, `sredniaPora`&nbsp;7519, `kwantyl`&nbsp;7527, `dniMiedzy`&nbsp;7535, `odstepyZPunktow`&nbsp;7549, `analyze`&nbsp;7558, `inrContext`&nbsp;7660
 
-*WYKRESY ANALIZY* — `komorkaRytmu`&nbsp;7702, `rytmSVG`&nbsp;7714, `poryWCzasieSVG`&nbsp;7776, `iskraSVG`&nbsp;7844, `dowSVG`&nbsp;7872, `dniRytmu`&nbsp;7908, `skutecznoscTygodniami`&nbsp;7929, `renderAnalysis`&nbsp;7957
+*WYKRESY ANALIZY* — `komorkaRytmu`&nbsp;7719, `rytmSVG`&nbsp;7731, `poryWCzasieSVG`&nbsp;7793, `iskraSVG`&nbsp;7861, `dowSVG`&nbsp;7889, `dniRytmu`&nbsp;7925, `skutecznoscTygodniami`&nbsp;7946, `renderAnalysis`&nbsp;7974
 
-*RAPORT* — `collectRows`&nbsp;8064, `makeReport`&nbsp;8101
+*RAPORT* — `collectRows`&nbsp;8081, `makeReport`&nbsp;8118
 
-*KONTEKST DNIA (TAGI)* — `tagiDnia`&nbsp;8252, `tagiPrzed`&nbsp;8260, `tagPrzelacz`&nbsp;8269
+*KONTEKST DNIA (TAGI)* — `tagiDnia`&nbsp;8269, `tagiPrzed`&nbsp;8277, `tagPrzelacz`&nbsp;8286
 
-*KOPIA ZAPASOWA* — `zbierzKopie`&nbsp;8312, `opisKopii`&nbsp;8322
+*KOPIA ZAPASOWA* — `zbierzKopie`&nbsp;8329, `opisKopii`&nbsp;8339
 
-*KOPIA NA TELEGRAM* — `tgKopiaUst`&nbsp;8367, `tgCzatKopii`&nbsp;8374, `odswiezKopie`&nbsp;8381, `tgKopiaCzatZapisz`&nbsp;8389, `tgKopiaCzatZnajdz`&nbsp;8409, `tgKopiaWlacz`&nbsp;8439, `tgKopiaWylacz`&nbsp;8458, `kopiaNaTelegram`&nbsp;8467, `kopiaAutomat`&nbsp;8518
+*KOPIA NA TELEGRAM* — `tgKopiaUst`&nbsp;8384, `tgCzatKopii`&nbsp;8391, `odswiezKopie`&nbsp;8398, `tgKopiaCzatZapisz`&nbsp;8406, `tgKopiaCzatZnajdz`&nbsp;8426, `tgKopiaWlacz`&nbsp;8456, `tgKopiaWylacz`&nbsp;8475, `kopiaNaTelegram`&nbsp;8484, `kopiaAutomat`&nbsp;8535
 
-*WIEK KOPII* — `dniOdDaty`&nbsp;8565, `wiekKopiiTxt`&nbsp;8571, `renderKopiaStan`&nbsp;8579, `zapiszKopie`&nbsp;8594
+*WIEK KOPII* — `dniOdDaty`&nbsp;8582, `wiekKopiiTxt`&nbsp;8588, `renderKopiaStan`&nbsp;8596, `zapiszKopie`&nbsp;8611
 
-*ODTWARZANIE Z KOPII* — `policzOdtworzenie`&nbsp;8628, `ustawieniaDoOdtworzenia`&nbsp;8676, `wczytajKopie`&nbsp;8691, `kopiaCzytelna`&nbsp;8696, `odtworzKopie`&nbsp;8706, `kopiaWybrana`&nbsp;8739
+*ODTWARZANIE Z KOPII* — `policzOdtworzenie`&nbsp;8645, `ustawieniaDoOdtworzenia`&nbsp;8693, `wczytajKopie`&nbsp;8708, `kopiaCzytelna`&nbsp;8713, `odtworzKopie`&nbsp;8723, `kopiaWybrana`&nbsp;8756
 
-*KOPIE Z BAZY* — `kopieZBazy`&nbsp;8763, `odtworzZBazy`&nbsp;8795, `exportCsv`&nbsp;8807
+*KOPIE Z BAZY* — `kopieZBazy`&nbsp;8780, `odtworzZBazy`&nbsp;8812, `exportCsv`&nbsp;8824
 
-*NAWIGACJA* — `wrocZEkranu`&nbsp;8915
+*NAWIGACJA* — `wrocZEkranu`&nbsp;8932
 
 
 ---

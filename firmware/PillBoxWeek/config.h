@@ -19,7 +19,7 @@
  *    miejsce w bazie i kalendarze wymieszalyby sie po cichu.
  * ------------------------------------------------------------------ */
 #define DEVICE_ID           "pillbox02"     // klucz w /devices/<DEVICE_ID>
-#define FW_VERSION          "0.8.0"         // widoczna w aplikacji
+#define FW_VERSION          "0.9.0"         // widoczna w aplikacji
 
 /* ---------------------------------------------------------------------
  * 2. FIREBASE
@@ -177,10 +177,27 @@
 #define OTA_JSON_FILE       "PillBoxWeek.json"  // opis wersji: kilkaset bajtow
 #define OTA_BIN_FILE        "PillBoxWeek.bin"   // sam program: ~1,1 MB
 
-/*     Ponizej tego progu tylko na ladowarce - a poniewaz to pudelko nie
- *     wie, czy na niej stoi, prog obowiazuje zawsze. Sama aktualizacja to
- *     okolo 1-2 mAh, ale na wyczerpanym ogniwie kazdy grosz jest pozyczka. */
-#define OTA_MIN_BATT_PCT    25
+/*     PROG BATERII ZNIESIONY - i to jest decyzja, nie przeoczenie (D138).
+ *
+ *     W pudelku dziennym stoi tu 25: ponizej tego poziomu aktualizacja
+ *     rusza tylko na ladowarce, bo 1-2 mAh na wyczerpanym ogniwie to
+ *     pozyczka. Tam ma to sens, bo tam pomiar baterii DZIALA.
+ *
+ *     Tutaj nie dziala i nie wiemy dlaczego (D136): plytka melduje 2,32 V,
+ *     czyli wartosc, przy ktorej by nie chodzila. Prog oparty na liczbie,
+ *     ktorej nie rozumiemy, nie jest zabezpieczeniem - jest LOTERIA:
+ *     przy odczycie niemozliwym (-1) nie zadziala wcale, a gdyby odczyt
+ *     wyladowal kiedys tuz nad progiem czulosci, zablokowalby aktualizacje
+ *     bez powodu.
+ *
+ *     A stawka jest asymetryczna. Zle zablokowana aktualizacja odcina
+ *     JEDYNA zdalna droge naprawy tego pudelka - zostaje kabel i moj
+ *     komputer, a pudelko stoi u kogos innego. Zle przepuszczona kosztuje
+ *     1-2 mAh.
+ *
+ *     PRZYWROC 25, gdy pomiar baterii zostanie wyjasniony - i dopiero
+ *     wtedy. Kontrola statyczna pilnuje, ze te dwie rzeczy chodza razem. */
+#define OTA_MIN_BATT_PCT    0
 
 /*     Po tylu nieudanych probach z rzedu pudelko przestaje samo probowac.
  *     Zdejmuje to dopiero SWIEZE zlecenie z aplikacji - czyli swiadoma

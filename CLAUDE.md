@@ -346,7 +346,7 @@ na `esp32:esp32@3.3.11` i z **ustawieniami płytki z nagłówka `PillBox.ino`**.
 Nie jest częścią `run_all.sh`: wymaga sieci i ~500 MB toolchainu.
 **Uruchom to po każdej zmianie w firmware.**
 
-Stan: `PillBox.ino` **64% flasha** (1 265 417 B z 1,875 MB), `PillBoxWeek.ino` **61%** (1 207 709 B),
+Stan: `PillBox.ino` **64% flasha** (1 265 417 B z 1,875 MB), `PillBoxWeek.ino` **61%** (1 207 685 B),
 `PillBoxTest.ino` 20% bez `config.h` i **57%** z nim. Szkic diagnostyczny budujemy w OBU
 konfiguracjach — bez tego drugiego przebiegu 722 kB jego kodu (logowanie do
 bazy, zapis wyniku) nie było kompilowane ani razu (D103).
@@ -425,6 +425,12 @@ nie do publikacji. Szczegóły obejść — D17.
   **czy ta liczba rusza się przy ładowaniu.** Jeśli tak — to dzielnik
   i da się to skalibrować; jeśli stoi — to zły pin albo brak kontaktu.
   Procentu przy tym nie zgadujemy: `0%` znaczy „naładuj natychmiast".
+  **Próg baterii dla aktualizacji jest w tym pudełku ZNIESIONY** (D138,
+  `OTA_MIN_BATT_PCT = 0`): próg oparty na liczbie, której nie rozumiemy,
+  nie jest zabezpieczeniem, tylko loterią — a źle zablokowana aktualizacja
+  odcina jedyną zdalną drogę naprawy. **Wraca razem z naprawionym
+  pomiarem**, nie wcześniej, i kontrola statyczna pilnuje, że te dwie
+  rzeczy chodzą razem.
   Melduje `2,32 V`,
   czyli napięcie, przy którym płytka by nie chodziła. Program zgłasza to
   uczciwie jako brak danych (`-1%`), ale **przyczyny nie znamy**. Najpierw

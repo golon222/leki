@@ -773,12 +773,36 @@ if w.exists():
         if _d != _t: _zle.append(f'{_n}: dzienne {_d}, tygodniowe {_t}')
     if 'TUTAJ_WPISZ_HASLO' not in _cfgW:
         _zle.append('config.h pudelka tygodniowego nie ma placeholdera hasla')
+    # ── PROG BATERII CHODZI RAZEM Z POMIAREM BATERII ────────────────
+    #
+    # W pudelku tygodniowym prog jest ZNIESIONY (D138), bo pomiar baterii
+    # jest zepsuty i nie wiemy dlaczego (D136). Prog oparty na liczbie,
+    # ktorej nie rozumiemy, nie jest zabezpieczeniem, tylko loteria -
+    # a stawka jest asymetryczna: zle zablokowana aktualizacja odcina
+    # JEDYNA zdalna droge naprawy, zle przepuszczona kosztuje 1-2 mAh.
+    #
+    # Ta kontrola pilnuje, ze te dwie rzeczy chodza razem: prog wraca
+    # dopiero wtedy, gdy ktos naprawi pomiar. Zmiana jednego bez drugiego
+    # zatrzyma sie tutaj i kaze przeczytac, o co chodzilo.
+    _prog = _defW('OTA_MIN_BATT_PCT', _cfgW)
+    if _prog is None:
+        _zle.append('OTA_MIN_BATT_PCT: nie ma w config.h pudelka tygodniowego')
+    elif _prog != '0':
+        _zle.append(f'prog baterii dla OTA to {_prog}, a pomiar baterii w tym '
+                    f'pudelku nadal jest niewyjasniony (D136/D138)')
+    # Ekran nie ma prawa obiecywac progu, ktorego pudelko nie stosuje.
+    _ota_txt = re.search(r'const warunki = profilTydzien\(\) \? `(.*?)` : `', _html, re.S)
+    if not _ota_txt:
+        _zle.append('nie znalazlem warunkow aktualizacji osobnych dla pudelek')
+    elif '% baterii' in _ota_txt.group(1):
+        _zle.append('ekran obiecuje prog baterii, ktorego pudelko tygodniowe nie stosuje')
+
     if _zle:
         bad += 1
         print('  BLAD aktualizacja pudelka tygodniowego:')
         for _z in _zle: print('       ' + _z)
     else:
-        print('  OK   pudelko tygodniowe pobiera wlasny plik, tymi samymi progami')
+        print('  OK   pudelko tygodniowe pobiera wlasny plik, bez progu baterii')
 
     # ── APLIKACJA I PUDELKO MUSZA WSKAZYWAC TEN SAM PLIK ────────────
     #
