@@ -2021,7 +2021,7 @@ window.wybierzPudelko = (id) => {
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-09-27.82";
+const APP_VERSION = "2026-09-27.83";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -8236,6 +8236,39 @@ function policzOdtworzenie(kopia){
            pominiete, noweInr, pominieteInr };
 }
 
+/*  USTAWIENIA Z KOPII — osobno od dawek i osobno CELOWO (D125).
+
+    Kopia ZAWSZE zawierała `cfg` (D84 pilnuje nawet, żeby lista nazw była
+    prawdziwa), ale odtwarzanie ruszało wyłącznie dawki, INR, rozpisania
+    i znaczniki. Wyszło to najgorszą możliwą drogą: `Import JSON` w konsoli
+    Firebase, zrobiony o jedno piętro wyżej niż trzeba, skasował całą gałąź
+    `devices` — a z nią harmonogram, dawkowanie, nazwę leku i stan
+    opakowania. Dane o lekach przeżyły, bo leżą pod `users/<uid>`.
+    Ustawień nie było czym wrócić, choć siedziały w kopii obok.
+
+    PORÓWNUJEMY Z BAZĄ, NIE Z `cfg`. W pamięci aplikacji `cfg` ma wartości
+    domyślne dla dziewięciu z szesnastu pól — patrząc na nie, wyszłoby, że
+    wszystko już jest, i nie wróciłoby nic. Jedyna uczciwa odpowiedź na
+    pytanie „czy to ustawienie istnieje" jest w bazie.
+
+    DOKŁADAMY TYLKO TO, CZEGO TAM NIE MA. Ustawienie, które w bazie już
+    stoi, jest z definicji świeższe niż to z kopii — ta sama zasada, którą
+    `policzOdtworzenie()` stosuje do dawek.                              */
+async function ustawieniaDoOdtworzenia(kopia){
+  const sciezki = {};
+  if (!kopia?.cfg || typeof kopia.cfg !== "object") return sciezki;
+  let wBazie = {};
+  try { wBazie = (await get(ref(db, `devices/${DEVICE_ID}/config`))).val() || {}; }
+  catch (e) { console.error("odczyt ustawien przed odtworzeniem:", e); return sciezki; }
+  for (const k of KOPIA_CFG){
+    const v = kopia.cfg[k];
+    if (v === undefined || v === null) continue;
+    if (wBazie[k] !== undefined && wBazie[k] !== null) continue;
+    sciezki[`devices/${DEVICE_ID}/config/${k}`] = v;
+  }
+  return sciezki;
+}
+
 window.wczytajKopie = () => document.getElementById("kopiaPlik")?.click();
 
 /* Czy to w ogóle jest kopia z tej aplikacji. Osobno, bo sprawdzają to teraz
@@ -8253,6 +8286,13 @@ function kopiaCzytelna(k){
    z D81 — a każdy z nich broni przed innym sposobem utraty historii.  */
 async function odtworzKopie(kopia, skad){
   const plan = policzOdtworzenie(kopia);
+  /*  Ustawienia idą TĄ SAMĄ drogą, jednym zapisem i jednym pytaniem.
+      Druga funkcja odtwarzająca prędzej czy później zgubiłaby któryś
+      z warunków z D81 — a każdy z nich broni przed innym sposobem utraty
+      historii.                                                         */
+  const ust = await ustawieniaDoOdtworzenia(kopia);
+  const ileUst = Object.keys(ust).length;
+  Object.assign(plan.sciezki, ust);
   if (!Object.keys(plan.sciezki).length){
     toast("Wszystko z tej kopii już jest w aplikacji — nic do odtworzenia.", "info", 4000);
     return false;
@@ -8263,7 +8303,10 @@ async function odtworzKopie(kopia, skad){
     `Kopia ${skad} z ${kiedy}. Dojdzie ${plan.dni} ${lm(plan.dni, "dzień", "dni", "dni")} ` +
     `i ${plan.noweInr} ${lm(plan.noweInr, "pomiar", "pomiary", "pomiarów")} INR. ` +
     `Pominięte zostaną dni, które już masz (${plan.pominiete}) — ręcznych wpisów ` +
-    `w telefonie kopia nie nadpisze.`);
+    `w telefonie kopia nie nadpisze.` +
+    (ileUst ? ` Wrócą też ${ileUst} ${lm(ileUst, "ustawienie", "ustawienia", "ustawień")} ` +
+              `pudełka (harmonogram, dawkowanie, lek) — tylko te, których w bazie nie ma.`
+            : ""));
   if (!ok) return false;
 
   busy(true);

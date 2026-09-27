@@ -13,7 +13,7 @@ zamiast 60 tys. tokenów wchodzi 2,5 tys. plus jeden obszar.
 | `decyzje/ota.md` | Aktualizacja przez WiFi i skan sieci | 8 |
 | `decyzje/telegram.md` | Powiadomienia Telegram | 5 |
 | `decyzje/aplikacja.md` | Aplikacja — ekrany i wygląd | 39 |
-| `decyzje/dane.md` | Dane, kolejka, dawkowanie | 19 |
+| `decyzje/dane.md` | Dane, kolejka, dawkowanie | 20 |
 | `decyzje/testy.md` | Testy, audyt, kompilacja | 15 |
 | `decyzje/bugi.md` | Błędy **zamknięte** — historia objawów | 25 |
 | `decyzje/cofniete.md` | Cofnięte — **nie próbować drugi raz** | 5 |
@@ -63,6 +63,7 @@ Od najnowszej. Kolumna „gdzie" mówi, który plik w `decyzje/` trzymać otwart
 
 | # | O co chodziło | gdzie |
 |---|---|---|
+| **D125** | Odtwarzanie z kopii przywraca też **ustawienia pudełka** — `Import JSON` z mojej instrukcji skasował gałąź `devices` i okazało się, że `cfg` leży w kopii, ale nie ma czym go wrócić. Historia leków przeżyła (inne drzewo), pudełko dalej dzwoni (config lokalny), dawki czekały w kolejce (401 to nie 400). Instrukcja dodaje teraz wszystko **polami**, nigdy importem | `dane` |
 | **D124** | Dziewczyna dostaje **własne konto** (`owners` w regułach obok `owner`), a dane człowieka **rozdzielają się na pudełka** — bo `users/<uid>/doses` nie miało w ścieżce numeru urządzenia i jedno przełączenie wpisywałoby cudze tabletki do kalendarza Warfinu. Aplikacja sprawdza dostęp **przed** nasłuchami; jawna odmowa reguł odcina pudełko, błąd sieci nigdy | `dane` |
 | **D123** | Binarka **nie może** być powtarzalna: rdzeń ESP32 wkompilowuje `__DATE__`/`__TIME__`, więc dwie kompilacje tego samego źródła w różne dni zawsze się różnią (zmierzone: 71 bajtów w trzech miejscach, jedno z nich to wprost `Sep  9 2026` kontra `Sep 22 2026`). Guard „binarka bez zmian" nie miał jak zadziałać — automat publikuje teraz według **odcisku źródła**, nie plików. Korekta D106 | `testy` |
 | **D122** | Generator prototypów (`proto_arduino.py`) robił śmieć z funkcji jednolinijkowej zawierającej pętlę — brał **ostatnią** klamrę w linii zamiast pierwszej po nazwie. `PillBox.ino` takiej funkcji nie ma, więc wzorzec nie trafił ani razu; wyszło przy pierwszym nowym szkicu | `testy` |

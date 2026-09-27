@@ -42,7 +42,7 @@ export { renderSkan, brakujePokrycia, doReconcile, reconcileDecyzja, opisLadowan
          REED_DRGANIA_DUZO,
          inrOdstep, inrTerminKey, inrDoTerminu, dniTxt, renderOstrzezenia, ostrzStraty,
          collectRows, inrChart, nf, esc, renderCalendar, renderToday,
-         zbierzKopie, opisKopii, policzOdtworzenie, KOPIA_WERSJA, KOPIA_CFG,
+         zbierzKopie, opisKopii, policzOdtworzenie, KOPIA_WERSJA, KOPIA_CFG, ustawieniaDoOdtworzenia,
          TAGI, TAGI_PL, tagiDnia, tagiPrzed, tags,
          kopiaAutomat, renderKopiaStan, KOPIE_W_BAZIE,
          tgKopiaUst, TG_KOPIA_KLUCZ, tgCzatKopii,

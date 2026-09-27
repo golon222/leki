@@ -3,6 +3,10 @@
 Osobne urządzenie, osobny program, osobne konta w bazie. Pudełka dziennego
 to nie dotyka w żadnym miejscu — ani jednego pliku, ani jednego wpisu.
 
+> **Skasowała Ci się gałąź `devices` w bazie?** Idź od razu do sekcji
+> **7. RATUNEK** na końcu tego pliku. Krótka wersja: historia leków jest
+> cała, pudełko dalej dzwoni, żadna dawka nie przepadła.
+
 Całość to jakieś 25 minut:
 
 1. konto **pudełka** i konto **dziewczyny** — to dwie różne rzeczy (10 min)
@@ -110,48 +114,56 @@ Twojego konta.
 **Skopiuj tę wartość**, nie przepisuj. Jedna pomylona litera i baza odrzuci
 wszystko, co pudełko wyśle, a błąd będzie wyglądał jak awaria sieci.
 
-## 2b. Utwórz `pillbox02`
+## 2b. Utwórz `pillbox02` — polami, nie importem
+
+> **TU BYŁ MÓJ BŁĄD I ZOSTAŁ USUNIĘTY.** Wcześniej stało tu „użyj
+> `Import JSON`". Import **zastępuje zawartość węzła**, a w konsoli łatwo
+> trafić o jedno piętro wyżej — i wtedy kasuje całą gałąź `devices`. Kuba
+> tak zrobił i skasował oba pudełka. Dlatego teraz wszystko dodajemy
+> **polami, przez `+`**: to więcej klikania, ale `+` może tylko **dodać**.
+> Niczego nie da się tak skasować.
 
 Najedź na węzeł **`devices`** — po prawej pojawią się ikonki. Kliknij **`+`**.
 
-* **Name:** `pillbox02`
-* **Value:** zostaw **puste** i kliknij **`+`** jeszcze raz — pojawi się
-  wcięty wiersz. W nim:
-  * **Name:** `owner`
-  * **Value:** wklej **swój** UID
+Pojawi się wiersz na nazwę i wartość. Za każdym razem działa to tak samo:
+**wpisz nazwę**, a potem albo **wpisz wartość**, albo **kliknij `+`** obok,
+żeby wejść piętro niżej. `Add` zatwierdza całość.
 
-**Kliknij `Add`.**
+Buduj to drzewo:
 
-(Po co ten jeden ręczny wpis, skoro zaraz wklejamy całość: konsola pozwala
-wklejać JSON tylko do węzła, **który już istnieje**. Ten krok robi
-`pillbox02` bytem, w który da się celować.)
-
-## 2c. Wgraj resztę jednym wklejeniem
-
-Najedź na węzeł **`pillbox02`** i kliknij **trzy kropki `⋮`** →
-**`Import JSON`**.
-
-> **Jedyne miejsce, w którym można tu narobić szkody:** upewnij się, że
-> trzy kropki klikasz na **`pillbox02`**, a nie na `devices`. Import
-> **zastępuje** zawartość węzła — zrobiony na `devices` skasowałby
-> `pillbox01`, czyli całą historię Warfinu. Na `pillbox02` jest zupełnie
-> bezpieczny, bo tam i tak nic jeszcze nie ma.
-
-```json
-{
-  "owner": "TWOJ_UID",
-  "owners": { "JEJ_UID": true },
-  "deviceUid": "UID_KONTA_pillbox02",
-  "config": {
-    "schedule": ["20:00"],
-    "profil": "tydzien"
-  }
-}
+```
+pillbox02
+├── owner       ← Twój UID
+├── owners
+│   └── <JEJ UID>   ← wartość: true
+├── deviceUid   ← UID konta pillbox02@device.local
+└── config
+    ├── schedule
+    │   └── 0   ← wartość: 20:00
+    └── profil  ← wartość: tydzien
 ```
 
-(ten sam plik leży w repo jako `firmware/PillBoxWeek/pillbox02-baza.json`)
+Krok po kroku, bo zagnieżdżanie w tej konsoli nie jest oczywiste:
 
-Uwaga: w `owners` **kluczem jest UID**, a wartością `true`. Nie odwrotnie.
+1. `+` na `devices` → **Name:** `pillbox02`, **Value** zostaw puste
+2. `+` obok → **Name:** `owner`, **Value:** wklej swój UID
+3. `+` znowu → **Name:** `owners`, **Value** puste → `+` obok →
+   **Name:** jej UID, **Value:** `true`
+4. `+` → **Name:** `deviceUid`, **Value:** UID konta pudełka
+5. `+` → **Name:** `config`, puste → `+` obok →
+   **Name:** `schedule`, puste → `+` obok → **Name:** `0`, **Value:** `20:00`
+6. wróć na poziom `config` → `+` → **Name:** `profil`, **Value:** `tydzien`
+7. **`Add`**
+
+Dwie rzeczy, na które warto spojrzeć po zatwierdzeniu:
+
+* w `owners` **kluczem jest UID**, a wartością `true` — nie odwrotnie,
+* `true` i `20:00` wpisz **bez cudzysłowów**; konsola sama zrobi z nich
+  wartość logiczną i napis.
+
+Wzorzec wartości, jeśli chcesz sobie sprawdzić, co ma gdzie stać, leży
+w repo jako `firmware/PillBoxWeek/pillbox02-baza.json`. **To materiał do
+czytania, nie do importowania.**
 
 **Co to znaczy, linia po linii:**
 
@@ -160,10 +172,10 @@ Uwaga: w `owners` **kluczem jest UID**, a wartością `true`. Nie odwrotnie.
 | `owner` | Ty. Zarządzasz pudełkiem. |
 | `owners` | dziewczyna. Ma **te same prawa** co Ty do tego pudełka. |
 | `deviceUid` | samo pudełko. Bez tego **nic nie zapisze** — reguły odrzucą każdy wpis. |
-| `schedule` | **godziny przypomnień**, nie pory brania. Możesz dać dwie: `["20:00","22:30"]` — wtedy pudełko przypomni jeszcze raz, jeśli klapka nadal nie została otwarta. |
+| `schedule` | **godziny przypomnień**, nie pory brania. Drugą dodasz tak samo: `1` → `22:30`. |
 | `profil` | po tym aplikacja pozna, że ma pokazać pudełko tygodniowe, a nie ekrany Warfinu. |
 
-Po imporcie **sprawdź wzrokiem, że `pillbox01` nadal ma swoje dane.**
+Po wszystkim **sprawdź wzrokiem, że `pillbox01` nadal ma swoje dane.**
 
 ## 2d. Czego jej konto NIE widzi — i to jest celowe
 
@@ -305,6 +317,97 @@ Otwórz przy tym jedną klapkę i policz piknięcia. Sprawdza **całą** drogę:
 rezystor, mikroprzełącznik, lutowanie i progi.
 
 ---
+
+---
+
+# 7. RATUNEK — gdy gałąź `devices` zniknęła
+
+Stało się: `Import JSON` zrobiony na `devices` zamiast na `pillbox02`
+skasował **oba pudełka**. Poniżej dokładnie, co przeżyło i jak wrócić.
+
+## Co NIE zginęło — i to jest większość
+
+**Cała historia leków jest cała.** Dawki, pomiary INR, rozpisania lekarza,
+znaczniki dni i kopie zapasowe leżą pod `users/<Twój uid>/…` — a skasowana
+została gałąź `devices`. To dwie różne gałęzie i wipe dotknął tylko jednej.
+
+**Pudełko dalej dzwoni.** Harmonogram, strefa czasowa, stan opakowania
+i termin INR siedzą w jego własnej pamięci trwałej. `fetchConfig()` przy
+braku konfiguracji w bazie loguje *„brak config — zostaje lokalny"* i nie
+rusza tego, co ma. Twoje 20:00 działa.
+
+**Żadna dawka nie przepadnie.** Reguły bazy wymagają `deviceUid`, więc bez
+tego węzła pudełko nie ma prawa pisać — dostaje HTTP 401. A 401 **nie jest**
+odrzuceniem trwałym (`trwaleOdrzucony()` zdejmuje wpis tylko przy 400/413),
+więc dawki czekają w kolejce w pudełku i pójdą, gdy węzeł wróci. Kolejka ma
+120 miejsc.
+
+## Co zginęło na dobre
+
+**Surowa historia otwarć pudełka** (`devices/pillbox01/events`) — nie ma jej
+skąd wziąć. Ale kalendarz dawek jest z tych zdarzeń **już policzony**
+i nietknięty, więc historia leczenia została; zginął tylko zapis źródłowy.
+
+`status`, `scan` i dziennik nieudanych zapisów pudełko nadpisze samo przy
+pierwszym wybudzeniu.
+
+## Jak wrócić — po kolei
+
+### Krok 1: dwa pola, żeby pudełko znowu mogło pisać
+
+Najpilniejsze, bo od tego zależy, czy aplikacja cokolwiek widzi.
+
+Potrzebujesz dwóch UID-ów z
+https://console.firebase.google.com/project/pudelko-na-leki/authentication/users
+— swojego (przy Twoim adresie) i konta `pillbox01@device.local`.
+
+W bazie, **polami przez `+`** (nigdy importem):
+
+```
+devices
+└── pillbox01
+    ├── owner      ← Twój UID
+    ├── deviceUid  ← UID konta pillbox01@device.local
+    └── config
+        └── schedule
+            └── 0  ← Twoja godzina przypomnienia, np. 20:00
+```
+
+`config/schedule` zakładasz od razu, bo reguły wymagają, żeby konfiguracja
+— jeśli w ogóle istnieje — miała harmonogram.
+
+Po `Add` otwórz aplikację. Powinna zobaczyć pudełko, a przy najbliższym
+wybudzeniu pudełko dośle wszystko, co czekało w kolejce.
+
+### Krok 2: reszta ustawień z kopii zapasowej
+
+Twoje kopie leżą w bazie pod `users/<Twój uid>/backup/` — trzy najnowsze,
+robione automatycznie raz na dzień przy otwarciu aplikacji. Zajrzyj tam
+i zobacz `cfg` w najnowszej: to jest Twój harmonogram, dawkowanie, nazwa
+leku, odstęp INR i stan opakowania.
+
+**W aplikacji: Ustawienia → Kopia zapasowa → odtwórz z kopii w bazie.**
+Od wersji `2026-09-27.83` odtwarzanie przywraca **także ustawienia
+pudełka** — dokłada tylko te pola, których w bazie nie ma, więc niczego
+nie nadpisze. Potwierdzenie przed zapisem powie, ile ustawień wróci.
+
+Zanim to zrobisz, sprawdź w aplikacji **dawkowanie** (Ustawienia → Lek).
+Przy pustej konfiguracji aplikacja pokazuje wartości domyślne — `defaultDose`
+wraca na 1 — więc dopóki ustawienia nie wrócą, liczba tabletek w kalendarzu
+może być liczona nie Twoją dawką.
+
+### Krok 3: pudełko tygodniowe od nowa
+
+Wróć do kroku **2b** wyżej i zbuduj `pillbox02` polami. Nic z niego nie
+zginęło, bo nic w nim jeszcze nie było.
+
+### Czego NIE robić
+
+* **Nie klikaj „Import JSON"** — ani teraz, ani nigdy w tym projekcie.
+* Nie kasuj niczego z `users/` „żeby posprzątać". Tam siedzi cała historia
+  leczenia i Twoje kopie zapasowe.
+* Nie kasuj pełnej pamięci pudełka („Erase All Flash") — z nią zniknie
+  hasło do bazy i lista sieci WiFi, czyli jedyna droga do pudełka bez kabla.
 
 # Czego to jeszcze nie ma
 

@@ -38,7 +38,7 @@ bash tests/run_all.sh
 ```
 
 Musi przejść przed zmianą i po zmianie. Stan wyjściowy:
-**642 + 52 firmware, 1326 (×6 pór doby) + 92 + 52 aplikacja, 48 zgodności,
+**642 + 52 firmware, 1339 (×6 pór doby) + 92 + 52 aplikacja, 48 zgodności,
 156 reguł bazy, 375 kontroli audytu, 32 kontrole statyczne — 0 błędów.**
 
 **Runner jest cichy przy sukcesie i głośny przy błędzie** (D66). Udany przebieg
@@ -255,6 +255,12 @@ WGRYWANIE.md                     instrukcja wgrywania kablem dla Kuby
 WGRYWANIE-TYDZIEN.md             uruchomienie pudelka tygodniowego (konta, baza)
 .github/workflows/firmware.yml   automat budujący binarkę do OTA
 ```
+
+**Instrukcje dla Kuby nie mogą zawierać kroku, w którym jedno nieuważne
+kliknięcie kasuje dane o leku** (D125). W konsoli Firebase wszystko dodajemy
+**polami przez `+`**, nigdy `Import JSON` — import zastępuje zawartość węzła
+i raz już skasował całą gałąź `devices`. Ostrzeżenie obok złego kroku nie
+jest zabezpieczeniem, tylko przypisem do niego.
 
 Po zmianie w plikach aplikacji **podbij `APP_VERSION` i `CACHE` w `sw.js`** — inaczej
 telefon zostanie na starej wersji. Po zmianie firmware podbij `FW_VERSION`.

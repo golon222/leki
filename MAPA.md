@@ -12,7 +12,7 @@ sed -n '2800,2960p' index.html          # jeden obszar
 grep -n "nazwaFunkcji" index.html       # gdy znasz nazwe
 ```
 
-## `index.html` — 8491 linii, ~130 tys. tokenow
+## `index.html` — 8534 linii, ~130 tys. tokenow
 
 Ekrany (`<section>`) i dwa duze bloki. Zakladki `tab-*` odpowiadaja
 pozycjom w pasku nawigacji i podekranom Ustawien.
@@ -76,12 +76,12 @@ pozycjom w pasku nawigacji i podekranom Ustawien.
 | 7868 | 7913 | KOPIA ZAPASOWA |
 | 7914 | 8127 | KOPIA NA TELEGRAM |
 | 8128 | 8193 | WIEK KOPII |
-| 8194 | 8291 | ODTWARZANIE Z KOPII |
-| 8292 | 8366 | KOPIE Z BAZY |
-| 8367 | 8449 | NAWIGACJA |
-| 8450 | 8491 | AUTOMATYCZNA AKTUALIZACJA |
+| 8194 | 8334 | ODTWARZANIE Z KOPII |
+| 8335 | 8409 | KOPIE Z BAZY |
+| 8410 | 8492 | NAWIGACJA |
+| 8493 | 8534 | AUTOMATYCZNA AKTUALIZACJA |
 
-**Funkcje** (221) — nazwa i linia deklaracji:
+**Funkcje** (222) — nazwa i linia deklaracji:
 
 *KONFIGURACJA — wklej z Firebase Console → Ustawienia projektu* — `pudelkoZnane`&nbsp;1938, `wybranePudelko`&nbsp;1940, `korzenDanych`&nbsp;1964, `odmowaRegul`&nbsp;1983, `sprawdzDostepPudelek`&nbsp;1988, `wybierzPudelko`&nbsp;2011, `profilTydzien`&nbsp;2060
 
@@ -157,11 +157,11 @@ pozycjom w pasku nawigacji i podekranom Ustawien.
 
 *WIEK KOPII* — `dniOdDaty`&nbsp;8146, `wiekKopiiTxt`&nbsp;8152, `renderKopiaStan`&nbsp;8160, `zapiszKopie`&nbsp;8175
 
-*ODTWARZANIE Z KOPII* — `policzOdtworzenie`&nbsp;8209, `wczytajKopie`&nbsp;8239, `kopiaCzytelna`&nbsp;8244, `odtworzKopie`&nbsp;8254, `kopiaWybrana`&nbsp;8277
+*ODTWARZANIE Z KOPII* — `policzOdtworzenie`&nbsp;8209, `ustawieniaDoOdtworzenia`&nbsp;8257, `wczytajKopie`&nbsp;8272, `kopiaCzytelna`&nbsp;8277, `odtworzKopie`&nbsp;8287, `kopiaWybrana`&nbsp;8320
 
-*KOPIE Z BAZY* — `kopieZBazy`&nbsp;8301, `odtworzZBazy`&nbsp;8333, `exportCsv`&nbsp;8345
+*KOPIE Z BAZY* — `kopieZBazy`&nbsp;8344, `odtworzZBazy`&nbsp;8376, `exportCsv`&nbsp;8388
 
-*NAWIGACJA* — `wrocZEkranu`&nbsp;8448
+*NAWIGACJA* — `wrocZEkranu`&nbsp;8491
 
 
 ---

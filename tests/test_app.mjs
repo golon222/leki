@@ -4881,6 +4881,67 @@ head("Konto widzi tylko swoje pudelka");
   A.__resetDb();
 }
 
+/* ═══════════ USTAWIENIA WRACAJA Z KOPII (D125) ═══════════
+
+   Kopia zawsze zawierala `cfg`, ale odtwarzanie ruszalo tylko dawki, INR,
+   rozpisania i znaczniki. Wyszlo to najgorsza droga: Import JSON w konsoli
+   Firebase, zrobiony o pietro wyzej niz trzeba, skasowal cala galaz
+   `devices` - harmonogram, dawkowanie, nazwe leku, stan opakowania.
+   Dane o lekach przezyly (leza pod users/<uid>), ustawien nie bylo czym
+   wrocic, choc siedzialy w kopii obok.                                 */
+head("Ustawienia wracaja z kopii");
+{
+  const kopia = { wersja: A.KOPIA_WERSJA, doses: {}, cfg: {
+    schedule: ["20:00","23:00"], defaultDose: 2, drugName: "Warfin",
+    drugStrength: 5, inrEveryDays: 42, pillsLeft: 37, trackingSince: "2026-05-01" } };
+
+  /* 1. Baza pusta - czyli dokladnie to, co zostalo po skasowaniu galezi. */
+  A.__resetDb();
+  let sciezki = await A.ustawieniaDoOdtworzenia(kopia);
+  check(sciezki["devices/pillbox01/config/schedule"]?.join(",") === "20:00,23:00",
+        "harmonogram wraca");
+  check(sciezki["devices/pillbox01/config/defaultDose"] === 2, "dawkowanie wraca");
+  check(sciezki["devices/pillbox01/config/inrEveryDays"] === 42, "odstep INR wraca");
+  check(sciezki["devices/pillbox01/config/pillsLeft"] === 37, "stan opakowania wraca");
+  check(Object.keys(sciezki).length === 7, `wszystkie pola z kopii (${Object.keys(sciezki).length})`);
+  check(Object.keys(sciezki).every(k => k.startsWith("devices/pillbox01/config/")),
+        "kazde pole idzie do konfiguracji pudelka");
+
+  /* 2. Co w bazie JEST, tego kopia nie rusza - jest swiezsze. */
+  A.__resetDb();
+  A.__db.data = { devices: { pillbox01: { config: { schedule:["07:30"], defaultDose:1 } } } };
+  sciezki = await A.ustawieniaDoOdtworzenia(kopia);
+  check(!("devices/pillbox01/config/schedule" in sciezki),
+        "harmonogram z bazy zostaje nietkniety");
+  check(!("devices/pillbox01/config/defaultDose" in sciezki), "dawkowanie tez");
+  check(sciezki["devices/pillbox01/config/pillsLeft"] === 37, "a brakujace nadal wraca");
+
+  /* 3. PORNOWANIE Z BAZA, NIE Z `cfg`. W pamieci aplikacji cfg ma wartosci
+        domyslne dla dziewieciu pol - patrzac na nie wyszloby, ze wszystko
+        juz jest, i nie wrocilo by NIC. To jest ten test.               */
+  A.__resetDb();
+  A.__setState({ cfg: { schedule:["08:00"], defaultDose:1, drugName:"Warfin",
+                        drugStrength:5, trackingSince:"2026-08-01" } });
+  sciezki = await A.ustawieniaDoOdtworzenia(kopia);
+  check(Object.keys(sciezki).length === 7,
+        `domyslne wartosci w cfg nie blokuja odtworzenia (${Object.keys(sciezki).length})`);
+
+  /* 4. Kopia bez ustawien (starsza wersja pliku) nie wywala odtwarzania. */
+  A.__resetDb();
+  check(Object.keys(await A.ustawieniaDoOdtworzenia({ doses:{} })).length === 0,
+        "kopia bez cfg nie psuje niczego");
+  check(Object.keys(await A.ustawieniaDoOdtworzenia({ doses:{}, cfg:"smiec" })).length === 0,
+        "cfg, ktore nie jest obiektem, tez nie");
+
+  /* 5. Odmowa bazy nie ma prawa skonczyc sie zapisem domyslnych ustawien
+        na wierzch tych prawdziwych - lepiej nie odtworzyc nic.        */
+  A.__resetDb();
+  A.__db.odmowaSciezek = ["devices/pillbox01/config"];
+  check(Object.keys(await A.ustawieniaDoOdtworzenia(kopia)).length === 0,
+        "przy odmowie odczytu nie odtwarzamy nic");
+  A.__resetDb();
+}
+
 head("Zgodnosc wersji aplikacji");
 check(/const APP_VERSION = "([\d.\-]+)"/.test(html), "index.html deklaruje wersje");
 const av = html.match(/const APP_VERSION = "([\d.\-]+)"/)?.[1];
