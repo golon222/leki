@@ -488,6 +488,26 @@ if braki or '$uid' not in dev.get('owners', {}):
 else:
     print('  OK   reguly znaja wspolwlascicieli pudelka (owners)')
 
+# ── Pudelko tygodniowe: pin wraca do trybu cyfrowego przed snem (B30) ──
+#
+# analogRead...() zostawia pad w trybie ANALOGOWYM, a to wylacza bufor
+# wejscia cyfrowego - ten sam, ktorym komparator wybudzania czyta stan
+# pinu. Wylaczony daje stale zero, czyli "stan niski" spelniony od razu
+# po zasnieciu: pudelko budzi sie w kolko i piszczy bez konca. Zmierzone
+# u Kuby, nie wydedukowane.
+w = root/"firmware/PillBoxWeek/PillBoxWeek.ino"
+if w.exists():
+    src = w.read_text(encoding="utf-8")
+    sen = src[src.index("void idzSpac()"):src.index("void setup()")]
+    braki = [x for x in ("pinMode(PIN_KLAPKI, INPUT)", "gpio_hold_en(",
+                         "gpio_deep_sleep_hold_en()") if x not in sen]
+    if braki:
+        bad += 1; print("  BLAD PillBoxWeek usypia bez powrotu pinu do trybu cyfrowego:", braki)
+    elif "gpio_hold_dis(" not in src or "gpio_deep_sleep_hold_dis()" not in src:
+        bad += 1; print("  BLAD PillBoxWeek nie zdejmuje zatrzasku po wybudzeniu")
+    else:
+        print("  OK   pudelko tygodniowe usypia z pinem w trybie cyfrowym")
+
 t = root/"firmware/PillBoxTest/PillBoxTest.ino"
 if t.exists():
     src = t.read_text(encoding="utf-8")

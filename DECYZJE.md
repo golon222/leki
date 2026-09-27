@@ -15,7 +15,7 @@ zamiast 60 tys. tokenów wchodzi 2,5 tys. plus jeden obszar.
 | `decyzje/aplikacja.md` | Aplikacja — ekrany i wygląd | 39 |
 | `decyzje/dane.md` | Dane, kolejka, dawkowanie | 20 |
 | `decyzje/testy.md` | Testy, audyt, kompilacja | 15 |
-| `decyzje/bugi.md` | Błędy **zamknięte** — historia objawów | 25 |
+| `decyzje/bugi.md` | Błędy **zamknięte** — historia objawów | 26 |
 | `decyzje/cofniete.md` | Cofnięte — **nie próbować drugi raz** | 5 |
 
 **Dopisując decyzję:** pełny wpis na górę właściwego pliku w `decyzje/`, jedna
@@ -63,6 +63,7 @@ Od najnowszej. Kolumna „gdzie" mówi, który plik w `decyzje/` trzymać otwart
 
 | # | O co chodziło | gdzie |
 |---|---|---|
+| **B30** | Pudełko tygodniowe budziło się w kółko i piszczało bez przerwy: `analogRead()` zostawia pin w trybie analogowym, a to wyłącza bufor wejścia cyfrowego, którym komparator wybudzania czyta stan pinu — stałe zero znaczy „warunek spełniony" od razu po zaśnięciu. **Naprawione**, `PillBoxWeek.ino` 0.2.0 | `bugi` |
 | **D125** | Odtwarzanie z kopii przywraca też **ustawienia pudełka** — `Import JSON` z mojej instrukcji skasował gałąź `devices` i okazało się, że `cfg` leży w kopii, ale nie ma czym go wrócić. Historia leków przeżyła (inne drzewo), pudełko dalej dzwoni (config lokalny), dawki czekały w kolejce (401 to nie 400). Instrukcja dodaje teraz wszystko **polami**, nigdy importem | `dane` |
 | **D124** | Dziewczyna dostaje **własne konto** (`owners` w regułach obok `owner`), a dane człowieka **rozdzielają się na pudełka** — bo `users/<uid>/doses` nie miało w ścieżce numeru urządzenia i jedno przełączenie wpisywałoby cudze tabletki do kalendarza Warfinu. Aplikacja sprawdza dostęp **przed** nasłuchami; jawna odmowa reguł odcina pudełko, błąd sieci nigdy | `dane` |
 | **D123** | Binarka **nie może** być powtarzalna: rdzeń ESP32 wkompilowuje `__DATE__`/`__TIME__`, więc dwie kompilacje tego samego źródła w różne dni zawsze się różnią (zmierzone: 71 bajtów w trzech miejscach, jedno z nich to wprost `Sep  9 2026` kontra `Sep 22 2026`). Guard „binarka bez zmian" nie miał jak zadziałać — automat publikuje teraz według **odcisku źródła**, nie plików. Korekta D106 | `testy` |

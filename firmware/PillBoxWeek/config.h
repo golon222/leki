@@ -19,7 +19,7 @@
  *    miejsce w bazie i kalendarze wymieszalyby sie po cichu.
  * ------------------------------------------------------------------ */
 #define DEVICE_ID           "pillbox02"     // klucz w /devices/<DEVICE_ID>
-#define FW_VERSION          "0.1.0"         // widoczna w aplikacji
+#define FW_VERSION          "0.2.0"         // widoczna w aplikacji
 
 /* ---------------------------------------------------------------------
  * 2. FIREBASE
@@ -84,6 +84,11 @@
  *  POZIOM. Bez czekania na zamkniecie pudelko budziloby sie w kolko. */
 #define CZEKAJ_ZAMKNIECIE_S 60     // ile czekac na zamkniecie klapki
 #define SEN_PRZY_OTWARTEJ_S 120    // sen na sam zegar, gdy nadal otwarta
+
+/*  Ponizej tego napiecia plytka po prostu nie chodzi - wiec taki odczyt
+ *  znaczy "dzielnik nie ma kontaktu", a nie "bateria pusta". Zglaszamy
+ *  wtedy brak danych zamiast zerowego procentu (B30).                  */
+#define BATT_MIN_SENS_V     3.00f
 
 #define BATT_WARN_PCT       15     // ponizej tego ostrzezenie dzwiekowe
 #define KOLEJKA_MAX         40     // ile zdarzen czeka na siec

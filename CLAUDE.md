@@ -39,7 +39,7 @@ bash tests/run_all.sh
 
 Musi przejść przed zmianą i po zmianie. Stan wyjściowy:
 **642 + 52 firmware, 1339 (×6 pór doby) + 92 + 52 aplikacja, 48 zgodności,
-156 reguł bazy, 375 kontroli audytu, 32 kontrole statyczne — 0 błędów.**
+156 reguł bazy, 375 kontroli audytu, 33 kontrole statyczne — 0 błędów.**
 
 **Runner jest cichy przy sukcesie i głośny przy błędzie** (D66). Udany przebieg
 to 12 linii — **i te 12 linii TO JEST potwierdzenie, nie jego skrót.** Nie
@@ -280,7 +280,7 @@ na `esp32:esp32@3.3.11` i z **ustawieniami płytki z nagłówka `PillBox.ino`**.
 Nie jest częścią `run_all.sh`: wymaga sieci i ~500 MB toolchainu.
 **Uruchom to po każdej zmianie w firmware.**
 
-Stan: `PillBox.ino` **64% flasha** (1 265 417 B z 1,875 MB), `PillBoxWeek.ino` **58%**,
+Stan: `PillBox.ino` **64% flasha** (1 265 417 B z 1,875 MB), `PillBoxWeek.ino` **58%** (1 142 325 B),
 `PillBoxTest.ino` 20% bez `config.h` i **57%** z nim. Szkic diagnostyczny budujemy w OBU
 konfiguracjach — bez tego drugiego przebiegu 722 kB jego kodu (logowanie do
 bazy, zapis wyniku) nie było kompilowane ani razu (D103).
@@ -304,6 +304,13 @@ nie do publikacji. Szczegóły obejść — D17.
 
 - Firmware **się kompiluje**, ale **nigdy nie było uruchomione z tego repo** na
   płytce. Kompilacja niczego nie wgrywa. Nie twierdź, że „działa".
+- **Pudełko tygodniowe BYŁO uruchomione, 2026-09-27, i od razu znalazło błąd,
+  którego testy nie miały jak złapać (B30).** `0.1.0` budziło się w kółko
+  i piszczało bez przerwy: `analogRead()` zostawia pin w trybie analogowym,
+  a to wyłącza bufor wejścia cyfrowego, którym komparator wybudzania czyta
+  stan pinu. Naprawione w `0.2.0` — **czeka na potwierdzenie z płytki**.
+  Logowanie do bazy, zapis hasła w NVS, pobranie harmonogramu i wysłanie
+  zdarzenia `boot` **zadziałały za pierwszym razem**, to jest zmierzone.
 - **Powiadomienia Telegram — DZIAŁAJĄ, potwierdzone przez Kubę 2026-09-01:**
   *„Telegram działa jak coś, przypomnienia wysyłają się, kopie też się
   wysyłają"*. Wysyła je **pudełko**, z `goToSleep()`. To był najdłużej

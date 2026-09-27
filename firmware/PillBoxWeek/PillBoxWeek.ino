@@ -147,6 +147,24 @@ void czytajBaterie() {
   /* Krzywa uproszczona: 4,20 V = 100%, 3,30 V = 0%. Nie jest liniowa
      naprawde, ale do ostrzezenia "laduj" wystarcza, a udawanie precyzji
      bez pomiaru rozladowania byloby zgadywaniem.                      */
+  /*  ODCZYT NIEMOZLIWY TO "NIE WIEM", NIE "0%".
+
+      Z logu Kuby: `[BAT] 0%  2.32 V` - przy dzialajacym radiu i -39 dBm.
+      To nie moze byc prawda: stabilizator na XIAO nie wyciagnie 3,3 V
+      z ogniwa przy 2,32 V, wiec przy takim napieciu plytka bylaby
+      martwa, a nie gadatliwa. Zepsuty jest POMIAR (u Kuby urwany pad
+      BAT+, wiec dzielnik wisi w powietrzu), nie bateria.
+
+      Zglaszane "0%" kosztowalo podwojnie: falszywy alarm "laduj"
+      w aplikacji i dwa dodatkowe pikniecia przy KAZDYM wybudzeniu.
+      Lepiej nie wiedziec niz wiedziec zle - `-1` aplikacja juz umie
+      pokazac jako brak danych.                                        */
+  if (battVolt < BATT_MIN_SENS_V) {
+    battProcent = -1;
+    LOG("[BAT] odczyt %.2f V niemozliwy przy dzialajacej plytce - zglaszam brak danych\n",
+        battVolt);
+    return;
+  }
   float p = (battVolt - 3.30f) / (4.20f - 3.30f) * 100.0f;
   battProcent = (int)(p < 0 ? 0 : (p > 100 ? 100 : p));
 }
@@ -413,8 +431,15 @@ int wyslijZdarzenie(const String& rec) {
   JsonDocument doc;
   doc["ts"]      = (ts > 1600000000UL) ? ts : 0;   // 0 = czas nieznany
   doc["type"]    = rec.substring(p1 + 1, p2);
-  doc["battery"] = rec.substring(p2 + 1, p3).toInt();
-  doc["volt"]    = rec.substring(p3 + 1, p4).toFloat();
+  /*  Pomiaru, ktorego nie bylo, NIE WYSYLAMY. Reguly przyjmuja w zdarzeniu
+      kazda liczbe, wiec -1 by przeszlo - i aplikacja pokazywalaby "0%"
+      albo "-1%" jako fakt z urzadzenia. Brak pola czyta sie uczciwie
+      jako brak pomiaru.                                              */
+  const int bat = rec.substring(p2 + 1, p3).toInt();
+  if (bat >= 0) {
+    doc["battery"] = bat;
+    doc["volt"]    = rec.substring(p3 + 1, p4).toFloat();
+  }
   doc["slot"]    = rec.substring(p4 + 1).toInt();
   doc["fw"]      = FW_VERSION;
 
@@ -444,8 +469,14 @@ void oproznijKolejke() {
 
 void wyslijStatus() {
   JsonDocument doc;
-  doc["battery"] = battProcent;
-  doc["volt"]    = battVolt;
+  /*  `status/battery` ma w regulach zakres 0..100, wiec -1 odrzucilby
+      CALY status - a razem z nim wersje programu, sile sygnalu i stan
+      kolejki, czyli wszystko, z czego widac, ze pudelko zyje. Brakujacy
+      pomiar po prostu pomijamy.                                       */
+  if (battProcent >= 0) {
+    doc["battery"] = battProcent;
+    doc["volt"]    = battVolt;
+  }
   doc["fw"]      = FW_VERSION;
   doc["rssi"]    = WiFi.RSSI();
   doc["queue"]   = kolejkaIle();
@@ -667,6 +698,35 @@ void idzSpac() {
   Serial.flush();
   nvs.end();
 
+  /* =================================================================
+     PIN MUSI WROCIC DO TRYBU CYFROWEGO. TO NIE JEST PORZADKOWANIE.
+
+     ZMIERZONE NA PLYTCE, nie wydedukowane (B30). Pudelko budzilo sie
+     w kolko - z logu Kuby: "wybudzenie 72", "73", "83", "84" co kilka
+     sekund, kazde przez pin klapek, i kazde meldujace `klapka:
+     zamkniete`. Czyli przetwornik widzial 1125 mV (zamkniete), a
+     komparator wybudzania w tej samej chwili widzial ZERO.
+
+     Powod: `analogReadMilliVolts()` przestawia pad w tryb ANALOGOWY,
+     a to WYLACZA bufor wejscia cyfrowego. Wybudzanie z glebokiego snu
+     czyta pin wlasnie tym buforem - wylaczony daje stale zero, czyli
+     warunek "stan niski" spelniony od razu po zasnieciu. W kolko, az do
+     rozladowania ogniwa, z pikaniem przy kazdym przebiegu.
+
+     Znalismy to juz z tej samej plytki: przy pierwszych probach
+     `digitalRead()` po `analogRead()` zwracal LOW przy 2858 mV na
+     wejsciu. Ta sama przyczyna, inny objaw - i nie przenioslem tej
+     wiedzy do usypiania.
+
+     `gpio_hold_en()` domyka sprawe od drugiej strony. ESP-IDF sam
+     ustawia podciagniecie w `esp_deep_sleep_start()` wedlug trybu
+     wybudzania i potrafi tym przestawic prog calej drabinki; zatrzask
+     sprawia, ze konfiguracja z tej chwili zostaje nietknieta do
+     wybudzenia. Pudelko dzienne ma to samo obejscie i z tego samego
+     zrodla (espressif/esp-idf#12183).
+     ================================================================= */
+  pinMode(PIN_KLAPKI, INPUT);
+
   /* Wewnetrzne podciagniecia WYLACZAMY. Rownolegle do naszego 10 kOhm
      podnosilyby wszystkie napiecia drabinki - niedziela (761 mV)
      przekroczylaby prog zera i przestalaby budzic pudelko.            */
@@ -675,6 +735,9 @@ void idzSpac() {
 
   if (!otwarte) esp_deep_sleep_enable_gpio_wakeup(BIT(PIN_KLAPKI), ESP_GPIO_WAKEUP_GPIO_LOW);
   esp_sleep_enable_timer_wakeup(sek * 1000000ULL);
+
+  gpio_hold_en((gpio_num_t)PIN_KLAPKI);
+  gpio_deep_sleep_hold_en();
   esp_deep_sleep_start();
 }
 
@@ -687,6 +750,15 @@ void setup() {
      to juz za pozno. W tescie na plytce pudelko obudzilo sie poprawnie,
      ale zobaczylo komore JUZ ZAMKNIETA i nie wiedzialo, ktora to byla. */
   esp_sleep_wakeup_cause_t powod = esp_sleep_get_wakeup_cause();
+
+  /*  Zatrzask z `idzSpac()` trzeba zdjac, zanim pad wroci do trybu
+      analogowego - inaczej przetwornik czyta pin, ktory wciaz jest
+      trzymany w konfiguracji cyfrowej. To dwa zapisy do rejestru,
+      mikrosekundy, wiec zasada "odczyt klapki jest pierwszy" zostaje
+      nienaruszona.                                                    */
+  gpio_deep_sleep_hold_dis();
+  gpio_hold_dis((gpio_num_t)PIN_KLAPKI);
+
   analogSetAttenuation(ADC_2_5db);
   analogReadResolution(12);
   if (powod == ESP_SLEEP_WAKEUP_GPIO) komoraPoStarcie = ktoraKomora(czytajKlapki());
@@ -725,8 +797,12 @@ void setup() {
       LOG("[EV ] kilka klapek naraz - napelnianie, nie zapisuje dawki\n");
       beepKilkaNaraz();
     } else {
-      LOG("[EV ] klapka zdazyla sie zamknac\n");
-      beepBlad();
+      /*  MILCZYMY. Pudelko obudzilo sie, ale nie ma czym tego wyjasnic -
+          a dzwiek, na ktory nie da sie zareagowac, uczy ignorowac
+          pudelko. Przy pomylce w usypianiu (B30) to wlasnie ten
+          pojedynczy pisk zamienil sie w melode grajaca bez konca.
+          Slad zostaje w logu i na liczniku wybudzen.                  */
+      LOG("[EV ] klapka zdazyla sie zamknac - nie pikam\n");
     }
     if (battProcent >= 0 && battProcent <= BATT_WARN_PCT) { delay(300); beepBateria(); }
     idzSpac();
