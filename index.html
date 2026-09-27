@@ -60,8 +60,13 @@
      wiec karta gasla w chlodny granat niezaleznie od motywu - i caly motyw
      rozowy konczyl sie na przyciskach.                                  */
   --card-btm:#0e1420;
-  --line:rgba(255,255,255,.075);        /* włosowa krawędź            */
-  --line2:rgba(255,255,255,.13);        /* mocniejsza, do wyróżnień   */
+  /* „Blask" to barwa, ktora klada sie NA tle: na ciemnym bialy, na jasnym
+     ciemny. Jeden token zamiast dwudziestu czterech rgba() wpisanych
+     wprost - inaczej jasny motyw (D129) musialby przepisywac kazda regule
+     z osobna i pierwsza zapomniana zostawilaby biala kreske na rozowym. */
+  --blask-rgb:255,255,255;
+  --line:rgba(var(--blask-rgb),.075);        /* włosowa krawędź            */
+  --line2:rgba(var(--blask-rgb),.13);        /* mocniejsza, do wyróżnień   */
 
   /* ---- tekst ----
      Czysta biel na czarnym tle wibruje i męczy przy dłuższym czytaniu,
@@ -88,6 +93,30 @@
   --inr:#a78bfa;  --inr-soft:rgba(167,139,250,.12); --inr-edge:rgba(167,139,250,.4);
 
   --pill:#8ab4f8; --pillEdge:#5b8ede;
+
+  /* ---- chrom ----
+     Naglowek, pasek nawigacji, powiadomienie i zaslona arkusza mialy te
+     barwy wpisane wprost. Na ciemnym tle dzialalo to bez zarzutu - az do
+     motywu jasnego (D129), w ktorym nieczytelny stal sie TYTUL EKRANU.
+     Zrzut ekranu pokazal to w pierwszej sekundzie; zaden test nie mial
+     jak tego zobaczyc.                                                */
+  /* Poswiata u gory tla. Byla wpisana wprost granatem - i to ona robila
+     z jasnego motywu brudna szarosc na gorze ekranu, dokladnie tam, gdzie
+     stoi tytul i kafelek dzisiejszej dawki.                            */
+  --aura:#16203a;
+  --hdr-rgb:7,10,17;
+  --nav-bg:rgba(11,15,24,.86);
+  --nav-pier:rgba(11,15,24,.9);   /* obwodka kropki nad zakladka        */
+  --toast-bg:rgba(24,32,52,.94);
+  --zaslona:rgba(3,6,12,.7);      /* przycmienie tla pod arkuszem       */
+
+  /* Atrament stanu: liczba w kalendarzu i napis na przycisku "skasuj".
+     Na ciemnym tle jasny, na jasnym ciemny - ta sama informacja czytana
+     odwrotnie. Wpisany wprost pastel bialczal na bialej karcie.        */
+  --ok-txt:#a7f3d0; --warn-txt:#fde68a; --bad-txt:#fecdd3;
+  /* Poswiata stanu na kafelku dnia i tetno kropki sieci.               */
+  --ok-blask:rgba(52,211,153,.16); --warn-blask:rgba(251,191,36,.14);
+  --bad-blask:rgba(251,113,133,.14); --ok-tetno:52,211,153;
 
   /* ---- rytm ----
      Wszystkie odstępy są wielokrotnością czterech. Nie ma tu miejsca na
@@ -121,7 +150,7 @@ html,body{overscroll-behavior-y:none;max-width:100%;overflow-x:hidden}
 svg{max-width:100%}
 main{overflow-x:hidden}
 body{margin:0;background:
-      radial-gradient(1100px 520px at 50% -8%, #16203a 0%, transparent 62%),
+      radial-gradient(1100px 520px at 50% -8%, var(--aura) 0%, transparent 62%),
       radial-gradient(700px 400px at 90% 8%, rgba(var(--acc-rgb),.05) 0%, transparent 70%),
       var(--bg);
      background-attachment:fixed;
@@ -146,7 +175,7 @@ body{margin:0;background:
    pod zegarek i wskaźnik baterii przy przewijaniu.                    */
 header{display:flex;align-items:center;gap:var(--s3);position:sticky;top:0;z-index:20;
        padding:calc(10px + env(safe-area-inset-top)) var(--s5) 10px;
-       background:linear-gradient(180deg,rgba(7,10,17,.96),rgba(7,10,17,.82));
+       background:linear-gradient(180deg,rgba(var(--hdr-rgb),.96),rgba(var(--hdr-rgb),.82));
        -webkit-backdrop-filter:saturate(180%) blur(18px);
        backdrop-filter:saturate(180%) blur(18px);
        border-bottom:1px solid var(--line)}
@@ -167,7 +196,7 @@ section{animation:fade .3s cubic-bezier(.2,.8,.3,1)}
 .card{background:linear-gradient(180deg,var(--card) 0%,var(--card-btm) 100%);
       border:1px solid var(--line);border-radius:var(--r);
       padding:var(--s4);margin-bottom:var(--s3);
-      box-shadow:inset 0 1px 0 rgba(255,255,255,.045), var(--e2);
+      box-shadow:inset 0 1px 0 rgba(var(--blask-rgb),.045), var(--e2);
       overflow-wrap:anywhere}
 /* Bez min-width:0 elementy w kontenerach flex nie chcą się kurczyć poniżej
    swojej treści i wypychają zawartość poza kartę.                        */
@@ -197,14 +226,14 @@ button{font:inherit;border:0;border-radius:var(--r-md);padding:12px 16px;
 button:active{transform:scale(.97);filter:brightness(1.08)}
 button.primary{background:linear-gradient(180deg,var(--btn1),var(--btn2));color:var(--btn-txt);
                font-weight:700;font-size:15px;
-               box-shadow:0 1px 0 rgba(255,255,255,.28) inset,
+               box-shadow:0 1px 0 rgba(var(--blask-rgb),.28) inset,
                0 6px 18px -14px rgba(var(--btn-glow),.9)}
-button.ghost{background:rgba(255,255,255,.035);border:1px solid var(--line);color:var(--dim)}
-button.ghost:active{background:rgba(255,255,255,.07)}
-button.danger{background:var(--bad-soft);color:#fecdd3;border:1px solid var(--bad-edge)}
+button.ghost{background:rgba(var(--blask-rgb),.035);border:1px solid var(--line);color:var(--dim)}
+button.ghost:active{background:rgba(var(--blask-rgb),.07)}
+button.danger{background:var(--bad-soft);color:var(--bad-txt);border:1px solid var(--bad-edge)}
 button[disabled]{opacity:.35;pointer-events:none}
 
-input,select{font:inherit;background:rgba(255,255,255,.04);color:var(--txt);
+input,select{font:inherit;background:rgba(var(--blask-rgb),.04);color:var(--txt);
       border:1px solid var(--line);border-radius:var(--r-md);padding:12px 13px;
       width:100%;min-width:0;outline:none;min-height:44px;
       -webkit-appearance:none;appearance:none;transition:border-color var(--ruch),
@@ -226,7 +255,7 @@ label{font-size:10.5px;color:var(--dim2);display:block;margin:var(--s4) 0 6px;
 .pair label{margin:0 0 6px}
 
 .chip{font-size:11.5px;font-weight:600;padding:6px 11px;border-radius:var(--r-pill);
-      background:rgba(255,255,255,.05);color:var(--dim);white-space:nowrap;
+      background:rgba(var(--blask-rgb),.05);color:var(--dim);white-space:nowrap;
       border:1px solid var(--line)}
 .chip.on{color:var(--ok);border-color:var(--ok-edge);background:var(--ok-soft)}
 .chip.warn{color:var(--warn);border-color:var(--warn-edge);background:var(--warn-soft)}
@@ -241,10 +270,10 @@ label{font-size:10.5px;color:var(--dim2);display:block;margin:var(--s4) 0 6px;
 #todayCard::before{content:"";position:absolute;inset:0;pointer-events:none;
       background:radial-gradient(420px 160px at 85% -30%, var(--stan-blask,transparent), transparent 70%);
       transition:background .4s}
-#todayCard.st-ok  {--stan-blask:rgba(52,211,153,.16)}
-#todayCard.st-warn{--stan-blask:rgba(251,191,36,.14)}
-#todayCard.st-bad {--stan-blask:rgba(251,113,133,.14)}
-#todayCard.st-off {--stan-blask:rgba(255,255,255,.05)}
+#todayCard.st-ok  {--stan-blask:var(--ok-blask)}
+#todayCard.st-warn{--stan-blask:var(--warn-blask)}
+#todayCard.st-bad {--stan-blask:var(--bad-blask)}
+#todayCard.st-off {--stan-blask:rgba(var(--blask-rgb),.05)}
 #todayCard > *{position:relative}
 /* Stopień pisma dobrany tak, żeby najdłuższy możliwy stan („Wzięte —
    mniejsza dawka") zmieścił się obok medalionu w dwóch wierszach, a
@@ -273,8 +302,8 @@ label{font-size:10.5px;color:var(--dim2);display:block;margin:var(--s4) 0 6px;
 
 /* Oprawa tabletki na karcie dnia. */
 .medalion{width:64px;height:64px;flex:none;border-radius:50%;display:grid;place-items:center;
-      background:radial-gradient(circle at 32% 26%, rgba(255,255,255,.11), rgba(255,255,255,.02) 60%);
-      border:1px solid var(--line);box-shadow:inset 0 1px 0 rgba(255,255,255,.06), var(--e1)}
+      background:radial-gradient(circle at 32% 26%, rgba(var(--blask-rgb),.11), rgba(var(--blask-rgb),.02) 60%);
+      border:1px solid var(--line);box-shadow:inset 0 1px 0 rgba(var(--blask-rgb),.06), var(--e1)}
 
 /* ---------- kalendarz ---------- */
 .calhead{display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--s4)}
@@ -284,16 +313,16 @@ label{font-size:10.5px;color:var(--dim2);display:block;margin:var(--s4) 0 6px;
 .grid{display:grid;grid-template-columns:repeat(7,1fr);gap:5px}
 .dow{text-align:center;font-size:10px;color:var(--dim2);font-weight:700;letter-spacing:.08em;
      padding-bottom:6px;text-transform:uppercase}
-.day{aspect-ratio:1;border-radius:var(--r-md);background:rgba(255,255,255,.028);
+.day{aspect-ratio:1;border-radius:var(--r-md);background:rgba(var(--blask-rgb),.028);
      display:flex;flex-direction:column;align-items:center;justify-content:center;
      font-size:13.5px;font-weight:650;position:relative;cursor:pointer;
      border:1px solid var(--line);color:var(--dim);
      transition:transform .12s cubic-bezier(.2,.8,.3,1), background var(--ruch)}
 .day:active{transform:scale(.9)}
 .day.blank{background:transparent;border-color:transparent;cursor:default}
-.day.taken  {background:var(--ok-soft);border-color:var(--ok-edge);color:#a7f3d0}
-.day.partial{background:var(--warn-soft);border-color:var(--warn-edge);color:#fde68a}
-.day.missed {background:var(--bad-soft);border-color:var(--bad-edge);color:#fecdd3}
+.day.taken  {background:var(--ok-soft);border-color:var(--ok-edge);color:var(--ok-txt)}
+.day.partial{background:var(--warn-soft);border-color:var(--warn-edge);color:var(--warn-txt)}
+.day.missed {background:var(--bad-soft);border-color:var(--bad-edge);color:var(--bad-txt)}
 .day.future {opacity:.4}
 /* Brak danych to NIE to samo co pominieta dawka - musi byc widocznie inny:
    szary, wyblakly, z przerywanym obrysem. */
@@ -306,7 +335,7 @@ label{font-size:10.5px;color:var(--dim2);display:block;margin:var(--s4) 0 6px;
    brak danych (wyblakly = nikt nie wie). Tu wszystko jest w porzadku i
    wiadomo dlaczego, wiec: spokojny obrys bez wypelnienia i pozioma kreska
    w miejscu, gdzie inne dni pokazuja liczbe tabletek.                    */
-.day.off {background:rgba(255,255,255,.015);border-color:var(--line2);
+.day.off {background:rgba(var(--blask-rgb),.015);border-color:var(--line2);
           color:var(--dim2);opacity:.8}
 .day.off .nodrug{font-size:11px;color:var(--dim2);line-height:1;margin-top:2px}
 .day.today{box-shadow:0 0 0 2px var(--acc), 0 6px 18px -10px rgba(var(--acc-rgb),.7);opacity:1}
@@ -351,7 +380,7 @@ label{font-size:10.5px;color:var(--dim2);display:block;margin:var(--s4) 0 6px;
         bottom:calc(78px + env(safe-area-inset-bottom))}
 .toast{max-width:min(420px,92vw);padding:12px 16px;border-radius:var(--r-lg);font-size:13.5px;
        display:flex;align-items:center;gap:10px;line-height:1.35;font-weight:500;
-       background:rgba(24,32,52,.94);border:1px solid var(--line2);color:var(--txt);
+       background:var(--toast-bg);border:1px solid var(--line2);color:var(--txt);
        box-shadow:var(--e3);-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);
        animation:wjedz var(--ruch-spr)}
 .toast.ok  {border-color:var(--ok-edge)}
@@ -368,8 +397,8 @@ label{font-size:10.5px;color:var(--dim2);display:block;margin:var(--s4) 0 6px;
 #netDot{width:8px;height:8px;border-radius:50%;flex:none;background:var(--dim2);
         transition:background .3s}
 #netDot.zywe{background:var(--ok);animation:tetno 2.4s ease-in-out infinite}
-@keyframes tetno{0%,100%{box-shadow:0 0 0 0 rgba(52,211,153,.55)}
-                 70%{box-shadow:0 0 0 6px rgba(52,211,153,0)}}
+@keyframes tetno{0%,100%{box-shadow:0 0 0 0 rgba(var(--ok-tetno),.55)}
+                 70%{box-shadow:0 0 0 6px rgba(var(--ok-tetno),0)}}
 
 .spin{animation:obrot .75s linear infinite;transform-origin:50% 50%}
 @keyframes obrot{to{transform:rotate(360deg)}}
@@ -381,8 +410,8 @@ label{font-size:10.5px;color:var(--dim2);display:block;margin:var(--s4) 0 6px;
 #pull.gotowe svg{transform:rotate(180deg);color:var(--acc)}
 
 /* Szkielet zamiast pustki, dopóki dane nie dojdą. */
-.skel{background:linear-gradient(90deg,rgba(255,255,255,.04) 25%,rgba(255,255,255,.09) 37%,
-      rgba(255,255,255,.04) 63%);
+.skel{background:linear-gradient(90deg,rgba(var(--blask-rgb),.04) 25%,rgba(var(--blask-rgb),.09) 37%,
+      rgba(var(--blask-rgb),.04) 63%);
       background-size:400% 100%;animation:polysk 1.4s ease infinite;
       border-radius:var(--r-sm);color:transparent !important}
 @keyframes polysk{0%{background-position:100% 50%}100%{background-position:0 50%}}
@@ -391,7 +420,7 @@ label{font-size:10.5px;color:var(--dim2);display:block;margin:var(--s4) 0 6px;
 .ring{--p:0;width:62px;height:62px;flex:none;position:relative}
 .ring svg{transform:rotate(-90deg)}
 .ring circle{fill:none;stroke-width:7;stroke-linecap:round}
-.ring .tlo{stroke:rgba(255,255,255,.07)}
+.ring .tlo{stroke:rgba(var(--blask-rgb),.07)}
 .ring .wyp{stroke:var(--ok);transition:stroke-dashoffset .7s cubic-bezier(.3,1,.4,1),stroke .3s;
            filter:drop-shadow(0 0 4px rgba(0,0,0,.35))}
 .ring b{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
@@ -473,7 +502,7 @@ button:focus-visible,.day:focus-visible{outline:2px solid var(--acc);outline-off
 .bar>div{height:100%;width:0;border-radius:var(--r-pill);transition:width .6s cubic-bezier(.3,1,.4,1)}
 
 /* ---------- arkusz ---------- */
-.sheet{position:fixed;inset:0;background:rgba(3,6,12,.7);
+.sheet{position:fixed;inset:0;background:var(--zaslona);
        -webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);
        display:none;align-items:flex-end;z-index:60}
 .sheet.show{display:flex;animation:fade .2s}
@@ -483,12 +512,12 @@ button:focus-visible,.day:focus-visible{outline:2px solid var(--acc);outline-off
      max-height:92vh;overflow:auto;box-shadow:var(--e3);
      animation:up .34s cubic-bezier(.2,.9,.3,1)}
 @keyframes up{from{transform:translateY(48px)}to{transform:none}}
-.grab{width:40px;height:5px;background:rgba(255,255,255,.16);border-radius:9px;margin:2px auto var(--s4)}
+.grab{width:40px;height:5px;background:rgba(var(--blask-rgb),.16);border-radius:9px;margin:2px auto var(--s4)}
 
 /* ---------- sterowanie dawką ---------- */
 .dosewrap{display:flex;align-items:center;justify-content:center;gap:var(--s5);margin:6px 0 4px}
 .stepbtn{width:58px;height:58px;border-radius:50%;font-size:26px;font-weight:300;padding:0;
-         background:rgba(255,255,255,.05);border:1px solid var(--line);
+         background:rgba(var(--blask-rgb),.05);border:1px solid var(--line);
          display:flex;align-items:center;justify-content:center}
 /* Te same przyciski w karcie „Plan na ten dzień" są działaniem drugiego
    planu — zmiana planu zdarza się raz na kilka tygodni, poprawka dawki
@@ -513,7 +542,7 @@ button:focus-visible,.day:focus-visible{outline:2px solid var(--acc);outline-off
    nie mówią nic o dawce — tylko poprawiają licznik w opakowaniu. Czerwone
    i zielone klawisze robiły z tego kalkulator i przyciągały wzrok mocniej
    niż kalendarz obok. Znaczenie niesie znak, nie barwa.                 */
-.pillpad button{background:rgba(255,255,255,.045);border:1px solid var(--line);color:var(--dim)}
+.pillpad button{background:rgba(var(--blask-rgb),.045);border:1px solid var(--line);color:var(--dim)}
 .pillpad .minus{color:var(--dim)}
 .pillpad .plus {color:var(--txt)}
 
@@ -523,7 +552,7 @@ button:focus-visible,.day:focus-visible{outline:2px solid var(--acc);outline-off
    zamawiał.                                                              */
 .stats{display:grid;grid-template-columns:repeat(2,1fr);gap:var(--s2);margin-top:var(--s4);
        align-items:start}
-.stat{background:rgba(255,255,255,.032);border:1px solid var(--line);border-radius:var(--r-lg);
+.stat{background:rgba(var(--blask-rgb),.032);border:1px solid var(--line);border-radius:var(--r-lg);
       padding:11px 12px}
 .stat .sv{font-size:21px;font-weight:800;letter-spacing:-.03em;line-height:1.1}
 .stat .sl{font-size:9.5px;color:var(--dim);text-transform:uppercase;letter-spacing:.08em;
@@ -574,7 +603,7 @@ nav{position:fixed;bottom:0;left:0;right:0;display:flex;z-index:30;
     /* Półprzezroczyste tło z rozmyciem — treść przewijana pod paskiem
        nie urywa się twardą krawędzią, tylko rozmywa. Prefiks -webkit-
        jest obowiązkowy: bez niego iOS Safari nie rozmywa NIC (B26). */
-    background:rgba(11,15,24,.86);
+    background:var(--nav-bg);
     -webkit-backdrop-filter:saturate(180%) blur(20px);
     backdrop-filter:saturate(180%) blur(20px);
     border-top:1px solid var(--line);
@@ -608,7 +637,7 @@ nav button:active i{transform:scale(.9)}
    naprawdę warto przypomnieć, kiedy człowiek grzebie w ustawieniach.   */
 nav button .kropka-nav{position:absolute;top:6px;right:50%;margin-right:-16px;
     width:7px;height:7px;border-radius:50%;background:var(--warn);
-    box-shadow:0 0 0 2px rgba(11,15,24,.9)}
+    box-shadow:0 0 0 2px var(--nav-pier)}
 .hide{display:none!important}
 
 /* ---------- CO NALEZY WYLACZNIE DO PUDELKA DZIENNEGO (D126) ----------
@@ -639,31 +668,59 @@ body:not([data-profil="tydzien"]) .tylko-tydzien{display:none!important}
    dokladnie z tym jednym kolorem, ktory musi byc odrozniany od reszty
    bez zastanowienia.                                                  */
 body[data-profil="tydzien"]{
-  /* Powierzchnie: ciemne, ale cieple. Zimny granat z pudelka dziennego
-     gryzl sie z pudrem - roznica jest subtelna, a widac ja od razu.   */
-  --bg:#0e0a0d; --bg2:#171115;
-  --card:#241a20; --card2:#2f232a; --card3:#3b2d35; --card-btm:#181114;
+  /* ---------- MOTYW JASNY, PUDROWY (D129) ----------
+     Kuba: "przebuduj caly design dla tego konta, zeby nie wygladalo to jak
+     psychiatryk (...) niech bedzie rozowy normalny kolor i akcenty
+     w jakims pasujacym kolorze".
 
-  /* ZNACZENIA TEZ SA PUDROWE, i to jest swiadome odstepstwo od palety
-     pudelka dziennego. Prosba Kuby: "odejdzmy od neonowych w tej wersji,
-     dawaj pudrowe". Zielony/zolty/czerwony ZOSTAJA na swoich miejscach -
-     zmienia sie nasycenie, nie przypisanie. Kontrola statyczna mierzy, czy
-     nadal da sie je od siebie odroznic; patrz komentarz przy niej.     */
-  /* Krycie WYZSZE niz w pudelku dziennym, i to nie jest kosmetyka: kolor
-     przygaszony niesie mniej sygnalu, wiec przy tym samym kryciu kratka
-     "wzieta" i "pominieta" robily sie podobne. Stan dawki ma byc czytelny
-     jednym spojrzeniem tak samo w obu pudelkach.                       */
-  --ok:#a9d3bd;   --ok-soft:rgba(169,211,189,.20);   --ok-edge:rgba(169,211,189,.55);
-  --warn:#e6c79c; --warn-soft:rgba(230,199,156,.18); --warn-edge:rgba(230,199,156,.55);
-  --bad:#d18b8e;  --bad-soft:rgba(209,139,142,.22);  --bad-edge:rgba(209,139,142,.60);
-  --inr:#bda8cf;  --inr-soft:rgba(189,168,207,.12);  --inr-edge:rgba(189,168,207,.4);
+     To nie jest przemalowanie ciemnego motywu, tylko ODWROCENIE zalozenia:
+     tlo jest jasne, karty biale, tekst ciemny. Dlatego pierwsza linijka
+     odwraca "blask" - warstwe, ktora kladzie sie na tle. Na ciemnym byla
+     biala, na rozowym musi byc ciemna, inaczej wlosowe krawedzie i
+     podswietlenia po prostu znikaja.                                   */
+  --blask-rgb:96,44,66;
 
-  /* Akcent: puder ze zdjecia od Kuby. Jasny, wiec na ciemnym tle czyta sie
-     jak swiatlo, a nie jak plama koloru.                               */
-  --acc:#fbdde7;  --acc-rgb:251,221,231;
-  --btn1:#fbdde7; --btn2:#eebbcf; --btn-txt:#4a2230; --btn-glow:238,187,207;
+  --bg:#fbeef2; --bg2:#f7e4ea;
+  --card:#ffffff; --card2:#fdf4f7; --card3:#f9eaf0; --card-btm:#fef7f9;
 
-  --pill:#f3c9d8; --pillEdge:#d3a2b3;
+  --txt:#3a2230; --dim:#7c6070; --dim2:#a58b99;
+  --line:rgba(var(--blask-rgb),.12);
+  --line2:rgba(var(--blask-rgb),.22);
+
+  /* Cienie mieksze i rozowawe: czarny cien na jasnym rozu brudzi.     */
+  --e1:0 1px 2px rgba(150,90,115,.18);
+  --e2:0 2px 6px -3px rgba(150,90,115,.20), 0 12px 28px -20px rgba(150,90,115,.35);
+  --e3:0 8px 20px -8px rgba(150,90,115,.26), 0 32px 64px -32px rgba(150,90,115,.5);
+
+  /* ZNACZENIA NA JASNYM TLE musza byc CIEMNIEJSZE niz na ciemnym - to ta
+     sama informacja, ale czytana odwrotnie. Pastel z ciemnego motywu na
+     bialej karcie znikalby zupelnie.                                   */
+  --ok:#3f8f6a;   --ok-soft:rgba(63,143,106,.16);  --ok-edge:rgba(63,143,106,.45);
+  --warn:#bd8420; --warn-soft:rgba(189,132,32,.16); --warn-edge:rgba(189,132,32,.45);
+  --bad:#c0505c;  --bad-soft:rgba(192,80,92,.15);  --bad-edge:rgba(192,80,92,.45);
+  --inr:#7b5ea8;  --inr-soft:rgba(123,94,168,.13); --inr-edge:rgba(123,94,168,.40);
+
+  /* Akcent: sliwka. Pasuje do pudru, a od ceglanego "nie wziete" dzieli
+     ja pol kola barw - czyli nie ma jak ich pomylic.                   */
+  --acc:#8b3f6b;  --acc-rgb:139,63,107;
+  --btn1:#a74f80; --btn2:#83365f; --btn-txt:#fff6fa; --btn-glow:131,54,95;
+
+  --pill:#b05f8c; --pillEdge:#8d4870;
+
+  /* CHROM ODWROCONY. Naglowek i pasek sa tu JASNIEJSZE od tla, nie
+     ciemniejsze - warstwa unosi sie nad trescia, zamiast ja przygniatac.
+     Zaslona arkusza zostaje ciemna (inaczej nie przycmiewa niczego), ale
+     sliwkowa i o polowe lzejsza: czern na pudrze robi sadz.            */
+  --aura:#ffffff;
+  --hdr-rgb:253,240,245;
+  --nav-bg:rgba(255,247,250,.88);
+  --nav-pier:rgba(255,247,250,.96);
+  --toast-bg:rgba(255,251,253,.96);
+  --zaslona:rgba(74,36,52,.40);
+
+  --ok-txt:#20654a; --warn-txt:#84580d; --bad-txt:#8f2f3b;
+  --ok-blask:rgba(63,143,106,.13); --warn-blask:rgba(189,132,32,.14);
+  --bad-blask:rgba(192,80,92,.12); --ok-tetno:63,143,106;
 }
 
 /* ---------- powrot z podekranu ----------
@@ -692,7 +749,7 @@ body[data-profil="tydzien"]{
        background:linear-gradient(180deg,var(--card) 0%,var(--card-btm) 100%);
        border:1px solid var(--line);
        border-radius:var(--r-lg);color:var(--txt);font-size:15px;font-weight:650;
-       box-shadow:inset 0 1px 0 rgba(255,255,255,.04);letter-spacing:-.01em}
+       box-shadow:inset 0 1px 0 rgba(var(--blask-rgb),.04);letter-spacing:-.01em}
 .kafel:active{background:var(--card2)}
 .kafel .kop{flex:1;min-width:0}
 .kafel .kop .dim2{font-weight:500;margin-top:3px}
@@ -705,7 +762,7 @@ body[data-profil="tydzien"]{
 /* ---------- filtry ---------- */
 .filtry{display:flex;flex-wrap:wrap;gap:6px;margin-top:var(--s2)}
 .filtr{padding:8px 13px;border-radius:var(--r-pill);font-size:12.5px;font-weight:650;
-       background:rgba(255,255,255,.04);border:1px solid var(--line);color:var(--dim);
+       background:rgba(var(--blask-rgb),.04);border:1px solid var(--line);color:var(--dim);
        min-height:0}
 .filtr.act{background:var(--acc-soft);border-color:var(--acc-edge);color:var(--acc)}
 /* Tag kontekstu nosi kolor INR, a nie stanu dawki: mówi o tym, co mogło
@@ -2094,7 +2151,7 @@ window.wybierzPudelko = (id) => {
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-09-27.89";
+const APP_VERSION = "2026-09-27.90";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -2157,8 +2214,15 @@ function komoraDnia(key){
     kazdym przyjsciu konfiguracji, nie raz na starcie: `cfg` na poczatku ma
     wartosci domyslne, a prawdziwy profil przychodzi z bazy chwile pozniej. */
 function ustawProfil(){
-  try { document.body.dataset.profil = profilTydzien() ? "tydzien" : "warfin"; }
-  catch { /* brak body w testach - nic sie nie dzieje */ }
+  try {
+    const tydz = profilTydzien();
+    document.body.dataset.profil = tydz ? "tydzien" : "warfin";
+    /*  Pasek stanu iOS bierze kolor z <meta>, nie z CSS. Bez tego nad
+        rozowa aplikacja wisial granatowy pas i cala robota szla na marne
+        w pierwszym centymetrze ekranu.                                */
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute("content", tydz ? "#fbeef2" : "#0b1220");
+  } catch { /* brak body w testach - nic sie nie dzieje */ }
 }
 let doses = {};      // { "2026-07-31": { "0": {dose, status, source, ts, note} } }
 let inr   = {};      // { "2026-07-20": { value, ts, note } }

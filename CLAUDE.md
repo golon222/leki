@@ -38,8 +38,8 @@ bash tests/run_all.sh
 ```
 
 Musi przejść przed zmianą i po zmianie. Stan wyjściowy:
-**642 + 52 firmware, 1392 (×6 pór doby) + 92 + 52 aplikacja, 48 zgodności,
-156 reguł bazy, 375 kontroli audytu, 35 kontroli statycznych — 0 błędów.**
+**642 + 52 firmware, 1417 (×6 pór doby) + 92 + 52 aplikacja, 48 zgodności,
+156 reguł bazy, 375 kontroli audytu, 37 kontroli statycznych — 0 błędów.**
 
 **Runner jest cichy przy sukcesie i głośny przy błędzie** (D66). Udany przebieg
 to 12 linii — **i te 12 linii TO JEST potwierdzenie, nie jego skrót.** Nie
@@ -209,6 +209,16 @@ odrzuca **cały** wpis kodem 400, a `trwaleOdrzucony(400)` go wtedy **kasuje**
    każdego koloru i odległość każdej pary w przestrzeni Lab (próg 25).
    Motyw, który przygasza kolor, **musi wzmocnić jego tło** — przygaszony
    kolor niesie mniej sygnału, a kratka kalendarza to mała plama.
+   **Od D129 motyw tygodniowy jest JASNY**: tło pudrowe, karty białe,
+   tekst ciemny, akcent śliwkowy. Dlatego **kolor chromu nigdy nie stoi
+   wprost w regule** — idzie przez `--aura`, `--hdr-rgb`, `--nav-bg`,
+   `--nav-pier`, `--toast-bg`, `--zaslona`, `--blask-rgb` oraz
+   `--ok-txt`/`--warn-txt`/`--bad-txt`. Cztery takie wartości wpisane
+   wprost dotrwały do D129 i **żadnej nie zgłosił żaden test**: nagłówek
+   malował czarny tytuł na czarnym, a poświata `#16203a` brudziła całą
+   górę ekranu na szaro. Teraz mierzy to kontrola statyczna — jasność
+   każdej powierzchni chromu (ciemna w palecie, jasna w motywie)
+   i kontrast WCAG liczby dnia na kratce kalendarza (próg 4,5).
    Wygląd sprawdzaj **na renderze**, nie w wyobraźni — i jest czym (D127):
    `node tests/podglad.mjs` buduje `tests/podglad.html`, stronę działającą
    bez Firebase i bez logowania, z podstawionym stanem. Otwierasz ją albo

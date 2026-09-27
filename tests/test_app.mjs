@@ -5039,7 +5039,7 @@ head("Pudelko tygodniowe: mniej ekranow");
      z bazy chwile pozniej.                                           */
   check(/config`\), s => \{[\s\S]{0,140}ustawProfil\(\);/.test(html),
         "profil trafia na <body> razem z konfiguracja z bazy");
-  check(/document\.body\.dataset\.profil = profilTydzien\(\) \? "tydzien" : "warfin"/.test(html),
+  check(/const tydz = profilTydzien\(\);[\s\S]{0,80}dataset\.profil = tydz \? "tydzien" : "warfin"/.test(html),
         "i jest liczony z profilu, a nie ustawiany na sztywno");
 }
 
@@ -5175,6 +5175,51 @@ head("Motyw pudelka tygodniowego");
         "przycisk glowny bierze kolory ze zmiennych");
   check(/linear-gradient\(180deg,var\(--card\) 0%,var\(--card-btm\) 100%\)/.test(html),
         "karta gasnie w kolor z motywu, nie w chlodny granat wpisany wprost");
+}
+
+/* ═══════════ MOTYW JASNY: CHROM TEZ MA ZMIENNE (D129) ═══════════
+
+   Kuba: "przebuduj caly design aplikacji dla tego konta, zeby nie wygladalo
+   to jak psychiatryk". Ciemny motyw przemalowany na jasny odslonil rzecz,
+   ktorej nie widzial zaden test: kilkanascie regul mialo kolor ciemnego
+   tla WPISANY WPROST. Naglowek zostawal czarny pod czarnym tytulem.
+
+   Czy wynik da sie czytac, MIERZY kontrola statyczna (jasnosc powierzchni
+   i kontrast WCAG). Tutaj pilnujemy tego, czego zmierzyc sie nie da:
+   ze zadna z tych regul nie wrocila do koloru wpisanego wprost.        */
+head("Chrom idzie przez zmienne");
+{
+  const motyw = (html.match(/body\[data-profil="tydzien"\]\{([\s\S]*?)\n\}/) || ["",""])[1];
+  const rootB = (html.match(/:root\{([\s\S]*?)\n\}/) || ["",""])[1];
+
+  for (const t of ["--aura", "--hdr-rgb", "--nav-bg", "--nav-pier", "--toast-bg",
+                   "--zaslona", "--ok-txt", "--warn-txt", "--bad-txt"]) {
+    check(new RegExp(`(?<![\\w-])${t}\\s*:`).test(rootB), `paleta definiuje ${t}`);
+    check(new RegExp(`(?<![\\w-])${t}\\s*:`).test(motyw), `motyw jasny ustawia ${t}`);
+  }
+
+  /* Cztery powierzchnie chromu, kazda z wlasnym starym kolorem. Gdyby
+     ktorakolwiek wrocila do wartosci wpisanej wprost, motyw skonczylby
+     sie dokladnie na niej - i tak wlasnie wygladal pierwszy zrzut.    */
+  const zakazane = [
+    [/rgba\(7,\s*10,\s*17/,  "naglowek"],
+    [/rgba\(11,\s*15,\s*24/, "pasek nawigacji"],
+    [/rgba\(24,\s*32,\s*52/, "powiadomienie"],
+    [/rgba\(3,\s*6,\s*12/,   "zaslona arkusza"],
+    [/#16203a/,              "poswiata tla"],
+  ];
+  const cssTylko = html.slice(html.indexOf("<style>"), html.indexOf("</style>"))
+                       .replace(/:root\{[\s\S]*?\n\}/, "")
+                       .replace(/body\[data-profil="[^"]+"\]\{[\s\S]*?\n\}/g, "");
+  for (const [re2, co] of zakazane)
+    check(!re2.test(cssTylko), `${co} nie ma koloru wpisanego wprost w regule`);
+
+  /* Pasek statusu telefonu (kolor paska iOS) musi isc za motywem - inaczej
+     nad jasna aplikacja zostaje czarny pas.                            */
+  check(/setAttribute\("content", tydz \? "#fbeef2" : "#0b1220"\)/.test(html),
+        "kolor paska statusu telefonu zmienia sie razem z motywem");
+  check(html.match(/--bg:#fbeef2/) && /content="#0b1220"/.test(html),
+        "oba kolory paska statusu zgadzaja sie z tlem swojego motywu");
 }
 
 head("Zgodnosc wersji aplikacji");

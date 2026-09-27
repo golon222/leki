@@ -163,9 +163,21 @@ if not _nav:
     bad += 1; print('  BLAD nie znaleziono regul paska nawigacji')
 else:
     _n = _nav.group(1)
+    # Tlo paska idzie od D129 przez zmienna (--nav-bg), zeby motyw jasny mogl
+    # je odwrocic. Kontrola musi wiec ROZWINAC zmienna i sprawdzic KAZDA jej
+    # postac - w :root i w kazdym motywie. Szukanie slowa "rgba" wprost
+    # w regule paska przestaloby cokolwiek pilnowac w chwili, w ktorej tlo
+    # stalo sie zmienna, i nikt by tego nie zauwazyl: wypis dalej mowilby OK.
+    _tlo = _re.search(r'background:([^;}]+)', _n)
+    _wart = [_tlo.group(1)] if _tlo else []
+    _zm = _re.match(r'\s*var\((--[\w-]+)\)\s*$', _wart[0]) if _wart else None
+    if _zm:
+        _wart = _re.findall(_zm.group(1) + r'\s*:\s*([^;}]+)', _css)
     if 'padding-bottom:env(safe-area-inset-bottom)' not in _n:
         bad += 1; print('  BLAD pasek nawigacji nie rezerwuje miejsca nad wcieciem ekranu')
-    elif _re.search(r'background:rgba', _n) and 'backdrop-filter' not in _n:
+    elif _zm and not _wart:
+        bad += 1; print('  BLAD tlo paska uzywa zmiennej', _zm.group(1), '- nikt jej nie definiuje')
+    elif any('rgba' in _w for _w in _wart) and 'backdrop-filter' not in _n:
         bad += 1; print('  BLAD polprzezroczysty pasek bez rozmycia tla')
     elif 'backdrop-filter' in _n and '-webkit-backdrop-filter' not in _n:
         bad += 1; print('  BLAD brak prefiksu -webkit-backdrop-filter (iOS nie rozmyje, B26)')
@@ -534,6 +546,81 @@ else:
         else:
             _naj = min(_odleglosc(_p[x], _p[y]) for x, y in _pary)
             print(f'  OK   motyw tygodniowy: znaczenia na miejscu, najblizsza para {_naj:.0f}')
+
+# ── Motyw jasny: chrom odwrocony i atrament czytelny (D129) ─────────
+#
+# Prosba Kuby: "przebuduj caly design dla tego konta, zeby nie wygladalo to
+# jak psychiatryk". Odwrocenie motywu ma jedna pulapke, ktora zobaczylem
+# dopiero NA ZRZUCIE, a nie w zadnym tescie: kilkanascie regul mialo kolor
+# ciemnego tla wpisany wprost. Naglowek zostal czarny, wiec tytul ekranu byl
+# czarny na czarnym, a liczby w kalendarzu - pastelowe na bieli.
+#
+# Te dwie kontrole MIERZA to, co wtedy bylo zle, zamiast wyliczac nazwy
+# zmiennych: jasnosc powierzchni i kontrast atramentu wzgledem tla, po
+# ktorym naprawde jezdzi oko (kratka dnia to `--X-soft` polozone na karcie).
+def _skladowe(w):
+    w = w.strip()
+    t = re.match(r'#([0-9a-fA-F]{6})$', w)
+    if t: return tuple(int(t.group(1)[i:i+2], 16) for i in (0, 2, 4)) + (1.0,)
+    t = re.match(r'rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*([\d.]+))?\s*\)$', w)
+    if t: return (int(t.group(1)), int(t.group(2)), int(t.group(3)),
+                  float(t.group(4)) if t.group(4) else 1.0)
+    t = re.match(r'(\d+)\s*,\s*(\d+)\s*,\s*(\d+)$', w)      # sam zestaw skladowych
+    if t: return (int(t.group(1)), int(t.group(2)), int(t.group(3)), 1.0)
+    return None
+
+def _jasnosc(rgb):
+    def li(c):
+        c /= 255
+        return c/12.92 if c <= .04045 else ((c+.055)/1.055)**2.4
+    r, g, b = (li(x) for x in rgb[:3])
+    return .2126*r + .7152*g + .0722*b
+
+def _nalozone(wierzch, spod):
+    a = wierzch[3]
+    return tuple(wierzch[i]*a + spod[i]*(1-a) for i in range(3))
+
+def _kontrast(a, b):
+    ja, jb = _jasnosc(a), _jasnosc(b)
+    return (max(ja, jb) + .05) / (min(ja, jb) + .05)
+
+if _m and _rt:
+    def _wartosc(blok, nazwa):
+        t = re.search(r'(?<![\w-])' + nazwa + r'\s*:\s*([^;}\n]+)', blok)
+        return _skladowe(t.group(1)) if t else None
+
+    # 1. CHROM. Kazda z tych powierzchni w motywie podstawowym jest ciemna;
+    #    w jasnym MUSI byc jasna, bo tekst na niej bierze kolor z --txt.
+    _chrom = ('--aura', '--hdr-rgb', '--nav-bg', '--nav-pier', '--toast-bg')
+    _zle = []
+    for _t in _chrom:
+        _c, _j = _wartosc(_rt.group(1), _t), _wartosc(_m.group(1), _t)
+        if _c is None: _zle.append(f'{_t}: brak w :root'); continue
+        if _j is None: _zle.append(f'{_t}: motyw jasny go nie zmienia'); continue
+        if _jasnosc(_c) > .25: _zle.append(f'{_t}: w palecie nie jest ciemny')
+        if _jasnosc(_j) < .60: _zle.append(f'{_t}: w motywie jasnym nadal ciemny')
+    if _zle:
+        bad += 1; print('  BLAD chrom motywu jasnego:', _zle)
+    else:
+        print(f'  OK   motyw jasny odwraca caly chrom ({len(_chrom)} powierzchni)')
+
+    # 2. ATRAMENT STANU na kratce kalendarza. Prog 4.5 to wymaganie WCAG AA
+    #    dla zwyklego tekstu - a liczba dnia jest mala i czyta sie ja
+    #    w przelocie, wiec ponizej tego progu kalendarz przestaje mowic.
+    _slabe = []
+    for _nazwa, _blok in (('paleta', _rt.group(1)), ('motyw jasny', _m.group(1))):
+        _karta = _wartosc(_blok, '--card') or _wartosc(_rt.group(1), '--card')
+        for _st in ('ok', 'warn', 'bad'):
+            _txt = _wartosc(_blok, f'--{_st}-txt') or _wartosc(_rt.group(1), f'--{_st}-txt')
+            _tlo = _wartosc(_blok, f'--{_st}-soft') or _wartosc(_rt.group(1), f'--{_st}-soft')
+            if not (_txt and _tlo and _karta):
+                _slabe.append(f'{_nazwa}/{_st}: brak koloru'); continue
+            _k = _kontrast(_txt[:3], _nalozone(_tlo, _karta))
+            if _k < 4.5: _slabe.append(f'{_nazwa}/{_st}: kontrast {_k:.1f}')
+    if _slabe:
+        bad += 1; print('  BLAD liczba w kalendarzu za slabo widoczna:', _slabe)
+    else:
+        print('  OK   atrament stanu czytelny w obu motywach (WCAG AA)')
 
 # ── Dwa pudelka: dane czlowieka nie moga sie mieszac (D124) ──────────
 #
