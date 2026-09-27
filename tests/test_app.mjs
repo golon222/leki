@@ -5031,8 +5031,25 @@ head("Pudelko tygodniowe: mniej ekranow");
   /* Samo ukrycie przyciskow nie wystarcza: do ekranu wraca sie takze
      z pamieci przegladarki i z powrotu z podekranu.                  */
   const st = html.slice(html.indexOf("window.showTab = t =>"), html.indexOf("window.showTab = t =>") + 700);
-  check(/profilTydzien\(\)\s*&&\s*\(t === "inr" \|\| t === "sinr"\)/.test(st),
-        "showTab odsyla z ekranow INR, nie tylko chowa przyciski");
+  for (const e of ["inr", "sinr", "wifi", "hist"])
+    check(new RegExp(`profilTydzien\\(\\)[\\s\\S]{0,160}t === "${e}"`).test(st),
+          `showTab odsyla z ekranu ${e}, nie tylko chowa przycisk`);
+
+  /* EKRAN SIECI WiFi NALEZY DO PUDELKA DZIENNEGO (D133).
+
+     Stoi na trzech rzeczach, ktorych pudelko tygodniowe nie robi: skanie
+     sieci na zadanie, liscie sieci w pamieci i poleceniach `wifiNowa` /
+     `wifiCmd`. Zostawiony pokazywalby liste, ktora nigdy nie przyjdzie,
+     i przyjmowal siec, ktorej nikt nie odczyta - czyli ekran udajacy,
+     ze cos robi. Tam sluzy do tego portal z przycisku (D131).        */
+  const kafel = html.slice(html.indexOf('onclick="showTab(\'wifi\')"') - 400,
+                           html.indexOf('onclick="showTab(\'wifi\')"') + 40);
+  check(/class="kafel tylko-warfin" onclick="showTab\('wifi'\)"/.test(kafel),
+        "kafelek sieci WiFi chowa sie razem z reszta pudelka dziennego");
+  check(/<details class="card sek tylko-warfin">\s*<summary><h3>Sieć WiFi pudełka<\/h3>/.test(html),
+        "i rozdzial o niej w Instrukcji tez");
+  check(/<details class="card sek tylko-tydzien">\s*<summary><h3>Zmiana WiFi w pudełku<\/h3>/.test(html),
+        "a na jej miejscu stoi rozdzial o portalu z przycisku");
 
   /* Profil musi trafic na <body> przy KAZDYM przyjsciu konfiguracji -
      `cfg` na starcie ma wartosci domyslne, a prawdziwy profil przychodzi
@@ -5106,6 +5123,19 @@ head("Pudelko tygodniowe: liczby tabletek znikaja z ekranu");
   A.renderCalendar();
   check(document.getElementById("calGrid").innerHTML.includes('class="dose"'),
         "i dalej pokazuje je w kalendarzu");
+  /* EKRANY, KTORYCH PUDELKO TYGODNIOWE NIE ZASILA (D133).
+
+     Uwaga Kuby, jednym zdaniem: "jak nie robimy skanu sieci, to nie
+     pokazujemy tez tego w ustawieniach". Ma racje i to jest szersza
+     zasada niz jeden kafelek: ekran, za ktorym nic nie stoi, wyglada
+     jak zepsuty, a nie jak nieistniejacy - i kaze szukac usterki.    */
+  A.__setState({ cfg:{ profil:"tydzien" }, doses:{}, inr:{}, events:[] });
+  check(!/pomiarów INR/.test(A.opisKopii({ doses:{ "2026-09-27":{} }, inr:{} })),
+        "opis kopii nie liczy pomiarow INR tam, gdzie INR nie ma");
+  A.__setState({ cfg:{ profil:"warfin" }, doses:{}, inr:{}, events:[] });
+  check(/pomiarów INR/.test(A.opisKopii({ doses:{ "2026-09-27":{} }, inr:{} })),
+        "a w pudelku dziennym liczy je dalej");
+
   A.__setState({ cfg:{ profil:undefined }, doses:{}, events:[] });
 }
 
@@ -5253,6 +5283,14 @@ head("Opis wersji osobny dla kazdego pudelka");
      zaproponowac aktualizacji wcale niz zaproponowac cudza.          */
   check(/return p && p\.fw \? p\.fw : null/.test(html),
         "pudelko bez wlasnego programu nie dziedziczy cudzego");
+
+  /* Numer wersji "od ktorej dziala Telegram" tez jest OSOBNY: to dwa
+     rozne programy i dwie rozne numeracje. "Wymaga 1.45.0" na pudelku,
+     ktore ma 0.6.0, kazaloby szukac aktualizacji, ktorej nie ma. */
+  const tgWer = [...lista.matchAll(/id:"(pillbox\d+)"[\s\S]*?fwTg:"([^"]+)"/g)];
+  check(tgWer.length === pary.length, `kazde pudelko ma swoj numer wersji z botem (${tgWer.length})`);
+  check(!/wymaga programu pudełka 1\.45\.0"/.test(html),
+        "numer wersji nie stoi wpisany na sztywno w podpisie kafelka");
 }
 
 head("Zgodnosc wersji aplikacji");

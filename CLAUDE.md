@@ -41,6 +41,12 @@ Musi przejść przed zmianą i po zmianie. Stan wyjściowy:
 **642 + 52 firmware, 1423 (×6 pór doby) + 92 + 52 aplikacja, 48 zgodności,
 156 reguł bazy, 375 kontroli audytu, 44 kontrole statyczne — 0 błędów.**
 
+**Pudełko tygodniowe widzi mniej z DWÓCH powodów i to są różne powody**
+(D126 i D133): czego nie potrzebuje (INR, zapas, raport) i czego nie umie
+(sieć WiFi, autotest w bazie, historia wybudzeń). Ekran, za którym nic nie
+stoi, wygląda jak zepsuty, nie jak nieistniejący. Ukrycie przycisku nie
+wystarcza — `showTab()` odsyła z `inr`, `sinr`, `wifi` i `hist`.
+
 **Runner jest cichy przy sukcesie i głośny przy błędzie** (D66). Udany przebieg
 to 12 linii — **i te 12 linii TO JEST potwierdzenie, nie jego skrót.** Nie
 odpalaj zestawu drugi raz z `SZCZEGOLY=1` „żeby sprawdzić dokładniej" i nie
