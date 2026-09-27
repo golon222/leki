@@ -62,7 +62,7 @@
 
     Numer wersji, ktory mieszka w NAGLOWKU, opisuje naglowek. Ten opisuje
     program. Gdy sie rozjada, log krzyczy o tym w pierwszej linii.        */
-#define KOD_WERSJA "0.6.0"
+#define KOD_WERSJA "0.7.0"
 
 /*  Po tym napisie pudelko poznaje config.h wzięty prosto z repozytorium -
     czyli "nie ma zadnej sieci", a nie "ma siec o takiej nazwie". Bez tego
@@ -655,10 +655,21 @@ void wyslijStatus() {
       CALY status - a razem z nim wersje programu, sile sygnalu i stan
       kolejki, czyli wszystko, z czego widac, ze pudelko zyje. Brakujacy
       pomiar po prostu pomijamy.                                       */
-  if (battProcent >= 0) {
-    doc["battery"] = battProcent;
-    doc["volt"]    = battVolt;
-  }
+  if (battProcent >= 0) doc["battery"] = battProcent;
+  /*  NAPIECIE WYSYLAMY ZAWSZE, takze przy niemozliwym odczycie.
+
+      Do 0.6.0 szlo razem z procentem - wiec przy zepsutym pomiarze nie
+      szlo NIC i z zewnatrz nie dalo sie zobaczyc nawet tego, co plytka
+      naprawde mierzy. Ta plytka melduje 2,32 V, czyli wartosc, przy
+      ktorej by nie chodzila; dopoki nie wiemy, czy ta liczba chociaz
+      RUSZA SIE przy ladowaniu, nie da sie zdecydowac, czy to dzielnik,
+      czy zly pin. Jedna liczba w statusie kosztuje kilkanascie bajtow
+      i jest jedynym pomiarem, jaki mamy.
+
+      Procentu przy tym NIE zgadujemy: reguly bazy daja mu zakres 0..100,
+      a 0% znaczy "naladuj natychmiast" - falszywy alarm o tym samym
+      ciezarze co przegapiona dawka.                                  */
+  doc["volt"]    = battVolt;
   doc["fw"]      = FW_VERSION;
   doc["rssi"]    = WiFi.RSSI();
   doc["queue"]   = kolejkaIle();

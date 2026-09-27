@@ -760,6 +760,8 @@ body[data-profil="tydzien"]{
    wysokosc, nie trzyma niczego wiecej - `visibility:hidden` wyjmuje je
    z kolejnosci dotykania i z odczytu dla niewidomych.               */
 .kafel-puste{visibility:hidden}
+/* Kafelka statystyki, ktora w tym profilu nie ma sasiada (D136). */
+body[data-profil="tydzien"] .stat-solo{grid-column:1/-1}
 .kafel .kop{flex:1;min-width:0}
 .kafel .kop .dim2{font-weight:500;margin-top:3px}
 /* Strzalka w prawo - ten sam ksztalt co w sekcjach zwijanych, tylko bez obrotu:
@@ -1122,21 +1124,26 @@ body[data-profil="tydzien"]{
       </select>
     </div>
     <div class="stats">
-      <div class="stat"><div class="sv" id="anAdh">–</div><div class="sl">regularność</div>
+      <!-- Gdy sasiad („srednia godzina") znika, ta kafelka zostaje sama
+           w rzedzie i polowa karty stoi pusta. Bierze wtedy cala
+           szerokosc - to jedna regula CSS, nie warunek w renderze. -->
+      <div class="stat stat-solo"><div class="sv" id="anAdh">–</div><div class="sl">regularność</div>
         <div class="dim2" id="anAdhSub"></div>
         <!-- Liczba mówi ILE, iskra mówi CZY ROŚNIE. Bez osi i podpisów —
              to przypis do liczby obok, nie osobny wykres. -->
         <div id="anIskra" style="margin-top:6px"></div></div>
-      <div class="stat"><div class="sv" id="anMean">–</div><div class="sl">średnia godzina</div>
+      <!-- Srednia godzina i sredni odstep to TO SAMO POJECIE co wykres
+           pory brania - patrz komentarz przy nim. Znikaja razem. -->
+      <div class="stat tylko-warfin"><div class="sv" id="anMean">–</div><div class="sl">średnia godzina</div>
         <div class="dim2" id="anMeanSub"></div></div>
 
       <!-- Pełna szerokość: to jedyna liczba w tej karcie, która mówi o leku,
            a nie o zegarze — reszta opisuje pory, ta opisuje rytm. -->
-      <div class="stat" style="grid-column:1/-1"><div class="sv" id="anGap">–</div>
+      <div class="stat tylko-warfin" style="grid-column:1/-1"><div class="sv" id="anGap">–</div>
         <div class="sl">średni odstęp między dawkami</div>
         <div class="dim2" id="anGapSub"></div></div>
     </div>
-    <div id="anPora" style="margin-top:14px;font-size:13.5px;line-height:1.6"></div>
+    <div id="anPora" class="tylko-warfin" style="margin-top:14px;font-size:13.5px;line-height:1.6"></div>
   </div>
 
   <!-- SIATKA RYTMU. Jedna kratka na dzień, kolumna to tydzień, wiersz to
@@ -1156,7 +1163,19 @@ body[data-profil="tydzien"]{
     </div>
   </div>
 
-  <div class="card">
+  <!-- PORA BRANIA NALEZY DO PUDELKA DZIENNEGO (D136).
+
+       Kuba: "nie ma czegos takiego jak pora brania w czasie, to wazne,
+       zeby wziasc danego dnia". Ma racje i to jest roznica w SAMYM
+       POJECIU, nie w ilosci danych: przy siedmiu klapkach pudelko
+       rejestruje OTWARCIE KOMORY, a komora nalezy do dnia, nie do
+       godziny. Tabletka lezy w niej od niedzieli i mozna ja wyjac
+       o dowolnej porze - wykres godzin opisywalby wiec moment otwarcia
+       wieczka, udajac, ze opisuje lek.
+
+       Przy Warfinie jest odwrotnie i dlatego tam zostaje: regularna pora
+       to czesc dzialania leku przeciwzakrzepowego.                   -->
+  <div class="card tylko-warfin">
     <div class="row between" style="align-items:baseline">
       <h3>Pora brania w czasie</h3>
       <span class="dim2" id="anPorySub"></span>
@@ -2275,7 +2294,7 @@ window.wybierzPudelko = (id) => {
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-09-27.98";
+const APP_VERSION = "2026-09-27.99";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -5596,10 +5615,25 @@ function renderStatus(st){
      celowe: w bazie może siedzieć cokolwiek, a "cokolwiek" nie może
      zapalić wskaźnika ładowania.                                     */
   const laduje = st.charging === true;
-  const pct = Math.max(0, Math.min(100, Math.round(num(st.battery))));
-  const col = pct > 40 ? "var(--ok)" : pct > 15 ? "var(--warn)" : "var(--bad)";
 
-  document.getElementById("batBig").textContent = pct + "%";
+  /*  BRAK POMIARU TO NIE JEST ZERO PROCENT (D136).
+
+      TU BYŁ BŁĄD i Kuba zobaczył go pierwszy: jej pudełko pokazywało
+      czerwone „0%", choć ogniwo jest naładowane. Pudełko zachowało się
+      uczciwie — nie umie zmierzyć napięcia (melduje 2,32 V, czyli
+      wartość niemożliwą przy działającej płytce), więc pola `battery`
+      NIE WYSYŁA w ogóle. To aplikacja zamieniała brak pola na zero,
+      bo `num(undefined)` daje 0.
+
+      Zero procent to zdanie „naładuj natychmiast" — fałszywy alarm
+      o dokładnie tym samym ciężarze co przegapiona dawka: uczy
+      ignorować kolor czerwony. Brak pomiaru mówimy kreską.        */
+  const znaneBatt = Number.isFinite(+st.battery);
+  const pct = znaneBatt ? Math.max(0, Math.min(100, Math.round(+st.battery))) : -1;
+  const col = !znaneBatt ? "var(--dim2)"
+            : pct > 40 ? "var(--ok)" : pct > 15 ? "var(--warn)" : "var(--bad)";
+
+  document.getElementById("batBig").textContent = znaneBatt ? pct + "%" : "—";
   /* Podczas ładowania procent jest ostatnim wiarygodnym odczytem SPRZED
      podłączenia kabla, nie stanem bieżącym — układ ładujący trzyma na
      ogniwie swoje napięcie, więc każdy pomiar wychodziłby 100%. Dlatego
@@ -5610,14 +5644,20 @@ function renderStatus(st){
   const volt = num(st.volt);
   document.getElementById("batVolt").textContent = laduje
     ? "Ładowanie — napięcie pokazuje ładowarkę, nie ogniwo"
+    /*  Napięcie pokazujemy TAKŻE bez procentu — to jedyna liczba, z której
+        da się kiedyś zrozumieć, czemu pomiar nie wychodzi.            */
+    : !znaneBatt ? (volt > 0
+        ? `Pudełko nie umie zmierzyć baterii · mierzy ${volt.toFixed(2)} V`
+        : "Pudełko nie umie zmierzyć baterii")
     : volt > 0 ? `${volt.toFixed(2)} V · ogniwo 470 mAh`
                : "ogniwo 470 mAh";
-  const f = document.getElementById("battFill"); f.style.width = Math.max(6,pct)+"%"; f.style.background = col;
-  const b = document.getElementById("batBar");  b.style.width = pct+"%"; b.style.background = col;
+  const szer = znaneBatt ? pct : 0;
+  const f = document.getElementById("battFill"); f.style.width = Math.max(6,szer)+"%"; f.style.background = col;
+  const b = document.getElementById("batBar");  b.style.width = szer+"%"; b.style.background = col;
   f.classList.toggle("laduje", laduje);
   b.classList.toggle("laduje", laduje);
-  chip.textContent = (laduje ? "ładuje · " : "") + pct + "%";
-  chip.className = "chip " + (laduje ? "on" : pct > 40 ? "on" : pct > 15 ? "warn" : "off");
+  chip.textContent = (laduje ? "ładuje · " : "") + (znaneBatt ? pct + "%" : "—");
+  chip.className = "chip " + (!znaneBatt ? "" : laduje ? "on" : pct > 40 ? "on" : pct > 15 ? "warn" : "off");
 
   /* Prognoza idzie przez `opisPrognozy()` — liczy z historii ładowań tego
      pudełka, nie ze stałej. Powód i pomiar stoją przy tamtej funkcji.
@@ -5633,10 +5673,15 @@ function renderStatus(st){
               : "Stanu naładowania nie da się zmierzyć przy podłączonym kablu. " +
                 "Powyżej widać odczyt sprzed ładowania — prawdziwy pojawi się " +
                 "kilkanaście sekund po odłączeniu.")
+    /*  Bez pomiaru nie ma czego prognozować - i nie ma też powodu do
+        czerwonego „naładuj". Mówimy, co naprawdę wiemy.              */
+    : !znaneBatt
+      ? "Dopóki pomiar nie działa, stanu ogniwa nie da się pokazać. Pudełko " +
+        "dzwoni i zgłasza dawki normalnie — to nie wpływa na jego pracę."
     : pct > 15
       ? opisPrognozy(st, pct)
       : "Czas naładować pudełko przez USB-C.";
-  eta.style.color = laduje ? "var(--ok)" : pct > 15 ? "" : "var(--bad)";
+  eta.style.color = laduje ? "var(--ok)" : !znaneBatt ? "var(--dim2)" : pct > 15 ? "" : "var(--bad)";
 
   const ls = num(st.lastSeen), ago = Math.round(Date.now()/1000 - ls);
   /* Status JEST, ale bez godziny — to znaczy dokładnie jedno: pudełko

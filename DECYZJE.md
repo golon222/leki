@@ -12,7 +12,7 @@ zamiast 60 tys. tokenów wchodzi 2,5 tys. plus jeden obszar.
 | `decyzje/pudelko.md` | Pudełko — sen, alarm, NVS, WiFi | 41 |
 | `decyzje/ota.md` | Aktualizacja przez WiFi i skan sieci | 9 |
 | `decyzje/telegram.md` | Powiadomienia Telegram | 6 |
-| `decyzje/aplikacja.md` | Aplikacja — ekrany i wygląd | 45 |
+| `decyzje/aplikacja.md` | Aplikacja — ekrany i wygląd | 46 |
 | `decyzje/dane.md` | Dane, kolejka, dawkowanie | 20 |
 | `decyzje/testy.md` | Testy, audyt, kompilacja | 16 |
 | `decyzje/bugi.md` | Błędy **zamknięte** — historia objawów | 26 |
@@ -63,6 +63,7 @@ Od najnowszej. Kolumna „gdzie" mówi, który plik w `decyzje/` trzymać otwart
 
 | # | O co chodziło | gdzie |
 |---|---|---|
+| **D136** | **Brak pomiaru baterii to nie jest 0%** — pudełko uczciwie nie wysyła pola, a aplikacja robiła z tego czerwone „0%" i fałszywy alarm. Napięcie idzie teraz w statusie ZAWSZE, żeby dało się zrozumieć, czemu pomiar nie wychodzi. Plus: **pora brania** znika z pudełka tygodniowego — komora należy do dnia, nie do godziny | `aplikacja` |
 | **D135** | **Nazwa leku znika z pudełka tygodniowego** — cofnięcie mojego własnego założenia z D126 („trzeba wiedzieć, co się bierze"): nazwa jest potrzebna tam, gdzie się jej UŻYWA, czyli w raporcie dla lekarza, którego to pudełko nie ma. Razem z nią „INR a regularność", „Historia rozpisania" i „Wyjątki na konkretne dni". Podpis z lekiem ma teraz jedno źródło | `aplikacja` |
 | **D134** | **Domyślna nazwa leku („Warfin") należy do pudełka dziennego**, nie do każdego — zrzut pokazał „Warfin" na koncie dziewczyny. Każde inne pudełko zaczyna bez nazwy i pokazuje „Lek". Plus dwa puste miejsca pod Instrukcją (`visibility:hidden`, więc poza kolejnością dotykania) | `aplikacja` |
 | **D133** | **Znika to, czego pudełko tygodniowe NIE UMIE** — sieć WiFi, autotest z bazy, historia wybudzeń. D126 zdjęło to, czego nie potrzebuje; to zdejmuje to, za czym nic nie stoi. Ekran, który nic nie robi, wygląda jak zepsuty i każe szukać usterki. `showTab()` odsyła z czterech ekranów, nie z dwóch | `aplikacja` |

@@ -5318,6 +5318,58 @@ head("Opis wersji osobny dla kazdego pudelka");
         "numer wersji nie stoi wpisany na sztywno w podpisie kafelka");
 }
 
+/* ═══════════ BRAK POMIARU TO NIE JEST ZERO PROCENT (D136) ═══════════
+
+   Zgloszenie Kuby: jej pudelko pokazywalo czerwone "0%", choc ogniwo jest
+   naladowane. Pudelko zachowalo sie uczciwie - nie umie zmierzyc napiecia
+   (melduje 2,32 V, czyli wartosc niemozliwa przy dzialajacej plytce), wiec
+   pola `battery` NIE WYSYLA w ogole. To aplikacja zamieniala brak pola na
+   zero, bo `num(undefined)` daje 0.
+
+   Zero procent to zdanie "naladuj natychmiast" - falszywy alarm o tym samym
+   ciezarze co przegapiona dawka, bo uczy ignorowac czerwony kolor.      */
+head("Brak pomiaru baterii nie jest zerem");
+{
+  const bat = () => document.getElementById("batBig").textContent;
+  const chip = () => document.getElementById("battChip");
+
+  A.renderStatus({ lastSeen: 1790000000, volt: 2.32 });       // bez pola battery
+  check(bat() === "—", `bez pomiaru pokazujemy kreske (jest "${bat()}")`);
+  check(/nie umie zmierzyć/.test(document.getElementById("batVolt").textContent),
+        "i mowimy wprost, ze pudelko nie umie tego zmierzyc");
+  check(/2\.32 V/.test(document.getElementById("batVolt").textContent),
+        "a napiecie pokazujemy mimo to - to jedyny pomiar, jaki mamy");
+  check(!/naładować/.test(document.getElementById("batEta").textContent),
+        "i nie kazemy ladowac czegos, czego nie zmierzylismy");
+
+  A.renderStatus({ lastSeen: 1790000000, battery: 0, volt: 3.3 });
+  check(bat() === "0%", "prawdziwe zero nadal jest zerem");
+
+  A.renderStatus({ lastSeen: 1790000000, battery: 62, volt: 3.9 });
+  check(bat() === "62%", "a zwykly pomiar pokazujemy normalnie");
+}
+
+/* ═══════════ PORA BRANIA NALEZY DO PUDELKA DZIENNEGO (D136) ═══════════
+
+   Kuba: "nie ma czegos takiego jak pora brania w czasie, to wazne, zeby
+   wziasc danego dnia". To roznica w SAMYM POJECIU, nie w ilosci danych:
+   przy siedmiu klapkach pudelko rejestruje otwarcie KOMORY, a komora
+   nalezy do dnia, nie do godziny. Tabletka lezy w niej od niedzieli
+   i mozna ja wyjac o dowolnej porze.                                   */
+head("Godziny brania znikaja z analizy");
+{
+  for (const [re, co] of [
+    [/<div class="card tylko-warfin">\s*<div class="row between"[^>]*>\s*<h3>Pora brania w czasie<\/h3>/, "wykres pory brania"],
+    [/<div class="stat tylko-warfin"><div class="sv" id="anMean">/,  "srednia godzina"],
+    [/<div class="stat tylko-warfin" style="grid-column:1\/-1"><div class="sv" id="anGap">/, "sredni odstep"],
+    [/<div id="anPora" class="tylko-warfin"/,                        "zdanie o porze brania"],
+  ]) check(re.test(html), `chowamy: ${co}`);
+
+  /* Regularnosc zostaje sama w rzedzie - bez tego polowa karty stoi pusta. */
+  check(/body\[data-profil="tydzien"\] \.stat-solo\{grid-column:1\/-1\}/.test(html),
+        "regularnosc bierze cala szerokosc, gdy traci sasiada");
+}
+
 head("Zgodnosc wersji aplikacji");
 check(/const APP_VERSION = "([\d.\-]+)"/.test(html), "index.html deklaruje wersje");
 const av = html.match(/const APP_VERSION = "([\d.\-]+)"/)?.[1];
