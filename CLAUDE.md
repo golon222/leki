@@ -316,13 +316,23 @@ nie do publikacji. Szczegóły obejść — D17.
 
 - Firmware **się kompiluje**, ale **nigdy nie było uruchomione z tego repo** na
   płytce. Kompilacja niczego nie wgrywa. Nie twierdź, że „działa".
-- **Pudełko tygodniowe BYŁO uruchomione, 2026-09-27, i od razu znalazło błąd,
-  którego testy nie miały jak złapać (B30).** `0.1.0` budziło się w kółko
-  i piszczało bez przerwy: `analogRead()` zostawia pin w trybie analogowym,
-  a to wyłącza bufor wejścia cyfrowego, którym komparator wybudzania czyta
-  stan pinu. Naprawione w `0.2.0` — **czeka na potwierdzenie z płytki**.
-  Logowanie do bazy, zapis hasła w NVS, pobranie harmonogramu i wysłanie
-  zdarzenia `boot` **zadziałały za pierwszym razem**, to jest zmierzone.
+- **Pudełko tygodniowe DZIAŁA — potwierdzone na płytce 2026-09-27, `0.3.0`.**
+  Zmierzony przebieg Kuby: zimny start → `wybudzenie 1`, a **następne
+  wybudzenie to prawdziwe otwarcie klapki**: `klapka: PON (105 mV, progi
+  72..943)`. 105 mV to **co do miliwolta** wartość z kalibracji na stole,
+  więc drabinka rozpoznaje komorę po wybudzeniu z głębokiego snu tak samo
+  jak na biurku. Pętli wybudzeń nie ma. Działa też logowanie do bazy, zapis
+  hasła w NVS, pobranie harmonogramu i wysyłka zdarzeń.
+  **Droga do tego zajęła trzy wersje i dwie moje błędne hipotezy** (B30):
+  `0.1.0` budziło się w kółko i piszczało bez przerwy, bo `analogRead()`
+  zostawia pin w trybie analogowym, a to wyłącza bufor wejścia cyfrowego,
+  którym komparator wybudzania czyta stan pinu. Najpierw zwaliłem to na
+  przypomnienie o 20:00 (Kuba: *„cały czas nie ma 20, jest 13:15"*), potem
+  szukałem błędu w kodzie, którego na płytce nie było, bo numer wersji
+  mieszkał w `config.h` i kłamał.
+  **Czego nadal nie ma:** pomiaru baterii (`-1%`, urwany pad BAT+ na tej
+  płytce — nie usterka programu), aktualizacji przez WiFi, portalu sieci
+  i powiadomień Telegram.
 - **Powiadomienia Telegram — DZIAŁAJĄ, potwierdzone przez Kubę 2026-09-01:**
   *„Telegram działa jak coś, przypomnienia wysyłają się, kopie też się
   wysyłają"*. Wysyła je **pudełko**, z `goToSleep()`. To był najdłużej
