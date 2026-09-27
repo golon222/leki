@@ -41,11 +41,16 @@ Musi przejść przed zmianą i po zmianie. Stan wyjściowy:
 **642 + 52 firmware, 1423 (×6 pór doby) + 92 + 52 aplikacja, 48 zgodności,
 156 reguł bazy, 375 kontroli audytu, 44 kontrole statyczne — 0 błędów.**
 
-**Nazwa leku nie ma wartości domyślnej poza pudełkiem dziennym** (D134):
-„Warfin" należy do `pillbox01`, bo to ono ma za sobą kilkaset wpisów z tą
-nazwą. Każde inne zaczyna bez nazwy i pokazuje „Lek". Zrzut pokazał
-„Warfin · jedna komora dziennie" na koncie dziewczyny — to jest kłamstwo
-o leku, nie literówka.
+**Nazwy leku w pudełku tygodniowym NIE MA** (D135, cofnięte z D126 na
+wyraźną prośbę Kuby — nie przywracaj). Nazwa jest potrzebna tam, gdzie się
+jej **używa**: w raporcie dla lekarza. W pudełku dziennym domyślną „Warfin"
+zostawiamy, bo ma za sobą kilkaset wpisów z tą nazwą (D134) — każde inne
+pudełko zaczyna bez nazwy i pokazuje „Lek". Podpis z lekiem powstaje
+w **jednym** miejscu (`opisLeku()`); stał w dwóch, słowo w słowo.
+
+**Przy profilu, który widzi mniej, domyślną odpowiedzią jest SCHOWAĆ**, a nie
+zostawić „na wszelki wypadek". Kuba zgłosił to trzy razy z rzędu (skan sieci,
+nazwa leku, „INR a regularność") i za każdym razem miał rację.
 
 **Pudełko tygodniowe widzi mniej z DWÓCH powodów i to są różne powody**
 (D126 i D133): czego nie potrzebuje (INR, zapas, raport) i czego nie umie

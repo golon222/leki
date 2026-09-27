@@ -5009,17 +5009,23 @@ head("Pudelko tygodniowe: mniej ekranow");
   /* Co dokladnie ma znikac. Kazda z tych rzeczy byla wymieniona wprost. */
   const naWylot = [
     [/<!-- ZAPAS TABLETEK[^>]*-->\s*<div class="card tylko-warfin">/, "zapas tabletek"],
+    [/<div class="card tylko-warfin">\s*<h3>INR a regularność<\/h3>/, "wykres INR a regularnosc"],
+    [/<details class="card sek tylko-warfin">\s*<summary><h3>Historia rozpisania<\/h3>/, "historia rozpisania"],
+    [/<details class="card sek tylko-warfin">\s*<summary><h3 id="exTytul">/, "wyjatki na konkretne dni"],
     [/<button id="nav-inr" class="tylko-warfin"/,                     "INR w pasku nawigacji"],
     [/<button class="kafel tylko-warfin" onclick="showTab\('sinr'\)"/, "kafelek INR w Ustawieniach"],
     [/<div class="card tylko-warfin"[^>]*>\s*<h3>Raport dla lekarza<\/h3>/, "raport dla lekarza"],
   ];
   for (const [re, co] of naWylot) check(re.test(html), `chowamy: ${co}`);
 
-  /* A co ZOSTAJE - bo profil tygodniowy to wezszy zakres, nie inny.
-     Nazwa leku i godziny przypomnien sa potrzebne obu pudelkom.      */
+  /* NAZWA LEKU ZNIKA - cofniete na prosbe Kuby ("usun jeszcze nazwe leku,
+     bo to tu niepotrzebne", D135). D126 zostawialo ja z uzasadnieniem
+     "trzeba wiedziec, co sie bierze" - i to bylo moje zalozenie, nie jego
+     potrzeba. Nazwa jest potrzebna tam, gdzie sie jej UZYWA: w raporcie
+     dla lekarza, ktorego to pudelko nie ma.                           */
   const lek = html.slice(html.indexOf('id="tab-lek"'), html.indexOf('id="tab-sinr"'));
-  const przedOslona = lek.slice(0, lek.indexOf('<div class="tylko-warfin">'));
-  check(przedOslona.includes('id="drugName"'), "nazwa leku ZOSTAJE - trzeba wiedziec, co sie bierze");
+  check(/<div class="tylko-warfin">\s*<label>Nazwa leku<\/label>/.test(lek),
+        "nazwa leku chowa sie razem z reszta pudelka dziennego");
   const poOslonie = lek.slice(lek.indexOf('</div><!-- /tylko-warfin -->'));
   check(poOslonie.includes("Godziny przypomnień"),
         "godziny przypomnien ZOSTAJA - po to jest to pudelko");
@@ -5147,10 +5153,13 @@ head("Pudelko tygodniowe: liczby tabletek znikaja z ekranu");
         "domyslna nazwa leku nalezy do pudelka dziennego, nie do kazdego");
   check(!/drugName\s*\|\|\s*"Warfin"/.test(html),
         "zadne pole nie podstawia Warfinu bez sprawdzenia profilu");
-  /* A gdy nazwy nie ma, na ekranie stoi "Lek" - w obu miejscach, ktore
-     ja pisza (naglowek i kafelek leku).                               */
-  check((html.match(/cfg\.drugName \|\| "Lek"/g) || []).length === 2,
-        "bez nazwy oba miejsca pokazuja \u201eLek\u201d, nie cudzy lek");
+  /* A gdy nazwy nie ma, na ekranie stoi "Lek". Podpis powstaje teraz
+     w JEDNYM miejscu (`opisLeku`) - stal w dwoch, slowo w slowo, i przy
+     drugiej poprawce z rzedu rozjazd byl kwestia czasu.              */
+  check((html.match(/cfg\.drugName \|\| "Lek"/g) || []).length === 1,
+        "podpis z lekiem ma jedno zrodlo, nie dwa");
+  check((html.match(/textContent = opisLeku\(\)/g) || []).length === 2,
+        "i oba miejsca z niego korzystaja");
 
   A.__setState({ cfg:{ profil:undefined }, doses:{}, events:[] });
 }

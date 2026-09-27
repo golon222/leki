@@ -1174,7 +1174,8 @@ body[data-profil="tydzien"]{
     <div id="anDowHint" style="margin-top:8px;font-size:13.5px"></div>
   </div>
 
-  <div class="card">
+  <!-- INR nalezy do pudelka dziennego (D126) - ta karta tez. -->
+  <div class="card tylko-warfin">
     <h3>INR a regularność</h3>
     <div class="muted" style="margin-bottom:8px">Tydzień przed każdym pomiarem.</div>
     <div id="anInr"></div>
@@ -1294,7 +1295,13 @@ body[data-profil="tydzien"]{
 <section id="tab-lek" class="hide">
   <div class="card">
 
-      <label>Nazwa leku</label><input id="drugName" placeholder="nazwa z opakowania">
+      <!-- Nazwa leku zostaje w pudelku DZIENNYM. Tam jest potrzebna: raport
+           dla lekarza nosi ja w naglowku, a przy Warfinie nazwa jest czescia
+           dokumentu. W tygodniowym raportu nie ma i nie ma jej gdzie uzyc -
+           pole, ktore nic nie zmienia, uczy nie czytac ustawien (D135). -->
+      <div class="tylko-warfin">
+        <label>Nazwa leku</label><input id="drugName" placeholder="nazwa z opakowania">
+      </div>
       <!-- Nazwa leku ZOSTAJE takze w pudelku tygodniowym: trzeba wiedziec,
            co sie bierze. Znika liczenie tabletek i rozpisanie tygodniowe -
            tam dawka jest jedna i lezy w komorze.                        -->
@@ -1345,7 +1352,10 @@ body[data-profil="tydzien"]{
   <!-- Historia rozpisania. Zwinięta, bo zagląda się do niej rzadko — ale
        musi być widoczna gdzieś, bo od niej zależy, jak liczone są dni
        sprzed korekty dawki. -->
-  <details class="card sek">
+  <!-- Oba rozwijane spisy nizej dotycza ROZPISANIA DAWEK - ile tabletek
+       naleze sie ktorego dnia. Pudelko tygodniowe tego nie ma (D126), wiec
+       prowadzilyby do historii i wyjatkow czegos, czego nie ma (D133). -->
+  <details class="card sek tylko-warfin">
     <summary><h3>Historia rozpisania</h3></summary>
     <div class="sekcia">
       <div id="planList"></div>
@@ -1354,7 +1364,7 @@ body[data-profil="tydzien"]{
 
   <!-- Wyjatki zostaja lista ROZWIJALNA, ale tutaj - przy dawkowaniu, ktorego
        dotycza. Zakłada sie je dotknieciem dnia w kalendarzu; to jest podglad. -->
-  <details class="card sek">
+  <details class="card sek tylko-warfin">
     <summary><h3 id="exTytul">Wyjątki na konkretne dni</h3></summary>
     <div class="sekcia">
       <div class="muted">Dodajesz je dotknięciem dnia w kalendarzu.</div>
@@ -2265,7 +2275,7 @@ window.wybierzPudelko = (id) => {
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-09-27.97";
+const APP_VERSION = "2026-09-27.98";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -4008,8 +4018,7 @@ function renderToday(){
   odswiezOdDawki();
   startTikOdDawki();
 
-  document.getElementById("hSub").textContent =
-    `${cfg.drugName || "Lek"}${+cfg.drugStrength && !profilTydzien() ? " " + cfg.drugStrength + " mg" : ""} · ${opisDawkowania()}`;
+  document.getElementById("hSub").textContent = opisLeku();
 }
 
 /* ═══════════════ ARKUSZ DNIA ═══════════════ */
@@ -5907,10 +5916,22 @@ window.setPills = () => {
 /* Podpisy pod kafelkami. Kafelek bez podpisu to sama nazwa działu i trzeba
    w niego wejść, żeby dowiedzieć się czegokolwiek — a najczęstsze pytania
    („ile biorę", „czy pudełko ma sieć") da się odpowiedzieć już na spisie. */
+/*  PODPIS Z LEKIEM - jedno zrodlo dla naglowka i dla kafelka w Ustawieniach.
+    Stal w dwoch miejscach, slowo w slowo; przy drugiej poprawce z rzedu
+    (D134, potem D135) rozjazd byl kwestia czasu.
+
+    W pudelku TYGODNIOWYM nie ma nazwy leku i to jest decyzja, nie brak:
+    nazwa jest potrzebna tam, gdzie sie jej uzywa - w raporcie dla lekarza,
+    ktorego to pudelko nie ma. Zostaje sam opis dawkowania.            */
+function opisLeku(){
+  if (profilTydzien()) return opisDawkowania();
+  const mg = +cfg.drugStrength ? ` ${cfg.drugStrength} mg` : "";
+  return `${cfg.drugName || "Lek"}${mg} · ${opisDawkowania()}`;
+}
+
 function renderKafelki(){
   const lek = document.getElementById("kafelLek");
-  if (lek) lek.textContent =
-    `${cfg.drugName || "Lek"}${+cfg.drugStrength && !profilTydzien() ? " " + cfg.drugStrength + " mg" : ""} · ${opisDawkowania()}`;
+  if (lek) lek.textContent = opisLeku();
 
   const wifi = document.getElementById("kafelWifi");
   if (wifi){
