@@ -639,13 +639,31 @@ body:not([data-profil="tydzien"]) .tylko-tydzien{display:none!important}
    dokladnie z tym jednym kolorem, ktory musi byc odrozniany od reszty
    bez zastanowienia.                                                  */
 body[data-profil="tydzien"]{
-  --bg:#0d0910; --bg2:#161019;
-  --card:#221822; --card2:#2d222d; --card3:#392c39; --card-btm:#160f16;
+  /* Powierzchnie: ciemne, ale cieple. Zimny granat z pudelka dziennego
+     gryzl sie z pudrem - roznica jest subtelna, a widac ja od razu.   */
+  --bg:#0e0a0d; --bg2:#171115;
+  --card:#241a20; --card2:#2f232a; --card3:#3b2d35; --card-btm:#181114;
 
-  --acc:#ecc3cd;  --acc-rgb:236,195,205;
-  --btn1:#f4d5dc; --btn2:#dfaab6; --btn-txt:#3c1f25; --btn-glow:223,170,182;
+  /* ZNACZENIA TEZ SA PUDROWE, i to jest swiadome odstepstwo od palety
+     pudelka dziennego. Prosba Kuby: "odejdzmy od neonowych w tej wersji,
+     dawaj pudrowe". Zielony/zolty/czerwony ZOSTAJA na swoich miejscach -
+     zmienia sie nasycenie, nie przypisanie. Kontrola statyczna mierzy, czy
+     nadal da sie je od siebie odroznic; patrz komentarz przy niej.     */
+  /* Krycie WYZSZE niz w pudelku dziennym, i to nie jest kosmetyka: kolor
+     przygaszony niesie mniej sygnalu, wiec przy tym samym kryciu kratka
+     "wzieta" i "pominieta" robily sie podobne. Stan dawki ma byc czytelny
+     jednym spojrzeniem tak samo w obu pudelkach.                       */
+  --ok:#a9d3bd;   --ok-soft:rgba(169,211,189,.20);   --ok-edge:rgba(169,211,189,.55);
+  --warn:#e6c79c; --warn-soft:rgba(230,199,156,.18); --warn-edge:rgba(230,199,156,.55);
+  --bad:#d18b8e;  --bad-soft:rgba(209,139,142,.22);  --bad-edge:rgba(209,139,142,.60);
+  --inr:#bda8cf;  --inr-soft:rgba(189,168,207,.12);  --inr-edge:rgba(189,168,207,.4);
 
-  --pill:#eec9d1; --pillEdge:#cda0aa;
+  /* Akcent: puder ze zdjecia od Kuby. Jasny, wiec na ciemnym tle czyta sie
+     jak swiatlo, a nie jak plama koloru.                               */
+  --acc:#fbdde7;  --acc-rgb:251,221,231;
+  --btn1:#fbdde7; --btn2:#eebbcf; --btn-txt:#4a2230; --btn-glow:238,187,207;
+
+  --pill:#f3c9d8; --pillEdge:#d3a2b3;
 }
 
 /* ---------- powrot z podekranu ----------
@@ -2076,7 +2094,7 @@ window.wybierzPudelko = (id) => {
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-09-27.88";
+const APP_VERSION = "2026-09-27.89";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);

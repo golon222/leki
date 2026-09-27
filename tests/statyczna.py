@@ -465,24 +465,75 @@ if zlyplik:    bad += 1; print('  BLAD indeks wskazuje zly plik dla:', zlyplik)
 if not (osierocone or nieznane or zlyplik):
     print(f'  OK   indeks decyzji zgadza sie z decyzje/ ({len(w_plikach)} wpisow)')
 
-# ── Motyw rozowy NIE MOZE ruszac kolorow znaczacych (D128) ───────────
+# ── Motyw moze przemalowac znaczenia, ale MUSZA zostac rozroznialne ──
 #
-# Zasada 14: zielony/zolty/czerwony naleza do STANU DAWKI i nigdzie
-# indziej. Motyw pudelka tygodniowego zmienia chrom - przyciski, pasek,
-# tlo - i ma tam zostac. Przemalowanie "nie wziete" na rozowo zabiera
-# aplikacji jedyny kolor, ktory musi byc rozpoznany bez zastanowienia.
+# Pierwsza wersja tej kontroli zabraniala motywowi ruszac --ok/--warn/--bad
+# w ogole. Zakaz byl za szeroki: Kuba poprosil wprost, zeby w pudelku
+# tygodniowym "odejsc od neonowych i dac pudrowe", a przygaszenie koloru
+# NIE zmienia jego znaczenia - zielony dalej znaczy "wziete".
+#
+# Chronimy wiec to, o co naprawde chodzi w zasadzie 14:
+#   1. przypisanie zostaje - zielony jest zielony, czerwony czerwony,
+#   2. kolory daja sie od siebie odroznic JEDNYM SPOJRZENIEM.
+#
+# Drugi punkt mierzymy, zamiast oceniac na oko: odleglosc w przestrzeni
+# Lab (CIE76). Ponizej ~25 dwa kolory zaczynaja byc mylone przy malych
+# plamach, a kratka kalendarza to wlasnie mala plama.
+def _lab(hx):
+    r, g, b = (int(hx[i:i+2], 16)/255 for i in (1, 3, 5))
+    def li(c): return c/12.92 if c <= .04045 else ((c+.055)/1.055)**2.4
+    r, g, b = li(r), li(g), li(b)
+    X = (r*.4124 + g*.3576 + b*.1805)/.95047
+    Y =  r*.2126 + g*.7152 + b*.0722
+    Z = (r*.0193 + g*.1192 + b*.9505)/1.08883
+    def f(t): return t**(1/3) if t > .008856 else 7.787*t + 16/116
+    fx, fy, fz = f(X), f(Y), f(Z)
+    return (116*fy - 16, 500*(fx-fy), 200*(fy-fz))
+
+def _odleglosc(a, b):
+    la, lb = _lab(a), _lab(b)
+    return sum((x-y)**2 for x, y in zip(la, lb)) ** .5
+
+def _odcien(hx):
+    r, g, b = (int(hx[i:i+2], 16)/255 for i in (1, 3, 5))
+    import colorsys
+    return colorsys.rgb_to_hls(r, g, b)[0]*360
+
 _html = (root/'index.html').read_text(encoding='utf-8')
-_m = re.search(r'body\[data-profil="tydzien"\]\{(.*?)\}', _html, re.S)
-if not _m:
-    bad += 1; print('  BLAD brak motywu pudelka tygodniowego')
+_m = re.search(r'body\[data-profil="tydzien"\]\{(.*?)\n\}', _html, re.S)
+_rt = re.search(r':root\{(.*?)\n\}', _html, re.S)
+if not _m or not _rt:
+    bad += 1; print('  BLAD brak motywu tygodniowego albo :root')
 else:
-    _znaczace = [t for t in ('--ok', '--warn', '--bad', '--inr')
-                 if re.search(r'(?<![\w-])' + t + r'(-soft|-edge)?\s*:', _m.group(1))]
-    if _znaczace:
-        bad += 1
-        print('  BLAD motyw tygodniowy nadpisuje kolory ZNACZENIA:', _znaczace)
+    def _token(nazwa):
+        for blok in (_m.group(1), _rt.group(1)):       # motyw ma pierwszenstwo
+            t = re.search(r'(?<![\w-])' + nazwa + r'\s*:\s*(#[0-9a-fA-F]{6})', blok)
+            if t: return t.group(1)
+        return None
+    _p = {n: _token('--' + n) for n in ('ok', 'warn', 'bad', 'acc')}
+    if None in _p.values():
+        bad += 1; print('  BLAD nie znalazlem koloru:', [k for k, v in _p.items() if not v])
     else:
-        print('  OK   motyw tygodniowy rusza chrom, nie kolory stanu dawki')
+        # 1. przypisanie: zielony/zolty/czerwony zostaja w swoich rodzinach
+        _rodziny = {'ok': (75, 190), 'warn': (20, 75), 'bad': (320, 20)}
+        _zle = []
+        for n, (a, b) in _rodziny.items():
+            h = _odcien(_p[n])
+            w_zakresie = (a <= h <= b) if a < b else (h >= a or h <= b)
+            if not w_zakresie: _zle.append(f'{n}={_p[n]} ({h:.0f} st)')
+        # 2. rozroznialnosc kazdej pary
+        _pary = [(x, y) for i, x in enumerate(_p) for y in list(_p)[i+1:]]
+        _blisko = [(x, y, _odleglosc(_p[x], _p[y])) for x, y in _pary
+                   if _odleglosc(_p[x], _p[y]) < 25]
+        if _zle:
+            bad += 1; print('  BLAD motyw zmienil ZNACZENIE koloru, nie tylko odcien:', _zle)
+        elif _blisko:
+            bad += 1
+            print('  BLAD w motywie kolory sa zbyt podobne, beda mylone:',
+                  [f'{x}~{y} ({d:.0f})' for x, y, d in _blisko])
+        else:
+            _naj = min(_odleglosc(_p[x], _p[y]) for x, y in _pary)
+            print(f'  OK   motyw tygodniowy: znaczenia na miejscu, najblizsza para {_naj:.0f}')
 
 # ── Dwa pudelka: dane czlowieka nie moga sie mieszac (D124) ──────────
 #

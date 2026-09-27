@@ -5127,12 +5127,36 @@ head("Motyw pudelka tygodniowego");
   for (const t of ["--acc", "--acc-rgb", "--btn1", "--btn-txt", "--card", "--bg"])
     check(new RegExp(`${t}\\s*:`).test(motyw), `motyw ustawia ${t}`);
 
-  /* SEDNO. Gdyby ktorykolwiek z nich tu stanal, "nie wziete" przestaloby
-     byc czerwone - a to jest dokladnie ta jedna rzecz, ktorej aplikacja
-     pilnujaca leku nie ma prawa zgubic.                                */
-  for (const t of ["--ok", "--warn", "--bad", "--inr"])
-    check(!new RegExp(`(?<![\\w-])${t}(-soft|-edge)?\\s*:`).test(motyw),
-          `motyw NIE rusza koloru znaczenia ${t}`);
+  /* SEDNO, po zmianie prosby Kuby ("odejdzmy od neonowych, dawaj pudrowe"):
+     motyw MOZE przygasic kolory znaczen, ale nie moze zmienic ICH ROLI.
+     Odcien wolno, przypisanie nie - zielony dalej znaczy "wziete".
+     Czy kolory da sie od siebie odroznic, MIERZY kontrola statyczna
+     w przestrzeni Lab; tu pilnujemy, ze komplet jest kompletny.       */
+  for (const t of ["--ok", "--warn", "--bad"]) {
+    const pelny = new RegExp(`(?<![\\w-])${t}\\s*:`).test(motyw);
+    if (!pelny) { check(true, `${t} zostaje z palety podstawowej`); continue; }
+    for (const w of ["-soft", "-edge"])
+      check(new RegExp(`(?<![\\w-])${t}${w}\\s*:`).test(motyw),
+            `skoro motyw zmienia ${t}, musi zmienic tez ${t}${w}`);
+  }
+
+  /* Kolor przygaszony niesie mniej sygnalu, wiec tlo kratki musi byc
+     MOCNIEJSZE niz w palecie podstawowej - inaczej "wziete" i "pominiete"
+     robia sie podobne dokladnie tam, gdzie sa najmniejsze: w kalendarzu. */
+  const krycie = w => {
+    const m2 = motyw.match(new RegExp(`--${w}-soft:\\s*rgba\\([^)]*,\\s*\\.(\\d+)\\)`));
+    return m2 ? +("0." + m2[1]) : null;
+  };
+  const rootBlok = (html.match(/:root\{([\s\S]*?)\n\}/) || ["",""])[1];
+  const krycieRoot = w => {
+    const m2 = rootBlok.match(new RegExp(`--${w}-soft:\\s*rgba\\([^)]*,\\s*\\.(\\d+)\\)`));
+    return m2 ? +("0." + m2[1]) : null;
+  };
+  for (const w of ["ok", "bad"]) {
+    const a2 = krycie(w), b2 = krycieRoot(w);
+    if (a2 === null) continue;
+    check(a2 > b2, `tlo "${w}" w motywie mocniejsze niz w palecie (${a2} > ${b2})`);
+  }
 
   /* Akcent musi sie od "nie wziete" ROZNIC, nie tylko nie byc nim.
      Oba sa rozowe; gdyby byly tym samym rozowym, przycisk i dzien

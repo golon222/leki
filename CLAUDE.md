@@ -38,8 +38,8 @@ bash tests/run_all.sh
 ```
 
 Musi przejść przed zmianą i po zmianie. Stan wyjściowy:
-**642 + 52 firmware, 1388 (×6 pór doby) + 92 + 52 aplikacja, 48 zgodności,
-156 reguł bazy, 375 kontroli audytu, 33 kontrole statyczne — 0 błędów.**
+**642 + 52 firmware, 1392 (×6 pór doby) + 92 + 52 aplikacja, 48 zgodności,
+156 reguł bazy, 375 kontroli audytu, 35 kontroli statycznych — 0 błędów.**
 
 **Runner jest cichy przy sukcesie i głośny przy błędzie** (D66). Udany przebieg
 to 12 linii — **i te 12 linii TO JEST potwierdzenie, nie jego skrót.** Nie
@@ -201,9 +201,14 @@ odrzuca **cały** wpis kodem 400, a `trwaleOdrzucony(400)` go wtedy **kasuje**
    `-webkit-`). Wiedza z D48–D52 zostaje jako ostrzeżenie, nie zakaz: gdyby
    objaw „pasek ucieka przy przewijaniu" wrócił, **najpierw zmierz**, czym
    różni się klatka, w której ucieka — pięć podejść po omacku nic nie dało.
-   **Motyw pudełka tygodniowego (D128) rusza WYŁĄCZNIE chrom**: akcent,
-   przyciski, powierzchnie. `--ok`, `--warn`, `--bad` i `--inr` zostają —
-   kontrola statyczna czyta blok motywu i odmawia, gdy któryś tam stanie.
+   **Motyw pudełka tygodniowego (D128) MOŻE przygasić także kolory
+   znaczeń** — na wyraźną prośbę Kuby („odejdźmy od neonowych, dawaj
+   pudrowe"). Zasada broni **przypisania i rozpoznawalności**, nie
+   konkretnych wartości: zielony ma dalej znaczyć „wzięte". Kontrola
+   statyczna to **mierzy**, a nie zakazuje: sprawdza rodzinę odcieni
+   każdego koloru i odległość każdej pary w przestrzeni Lab (próg 25).
+   Motyw, który przygasza kolor, **musi wzmocnić jego tło** — przygaszony
+   kolor niesie mniej sygnału, a kratka kalendarza to mała plama.
    Wygląd sprawdzaj **na renderze**, nie w wyobraźni — i jest czym (D127):
    `node tests/podglad.mjs` buduje `tests/podglad.html`, stronę działającą
    bez Firebase i bez logowania, z podstawionym stanem. Otwierasz ją albo
