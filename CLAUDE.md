@@ -68,6 +68,18 @@ __db.tryb = "wisi";     // Firebase offline - obietnica nigdy się nie kończy (
 __db.sprawdzajReguly = false;  // tylko dla testów piszących celowo śmieci
 ```
 
+**`database.rules.json` to TYLKO PLIK — Firebase go nie czyta.** Reguły,
+które naprawdę działają, to te wklejone w konsoli. Nic w repozytorium ich tam
+nie wysyła. Po każdej zmianie tego pliku **trzeba go opublikować ręcznie**
+(Realtime Database → Rules → wklej całość → Publish) i trzeba o tym Kubie
+powiedzieć w tej samej wiadomości, w której zmieniasz reguły.
+
+To jedyne miejsce w projekcie, gdzie **zielony zestaw testów niczego nie
+gwarantuje**: atrapa bazy sprawdza każdy zapis plikiem z repozytorium, więc
+testy przechodzą niezależnie od tego, co stoi w bazie. Kosztowało to już
+jedno zgłoszenie — konto dziewczyny dostawało odmowę mimo poprawnego wpisu
+w `owners`, bo baza wciąż miała reguły sprzed dołożenia `owners`.
+
 Jeśli dokładasz pole do zapisu — **dopisz je też do `database.rules.json`**.
 Gałąź `events` i pojedyncza dawka mają `$other: false`, więc nieznane pole
 odrzuca **cały** wpis kodem 400, a `trwaleOdrzucony(400)` go wtedy **kasuje**

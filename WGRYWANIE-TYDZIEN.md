@@ -9,11 +9,41 @@ to nie dotyka w żadnym miejscu — ani jednego pliku, ani jednego wpisu.
 
 Całość to jakieś 25 minut:
 
+0. **opublikuj reguły bazy** — bez tego reszta nie zadziała (2 min)
 1. konto **pudełka** i konto **dziewczyny** — to dwie różne rzeczy (10 min)
 2. gałąź `pillbox02` w bazie (5 min)
 3. `config.h` — trzy linie (2 min)
 4. wgranie kablem z Arduino IDE (5 min)
 5. sprawdzenie, czy się zameldowało
+
+---
+
+# 0. NAJPIERW: opublikuj reguły bazy
+
+**Bez tego kroku nic dalej nie zadziała i wygląda to na zepsutą aplikację.**
+
+`database.rules.json` z repozytorium to **tylko plik**. Firebase go nie
+czyta — reguły, które naprawdę działają, to te wklejone w konsoli. Dopóki
+ich nie opublikujesz, baza nie wie, co znaczy `owners`, więc konto
+dziewczyny dostanie odmowę mimo poprawnego wpisu.
+
+Kuba trafił dokładnie na to: UID w `owners` był właściwy, a aplikacja
+i tak pisała *„to konto nie ma dostępu do żadnego pudełka"*.
+
+**Jak to zrobić:**
+
+1. https://console.firebase.google.com/project/pudelko-na-leki/database/pudelko-na-leki-default-rtdb/rules
+2. Otwórz `database.rules.json` z repozytorium, zaznacz **całość** (Ctrl+A)
+3. W konsoli zaznacz całość tego, co jest w edytorze, i **wklej na wierzch**
+4. **Publish** (niebieski przycisk u góry)
+
+Konsola od razu powie, jeśli plik ma błąd składni — wtedy nie publikuj
+i napisz mi.
+
+**Rób to po KAŻDEJ zmianie w `database.rules.json`.** Testy sprawdzają plik
+z repozytorium, więc świecą na zielono niezależnie od tego, co stoi w bazie —
+to jedyne miejsce w całym projekcie, gdzie zielony zestaw testów niczego nie
+gwarantuje.
 
 ---
 
