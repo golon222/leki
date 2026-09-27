@@ -683,7 +683,12 @@ body[data-profil="tydzien"]{
   --bg:#fbeef2; --bg2:#f7e4ea;
   --card:#ffffff; --card2:#fdf4f7; --card3:#f9eaf0; --card-btm:#fef7f9;
 
-  --txt:#3a2230; --dim:#7c6070; --dim2:#a58b99;
+  /* Tekst drugorzedny na jasnym tle trzeba PRZYCIEMNIC mocniej, niz mowi
+     intuicja. Pierwsza wersja miala tu #a58b99 - kontrast 3,1 na bialej
+     karcie - i Kuba zglosil od razu: "nie widac dni tygodnia w ogole".
+     Skrot PN/WT/SR ma 10 px i wersaliki, czyta sie go w przelocie, wiec
+     kazdy ubytek kontrastu boli go podwojnie. Teraz 5,5.              */
+  --txt:#3a2230; --dim:#7c6070; --dim2:#7a6270;
   --line:rgba(var(--blask-rgb),.12);
   --line2:rgba(var(--blask-rgb),.22);
 
@@ -2151,7 +2156,7 @@ window.wybierzPudelko = (id) => {
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-09-27.90";
+const APP_VERSION = "2026-09-27.91";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);

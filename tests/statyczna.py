@@ -622,6 +622,26 @@ if _m and _rt:
     else:
         print('  OK   atrament stanu czytelny w obu motywach (WCAG AA)')
 
+    # 3. TEKST DRUGORZEDNY. Zgloszenie Kuby po pierwszej wersji motywu
+    #    jasnego: "nie widac dni tygodnia w ogole". Skrot PN/WT/SR ma 10 px
+    #    i wersaliki - to najmniejszy tekst w aplikacji, a stoi w kolorze
+    #    `--dim2`. Na bialej karcie wychodzilo 3,1 i po prostu znikal.
+    #    Prog 4.0 nie jest wziety z sufitu: tyle ma `--dim2` w palecie
+    #    podstawowej, ktora Kuba czyta codziennie. Motyw nie moze byc
+    #    gorszy od tego, co kopiuje.
+    _blade = []
+    for _nazwa, _blok in (('paleta', _rt.group(1)), ('motyw jasny', _m.group(1))):
+        _karta = _wartosc(_blok, '--card') or _wartosc(_rt.group(1), '--card')
+        for _t in ('--dim', '--dim2'):
+            _c = _wartosc(_blok, _t) or _wartosc(_rt.group(1), _t)
+            if not (_c and _karta): _blade.append(f'{_nazwa}/{_t}: brak koloru'); continue
+            _k = _kontrast(_c[:3], _karta[:3])
+            if _k < 4.0: _blade.append(f'{_nazwa}/{_t}: kontrast {_k:.1f}')
+    if _blade:
+        bad += 1; print('  BLAD tekst drugorzedny za blady:', _blade)
+    else:
+        print('  OK   tekst drugorzedny czytelny w obu motywach')
+
 # ── Dwa pudelka: dane czlowieka nie moga sie mieszac (D124) ──────────
 #
 # TU BYL NAJGROZNIEJSZY BLAD, jaki ta aplikacja moze miec. Dawki, INR,

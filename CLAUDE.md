@@ -39,7 +39,7 @@ bash tests/run_all.sh
 
 Musi przejść przed zmianą i po zmianie. Stan wyjściowy:
 **642 + 52 firmware, 1417 (×6 pór doby) + 92 + 52 aplikacja, 48 zgodności,
-156 reguł bazy, 375 kontroli audytu, 37 kontroli statycznych — 0 błędów.**
+156 reguł bazy, 375 kontroli audytu, 38 kontroli statycznych — 0 błędów.**
 
 **Runner jest cichy przy sukcesie i głośny przy błędzie** (D66). Udany przebieg
 to 12 linii — **i te 12 linii TO JEST potwierdzenie, nie jego skrót.** Nie
@@ -218,7 +218,11 @@ odrzuca **cały** wpis kodem 400, a `trwaleOdrzucony(400)` go wtedy **kasuje**
    malował czarny tytuł na czarnym, a poświata `#16203a` brudziła całą
    górę ekranu na szaro. Teraz mierzy to kontrola statyczna — jasność
    każdej powierzchni chromu (ciemna w palecie, jasna w motywie)
-   i kontrast WCAG liczby dnia na kratce kalendarza (próg 4,5).
+   i kontrast WCAG liczby dnia na kratce kalendarza (próg 4,5), a także
+   tekstu drugorzędnego (`--dim`, `--dim2`) na karcie — próg 4,0, bo tyle
+   ma paleta podstawowa. Kuba zgłosił po pierwszej wersji: „nie widać dni
+   tygodnia w ogóle"; `--dim2` przeniesione z ciemnego motywu dawało na
+   białej karcie 3,1, a `PN`/`WT`/`ŚR` to 10 px wersalikami.
    Wygląd sprawdzaj **na renderze**, nie w wyobraźni — i jest czym (D127):
    `node tests/podglad.mjs` buduje `tests/podglad.html`, stronę działającą
    bez Firebase i bez logowania, z podstawionym stanem. Otwierasz ją albo
