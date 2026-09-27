@@ -56,6 +56,10 @@
      gradient, a nie płaski kolor.                                      */
   --bg:#070a11; --bg2:#0b0f18;
   --card:#111726; --card2:#182034; --card3:#1e283f;
+  /* Dolny koniec gradientu karty. Byl wpisany na sztywno w dwoch miejscach,
+     wiec karta gasla w chlodny granat niezaleznie od motywu - i caly motyw
+     rozowy konczyl sie na przyciskach.                                  */
+  --card-btm:#0e1420;
   --line:rgba(255,255,255,.075);        /* włosowa krawędź            */
   --line2:rgba(255,255,255,.13);        /* mocniejsza, do wyróżnień   */
 
@@ -72,7 +76,15 @@
   --ok:#34d399;   --ok-soft:rgba(52,211,153,.13);   --ok-edge:rgba(52,211,153,.42);
   --warn:#fbbf24; --warn-soft:rgba(251,191,36,.12); --warn-edge:rgba(251,191,36,.42);
   --bad:#fb7185;  --bad-soft:rgba(251,113,133,.12); --bad-edge:rgba(251,113,133,.42);
-  --acc:#5eead4;  --acc-soft:rgba(94,234,212,.12);  --acc-edge:rgba(94,234,212,.36);
+  /* Akcent trzymamy TAKZE jako skladowe, bo pol tuzina miejsc robi z niego
+     przezroczystosc. Bez tego motyw zmienialby przyciski, a poswiaty
+     zostawalby w starym kolorze - i widac to natychmiast.            */
+  --acc:#5eead4;  --acc-rgb:94,234,212;
+  --acc-soft:rgba(var(--acc-rgb),.12);  --acc-edge:rgba(var(--acc-rgb),.36);
+
+  /* Przycisk glowny ma wlasny gradient i wlasny kolor tekstu - na jasnym
+     akcencie tekst musi byc ciemny, a jego odcien zalezy od motywu.   */
+  --btn1:#5ee7d4; --btn2:#2cc5b3; --btn-txt:#04302a; --btn-glow:45,212,191;
   --inr:#a78bfa;  --inr-soft:rgba(167,139,250,.12); --inr-edge:rgba(167,139,250,.4);
 
   --pill:#8ab4f8; --pillEdge:#5b8ede;
@@ -110,7 +122,7 @@ svg{max-width:100%}
 main{overflow-x:hidden}
 body{margin:0;background:
       radial-gradient(1100px 520px at 50% -8%, #16203a 0%, transparent 62%),
-      radial-gradient(700px 400px at 90% 8%, rgba(94,234,212,.05) 0%, transparent 70%),
+      radial-gradient(700px 400px at 90% 8%, rgba(var(--acc-rgb),.05) 0%, transparent 70%),
       var(--bg);
      background-attachment:fixed;
      color:var(--txt);
@@ -152,7 +164,7 @@ section{animation:fade .3s cubic-bezier(.2,.8,.3,1)}
    Powierzchnia, nie pudełko: jasność rośnie ku górze, krawędź jest
    włosowa, a nad nią leży jednopikselowe światło (inset). Ten jeden
    piksel robi różnicę między „prostokątem z ramką" a „materiałem".  */
-.card{background:linear-gradient(180deg,var(--card) 0%,#0e1420 100%);
+.card{background:linear-gradient(180deg,var(--card) 0%,var(--card-btm) 100%);
       border:1px solid var(--line);border-radius:var(--r);
       padding:var(--s4);margin-bottom:var(--s3);
       box-shadow:inset 0 1px 0 rgba(255,255,255,.045), var(--e2);
@@ -183,10 +195,10 @@ button{font:inherit;border:0;border-radius:var(--r-md);padding:12px 16px;
        transition:transform .12s cubic-bezier(.2,.8,.3,1), filter var(--ruch),
                   background var(--ruch), box-shadow var(--ruch)}
 button:active{transform:scale(.97);filter:brightness(1.08)}
-button.primary{background:linear-gradient(180deg,#5ee7d4,#2cc5b3);color:#04302a;
+button.primary{background:linear-gradient(180deg,var(--btn1),var(--btn2));color:var(--btn-txt);
                font-weight:700;font-size:15px;
                box-shadow:0 1px 0 rgba(255,255,255,.28) inset,
-               0 6px 18px -14px rgba(45,212,191,.9)}
+               0 6px 18px -14px rgba(var(--btn-glow),.9)}
 button.ghost{background:rgba(255,255,255,.035);border:1px solid var(--line);color:var(--dim)}
 button.ghost:active{background:rgba(255,255,255,.07)}
 button.danger{background:var(--bad-soft);color:#fecdd3;border:1px solid var(--bad-edge)}
@@ -200,8 +212,8 @@ input,select{font:inherit;background:rgba(255,255,255,.04);color:var(--txt);
 /* Pole daty na iOS ma własną, dużą szerokość minimalną i potrafi rozepchnąć
    sąsiada poza kartę. Poniższe wymusza, żeby respektowało kontener.       */
 input[type=date]{min-height:44px;line-height:20px;text-align:left}
-input:focus,select:focus{border-color:var(--acc-edge);background:rgba(94,234,212,.05);
-      box-shadow:0 0 0 3px rgba(94,234,212,.10)}
+input:focus,select:focus{border-color:var(--acc-edge);background:rgba(var(--acc-rgb),.05);
+      box-shadow:0 0 0 3px rgba(var(--acc-rgb),.10)}
 input::placeholder{color:var(--dim2)}
 label{font-size:10.5px;color:var(--dim2);display:block;margin:var(--s4) 0 6px;
       text-transform:uppercase;letter-spacing:.1em;font-weight:700}
@@ -297,7 +309,7 @@ label{font-size:10.5px;color:var(--dim2);display:block;margin:var(--s4) 0 6px;
 .day.off {background:rgba(255,255,255,.015);border-color:var(--line2);
           color:var(--dim2);opacity:.8}
 .day.off .nodrug{font-size:11px;color:var(--dim2);line-height:1;margin-top:2px}
-.day.today{box-shadow:0 0 0 2px var(--acc), 0 6px 18px -10px rgba(94,234,212,.7);opacity:1}
+.day.today{box-shadow:0 0 0 2px var(--acc), 0 6px 18px -10px rgba(var(--acc-rgb),.7);opacity:1}
 /* Dzien, w ktorym mija odstep miedzy pomiarami INR. Obramowanie przerywane,
    a nie tlo - dzien ma juz kolor od stanu dawki i nie wolno go zaslonic.
    outline nie kłóci się z box-shadow, wiec "dzis" i "termin" moga wypasc
@@ -612,6 +624,30 @@ nav button .kropka-nav{position:absolute;top:6px;right:50%;margin-right:-16px;
 body[data-profil="tydzien"] .tylko-warfin{display:none!important}
 body:not([data-profil="tydzien"]) .tylko-tydzien{display:none!important}
 
+/* ---------- MOTYW PUDELKA TYGODNIOWEGO (D128) ----------
+   Prosba Kuby: "zeby ta aplikacja byla bardziej damska, kolory na rozowe,
+   tylko pasujace i tak do wszystkiego".
+
+   ROZOWY WCHODZI WYLACZNIE W AKCENT. Zielony, zolty i czerwony naleza do
+   STANU DAWKI (zasada 14) i zostaja nietkniete - inaczej "nie wziete"
+   przestaloby byc czerwone i aplikacja zaczelaby klamac o leku. Zmienia
+   sie chrom: przyciski, pasek, podswietlenia, poswiaty, tlo.
+
+   Odcien jest orchidea (~315 stopni), nie lososiowy roz. To NIE jest
+   kwestia gustu: `--bad` to #fb7185, czyli roz przesuniety w czerwien.
+   Akcent w tej samej rodzinie zlewalby sie ze stanem "nie wziete", czyli
+   dokladnie z tym jednym kolorem, ktory musi byc odrozniany od reszty
+   bez zastanowienia.                                                  */
+body[data-profil="tydzien"]{
+  --bg:#0c0713; --bg2:#150d1e;
+  --card:#1f1430; --card2:#2a1b3f; --card3:#37244f; --card-btm:#140c1d;
+
+  --acc:#f0a6dc;  --acc-rgb:240,166,220;
+  --btn1:#f7b6de; --btn2:#e27ab8; --btn-txt:#3a0d28; --btn-glow:226,122,184;
+
+  --pill:#f2b5d4; --pillEdge:#d98cb8;
+}
+
 /* ---------- powrot z podekranu ----------
    Powierzchnia dotyku ma miec sensowna wysokosc: sam tekst to cel wielkosci
    litery, a to jest przycisk, ktorego uzywa sie najczesciej ze wszystkich
@@ -635,7 +671,7 @@ body:not([data-profil="tydzien"]) .tylko-tydzien{display:none!important}
 .kafel .ikonka svg{width:19px;height:19px}
 .kafel{display:flex;align-items:center;gap:var(--s3);width:100%;text-align:left;
        padding:13px var(--s3);margin-top:var(--s2);
-       background:linear-gradient(180deg,var(--card) 0%,#0e1420 100%);
+       background:linear-gradient(180deg,var(--card) 0%,var(--card-btm) 100%);
        border:1px solid var(--line);
        border-radius:var(--r-lg);color:var(--txt);font-size:15px;font-weight:650;
        box-shadow:inset 0 1px 0 rgba(255,255,255,.04);letter-spacing:-.01em}
@@ -2040,7 +2076,7 @@ window.wybierzPudelko = (id) => {
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-09-27.86";
+const APP_VERSION = "2026-09-27.87";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);

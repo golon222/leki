@@ -176,10 +176,20 @@ else:
 # stanu dawki. Wartosci szesnastkowe wpisane wprost w style omijaja ten
 # system - i wlasnie tak rodzi sie interfejs, w ktorym pieć odcieni zieleni
 # znaczy pieć roznych rzeczy. Progi sa z pomiaru stanu po przebudowie.
-_hex_css = re.findall(r'#[0-9a-fA-F]{3,8}\b', _css)
-if len(_hex_css) > 40:
+#
+# PALETY POMIJAMY, i to nie jest poblazanie: `:root` i motyw pudelka
+# tygodniowego to MIEJSCA, W KTORYCH kolor ma byc wpisany wprost - one
+# definiuja zmienne, ktorych ma uzywac reszta. Liczac je razem z reszta,
+# kontrola mierzyla wielkosc palety zamiast tego, o co jej chodzi, i rosla
+# przy kazdym nowym motywie az do falszywego alarmu.
+_css_reguly = re.sub(r':root\{.*?\n\}', '', _css, flags=re.S)
+_css_reguly = re.sub(r'body\[data-profil="[^"]+"\]\{.*?\n\}', '', _css_reguly, flags=re.S)
+_hex_css = re.findall(r'#[0-9a-fA-F]{3,8}\b', _css_reguly)
+# Stan po przebudowie to 12. Prog trzymamy tuz nad nim, zeby kazdy nowy
+# kolor wpisany wprost w regule byl widoczny, a nie ginal w zapasie.
+if len(_hex_css) > 13:
     bad += 1
-    print(f'  BLAD za duzo kolorow wpisanych wprost w CSS ({len(_hex_css)}) - uzyj zmiennych')
+    print(f'  BLAD za duzo kolorow wpisanych wprost w regulach CSS ({len(_hex_css)}) - uzyj zmiennych')
 else:
     print(f'  OK   kolory ida przez zmienne ({len(_hex_css)} wyjatkow w CSS)')
 
@@ -454,6 +464,25 @@ if nieznane:   bad += 1; print('  BLAD wpis w decyzje/ bez linijki w indeksie:',
 if zlyplik:    bad += 1; print('  BLAD indeks wskazuje zly plik dla:', zlyplik)
 if not (osierocone or nieznane or zlyplik):
     print(f'  OK   indeks decyzji zgadza sie z decyzje/ ({len(w_plikach)} wpisow)')
+
+# ── Motyw rozowy NIE MOZE ruszac kolorow znaczacych (D128) ───────────
+#
+# Zasada 14: zielony/zolty/czerwony naleza do STANU DAWKI i nigdzie
+# indziej. Motyw pudelka tygodniowego zmienia chrom - przyciski, pasek,
+# tlo - i ma tam zostac. Przemalowanie "nie wziete" na rozowo zabiera
+# aplikacji jedyny kolor, ktory musi byc rozpoznany bez zastanowienia.
+_html = (root/'index.html').read_text(encoding='utf-8')
+_m = re.search(r'body\[data-profil="tydzien"\]\{(.*?)\}', _html, re.S)
+if not _m:
+    bad += 1; print('  BLAD brak motywu pudelka tygodniowego')
+else:
+    _znaczace = [t for t in ('--ok', '--warn', '--bad', '--inr')
+                 if re.search(r'(?<![\w-])' + t + r'(-soft|-edge)?\s*:', _m.group(1))]
+    if _znaczace:
+        bad += 1
+        print('  BLAD motyw tygodniowy nadpisuje kolory ZNACZENIA:', _znaczace)
+    else:
+        print('  OK   motyw tygodniowy rusza chrom, nie kolory stanu dawki')
 
 # ── Dwa pudelka: dane czlowieka nie moga sie mieszac (D124) ──────────
 #

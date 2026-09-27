@@ -12,7 +12,7 @@ zamiast 60 tys. tokenów wchodzi 2,5 tys. plus jeden obszar.
 | `decyzje/pudelko.md` | Pudełko — sen, alarm, NVS, WiFi | 40 |
 | `decyzje/ota.md` | Aktualizacja przez WiFi i skan sieci | 8 |
 | `decyzje/telegram.md` | Powiadomienia Telegram | 5 |
-| `decyzje/aplikacja.md` | Aplikacja — ekrany i wygląd | 40 |
+| `decyzje/aplikacja.md` | Aplikacja — ekrany i wygląd | 41 |
 | `decyzje/dane.md` | Dane, kolejka, dawkowanie | 20 |
 | `decyzje/testy.md` | Testy, audyt, kompilacja | 16 |
 | `decyzje/bugi.md` | Błędy **zamknięte** — historia objawów | 26 |
@@ -63,6 +63,7 @@ Od najnowszej. Kolumna „gdzie" mówi, który plik w `decyzje/` trzymać otwart
 
 | # | O co chodziło | gdzie |
 |---|---|---|
+| **D128** | Motyw **różowy** dla pudełka tygodniowego, standardowy u Kuby. Różowy wchodzi wyłącznie w **chrom** — zielony/żółty/czerwony zostają przy stanie dawki (zasada 14), a odcień jest orchideą, nie łososiem, żeby akcent nie zlewał się z „nie wzięte". Kontrola statyczna tego pilnuje | `aplikacja` |
 | **D127** | Podgląd wyglądu w przeglądarce (`tests/podglad.mjs`) — zasada „sprawdzaj na renderze" była dotąd zakazem bez narzędzia. Pierwszy zrzut od razu pokazał cztery rzeczy, których nie widział żaden test | `testy` |
 | **D126** | Pudełko tygodniowe **widzi mniej**: znika INR, raport dla lekarza, zapas tabletek i zmienne dawkowanie. Robi to **jedna reguła CSS**, nie warunek w każdym z kilkunastu renderów — zapomniany warunek przy leku przeciwzakrzepowym pokazuje nie te dane. Nazwa leku i godziny przypomnień zostają | `aplikacja` |
 | **B30** | Pudełko tygodniowe budziło się w kółko i piszczało bez przerwy: `analogRead()` zostawia pin w trybie analogowym, a to wyłącza bufor wejścia cyfrowego, którym komparator wybudzania czyta stan pinu — stałe zero znaczy „warunek spełniony" od razu po zaśnięciu. **Naprawione**, `PillBoxWeek.ino` 0.2.0 | `bugi` |

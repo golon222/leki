@@ -5109,6 +5109,50 @@ head("Pudelko tygodniowe: liczby tabletek znikaja z ekranu");
   A.__setState({ cfg:{ profil:undefined }, doses:{}, events:[] });
 }
 
+/* ═══════════ MOTYW ROZOWY RUSZA CHROM, NIE ZNACZENIA (D128) ═══════════
+
+   Prosba Kuby: "zeby ta aplikacja byla bardziej damska, kolory na rozowe,
+   tylko pasujace i tak do wszystkiego, a zarazem zeby u mnie byly
+   standardowe kolory te co teraz".
+
+   Cala trudnosc siedzi w zasadzie 14: kolor tu NIESIE ZNACZENIE. Zielony,
+   zolty i czerwony naleza do stanu dawki - przemalowanie ich zabiera
+   aplikacji jedyny kolor, ktory musi byc rozpoznany bez zastanowienia. */
+head("Motyw pudelka tygodniowego");
+{
+  const m = html.match(/body\[data-profil="tydzien"\]\{([\s\S]*?)\n\}/);
+  check(!!m, "motyw istnieje i jest jednym blokiem");
+  const motyw = m ? m[1] : "";
+
+  for (const t of ["--acc", "--acc-rgb", "--btn1", "--btn-txt", "--card", "--bg"])
+    check(new RegExp(`${t}\\s*:`).test(motyw), `motyw ustawia ${t}`);
+
+  /* SEDNO. Gdyby ktorykolwiek z nich tu stanal, "nie wziete" przestaloby
+     byc czerwone - a to jest dokladnie ta jedna rzecz, ktorej aplikacja
+     pilnujaca leku nie ma prawa zgubic.                                */
+  for (const t of ["--ok", "--warn", "--bad", "--inr"])
+    check(!new RegExp(`(?<![\\w-])${t}(-soft|-edge)?\\s*:`).test(motyw),
+          `motyw NIE rusza koloru znaczenia ${t}`);
+
+  /* Akcent musi sie od "nie wziete" ROZNIC, nie tylko nie byc nim.
+     Oba sa rozowe; gdyby byly tym samym rozowym, przycisk i dzien
+     pominiety wygladalyby jednakowo.                                  */
+  const accMotyw = (motyw.match(/--acc:\s*(#[0-9a-f]{6})/i) || [])[1];
+  const bad = (html.match(/--bad:\s*(#[0-9a-f]{6})/i) || [])[1];
+  check(!!accMotyw && !!bad && accMotyw.toLowerCase() !== bad.toLowerCase(),
+        `akcent motywu to nie jest kolor "nie wziete" (${accMotyw} kontra ${bad})`);
+
+  /* Przycisk glowny i poswiaty musza isc ZA motywem. Gdy akcent zostaje
+     tylko jako `--acc`, a rgba() ma wpisane skladowe, motyw konczy sie
+     na przyciskach i polowa ekranu zostaje w starym kolorze.          */
+  check(!/rgba\(94,234,212/.test(html),
+        "zadna poswiata nie ma wpisanego starego akcentu wprost");
+  check(/linear-gradient\(180deg,var\(--btn1\),var\(--btn2\)\)/.test(html),
+        "przycisk glowny bierze kolory ze zmiennych");
+  check(/linear-gradient\(180deg,var\(--card\) 0%,var\(--card-btm\) 100%\)/.test(html),
+        "karta gasnie w kolor z motywu, nie w chlodny granat wpisany wprost");
+}
+
 head("Zgodnosc wersji aplikacji");
 check(/const APP_VERSION = "([\d.\-]+)"/.test(html), "index.html deklaruje wersje");
 const av = html.match(/const APP_VERSION = "([\d.\-]+)"/)?.[1];
