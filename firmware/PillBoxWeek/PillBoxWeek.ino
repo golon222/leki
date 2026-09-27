@@ -69,6 +69,7 @@ String  idToken;
 int     battProcent   = -1;
 float   battVolt      = 0;
 int     komoraPoStarcie = -3;      // -1 zamkniete, -2 kilka naraz, 0..6 komora
+uint16_t mvPoStarcie   = 0;        // surowy odczyt drabinki z chwili wybudzenia
 bool    czasZsync     = false;
 
 /* Harmonogram przypomnien. To sa godziny PRZYPOMNIEN, nie pory brania -
@@ -761,7 +762,10 @@ void setup() {
 
   analogSetAttenuation(ADC_2_5db);
   analogReadResolution(12);
-  if (powod == ESP_SLEEP_WAKEUP_GPIO) komoraPoStarcie = ktoraKomora(czytajKlapki());
+  if (powod == ESP_SLEEP_WAKEUP_GPIO) {
+    mvPoStarcie     = czytajKlapki();
+    komoraPoStarcie = ktoraKomora(mvPoStarcie);
+  }
 
   Serial.begin(115200);
   delay(300);
@@ -785,7 +789,12 @@ void setup() {
   /* ---------- A. OBUDZILA NAS KLAPKA ---------- */
   if (powod == ESP_SLEEP_WAKEUP_GPIO) {
     int k = komoraPoStarcie;
-    LOG("[EV ] klapka: %s\n", opisKomory(k));
+    /*  SUROWE MILIWOLTY, nie samo slowo. "zamkniete" nie mowi, czy pin byl
+        przy 1125 mV (naprawde zamkniete), czy przy 950 (styk, ktory nie
+        puszcza do konca) - a to dwie zupelnie rozne usterki. Bez tej
+        liczby kazdy nastepny log konczy sie hipoteza zamiast rozstrzygniecia. */
+    LOG("[EV ] klapka: %s  (%u mV, progi %u..%u)\n",
+        opisKomory(k), mvPoStarcie, PROGI[0], PROGI[7]);
 
     if (k >= 0) {
       pikniecia(k + 1);                   // potwierdzenie na sluch
