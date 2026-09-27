@@ -3842,7 +3842,9 @@ head("Wyglad - system, nie upodobania");
    zmianie wygladu, a ktore powstaly z konkretnego powodu.              */
 check(/class="medalion"/.test(html), "tabletka ma oprawe, nie lezy na tle karty");
 {
-  const kafelki = (html.match(/class="kafel"/g) || []).length;
+  /* `kafel` bywa teraz z druga klasa (`tylko-warfin`, D126) - liczymy
+     kafelki po POCZATKU atrybutu, nie po dokladnym dopasowaniu. */
+  const kafelki = (html.match(/class="kafel[ "]/g) || []).length;
   const ikony   = (html.match(/class="ikonka"/g) || []).length;
   check(kafelki === ikony && kafelki >= 7,
         `kazdy kafelek Ustawien ma swoja ikone (${ikony} z ${kafelki})`);
@@ -4987,6 +4989,57 @@ head("Lista pudelek mowi prawde o dostepie");
   check(html.includes("oglądane teraz"), "aktualne pudelko jest oznaczone");
   check(!document.getElementById("pudStan").innerHTML.includes("nie ma dostępu do żadnego"),
         "i nie ma ostrzezenia o braku dostepu");
+}
+
+/* ═══════════ PUDELKO TYGODNIOWE WIDZI MNIEJ (D126) ═══════════
+
+   Kuba: "wyjebac trzeba inr i raport dla lekarza (...) nie trzeba w sumie
+   ani ile jest tabletek w zapasie, trzeba jedynie przypominac o tym zeby
+   brac tabletke". Wymagania sa WEZSZE, nie inne.
+
+   Robi to jedna regula CSS zamiast warunku w kazdym renderze - bo renderow
+   jest kilkanascie i kazdy warunek to kolejne miejsce, w ktorym mozna
+   zapomniec. Te testy pilnuja, ze regula jest i ze obejmuje to, co trzeba. */
+head("Pudelko tygodniowe: mniej ekranow");
+{
+  check(/body\[data-profil="tydzien"\] \.tylko-warfin\{display:none!important\}/.test(html),
+        "jest regula chowajaca to, co nalezy tylko do pudelka dziennego");
+
+  /* Co dokladnie ma znikac. Kazda z tych rzeczy byla wymieniona wprost. */
+  const naWylot = [
+    [/<!-- ZAPAS TABLETEK[^>]*-->\s*<div class="card tylko-warfin">/, "zapas tabletek"],
+    [/<button id="nav-inr" class="tylko-warfin"/,                     "INR w pasku nawigacji"],
+    [/<button class="kafel tylko-warfin" onclick="showTab\('sinr'\)"/, "kafelek INR w Ustawieniach"],
+    [/<div class="card tylko-warfin"[^>]*>\s*<h3>Raport dla lekarza<\/h3>/, "raport dla lekarza"],
+  ];
+  for (const [re, co] of naWylot) check(re.test(html), `chowamy: ${co}`);
+
+  /* A co ZOSTAJE - bo profil tygodniowy to wezszy zakres, nie inny.
+     Nazwa leku i godziny przypomnien sa potrzebne obu pudelkom.      */
+  const lek = html.slice(html.indexOf('id="tab-lek"'), html.indexOf('id="tab-sinr"'));
+  const przedOslona = lek.slice(0, lek.indexOf('<div class="tylko-warfin">'));
+  check(przedOslona.includes('id="drugName"'), "nazwa leku ZOSTAJE - trzeba wiedziec, co sie bierze");
+  const poOslonie = lek.slice(lek.indexOf('</div><!-- /tylko-warfin -->'));
+  check(poOslonie.includes("Godziny przypomnień"),
+        "godziny przypomnien ZOSTAJA - po to jest to pudelko");
+  const wOslonie = lek.slice(lek.indexOf('<div class="tylko-warfin">'),
+                             lek.indexOf('</div><!-- /tylko-warfin -->'));
+  check(wOslonie.includes('id="defDose"'),  "chowamy: standardowa dawka dzienna");
+  check(wOslonie.includes('id="weekEditor"'), "chowamy: rozpisanie tygodniowe");
+
+  /* Samo ukrycie przyciskow nie wystarcza: do ekranu wraca sie takze
+     z pamieci przegladarki i z powrotu z podekranu.                  */
+  const st = html.slice(html.indexOf("window.showTab = t =>"), html.indexOf("window.showTab = t =>") + 700);
+  check(/profilTydzien\(\)\s*&&\s*\(t === "inr" \|\| t === "sinr"\)/.test(st),
+        "showTab odsyla z ekranow INR, nie tylko chowa przyciski");
+
+  /* Profil musi trafic na <body> przy KAZDYM przyjsciu konfiguracji -
+     `cfg` na starcie ma wartosci domyslne, a prawdziwy profil przychodzi
+     z bazy chwile pozniej.                                           */
+  check(/config`\), s => \{[\s\S]{0,140}ustawProfil\(\);/.test(html),
+        "profil trafia na <body> razem z konfiguracja z bazy");
+  check(/document\.body\.dataset\.profil = profilTydzien\(\) \? "tydzien" : "warfin"/.test(html),
+        "i jest liczony z profilu, a nie ustawiany na sztywno");
 }
 
 head("Zgodnosc wersji aplikacji");

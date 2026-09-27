@@ -38,7 +38,7 @@ bash tests/run_all.sh
 ```
 
 Musi przejść przed zmianą i po zmianie. Stan wyjściowy:
-**642 + 52 firmware, 1350 (×6 pór doby) + 92 + 52 aplikacja, 48 zgodności,
+**642 + 52 firmware, 1362 (×6 pór doby) + 92 + 52 aplikacja, 48 zgodności,
 156 reguł bazy, 375 kontroli audytu, 33 kontrole statyczne — 0 błędów.**
 
 **Runner jest cichy przy sukcesie i głośny przy błędzie** (D66). Udany przebieg
@@ -330,9 +330,14 @@ nie do publikacji. Szczegóły obejść — D17.
   przypomnienie o 20:00 (Kuba: *„cały czas nie ma 20, jest 13:15"*), potem
   szukałem błędu w kodzie, którego na płytce nie było, bo numer wersji
   mieszkał w `config.h` i kłamał.
-  **Czego nadal nie ma:** pomiaru baterii (`-1%`, urwany pad BAT+ na tej
-  płytce — nie usterka programu), aktualizacji przez WiFi, portalu sieci
+  **Czego nadal nie ma:** aktualizacji przez WiFi, portalu sieci
   i powiadomień Telegram.
+- **Pomiar baterii pudełka tygodniowego — NIEWYJAŚNIONY.** Melduje `2,32 V`,
+  czyli napięcie, przy którym płytka by nie chodziła. Program zgłasza to
+  uczciwie jako brak danych (`-1%`), ale **przyczyny nie znamy**. Najpierw
+  zwaliłem to na urwany pad BAT+ — Kuba sprostował, że na **tej** płytce pad
+  jest cały, więc to było przeniesienie uszkodzenia ze starej. Do zmierzenia:
+  co naprawdę stoi na dzielniku i czy trafia do właściwego pinu.
 - **Powiadomienia Telegram — DZIAŁAJĄ, potwierdzone przez Kubę 2026-09-01:**
   *„Telegram działa jak coś, przypomnienia wysyłają się, kopie też się
   wysyłają"*. Wysyła je **pudełko**, z `goToSleep()`. To był najdłużej

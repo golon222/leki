@@ -599,6 +599,18 @@ nav button .kropka-nav{position:absolute;top:6px;right:50%;margin-right:-16px;
     box-shadow:0 0 0 2px rgba(11,15,24,.9)}
 .hide{display:none!important}
 
+/* ---------- CO NALEZY WYLACZNIE DO PUDELKA DZIENNEGO (D126) ----------
+   Pudelko tygodniowe ma wymagania WEZSZE, nie inne: bez INR, bez raportu
+   dla lekarza, bez zapasu tabletek, bez zmiennych dawek. Zostaje samo
+   przypominanie.
+
+   Robi to JEDNA regula, a nie warunek w kazdym renderze. Powod jest
+   praktyczny: renderow jest kilkanascie i kazdy warunek w nich to kolejne
+   miejsce, w ktorym mozna zapomniec - a zapomniany warunek przy leku
+   przeciwzakrzepowym pokazuje nie te dane. Tu jest jedno miejsce i jedna
+   klasa; co ma zniknac, widac w HTML-u obok elementu.                  */
+body[data-profil="tydzien"] .tylko-warfin{display:none!important}
+
 /* ---------- powrot z podekranu ----------
    Powierzchnia dotyku ma miec sensowna wysokosc: sam tekst to cel wielkosci
    litery, a to jest przycisk, ktorego uzywa sie najczesciej ze wszystkich
@@ -881,8 +893,8 @@ nav button .kropka-nav{position:absolute;top:6px;right:50%;margin-right:-16px;
     </div>
   </div>
 
-  <!-- ZAPAS TABLETEK -->
-  <div class="card">
+  <!-- ZAPAS TABLETEK - pudelko tygodniowe tabletek nie liczy (D126) -->
+  <div class="card tylko-warfin">
     <div class="row between" style="align-items:flex-start">
       <div>
         <h3>Zapas w opakowaniu</h3>
@@ -1074,7 +1086,7 @@ nav button .kropka-nav{position:absolute;top:6px;right:50%;margin-right:-16px;
     <span class="kop">Lek i dawkowanie
       <div class="dim2" id="kafelLek">—</div></span></button>
 
-  <button class="kafel" onclick="showTab('sinr')">
+  <button class="kafel tylko-warfin" onclick="showTab('sinr')">
     <span class="ikonka" style="--ikol:var(--inr)"><svg viewBox="0 0 24 24" fill="none"
       stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 14l4.5-5 3.5 4 3-7 4 8h3"/></svg></span>
     <span class="kop">INR
@@ -1113,7 +1125,7 @@ nav button .kropka-nav{position:absolute;top:6px;right:50%;margin-right:-16px;
   <!-- Raport zostaje TU i w tej samej postaci - to jedyna pozycja Ustawien,
        ktorej sie uzywa, a nie ktora sie ustawia. Na samym dole, bo siega sie
        po niego rzadko i zwykle swiadomie. -->
-  <div class="card" style="margin-top:16px">
+  <div class="card tylko-warfin" style="margin-top:16px">
     <h3>Raport dla lekarza</h3>
 
 
@@ -1138,6 +1150,10 @@ nav button .kropka-nav{position:absolute;top:6px;right:50%;margin-right:-16px;
   <div class="card">
 
       <label>Nazwa leku</label><input id="drugName" placeholder="Warfin">
+      <!-- Nazwa leku ZOSTAJE takze w pudelku tygodniowym: trzeba wiedziec,
+           co sie bierze. Znika liczenie tabletek i rozpisanie tygodniowe -
+           tam dawka jest jedna i lezy w komorze.                        -->
+      <div class="tylko-warfin">
       <label>Moc tabletki</label>
       <select id="drugStrength">
         <option value="5">5 mg — tabletka różowa</option>
@@ -1161,6 +1177,7 @@ nav button .kropka-nav{position:absolute;top:6px;right:50%;margin-right:-16px;
         <button class="ghost" style="flex:1" onclick="rownajTydzien()">Wyrównaj wszystkie dni</button>
       </div>
       <div class="dim2" id="weekHint" style="margin-top:8px;font-size:12px"></div>
+      </div><!-- /tylko-warfin -->
 
       <label style="margin-top:14px">Godziny przypomnień</label>
       <div class="dim2" style="margin:-4px 0 6px">To godziny przypomnień, nie pory brania leku.</div>
@@ -1846,7 +1863,7 @@ nav button .kropka-nav{position:absolute;top:6px;right:50%;margin-right:-16px;
     <span class="kropka-nav hide" id="navKropka"></span>
     <i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round">
       <rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18"/></svg></i>Kalendarz</button>
-  <button id="nav-inr" onclick="showTab('inr')">
+  <button id="nav-inr" class="tylko-warfin" onclick="showTab('inr')">
     <i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
       <path d="M3 14l4.5-5 3.5 4 3-7 4 8h3"/></svg></i>INR</button>
   <button id="nav-ana" onclick="showTab('ana')">
@@ -2022,7 +2039,7 @@ window.wybierzPudelko = (id) => {
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-09-27.84";
+const APP_VERSION = "2026-09-27.85";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -2059,6 +2076,14 @@ let cfg = { schedule:["08:00"], tz:"Europe/Warsaw", tzOffsetMin:120,
    wczytaniu nowej wersji aplikacji — łącznie z INR, czyli danymi, których
    nie da się odtworzyć z pamięci pudełka.                                */
 const profilTydzien = () => cfg.profil === "tydzien";
+
+/*  Profil trafia na <body>, bo stamtad siega po niego CSS. Wolamy to przy
+    kazdym przyjsciu konfiguracji, nie raz na starcie: `cfg` na poczatku ma
+    wartosci domyslne, a prawdziwy profil przychodzi z bazy chwile pozniej. */
+function ustawProfil(){
+  try { document.body.dataset.profil = profilTydzien() ? "tydzien" : "warfin"; }
+  catch { /* brak body w testach - nic sie nie dzieje */ }
+}
 let doses = {};      // { "2026-07-31": { "0": {dose, status, source, ts, note} } }
 let inr   = {};      // { "2026-07-20": { value, ts, note } }
 let events = [];
@@ -2566,6 +2591,7 @@ async function boot(){
 
   onValue(ref(db, `devices/${DEVICE_ID}/config`), s => {
     if (s.val()) cfg = Object.assign(cfg, s.val());
+    ustawProfil();
     /* Czas letni: jeśli dla wybranej strefy przesunięcie jest już inne niż
        zapisane, poprawiamy je sami. Bez tego po ostatniej niedzieli marca
        i października pudełko dzwoniłoby o godzinę obok, dopóki ktoś by tego
@@ -8463,6 +8489,10 @@ const EKRANY = {
 
 window.showTab = t => {
   if (!EKRANY[t]) t = "cal";
+  /*  Ekrany INR nie istnieja dla pudelka tygodniowego. Samo ukrycie
+      przyciskow nie wystarcza: do ekranu wraca sie tez z pamieci
+      przegladarki i z powrotu z podekranu.                            */
+  if (profilTydzien() && (t === "inr" || t === "sinr")) t = "cal";
   curTab = t;
   const def = EKRANY[t];
 
