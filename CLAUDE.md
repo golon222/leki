@@ -268,6 +268,11 @@ odrzuca **cały** wpis kodem 400, a `trwaleOdrzucony(400)` go wtedy **kasuje**
    z kontem człowieka: jego hasło siedzi w zaklejonym pudełku.
    Aplikacja sprawdza dostęp **przed** nasłuchami; pudełko odcina
    **wyłącznie jawna odmowa reguł**, nigdy błąd sieci.
+   **DZIAŁA — potwierdzone przez Kubę 2026-09-27: *„widzi i zapisuje"*.**
+   Czyli reguły z `owners` i z gałęzią `users/<uid>/pud/<id>` są
+   opublikowane w konsoli, a nie tylko w pliku. Oba warunki zamyka to
+   jedno zdanie: „widzi" dowodzi `owners`, „zapisuje" dowodzi `pud` —
+   samo „widzi" wychodziłoby tak samo przy starych regułach.
 
 Blok pomiaru napięcia **wolno** zmieniać (zakaz zniesiony). Audyt nie blokuje —
 zgłasza tylko uwagę, żeby zmiana przypadkowa nie wyglądała jak świadoma.
