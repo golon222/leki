@@ -38,7 +38,7 @@ bash tests/run_all.sh
 ```
 
 Musi przejść przed zmianą i po zmianie. Stan wyjściowy:
-**642 + 52 firmware, 1362 (×6 pór doby) + 92 + 52 aplikacja, 48 zgodności,
+**642 + 52 firmware, 1373 (×6 pór doby) + 92 + 52 aplikacja, 48 zgodności,
 156 reguł bazy, 375 kontroli audytu, 33 kontrole statyczne — 0 błędów.**
 
 **Runner jest cichy przy sukcesie i głośny przy błędzie** (D66). Udany przebieg
@@ -201,7 +201,14 @@ odrzuca **cały** wpis kodem 400, a `trwaleOdrzucony(400)` go wtedy **kasuje**
    `-webkit-`). Wiedza z D48–D52 zostaje jako ostrzeżenie, nie zakaz: gdyby
    objaw „pasek ucieka przy przewijaniu" wrócił, **najpierw zmierz**, czym
    różni się klatka, w której ucieka — pięć podejść po omacku nic nie dało.
-   Wygląd sprawdzaj **na renderze**, nie w wyobraźni.
+   Wygląd sprawdzaj **na renderze**, nie w wyobraźni — i jest czym (D127):
+   `node tests/podglad.mjs` buduje `tests/podglad.html`, stronę działającą
+   bez Firebase i bez logowania, z podstawionym stanem. Otwierasz ją albo
+   robisz zrzut Chromium jednym poleceniem:
+   `chrome --headless=new --screenshot=x.png --window-size=560,1250
+   "file://.../tests/podglad.html?profil=tydzien"`.
+   Pierwszy taki zrzut od razu pokazał cztery rzeczy, których nie widział
+   żaden test.
 15. **Wyjaśnienia mieszkają w Instrukcji, nie na ekranach** (D75).
    Na ekranie zostaje tylko to, czego brak prowadzi do **złej decyzji
    o leku**; wszystko, co tłumaczy „jak to działa", idzie do ekranu
@@ -258,6 +265,7 @@ tabletka.gif                     zapas dla przeglądarki bez WEBP (D72)
 tests/                           testy + audyt
 tests/statyczna.py               kontrola statyczna (krok 4/10)
 tests/mapa.py                    generator MAPA.md
+tests/podglad.mjs                podglad wygladu w przegladarce (D127)
 database.rules.json              reguły Firebase
 MAPA.md                          spis treści dużych plików (generowany)
 DECYZJE.md                       indeks decyzji; pełne wpisy w decyzje/

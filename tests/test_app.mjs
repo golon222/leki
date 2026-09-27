@@ -1127,7 +1127,8 @@ head("Legenda kalendarza");
    i to tym samym ksztaltem, ktorego uzywa INR_DUE_MARK - inaczej te dwa
    miejsca rozjada sie po pierwszej zmianie wygladu.                      */
 check(/czas na pomiar INR/.test(html), "legenda kalendarza tlumaczy nowa ikonke");
-check(/legend[\s\S]{0,900}circle cx="6" cy="6" r="4\.4"/.test(html),
+/* Okno powiekszone: pozycje legendy maja teraz klasy profilu (D126). */
+check(/legend[\s\S]{0,1300}circle cx="6" cy="6" r="4\.4"/.test(html),
       "legenda uzywa TEJ SAMEJ ikonki co znacznik w kalendarzu");
 /* Wyjasnienie nie stoi pod kalendarzem - tam zabieralo miejsce przy kazdym
    spojrzeniu, a potrzebne jest raz. Od D75 mieszka w Instrukcji: ekran
@@ -5040,6 +5041,72 @@ head("Pudelko tygodniowe: mniej ekranow");
         "profil trafia na <body> razem z konfiguracja z bazy");
   check(/document\.body\.dataset\.profil = profilTydzien\(\) \? "tydzien" : "warfin"/.test(html),
         "i jest liczony z profilu, a nie ustawiany na sztywno");
+}
+
+/* ═══════════ WYGLAD PUDELKA TYGODNIOWEGO (D126) ═══════════
+
+   Sprawdzone TAKZE NA RENDERZE (zasada 14): tests/podglad.mjs buduje
+   strone, ktora otwiera sie bez Firebase, a zrzut pokazal dokladnie te
+   cztery rzeczy do poprawy. Tu sa one zamkniete testem, zeby nie wrocily. */
+head("Pudelko tygodniowe: liczby tabletek znikaja z ekranu");
+{
+  /*  ZNACZNIK MUSI LEZEC W DZISIEJSZEJ DOBIE LEKOWEJ, a nie "godzine temu":
+      zestaw przechodzi aplikacje o szesciu porach doby i o 3:30 godzina
+      wstecz wpada juz w dobe poprzednia - wtedy karta dnia pokazuje inny
+      dzien niz ten, ktoremu podstawilismy otwarcie.                    */
+  const ts = Math.floor(Date.now()/1000);
+  const key = A.todayKey();
+  /*  devKey() liczy dobe wedlug strefy PUDELKA (`cfg.tzOffsetMin`), a
+      todayKey() wedlug zegara telefonu. W tescie musza mowic o tym samym
+      dniu, inaczej karta dnia patrzy na inna dobe niz ta, ktorej
+      podstawilismy otwarcie - i test mierzy strefe zamiast wygladu.    */
+  const tz = -new Date().getTimezoneOffset();
+
+  A.__setState({ cfg:{ profil:"tydzien", drugName:"Escitalopram", schedule:["20:00"],
+                       tzOffsetMin: tz },
+                 doses:{ [key]: { 0:{ status:"taken", dose:1, source:"device", ts, openTs:ts } } },
+                 events:[{ id:"o1", ts, type:"open", slot:2 }] });
+
+  check(A.opisDawkowania() === "jedna komora dziennie",
+        `opis dawkowania nie wymysla tabletek (${A.opisDawkowania()})`);
+
+  /* KTORA komora - przy siedmiu klapkach da sie otworzyc NIE TE, a sama
+     data mowi tylko, ze cos wzieto.                                    */
+  check(A.komoraDnia(key) === "środa", `komora z pola slot (${A.komoraDnia(key)})`);
+  check(A.KOMORY_PL.length === 7 && A.KOMORY_PL[0] === "poniedziałek",
+        "komory nazwane po polsku, od poniedzialku");
+
+  /* Bierzemy NAJWCZESNIEJSZE otwarcie doby - to samo, ktore doReconcile()
+     uznaje za dawke. Inaczej ekran i kalendarz mowilyby dwie rzeczy.    */
+  A.__setState({ events:[{ id:"b", ts: ts+600, type:"open", slot:5 },
+                         { id:"a", ts, type:"open", slot:2 }] });
+  check(A.komoraDnia(key) === "środa", "przy dwoch otwarciach liczy sie pierwsze");
+
+  A.__setState({ events:[{ id:"z", ts, type:"open", slot:99 }] });
+  check(A.komoraDnia(key) === null, "numer komory spoza zakresu to brak danych, nie smiec");
+
+  /* Karta "dzisiaj" i kalendarz: zadnych "N tabl." */
+  A.__setState({ events:[{ id:"o1", ts, type:"open", slot:2 }] });
+  A.renderToday();
+  const gdy = document.getElementById("todayWhen").textContent;
+  check(!/tabl\./.test(gdy), `karta dnia bez liczby tabletek ("${gdy}")`);
+  check(gdy.includes("komora: środa"), "za to z komora, ktora otwarto");
+
+  const d = new Date(key + "T12:00:00");
+  A.__setView(d.getFullYear(), d.getMonth());
+  A.renderCalendar();
+  const grid = document.getElementById("calGrid").innerHTML;
+  check(!grid.includes('class="dose"'), "kratki kalendarza bez liczb - kolor wystarczy");
+
+  /* A w pudelku dziennym wszystko zostaje po staremu. */
+  A.__setState({ cfg:{ profil:"warfin", defaultDose:1.5, drugName:"Warfin", tzOffsetMin: tz },
+                 doses:{ [key]: { 0:{ status:"taken", dose:1.5, source:"device", ts } } } });
+  check(A.komoraDnia(key) === null, "komora to pojecie pudelka tygodniowego");
+  check(/tabl\./.test(A.opisDawkowania()), "warfin dalej liczy tabletki");
+  A.renderCalendar();
+  check(document.getElementById("calGrid").innerHTML.includes('class="dose"'),
+        "i dalej pokazuje je w kalendarzu");
+  A.__setState({ cfg:{ profil:undefined }, doses:{}, events:[] });
 }
 
 head("Zgodnosc wersji aplikacji");

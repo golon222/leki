@@ -14,7 +14,7 @@ zamiast 60 tys. tokenów wchodzi 2,5 tys. plus jeden obszar.
 | `decyzje/telegram.md` | Powiadomienia Telegram | 5 |
 | `decyzje/aplikacja.md` | Aplikacja — ekrany i wygląd | 40 |
 | `decyzje/dane.md` | Dane, kolejka, dawkowanie | 20 |
-| `decyzje/testy.md` | Testy, audyt, kompilacja | 15 |
+| `decyzje/testy.md` | Testy, audyt, kompilacja | 16 |
 | `decyzje/bugi.md` | Błędy **zamknięte** — historia objawów | 26 |
 | `decyzje/cofniete.md` | Cofnięte — **nie próbować drugi raz** | 5 |
 
@@ -63,6 +63,7 @@ Od najnowszej. Kolumna „gdzie" mówi, który plik w `decyzje/` trzymać otwart
 
 | # | O co chodziło | gdzie |
 |---|---|---|
+| **D127** | Podgląd wyglądu w przeglądarce (`tests/podglad.mjs`) — zasada „sprawdzaj na renderze" była dotąd zakazem bez narzędzia. Pierwszy zrzut od razu pokazał cztery rzeczy, których nie widział żaden test | `testy` |
 | **D126** | Pudełko tygodniowe **widzi mniej**: znika INR, raport dla lekarza, zapas tabletek i zmienne dawkowanie. Robi to **jedna reguła CSS**, nie warunek w każdym z kilkunastu renderów — zapomniany warunek przy leku przeciwzakrzepowym pokazuje nie te dane. Nazwa leku i godziny przypomnień zostają | `aplikacja` |
 | **B30** | Pudełko tygodniowe budziło się w kółko i piszczało bez przerwy: `analogRead()` zostawia pin w trybie analogowym, a to wyłącza bufor wejścia cyfrowego, którym komparator wybudzania czyta stan pinu — stałe zero znaczy „warunek spełniony" od razu po zaśnięciu. **Naprawione**, `PillBoxWeek.ino` 0.2.0 | `bugi` |
 | **D125** | Odtwarzanie z kopii przywraca też **ustawienia pudełka** — `Import JSON` z mojej instrukcji skasował gałąź `devices` i okazało się, że `cfg` leży w kopii, ale nie ma czym go wrócić. Historia leków przeżyła (inne drzewo), pudełko dalej dzwoni (config lokalny), dawki czekały w kolejce (401 to nie 400). Instrukcja dodaje teraz wszystko **polami**, nigdy importem | `dane` |

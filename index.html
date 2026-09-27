@@ -610,6 +610,7 @@ nav button .kropka-nav{position:absolute;top:6px;right:50%;margin-right:-16px;
    przeciwzakrzepowym pokazuje nie te dane. Tu jest jedno miejsce i jedna
    klasa; co ma zniknac, widac w HTML-u obok elementu.                  */
 body[data-profil="tydzien"] .tylko-warfin{display:none!important}
+body:not([data-profil="tydzien"]) .tylko-tydzien{display:none!important}
 
 /* ---------- powrot z podekranu ----------
    Powierzchnia dotyku ma miec sensowna wysokosc: sam tekst to cel wielkosci
@@ -877,16 +878,16 @@ body[data-profil="tydzien"] .tylko-warfin{display:none!important}
     <div class="grid" id="dowRow"></div>
     <div class="grid" id="calGrid" style="margin-top:6px"></div>
     <div class="legend">
-      <span><i style="background:var(--ok)"></i>pełna dawka</span>
-      <span><i style="background:var(--warn)"></i>mniejsza dawka</span>
+      <span><i style="background:var(--ok)"></i><span class="tylko-warfin">pełna dawka</span><span class="tylko-tydzien">wzięte</span></span>
+      <span class="tylko-warfin"><i style="background:var(--warn)"></i>mniejsza dawka</span>
       <span><i style="background:var(--bad)"></i>nie wzięte</span>
       <span><i style="background:var(--dim2);opacity:.5"></i>brak danych</span>
-      <span><svg width="10" height="10" viewBox="0 0 10 10"><circle cx="5" cy="5" r="4"
+      <span class="tylko-warfin"><svg width="10" height="10" viewBox="0 0 10 10"><circle cx="5" cy="5" r="4"
         fill="rgba(167,139,250,.25)" stroke="#a78bfa" stroke-width="1.6"/></svg>pomiar INR</span>
       <!-- Ta sama ikonka co INR_DUE_MARK w kodzie. Kropka wypelniona, nie
            obrysowana - „pomiar byl" i „pomiar wypada" musza sie roznic
            jednym spojrzeniem, a nie odcieniem.                            -->
-      <span><svg width="10" height="10" viewBox="0 0 12 12">
+      <span class="tylko-warfin"><svg width="10" height="10" viewBox="0 0 12 12">
         <circle cx="6" cy="6" r="4.4" fill="var(--warn)" opacity=".9"/>
         <path d="M6 3.6v3.1" stroke="#101828" stroke-width="1.5" stroke-linecap="round"/>
         <circle cx="6" cy="8.7" r=".85" fill="#101828"/></svg>czas na pomiar INR</span>
@@ -1029,7 +1030,7 @@ body[data-profil="tydzien"] .tylko-warfin{display:none!important}
     <div id="anRytm" style="margin-top:var(--s3)"></div>
     <div class="legend">
       <span><i style="background:var(--ok)"></i>wzięte</span>
-      <span><i style="background:var(--warn)"></i>mniejsza dawka</span>
+      <span class="tylko-warfin"><i style="background:var(--warn)"></i>mniejsza dawka</span>
       <span><i style="background:var(--bad)"></i>nie wzięte</span>
       <span><i style="background:var(--dim2);opacity:.35"></i>bez leku lub brak danych</span>
     </div>
@@ -2039,7 +2040,7 @@ window.wybierzPudelko = (id) => {
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-09-27.85";
+const APP_VERSION = "2026-09-27.86";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -2076,6 +2077,27 @@ let cfg = { schedule:["08:00"], tz:"Europe/Warsaw", tzOffsetMin:120,
    wczytaniu nowej wersji aplikacji — łącznie z INR, czyli danymi, których
    nie da się odtworzyć z pamięci pudełka.                                */
 const profilTydzien = () => cfg.profil === "tydzien";
+
+/*  KTORA KOMORE OTWARTO tego dnia. Tylko pudelko tygodniowe - tam numer
+    komory jedzie w polu `slot` zdarzenia (galaz `events` ma `$other:false`,
+    wiec nowego pola dolozyc sie nie da, zasada 7).
+
+    Po co to na ekranie: przy siedmiu klapkach da sie otworzyc NIE TE.
+    Sama data mowi, ze cos wzieto; komora mowi, czy z wlasciwej przegrodki.
+    Bierzemy NAJWCZESNIEJSZE otwarcie doby - to samo, ktore `doReconcile()`
+    uznaje za dawke, zeby ekran i kalendarz nie mowily dwoch rzeczy.     */
+const KOMORY_PL = ["poniedziałek","wtorek","środa","czwartek","piątek","sobota","niedziela"];
+function komoraDnia(key){
+  if (!profilTydzien()) return null;
+  let naj = null;
+  for (const e of events){
+    if (e?.type !== "open" || !Number.isFinite(+e.ts)) continue;
+    if (devKey(e.ts) !== key) continue;
+    if (!naj || e.ts < naj.ts) naj = e;
+  }
+  const i = naj ? +naj.slot : -1;
+  return (Number.isFinite(i) && i >= 0 && i < 7) ? KOMORY_PL[i] : null;
+}
 
 /*  Profil trafia na <body>, bo stamtad siega po niego CSS. Wolamy to przy
     kazdym przyjsciu konfiguracji, nie raz na starcie: `cfg` na poczatku ma
@@ -3354,6 +3376,10 @@ function wyjatekNaDzien(key){
 /* Krótki opis dawkowania do nagłówka i raportu. */
 function opisDawkowania(){
   const t = tydzienDawek();
+  /*  Pudelko tygodniowe nie liczy tabletek: dawka lezy w komorze i tyle.
+      "1 tabl. dziennie" byloby tu wymyslona liczba, bo aplikacja nie wie,
+      ile ich tam wlozono - i nie ma jak sie dowiedziec.                */
+  if (profilTydzien()) return "jedna komora dziennie";
   if (!t) return `${nf(cfg.defaultDose ?? 1)} tabl. dziennie`;
   const rowne = t.every(v => Math.abs(v - t[0]) < 0.001);
   if (rowne) return `${nf(t[0])} tabl. dziennie`;
@@ -3481,7 +3507,7 @@ function renderCalendar(){
         key===termKey?` title="Tego dnia mija ${inrOdstep()} dni od ostatniego pomiaru INR"`
         : st==="off" ? ` title="Ten dzień masz rozpisany bez leku"` : ""}>
         ${inr[key] ? INR_MARK : (key===termKey ? INR_DUE_MARK : "")}${d}
-        ${sum>0 ? `<span class="dose">${nf(sum)}</span>`
+        ${sum>0 && !profilTydzien() ? `<span class="dose">${nf(sum)}</span>`
                 : st==="off" ? `<span class="nodrug">—</span>` : ""}
       </div>`;
   }
@@ -3655,16 +3681,23 @@ function renderToday(){
   } else if (!any){
     el.textContent = "Jeszcze nie wzięte";  el.style.color = "var(--warn)";
     document.getElementById("todayWhen").textContent =
-      `${nf(target)} tabl. · przypomnienie o ${cfg.schedule[0] || "—"}`;
+      (profilTydzien() ? "" : `${nf(target)} tabl. · `) +
+      `przypomnienie o ${cfg.schedule[0] || "—"}`;
   } else if (sum <= 0){
     el.textContent = "Pominięte";           el.style.color = "var(--bad)";
     document.getElementById("todayWhen").textContent = "Możesz to poprawić w kalendarzu";
   } else {
-    el.textContent = sum >= target-0.001 ? "Wzięte" : "Wzięte — mniejsza dawka";
-    el.style.color = sum >= target-0.001 ? "var(--ok)" : "var(--warn)";
+    /*  W pudelku tygodniowym nie ma "mniejszej dawki": dawka lezy w komorze
+        i albo zostala z niej wyjeta, albo nie. Porownywanie z planem
+        pokazywaloby ostrzezenie tam, gdzie nie ma czego ostrzegac.     */
+    const pelna = profilTydzien() || sum >= target-0.001;
+    el.textContent = pelna ? "Wzięte" : "Wzięte — mniejsza dawka";
+    el.style.color = pelna ? "var(--ok)" : "var(--warn)";
     const r = (doses[key]||{})[0];
+    const kom = komoraDnia(key);
     document.getElementById("todayWhen").textContent =
-      `${nf(sum)} tabl.` + (r?.ts ? ` · o ${devHM(r.ts)}` : "");
+      (profilTydzien() ? (kom ? `komora: ${kom}` : "otwarte")
+                       : `${nf(sum)} tabl.`) + (r?.ts ? ` · o ${devHM(r.ts)}` : "");
   }
   /* Poświata karty w kolorze stanu dnia. To jedyne miejsce, gdzie kolor
      wychodzi poza tekst — i robi dokładnie to samo, co on: mówi, jak jest
@@ -3703,7 +3736,8 @@ function renderToday(){
   const btn = document.getElementById("wezTerazBtn");
   if (btn){
     btn.classList.toggle("hide", !(target > 0 && sum <= 0));
-    btn.textContent = `Wziąłem teraz — ${nf(target)} tabl.`;
+    btn.textContent = profilTydzien() ? "Wziąłem teraz"
+                                      : `Wziąłem teraz — ${nf(target)} tabl.`;
   }
 
   /* Ta sama informacja co przycisk wyżej, ale widoczna z KAŻDEGO ekranu:
@@ -3730,7 +3764,7 @@ function renderToday(){
   startTikOdDawki();
 
   document.getElementById("hSub").textContent =
-    `${cfg.drugName || "Lek"}${+cfg.drugStrength ? " " + cfg.drugStrength + " mg" : ""} · ${opisDawkowania()}`;
+    `${cfg.drugName || "Lek"}${+cfg.drugStrength && !profilTydzien() ? " " + cfg.drugStrength + " mg" : ""} · ${opisDawkowania()}`;
 }
 
 /* ═══════════════ ARKUSZ DNIA ═══════════════ */
@@ -5631,7 +5665,7 @@ window.setPills = () => {
 function renderKafelki(){
   const lek = document.getElementById("kafelLek");
   if (lek) lek.textContent =
-    `${cfg.drugName || "Lek"}${+cfg.drugStrength ? " " + cfg.drugStrength + " mg" : ""} · ${opisDawkowania()}`;
+    `${cfg.drugName || "Lek"}${+cfg.drugStrength && !profilTydzien() ? " " + cfg.drugStrength + " mg" : ""} · ${opisDawkowania()}`;
 
   const wifi = document.getElementById("kafelWifi");
   if (wifi){

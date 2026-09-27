@@ -3,6 +3,8 @@
 tests/logic.inc
 tests/app_module.mjs
 tests/crosscheck_bin
+# Podglad wygladu - generowany z index.html przez tests/podglad.mjs (D127)
+tests/podglad.html
 
 # UWAGA: firmware/PillBox/config.h jest CELOWO sledzony przez gita - patrz
 # komentarz na gorze tego pliku. Trzymamy w nim wylacznie placeholder hasla.
