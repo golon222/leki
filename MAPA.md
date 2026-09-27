@@ -12,7 +12,7 @@ sed -n '2800,2960p' index.html          # jeden obszar
 grep -n "nazwaFunkcji" index.html       # gdy znasz nazwe
 ```
 
-## `index.html` — 8762 linii, ~130 tys. tokenow
+## `index.html` — 8788 linii, ~130 tys. tokenow
 
 Ekrany (`<section>`) i dwa duze bloki. Zakladki `tab-*` odpowiadaja
 pozycjom w pasku nawigacji i podekranom Ustawien.
@@ -35,133 +35,133 @@ pozycjom w pasku nawigacji i podekranom Ustawien.
 | 1408 | 1508 | tab-tg |
 | 1509 | 1542 | tab-dev |
 | 1543 | 1643 | tab-diag |
-| 1644 | 1919 | tab-help |
-| 1920 | 1941 | tab-ev |
-| 1942 | 2032 | tab-hist |
-| 2033 | 2041 | JS — poczatek |
-| 2042 | 2262 | KONFIGURACJA — wklej z Firebase Console → Ustawienia projektu |
-| 2263 | 2337 | INFORMACJA ZWROTNA |
-| 2338 | 2432 | STREFY CZASOWE |
-| 2433 | 2460 | TABLETKA — rysowana, z nacięciem krzyżowym jak Warfin. |
-| 2461 | 2527 | TABLETKA JAKO BRYŁA |
-| 2528 | 2542 | LOGOWANIE |
-| 2543 | 2682 | TEST POŁĄCZENIA — przechodzi całą drogę danych krok po kroku |
-| 2683 | 3063 | START |
-| 3064 | 3124 | OSŁONA RYSOWANIA |
-| 3125 | 3183 | REKONCYLIACJA |
-| 3184 | 3388 | ŻADEN ZAPIS DO BAZY NIE CZEKA W NIESKOŃCZONOŚĆ |
-| 3389 | 3447 | KALENDARZ |
-| 3448 | 3718 | HISTORIA ROZPISANIA DAWKI |
-| 3719 | 3908 | ILE MINĘŁO OD POPRZEDNIEJ DAWKI |
-| 3909 | 4060 | ARKUSZ DNIA |
-| 4061 | 4160 | WZIĄŁEM TERAZ |
-| 4161 | 4275 | INR |
-| 4276 | 4415 | ODSTĘP MIĘDZY POMIARAMI INR |
-| 4416 | 4428 | STATUS PUDEŁKA |
-| 4429 | 4578 | DIAGNOSTYKA — surowe zdarzenia z pudełka obok tego, co aplikacja |
-| 4579 | 4740 | KOLEJKA ZAPISÓW — to samo, co pudełko ma w pamięci nieulotnej. |
-| 4741 | 5023 | OSTRZEŻENIA — celowo NIE schowane w Diagnostyce |
-| 5024 | 5064 | KOLEJKA, KTÓRA NIE SCHODZI |
-| 5065 | 5161 | EKRAN, KTÓRY SIĘ NIE NARYSOWAŁ |
-| 5162 | 5680 | EKRAN ZDARZEN |
-| 5681 | 5799 | ZAPAS TABLETEK |
-| 5800 | 6137 | USTAWIENIA |
-| 6138 | 6445 | POWIADOMIENIA NA TELEFON — BOT TELEGRAM (D67) |
-| 6446 | 6904 | AKTUALIZACJA PROGRAMU PUDEŁKA (D59) |
-| 6905 | 7275 | SIECI WIDZIANE PRZEZ PUDEŁKO |
-| 7276 | 7486 | ANALIZA |
-| 7487 | 7872 | WYKRESY ANALIZY |
-| 7873 | 8029 | RAPORT |
-| 8030 | 8091 | KONTEKST DNIA (TAGI) |
-| 8092 | 8137 | KOPIA ZAPASOWA |
-| 8138 | 8351 | KOPIA NA TELEGRAM |
-| 8352 | 8417 | WIEK KOPII |
-| 8418 | 8558 | ODTWARZANIE Z KOPII |
-| 8559 | 8633 | KOPIE Z BAZY |
-| 8634 | 8720 | NAWIGACJA |
-| 8721 | 8762 | AUTOMATYCZNA AKTUALIZACJA |
+| 1644 | 1945 | tab-help |
+| 1946 | 1967 | tab-ev |
+| 1968 | 2058 | tab-hist |
+| 2059 | 2067 | JS — poczatek |
+| 2068 | 2288 | KONFIGURACJA — wklej z Firebase Console → Ustawienia projektu |
+| 2289 | 2363 | INFORMACJA ZWROTNA |
+| 2364 | 2458 | STREFY CZASOWE |
+| 2459 | 2486 | TABLETKA — rysowana, z nacięciem krzyżowym jak Warfin. |
+| 2487 | 2553 | TABLETKA JAKO BRYŁA |
+| 2554 | 2568 | LOGOWANIE |
+| 2569 | 2708 | TEST POŁĄCZENIA — przechodzi całą drogę danych krok po kroku |
+| 2709 | 3089 | START |
+| 3090 | 3150 | OSŁONA RYSOWANIA |
+| 3151 | 3209 | REKONCYLIACJA |
+| 3210 | 3414 | ŻADEN ZAPIS DO BAZY NIE CZEKA W NIESKOŃCZONOŚĆ |
+| 3415 | 3473 | KALENDARZ |
+| 3474 | 3744 | HISTORIA ROZPISANIA DAWKI |
+| 3745 | 3934 | ILE MINĘŁO OD POPRZEDNIEJ DAWKI |
+| 3935 | 4086 | ARKUSZ DNIA |
+| 4087 | 4186 | WZIĄŁEM TERAZ |
+| 4187 | 4301 | INR |
+| 4302 | 4441 | ODSTĘP MIĘDZY POMIARAMI INR |
+| 4442 | 4454 | STATUS PUDEŁKA |
+| 4455 | 4604 | DIAGNOSTYKA — surowe zdarzenia z pudełka obok tego, co aplikacja |
+| 4605 | 4766 | KOLEJKA ZAPISÓW — to samo, co pudełko ma w pamięci nieulotnej. |
+| 4767 | 5049 | OSTRZEŻENIA — celowo NIE schowane w Diagnostyce |
+| 5050 | 5090 | KOLEJKA, KTÓRA NIE SCHODZI |
+| 5091 | 5187 | EKRAN, KTÓRY SIĘ NIE NARYSOWAŁ |
+| 5188 | 5706 | EKRAN ZDARZEN |
+| 5707 | 5825 | ZAPAS TABLETEK |
+| 5826 | 6163 | USTAWIENIA |
+| 6164 | 6471 | POWIADOMIENIA NA TELEFON — BOT TELEGRAM (D67) |
+| 6472 | 6930 | AKTUALIZACJA PROGRAMU PUDEŁKA (D59) |
+| 6931 | 7301 | SIECI WIDZIANE PRZEZ PUDEŁKO |
+| 7302 | 7512 | ANALIZA |
+| 7513 | 7898 | WYKRESY ANALIZY |
+| 7899 | 8055 | RAPORT |
+| 8056 | 8117 | KONTEKST DNIA (TAGI) |
+| 8118 | 8163 | KOPIA ZAPASOWA |
+| 8164 | 8377 | KOPIA NA TELEGRAM |
+| 8378 | 8443 | WIEK KOPII |
+| 8444 | 8584 | ODTWARZANIE Z KOPII |
+| 8585 | 8659 | KOPIE Z BAZY |
+| 8660 | 8746 | NAWIGACJA |
+| 8747 | 8788 | AUTOMATYCZNA AKTUALIZACJA |
 
 **Funkcje** (225) — nazwa i linia deklaracji:
 
-*KONFIGURACJA — wklej z Firebase Console → Ustawienia projektu* — `opisPlikFirmware`&nbsp;2083, `pudelkoZnane`&nbsp;2089, `wybranePudelko`&nbsp;2091, `korzenDanych`&nbsp;2115, `odmowaRegul`&nbsp;2134, `sprawdzDostepPudelek`&nbsp;2139, `wybierzPudelko`&nbsp;2162, `profilTydzien`&nbsp;2211, `komoraDnia`&nbsp;2222, `ustawProfil`&nbsp;2237
+*KONFIGURACJA — wklej z Firebase Console → Ustawienia projektu* — `opisPlikFirmware`&nbsp;2109, `pudelkoZnane`&nbsp;2115, `wybranePudelko`&nbsp;2117, `korzenDanych`&nbsp;2141, `odmowaRegul`&nbsp;2160, `sprawdzDostepPudelek`&nbsp;2165, `wybierzPudelko`&nbsp;2188, `profilTydzien`&nbsp;2237, `komoraDnia`&nbsp;2248, `ustawProfil`&nbsp;2263
 
-*INFORMACJA ZWROTNA* — `toast`&nbsp;2284, `busy`&nbsp;2300, `todayKey`&nbsp;2327, `dzisiajKey`&nbsp;2331, `inNightWindow`&nbsp;2334
+*INFORMACJA ZWROTNA* — `toast`&nbsp;2310, `busy`&nbsp;2326, `todayKey`&nbsp;2353, `dzisiajKey`&nbsp;2357, `inNightWindow`&nbsp;2360
 
-*STREFY CZASOWE* — `tzOffsetFor`&nbsp;2389, `tzName`&nbsp;2405, `tzLabel`&nbsp;2406, `tzOffsetTxt`&nbsp;2407, `devDate`&nbsp;2413, `devKey`&nbsp;2418, `devHM`&nbsp;2423, `slotMin`&nbsp;2424, `pillColors`&nbsp;2426
+*STREFY CZASOWE* — `tzOffsetFor`&nbsp;2415, `tzName`&nbsp;2431, `tzLabel`&nbsp;2432, `tzOffsetTxt`&nbsp;2433, `devDate`&nbsp;2439, `devKey`&nbsp;2444, `devHM`&nbsp;2449, `slotMin`&nbsp;2450, `pillColors`&nbsp;2452
 
-*TABLETKA — rysowana, z nacięciem krzyżowym jak Warfin.* — `tabletSVG`&nbsp;2437
+*TABLETKA — rysowana, z nacięciem krzyżowym jak Warfin.* — `tabletSVG`&nbsp;2463
 
-*TABLETKA JAKO BRYŁA* — `tablet3D`&nbsp;2474, `cieniuj`&nbsp;2501, `doseGraphic`&nbsp;2518
+*TABLETKA JAKO BRYŁA* — `tablet3D`&nbsp;2500, `cieniuj`&nbsp;2527, `doseGraphic`&nbsp;2544
 
-*LOGOWANIE* — `doLogin`&nbsp;2532
+*LOGOWANIE* — `doLogin`&nbsp;2558
 
-*TEST POŁĄCZENIA — przechodzi całą drogę danych krok po kroku* — `testPolaczenia`&nbsp;2552, `wyczyscCache`&nbsp;2647, `fbSignOut`&nbsp;2666
+*TEST POŁĄCZENIA — przechodzi całą drogę danych krok po kroku* — `testPolaczenia`&nbsp;2578, `wyczyscCache`&nbsp;2673, `fbSignOut`&nbsp;2692
 
-*START* — `boot`&nbsp;2684
+*START* — `boot`&nbsp;2710
 
-*OSŁONA RYSOWANIA* — `rysuj`&nbsp;3091, `rysujWszystkie`&nbsp;3104, `renderAll`&nbsp;3108
+*OSŁONA RYSOWANIA* — `rysuj`&nbsp;3117, `rysujWszystkie`&nbsp;3130, `renderAll`&nbsp;3134
 
-*REKONCYLIACJA* — `brakujePokrycia`&nbsp;3131, `reconcileDecyzja`&nbsp;3170
+*REKONCYLIACJA* — `brakujePokrycia`&nbsp;3157, `reconcileDecyzja`&nbsp;3196
 
-*ŻADEN ZAPIS DO BAZY NIE CZEKA W NIESKOŃCZONOŚĆ* — `zTerminem`&nbsp;3205, `zapiszReconcile`&nbsp;3217, `doReconcile`&nbsp;3256, `doReconcileWewn`&nbsp;3266, `reconcile`&nbsp;3387
+*ŻADEN ZAPIS DO BAZY NIE CZEKA W NIESKOŃCZONOŚĆ* — `zTerminem`&nbsp;3231, `zapiszReconcile`&nbsp;3243, `doReconcile`&nbsp;3282, `doReconcileWewn`&nbsp;3292, `reconcile`&nbsp;3413
 
-*KALENDARZ* — `tydzienDawek`&nbsp;3427
+*KALENDARZ* — `tydzienDawek`&nbsp;3453
 
-*HISTORIA ROZPISANIA DAWKI* — `planNaDzien`&nbsp;3473, `dawkaNaDzien`&nbsp;3484, `dzienBezLeku`&nbsp;3505, `wyjatekNaDzien`&nbsp;3510, `opisDawkowania`&nbsp;3516, `dayDose`&nbsp;3530, `dzienZamkniety`&nbsp;3564, `trackingSince`&nbsp;3570, `beforeTracking`&nbsp;3571, `dayStatus`&nbsp;3573, `renderCalendar`&nbsp;3614, `seriaDni`&nbsp;3679, `doNastepnej`&nbsp;3697, `opisCzasu`&nbsp;3712
+*HISTORIA ROZPISANIA DAWKI* — `planNaDzien`&nbsp;3499, `dawkaNaDzien`&nbsp;3510, `dzienBezLeku`&nbsp;3531, `wyjatekNaDzien`&nbsp;3536, `opisDawkowania`&nbsp;3542, `dayDose`&nbsp;3556, `dzienZamkniety`&nbsp;3590, `trackingSince`&nbsp;3596, `beforeTracking`&nbsp;3597, `dayStatus`&nbsp;3599, `renderCalendar`&nbsp;3640, `seriaDni`&nbsp;3705, `doNastepnej`&nbsp;3723, `opisCzasu`&nbsp;3738
 
-*ILE MINĘŁO OD POPRZEDNIEJ DAWKI* — `ostatniaDawka`&nbsp;3727, `trwanieTxt`&nbsp;3742, `kiedyDawkaTxt`&nbsp;3753, `odswiezOdDawki`&nbsp;3761, `startTikOdDawki`&nbsp;3775, `renderToday`&nbsp;3785
+*ILE MINĘŁO OD POPRZEDNIEJ DAWKI* — `ostatniaDawka`&nbsp;3753, `trwanieTxt`&nbsp;3768, `kiedyDawkaTxt`&nbsp;3779, `odswiezOdDawki`&nbsp;3787, `startTikOdDawki`&nbsp;3801, `renderToday`&nbsp;3811
 
-*ARKUSZ DNIA* — `closeSheet`&nbsp;3920, `renderSheet`&nbsp;3922, `resetDose`&nbsp;4000, `resetPlan`&nbsp;4007, `commitPlan`&nbsp;4012, `clearPlan`&nbsp;4028, `commitDose`&nbsp;4040
+*ARKUSZ DNIA* — `closeSheet`&nbsp;3946, `renderSheet`&nbsp;3948, `resetDose`&nbsp;4026, `resetPlan`&nbsp;4033, `commitPlan`&nbsp;4038, `clearPlan`&nbsp;4054, `commitDose`&nbsp;4066
 
-*WZIĄŁEM TERAZ* — `wezTeraz`&nbsp;4081, `askConfirm`&nbsp;4150
+*WZIĄŁEM TERAZ* — `wezTeraz`&nbsp;4107, `askConfirm`&nbsp;4176
 
-*INR* — `inrState`&nbsp;4162, `odswiezTerminInr`&nbsp;4175, `addInr`&nbsp;4184, `inrKeysOk`&nbsp;4270
+*INR* — `inrState`&nbsp;4188, `odswiezTerminInr`&nbsp;4201, `addInr`&nbsp;4210, `inrKeysOk`&nbsp;4296
 
-*ODSTĘP MIĘDZY POMIARAMI INR* — `inrOdstep`&nbsp;4285, `inrTerminKey`&nbsp;4293, `inrDoTerminu`&nbsp;4305, `dniTxt`&nbsp;4314, `renderInr`&nbsp;4316, `inrChart`&nbsp;4388
+*ODSTĘP MIĘDZY POMIARAMI INR* — `inrOdstep`&nbsp;4311, `inrTerminKey`&nbsp;4319, `inrDoTerminu`&nbsp;4331, `dniTxt`&nbsp;4340, `renderInr`&nbsp;4342, `inrChart`&nbsp;4414
 
-*STATUS PUDEŁKA* — `relTime`&nbsp;4417, `devDayMon`&nbsp;4426
+*STATUS PUDEŁKA* — `relTime`&nbsp;4443, `devDayMon`&nbsp;4452
 
-*DIAGNOSTYKA — surowe zdarzenia z pudełka obok tego, co aplikacja* — `renderTesty`&nbsp;4461, `renderBoxLog`&nbsp;4507, `logPrzelacz`&nbsp;4543, `renderNvsFailLog`&nbsp;4551
+*DIAGNOSTYKA — surowe zdarzenia z pudełka obok tego, co aplikacja* — `renderTesty`&nbsp;4487, `renderBoxLog`&nbsp;4533, `logPrzelacz`&nbsp;4569, `renderNvsFailLog`&nbsp;4577
 
-*KOLEJKA ZAPISÓW — to samo, co pudełko ma w pamięci nieulotnej.* — `magazyn`&nbsp;4596, `oczekWczytaj`&nbsp;4604, `oczekZapisz`&nbsp;4609, `oczekIle`&nbsp;4612, `zapiszPewnie`&nbsp;4622, `zapiszCfg`&nbsp;4660, `bazaOdmowila`&nbsp;4678, `oczekWyslij`&nbsp;4702, `oczekOdmowy`&nbsp;4739
+*KOLEJKA ZAPISÓW — to samo, co pudełko ma w pamięci nieulotnej.* — `magazyn`&nbsp;4622, `oczekWczytaj`&nbsp;4630, `oczekZapisz`&nbsp;4635, `oczekIle`&nbsp;4638, `zapiszPewnie`&nbsp;4648, `zapiszCfg`&nbsp;4686, `bazaOdmowila`&nbsp;4704, `oczekWyslij`&nbsp;4728, `oczekOdmowy`&nbsp;4765
 
-*OSTRZEŻENIA — celowo NIE schowane w Diagnostyce* — `ostrzKolejka`&nbsp;4755, `ostrzReguly`&nbsp;4777, `lm`&nbsp;4816, `ostrzMilczy`&nbsp;4822, `nvsMalo`&nbsp;4902, `opisNvsFailKey`&nbsp;4914, `stratyDotyczaLeku`&nbsp;4967, `ostrzStraty`&nbsp;4979, `stratyCicho`&nbsp;5013
+*OSTRZEŻENIA — celowo NIE schowane w Diagnostyce* — `ostrzKolejka`&nbsp;4781, `ostrzReguly`&nbsp;4803, `lm`&nbsp;4842, `ostrzMilczy`&nbsp;4848, `nvsMalo`&nbsp;4928, `opisNvsFailKey`&nbsp;4940, `stratyDotyczaLeku`&nbsp;4993, `ostrzStraty`&nbsp;5005, `stratyCicho`&nbsp;5039
 
-*KOLEJKA, KTÓRA NIE SCHODZI* — `ostrzZatkana`&nbsp;5045
+*KOLEJKA, KTÓRA NIE SCHODZI* — `ostrzZatkana`&nbsp;5071
 
-*EKRAN, KTÓRY SIĘ NIE NARYSOWAŁ* — `ostrzRysowanie`&nbsp;5075, `renderOstrzezenia`&nbsp;5090, `bezPokrycia`&nbsp;5100, `wierszZdarzenia`&nbsp;5106, `renderDiag`&nbsp;5123
+*EKRAN, KTÓRY SIĘ NIE NARYSOWAŁ* — `ostrzRysowanie`&nbsp;5101, `renderOstrzezenia`&nbsp;5116, `bezPokrycia`&nbsp;5126, `wierszZdarzenia`&nbsp;5132, `renderDiag`&nbsp;5149
 
-*EKRAN ZDARZEN* — `evFiltr`&nbsp;5178, `evPasuje`&nbsp;5183, `renderEvents`&nbsp;5195, `renderOpenWarn`&nbsp;5235, `minutyDoPelna`&nbsp;5288, `opisLadowania`&nbsp;5300, `dni`&nbsp;5320, `opisLadowan`&nbsp;5323, `tempoZHistorii`&nbsp;5376, `prognozaDni`&nbsp;5385, `opisPrognozy`&nbsp;5397, `czasKrotko`&nbsp;5419, `opisCzuwania`&nbsp;5427, `renderStatus`&nbsp;5445
+*EKRAN ZDARZEN* — `evFiltr`&nbsp;5204, `evPasuje`&nbsp;5209, `renderEvents`&nbsp;5221, `renderOpenWarn`&nbsp;5261, `minutyDoPelna`&nbsp;5314, `opisLadowania`&nbsp;5326, `dni`&nbsp;5346, `opisLadowan`&nbsp;5349, `tempoZHistorii`&nbsp;5402, `prognozaDni`&nbsp;5411, `opisPrognozy`&nbsp;5423, `czasKrotko`&nbsp;5445, `opisCzuwania`&nbsp;5453, `renderStatus`&nbsp;5471
 
-*ZAPAS TABLETEK* — `yesterdayKey`&nbsp;5684, `dayAfter`&nbsp;5687, `pillsBaseInfo`&nbsp;5698, `settlePills`&nbsp;5708, `dniZapasu`&nbsp;5748, `renderPills`&nbsp;5761, `savePills`&nbsp;5782, `setPills`&nbsp;5793
+*ZAPAS TABLETEK* — `yesterdayKey`&nbsp;5710, `dayAfter`&nbsp;5713, `pillsBaseInfo`&nbsp;5724, `settlePills`&nbsp;5734, `dniZapasu`&nbsp;5774, `renderPills`&nbsp;5787, `savePills`&nbsp;5808, `setPills`&nbsp;5819
 
-*USTAWIENIA* — `renderKafelki`&nbsp;5804, `renderPudelka`&nbsp;5838, `renderSettings`&nbsp;5880, `tydzienZPol`&nbsp;5936, `renderWeekEditor`&nbsp;5948, `odswiezPodpowiedzTygodnia`&nbsp;5965, `tydzienZmieniony`&nbsp;5979, `rownajTydzien`&nbsp;5980, `renderPlanList`&nbsp;6028, `renderExceptions`&nbsp;6055, `wyslijSiec`&nbsp;6113
+*USTAWIENIA* — `renderKafelki`&nbsp;5830, `renderPudelka`&nbsp;5864, `renderSettings`&nbsp;5906, `tydzienZPol`&nbsp;5962, `renderWeekEditor`&nbsp;5974, `odswiezPodpowiedzTygodnia`&nbsp;5991, `tydzienZmieniony`&nbsp;6005, `rownajTydzien`&nbsp;6006, `renderPlanList`&nbsp;6054, `renderExceptions`&nbsp;6081, `wyslijSiec`&nbsp;6139
 
-*POWIADOMIENIA NA TELEFON — BOT TELEGRAM (D67)* — `tgTokenPoprawny`&nbsp;6155, `tgZapytaj`&nbsp;6165, `tgKodParowania`&nbsp;6205, `tgZnajdzCzat`&nbsp;6221, `tgPolacz`&nbsp;6289, `tgProbna`&nbsp;6322, `tgOdlacz`&nbsp;6329, `renderTgStan`&nbsp;6351
+*POWIADOMIENIA NA TELEFON — BOT TELEGRAM (D67)* — `tgTokenPoprawny`&nbsp;6181, `tgZapytaj`&nbsp;6191, `tgKodParowania`&nbsp;6231, `tgZnajdzCzat`&nbsp;6247, `tgPolacz`&nbsp;6315, `tgProbna`&nbsp;6348, `tgOdlacz`&nbsp;6355, `renderTgStan`&nbsp;6377
 
-*AKTUALIZACJA PROGRAMU PUDEŁKA (D59)* — `sprawdzAktualizacje`&nbsp;6466, `pobierzOpisFirmware`&nbsp;6472, `wyslijAktualizacje`&nbsp;6495, `anulujAktualizacje`&nbsp;6540, `renderOta`&nbsp;6546, `renderNetStan`&nbsp;6831
+*AKTUALIZACJA PROGRAMU PUDEŁKA (D59)* — `sprawdzAktualizacje`&nbsp;6492, `pobierzOpisFirmware`&nbsp;6498, `wyslijAktualizacje`&nbsp;6521, `anulujAktualizacje`&nbsp;6566, `renderOta`&nbsp;6572, `renderNetStan`&nbsp;6857
 
-*SIECI WIDZIANE PRZEZ PUDEŁKO* — `opisSygnalu`&nbsp;6916, `renderSkan`&nbsp;6922, `szukajSieci`&nbsp;6974, `wybierzSiec`&nbsp;6982, `wyslijPolecenieSieci`&nbsp;7000, `siecZIndeksu`&nbsp;7010, `tzChanged`&nbsp;7044, `cfgTime`&nbsp;7049, `addSlot`&nbsp;7057, `zapiszPlanDnia`&nbsp;7070, `saveConfig`&nbsp;7088, `inrKrokiZakresu`&nbsp;7158, `opcjeInr`&nbsp;7165, `inrZakresZmieniony`&nbsp;7176, `wypelnijListyZakresu`&nbsp;7189, `saveInrRange`&nbsp;7200, `wypelnijListeOdstepu`&nbsp;7234, `saveInrEvery`&nbsp;7247, `odswiezPodpowiedzInr`&nbsp;7257
+*SIECI WIDZIANE PRZEZ PUDEŁKO* — `opisSygnalu`&nbsp;6942, `renderSkan`&nbsp;6948, `szukajSieci`&nbsp;7000, `wybierzSiec`&nbsp;7008, `wyslijPolecenieSieci`&nbsp;7026, `siecZIndeksu`&nbsp;7036, `tzChanged`&nbsp;7070, `cfgTime`&nbsp;7075, `addSlot`&nbsp;7083, `zapiszPlanDnia`&nbsp;7096, `saveConfig`&nbsp;7114, `inrKrokiZakresu`&nbsp;7184, `opcjeInr`&nbsp;7191, `inrZakresZmieniony`&nbsp;7202, `wypelnijListyZakresu`&nbsp;7215, `saveInrRange`&nbsp;7226, `wypelnijListeOdstepu`&nbsp;7260, `saveInrEvery`&nbsp;7273, `odswiezPodpowiedzInr`&nbsp;7283
 
-*ANALIZA* — `openTimeOf`&nbsp;7282, `openMinutes`&nbsp;7288, `sredniaPora`&nbsp;7312, `kwantyl`&nbsp;7320, `dniMiedzy`&nbsp;7328, `odstepyZPunktow`&nbsp;7342, `analyze`&nbsp;7351, `inrContext`&nbsp;7453
+*ANALIZA* — `openTimeOf`&nbsp;7308, `openMinutes`&nbsp;7314, `sredniaPora`&nbsp;7338, `kwantyl`&nbsp;7346, `dniMiedzy`&nbsp;7354, `odstepyZPunktow`&nbsp;7368, `analyze`&nbsp;7377, `inrContext`&nbsp;7479
 
-*WYKRESY ANALIZY* — `komorkaRytmu`&nbsp;7512, `rytmSVG`&nbsp;7524, `poryWCzasieSVG`&nbsp;7586, `iskraSVG`&nbsp;7654, `dowSVG`&nbsp;7682, `dniRytmu`&nbsp;7718, `skutecznoscTygodniami`&nbsp;7739, `renderAnalysis`&nbsp;7767
+*WYKRESY ANALIZY* — `komorkaRytmu`&nbsp;7538, `rytmSVG`&nbsp;7550, `poryWCzasieSVG`&nbsp;7612, `iskraSVG`&nbsp;7680, `dowSVG`&nbsp;7708, `dniRytmu`&nbsp;7744, `skutecznoscTygodniami`&nbsp;7765, `renderAnalysis`&nbsp;7793
 
-*RAPORT* — `collectRows`&nbsp;7874, `makeReport`&nbsp;7911
+*RAPORT* — `collectRows`&nbsp;7900, `makeReport`&nbsp;7937
 
-*KONTEKST DNIA (TAGI)* — `tagiDnia`&nbsp;8062, `tagiPrzed`&nbsp;8070, `tagPrzelacz`&nbsp;8079
+*KONTEKST DNIA (TAGI)* — `tagiDnia`&nbsp;8088, `tagiPrzed`&nbsp;8096, `tagPrzelacz`&nbsp;8105
 
-*KOPIA ZAPASOWA* — `zbierzKopie`&nbsp;8122, `opisKopii`&nbsp;8132
+*KOPIA ZAPASOWA* — `zbierzKopie`&nbsp;8148, `opisKopii`&nbsp;8158
 
-*KOPIA NA TELEGRAM* — `tgKopiaUst`&nbsp;8172, `tgCzatKopii`&nbsp;8179, `odswiezKopie`&nbsp;8186, `tgKopiaCzatZapisz`&nbsp;8194, `tgKopiaCzatZnajdz`&nbsp;8214, `tgKopiaWlacz`&nbsp;8244, `tgKopiaWylacz`&nbsp;8263, `kopiaNaTelegram`&nbsp;8272, `kopiaAutomat`&nbsp;8323
+*KOPIA NA TELEGRAM* — `tgKopiaUst`&nbsp;8198, `tgCzatKopii`&nbsp;8205, `odswiezKopie`&nbsp;8212, `tgKopiaCzatZapisz`&nbsp;8220, `tgKopiaCzatZnajdz`&nbsp;8240, `tgKopiaWlacz`&nbsp;8270, `tgKopiaWylacz`&nbsp;8289, `kopiaNaTelegram`&nbsp;8298, `kopiaAutomat`&nbsp;8349
 
-*WIEK KOPII* — `dniOdDaty`&nbsp;8370, `wiekKopiiTxt`&nbsp;8376, `renderKopiaStan`&nbsp;8384, `zapiszKopie`&nbsp;8399
+*WIEK KOPII* — `dniOdDaty`&nbsp;8396, `wiekKopiiTxt`&nbsp;8402, `renderKopiaStan`&nbsp;8410, `zapiszKopie`&nbsp;8425
 
-*ODTWARZANIE Z KOPII* — `policzOdtworzenie`&nbsp;8433, `ustawieniaDoOdtworzenia`&nbsp;8481, `wczytajKopie`&nbsp;8496, `kopiaCzytelna`&nbsp;8501, `odtworzKopie`&nbsp;8511, `kopiaWybrana`&nbsp;8544
+*ODTWARZANIE Z KOPII* — `policzOdtworzenie`&nbsp;8459, `ustawieniaDoOdtworzenia`&nbsp;8507, `wczytajKopie`&nbsp;8522, `kopiaCzytelna`&nbsp;8527, `odtworzKopie`&nbsp;8537, `kopiaWybrana`&nbsp;8570
 
-*KOPIE Z BAZY* — `kopieZBazy`&nbsp;8568, `odtworzZBazy`&nbsp;8600, `exportCsv`&nbsp;8612
+*KOPIE Z BAZY* — `kopieZBazy`&nbsp;8594, `odtworzZBazy`&nbsp;8626, `exportCsv`&nbsp;8638
 
-*NAWIGACJA* — `wrocZEkranu`&nbsp;8719
+*NAWIGACJA* — `wrocZEkranu`&nbsp;8745
 
 
 ---

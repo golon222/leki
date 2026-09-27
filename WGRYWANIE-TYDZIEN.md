@@ -7,6 +7,26 @@ to nie dotyka w żadnym miejscu — ani jednego pliku, ani jednego wpisu.
 > **7. RATUNEK** na końcu tego pliku. Krótka wersja: historia leków jest
 > cała, pudełko dalej dzwoni, żadna dawka nie przepadła.
 
+---
+
+## ŚCIĄGAWKA — to, czego szukasz najczęściej
+
+| co | wartość |
+|---|---|
+| **sieć pudełka przy zmianie WiFi** | **`Pudelko-na-leki`** |
+| **hasło do niej** | **`pudelko123`** |
+| strona portalu, gdyby nie otworzyła się sama | `http://192.168.4.1` |
+| jak wejść w portal | **ukryty przycisk** (pudełko śpi) albo trzymaj go **3 s** przy starcie |
+| jak wyjść | drugie naciśnięcie przycisku — dwa opadające tony |
+| konto pudełka w bazie | `pillbox02@device.local` |
+| identyfikator w bazie | `pillbox02` |
+| sieć i hasło portalu w kodzie | `firmware/PillBoxWeek/config.h`, `AP_SSID` / `AP_PASS` |
+
+**To samo jest w aplikacji**, na telefonie, zawsze pod ręką:
+**Ustawienia → Instrukcja → „Zmiana WiFi w pudełku"** (na koncie
+tygodniowym). Kontrola statyczna porównuje oba napisy z `config.h`, więc
+instrukcja nie ma jak zacząć kłamać.
+
 Całość to jakieś 25 minut:
 
 0. **opublikuj reguły bazy** — bez tego reszta nie zadziała (2 min)

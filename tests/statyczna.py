@@ -892,12 +892,23 @@ if w.exists():
     elif _ph_ino.group(1) != _ph_cfg.group(1):
         _zle.append(f'placeholder sieci: kod ma "{_ph_ino.group(1)}", '
                     f'config.h "{_ph_cfg.group(1)}"')
+    # 5. Nazwa sieci i haslo portalu stoja W INSTRUKCJI W APLIKACJI -
+    #    na prosbe Kuby ("zapisz gdzies to haslo i nazwe sieci"). Telefon
+    #    ma sie przy sobie zawsze, kartki nie. Instrukcja, ktora podaje
+    #    inne haslo niz pudelko, jest gorsza niz jej brak: czlowiek stoi
+    #    nad pudelkiem, wpisuje i nie rozumie, dlaczego nie wchodzi.
+    for _n, _co in (('AP_SSID', 'nazwa sieci'), ('AP_PASS', 'haslo')):
+        _v = _defW(_n, _cfgW)
+        if not _v:
+            _zle.append(f'{_n}: nie ma w config.h')
+        elif _v not in _html:
+            _zle.append(f'{_co} portalu ("{_v}") nie stoi w Instrukcji w aplikacji')
     if _zle:
         bad += 1
         print('  BLAD portal WiFi pudelka tygodniowego:')
         for _z in _zle: print('       ' + _z)
     else:
-        print('  OK   portal WiFi: siec po potwierdzeniu, przycisk bez petli')
+        print('  OK   portal WiFi: siec po potwierdzeniu, przycisk bez petli, haslo w Instrukcji')
 
 t = root/"firmware/PillBoxTest/PillBoxTest.ino"
 if t.exists():

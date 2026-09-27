@@ -1656,6 +1656,32 @@ body[data-profil="tydzien"]{
     </div>
   </details>
 
+  <!-- SIEC PORTALU STOI TU DOSLOWNIE, a nie "sprawdz w instrukcji".
+       Kuba poprosil wprost: "zapisz gdzies to haslo i nazwe sieci, zeby
+       to gdzies zapamietac". Telefon ma sie przy sobie zawsze, a kartka
+       z hasłem nie. Kontrola statyczna porownuje oba napisy z config.h
+       pudelka - rozjazd znaczylby instrukcje, ktora nie dziala.      -->
+  <details class="card sek tylko-tydzien">
+    <summary><h3>Zmiana WiFi w pudełku</h3></summary>
+    <div class="sekcia">
+      <div class="fakt"><span>sieć pudełka</span><b>Pudelko-na-leki</b></div>
+      <div class="fakt"><span>hasło</span><b>pudelko123</b></div>
+      <div class="fakt"><span>strona</span><b>http://192.168.4.1</b></div>
+      <p class="muted" style="margin-top:var(--s3)"><b>Naciśnij ukryty przycisk
+        w pudełku</b> — trzy piknięcia znaczą „jestem w trybie konfiguracji".
+        Połącz telefon z siecią <b>Pudelko-na-leki</b>, strona otworzy się sama.
+        Wybierz swoją sieć z listy, wpisz jej hasło, <b>Połącz</b>. Jedno
+        piknięcie = połączone i zapamiętane.</p>
+      <p class="muted"><b>Sieć zapisuje się dopiero po udanym połączeniu</b>,
+        więc literówka nie skasuje tej, która działa — usłyszysz dwa sygnały
+        błędu i zostaje po staremu. Portal zamkniesz drugim naciśnięciem
+        przycisku (dwa opadające tony), a sam zamyka się po pięciu minutach.</p>
+      <p class="muted">Jeśli pudełko nie zna żadnej sieci, otwiera portal
+        samo przy włączeniu. Przy starcie przycisk trzymany <b>ponad
+        3 sekundy</b> też otwiera portal; krótkie naciśnięcie to autotest.</p>
+    </div>
+  </details>
+
   <details class="card sek">
     <summary><h3>Kalendarz i kolory</h3></summary>
     <div class="sekcia">
@@ -1667,8 +1693,8 @@ body[data-profil="tydzien"]{
         <b>nie wzięte</b></div>
       <div class="fakt"><span><i class="kropka" style="background:var(--dim2)"></i>szary</span>
         <b>brak danych</b></div>
-      <div class="fakt"><span>obwódka kreskowana</span><b>termin pomiaru INR</b></div>
-      <div class="fakt"><span>fioletowa kropka</span><b>tego dnia był pomiar INR</b></div>
+      <div class="fakt tylko-warfin"><span>obwódka kreskowana</span><b>termin pomiaru INR</b></div>
+      <div class="fakt tylko-warfin"><span>fioletowa kropka</span><b>tego dnia był pomiar INR</b></div>
       <p class="muted" style="margin-top:var(--s3)">Dzień robi się czerwony dopiero
         po <b>zamknięciu doby lekowej</b>, czyli po 3:00 następnego dnia — nie
         o 20:06, gdy pudełko przestanie dzwonić. Tabletkę bierzesz, kiedy chcesz,
@@ -1700,7 +1726,7 @@ body[data-profil="tydzien"]{
     </div>
   </details>
 
-  <details class="card sek">
+  <details class="card sek tylko-warfin">
     <summary><h3>Zapas tabletek</h3></summary>
     <div class="sekcia">
       <p class="muted">Licznik odejmuje tabletki od stanu, który sam wpiszesz —
@@ -1712,7 +1738,7 @@ body[data-profil="tydzien"]{
     </div>
   </details>
 
-  <details class="card sek">
+  <details class="card sek tylko-warfin">
     <summary><h3>INR</h3></summary>
     <div class="sekcia">
       <p class="muted"><b>Zakres terapeutyczny ustala lekarz</b> — najczęściej 2,0–3,0.
@@ -1820,7 +1846,7 @@ body[data-profil="tydzien"]{
     </div>
   </details>
 
-  <details class="card sek">
+  <details class="card sek tylko-warfin">
     <summary><h3>Okoliczności przy INR</h3></summary>
     <div class="sekcia">
       <p class="muted">Warfaryna nie działa w próżni. Antybiotyk, infekcja
@@ -2172,7 +2198,7 @@ window.wybierzPudelko = (id) => {
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-09-27.92";
+const APP_VERSION = "2026-09-27.93";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
