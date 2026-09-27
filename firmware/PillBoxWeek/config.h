@@ -19,7 +19,7 @@
  *    miejsce w bazie i kalendarze wymieszalyby sie po cichu.
  * ------------------------------------------------------------------ */
 #define DEVICE_ID           "pillbox02"     // klucz w /devices/<DEVICE_ID>
-#define FW_VERSION          "0.2.0"         // widoczna w aplikacji
+#define FW_VERSION          "0.3.0"         // widoczna w aplikacji
 
 /* ---------------------------------------------------------------------
  * 2. FIREBASE
@@ -88,6 +88,13 @@
 /*  Ponizej tego napiecia plytka po prostu nie chodzi - wiec taki odczyt
  *  znaczy "dzielnik nie ma kontaktu", a nie "bateria pusta". Zglaszamy
  *  wtedy brak danych zamiast zerowego procentu (B30).                  */
+/*  Hamulec na petle wybudzen. Pudelko, ktore budzi sie z pinu raz za razem
+ *  i za kazdym razem nie ma czego zglosic, jest zepsute - wszystko jedno
+ *  z jakiego powodu. Po tylu pustych wybudzeniach z rzedu rozbrajamy pin
+ *  na chwile, zeby petla nie zjadla ogniwa (B30).                       */
+#define PUSTE_WYBUDZENIA_MAX 3
+#define PO_PUSTYCH_SEN_S     300
+
 #define BATT_MIN_SENS_V     3.00f
 
 #define BATT_WARN_PCT       15     // ponizej tego ostrzezenie dzwiekowe

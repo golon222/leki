@@ -499,6 +499,20 @@ w = root/"firmware/PillBoxWeek/PillBoxWeek.ino"
 if w.exists():
     src = w.read_text(encoding="utf-8")
     sen = src[src.index("void idzSpac()"):src.index("void setup()")]
+    # Wersja w naglowku i wersja w kodzie MUSZA sie zgadzac. Rozjazd
+    # sprawia, ze pudelko meldujac "0.2.0" moze chodzic na starym kodzie -
+    # i tak sie wlasnie stalo (B30, druga runda).
+    import re as _r2
+    _fw  = _r2.search(r'#define\s+FW_VERSION\s+"([^"]+)"',
+                      (root/"firmware/PillBoxWeek/config.h").read_text(encoding="utf-8"))
+    _kod = _r2.search(r'#define\s+KOD_WERSJA\s+"([^"]+)"', src)
+    if not _fw or not _kod:
+        bad += 1; print("  BLAD PillBoxWeek: brak FW_VERSION albo KOD_WERSJA")
+    elif _fw.group(1) != _kod.group(1):
+        bad += 1; print(f"  BLAD PillBoxWeek: config.h mowi {_fw.group(1)}, kod {_kod.group(1)}")
+    else:
+        print(f"  OK   pudelko tygodniowe - naglowek i kod tej samej wersji ({_fw.group(1)})")
+
     braki = [x for x in ("pinMode(PIN_KLAPKI, INPUT)", "gpio_hold_en(",
                          "gpio_deep_sleep_hold_en()") if x not in sen]
     if braki:

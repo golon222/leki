@@ -43,6 +43,18 @@
 #error "config.h nie pasuje do tego szkicu - pobierz oba pliki na nowo."
 #endif
 
+/*  WERSJA KODU - W TYM PLIKU, obok FW_VERSION, ktore siedzi w config.h.
+
+    TO NIE JEST DUBLOWANIE. Kosztowalo cala runde diagnostyki: Kuba
+    podmienil `config.h` (bo tam dolozylem stala), a `PillBoxWeek.ino`
+    zostawil stary. Pudelko meldowalo sie wiec jako `0.2.0` i wygladalo na
+    zaktualizowane, podczas gdy chodzil na nim kod sprzed naprawy - szukalem
+    bledu w czyms, czego na plytce w ogole nie bylo.
+
+    Numer wersji, ktory mieszka w NAGLOWKU, opisuje naglowek. Ten opisuje
+    program. Gdy sie rozjada, log krzyczy o tym w pierwszej linii.        */
+#define KOD_WERSJA "0.3.0"
+
 #define LOG(...)  Serial.printf(__VA_ARGS__)
 
 static const char* NAZWY_DNI[7] = { "PON","WT","SR","CZW","PT","SOB","ND" };
@@ -60,6 +72,8 @@ RTC_DATA_ATTR int32_t  rtcAlarmDzien    = -1;
 RTC_DATA_ATTR int8_t   rtcAlarmSlot     = -1;   // slot, ktory wlasnie ponawiamy
 RTC_DATA_ATTR uint8_t  rtcAlarmPonowien = 0;
 RTC_DATA_ATTR bool     rtcCzasPewny     = false;
+RTC_DATA_ATTR uint8_t  rtcPuste         = 0;    // wybudzenia z pinu, ktore nic nie wykryly
+RTC_DATA_ATTR uint16_t rtcPusteRazem    = 0;    // ile ich bylo w ogole - idzie do statusu
 
 /* =====================================================================
  *  STAN BIEZACEGO WYBUDZENIA
@@ -482,6 +496,9 @@ void wyslijStatus() {
   doc["rssi"]    = WiFi.RSSI();
   doc["queue"]   = kolejkaIle();
   doc["wakes"]   = (uint32_t)rtcWybudzen;
+  /*  Puste wybudzenia sa OBJAWEM, nie ciekawostka: jesli ta liczba rosnie,
+      pudelko budzi sie z pinu bez powodu i trzeba na to spojrzec.      */
+  doc["puste"]   = (uint32_t)rtcPusteRazem;
   doc["ts"]      = (uint32_t)time(nullptr);
   String body; serializeJson(doc, body);
   rtdbWyslij("PATCH", "/devices/" DEVICE_ID "/status.json", body);
@@ -694,7 +711,28 @@ void idzSpac() {
   const bool otwarte = klapkiOtwarte();
   if (otwarte) LOG("[SEN] klapka nadal otwarta - usypiam na sam zegar\n");
 
-  uint64_t sek = otwarte ? (uint64_t)SEN_PRZY_OTWARTEJ_S : sekundDoNastepnego();
+  /*  HAMULEC NA PETLE WYBUDZEN.
+
+      Nie zna przyczyny i nie musi. Pudelko, ktore budzi sie z pinu raz za
+      razem i za kazdym razem nie ma czego zglosic, jest zepsute - wszystko
+      jedno czy przez blad w kodzie (B30), czy przez styk, ktory nie puszcza.
+      Bez hamulca taka petla konczy sie rozladowanym ogniwem i melodia
+      grajaca do skutku; z hamulcem konczy sie wpisem w logu i statusie.
+
+      SWIADOMA CENA: przez PO_PUSTYCH_SEN_S pin nie budzi, wiec otwarcie
+      klapki w tym oknie moze zostac zauwazone dopiero przy nastepnym
+      wybudzeniu albo wcale. Zgadzam sie na to, bo pudelko w petli i tak
+      nie zglasza niczego - a zamiast psuc sie po cichu, teraz to widac.  */
+  bool hamulec = false;
+  if (rtcPuste >= PUSTE_WYBUDZENIA_MAX) {
+    hamulec  = true;
+    rtcPuste = 0;                       // po drzemce probujemy jeszcze raz
+    LOG("[SEN] %u pustych wybudzen z rzedu - rozbrajam pin na %d s\n",
+        (unsigned)PUSTE_WYBUDZENIA_MAX, PO_PUSTYCH_SEN_S);
+  }
+
+  uint64_t sek = hamulec ? (uint64_t)PO_PUSTYCH_SEN_S
+               : otwarte ? (uint64_t)SEN_PRZY_OTWARTEJ_S : sekundDoNastepnego();
   LOG("[SEN] spie na %llu min (kolejka: %d)\n", sek / 60, kolejkaIle());
   Serial.flush();
   nvs.end();
@@ -734,7 +772,8 @@ void idzSpac() {
   gpio_pullup_dis((gpio_num_t)PIN_KLAPKI);
   gpio_pulldown_dis((gpio_num_t)PIN_KLAPKI);
 
-  if (!otwarte) esp_deep_sleep_enable_gpio_wakeup(BIT(PIN_KLAPKI), ESP_GPIO_WAKEUP_GPIO_LOW);
+  if (!otwarte && !hamulec)
+    esp_deep_sleep_enable_gpio_wakeup(BIT(PIN_KLAPKI), ESP_GPIO_WAKEUP_GPIO_LOW);
   esp_sleep_enable_timer_wakeup(sek * 1000000ULL);
 
   gpio_hold_en((gpio_num_t)PIN_KLAPKI);
@@ -777,7 +816,11 @@ void setup() {
   czytajBaterie();
 
   LOG("\n===== PillBoxWeek %s  (wybudzenie %lu) =====\n",
-      FW_VERSION, (unsigned long)rtcWybudzen);
+      KOD_WERSJA, (unsigned long)rtcWybudzen);
+  if (strcmp(FW_VERSION, KOD_WERSJA) != 0)
+    LOG("[!!!] UWAGA: config.h mowi %s, a program jest %s - PLIKI SA Z ROZNYCH WERSJI.\n"
+        "      Podmien OBA pliki z firmware/PillBoxWeek i wgraj jeszcze raz.\n",
+        FW_VERSION, KOD_WERSJA);
   LOG("[BAT] %d%%  %.2f V\n", battProcent, battVolt);
 
   /*  Zegar ESP32 chodzi przez caly deep sleep, wiec doby domykamy JESZCZE
@@ -797,12 +840,14 @@ void setup() {
         opisKomory(k), mvPoStarcie, PROGI[0], PROGI[7]);
 
     if (k >= 0) {
+      rtcPuste = 0;                       // pin powiedzial cos sensownego
       pikniecia(k + 1);                   // potwierdzenie na sluch
       zapiszOtwarcie(k);
       beepAck();
     } else if (k == -2) {
       /* Kilka klapek naraz to NAPELNIANIE, nie dawka. Zapisanie tego jako
          wziecia zmyliloby kalendarz na caly tydzien do przodu.         */
+      rtcPuste = 0;                       // pin powiedzial cos sensownego
       LOG("[EV ] kilka klapek naraz - napelnianie, nie zapisuje dawki\n");
       beepKilkaNaraz();
     } else {
@@ -810,8 +855,10 @@ void setup() {
           a dzwiek, na ktory nie da sie zareagowac, uczy ignorowac
           pudelko. Przy pomylce w usypianiu (B30) to wlasnie ten
           pojedynczy pisk zamienil sie w melode grajaca bez konca.
-          Slad zostaje w logu i na liczniku wybudzen.                  */
-      LOG("[EV ] klapka zdazyla sie zamknac - nie pikam\n");
+          Slad zostaje w logu i na liczniku pustych wybudzen.          */
+      if (rtcPuste < 255)     rtcPuste++;
+      if (rtcPusteRazem < 65535) rtcPusteRazem++;
+      LOG("[EV ] klapka zdazyla sie zamknac - nie pikam (puste z rzedu: %u)\n", rtcPuste);
     }
     if (battProcent >= 0 && battProcent <= BATT_WARN_PCT) { delay(300); beepBateria(); }
     idzSpac();
