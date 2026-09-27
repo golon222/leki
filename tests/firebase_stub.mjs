@@ -27,12 +27,33 @@ export const __db = {
   /* Reguly sprawdzamy domyslnie. Testy, ktore CELOWO pisza smieci,
      moga to na chwile wylaczyc.                                     */
   sprawdzajReguly: true,
-  odrzucone: []
+  odrzucone: [],
+  /* ODMOWA NA WYBRANEJ SCIEZCE, nie na calej bazie.
+
+     Potrzebna, odkad konto czlowieka moze miec dostep do JEDNEGO pudelka
+     i nie miec do drugiego (D124). Trybem "odmowa" tego nie da sie
+     ustawic - on odmawia wszystkiego, a wtedy test nie odrozni "to konto
+     nie ma tam nic do roboty" od "baza padla", czyli dokladnie tych dwoch
+     przypadkow, ktore aplikacja MUSI rozrozniac.                      */
+  odmowaSciezek: [],
+  /*  To samo, ale bledem SIECI, nie odmowa. Te dwa przypadki musza dac
+      rozny wynik: odmowa znaczy "to konto nie ma tam nic do roboty",
+      a blad sieci nie ma prawa odciac nikogo od wlasnego pudelka.     */
+  bladSciezek: []
 };
 
 export function __resetDb(){
   __db.data = {}; __db.writes = []; __db.tryb = "ok";
   __db.sprawdzajReguly = true; __db.odrzucone = [];
+  __db.odmowaSciezek = []; __db.bladSciezek = [];
+}
+
+/* Czy ta sciezka lezy w galezi, ktorej test kazal odmawiac. */
+function odmawiamy(path){
+  return (__db.odmowaSciezek || []).some(pref => (path || "").startsWith(pref));
+}
+function psujemy(path){
+  return (__db.bladSciezek || []).some(pref => (path || "").startsWith(pref));
 }
 
 const setPath = (obj, path, val) => {
@@ -88,6 +109,8 @@ export const ref = (_db, path = "") => ({ path });
 export const onValue = () => {};
 export const goOnline = () => {};
 export const get = async (r) => {
+  if (odmawiamy(r.path)) throw bladOdmowy("sciezka zablokowana w tescie: " + r.path);
+  if (psujemy(r.path))   throw new Error("baza nie odpowiada");
   const parts = (r.path || "").split("/").filter(Boolean);
   let cur = __db.data;
   for (const p of parts) cur = (cur && typeof cur === "object") ? cur[p] : undefined;

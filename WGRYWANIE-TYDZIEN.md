@@ -1,53 +1,97 @@
 # Pudełko tygodniowe — od zera do działania
 
-Osobne urządzenie, osobny program, **osobne konto w bazie**. Pudełka dziennego
-to nie dotyka w żadnym miejscu — ani jednego pliku, ani jednego wpisu w bazie.
+Osobne urządzenie, osobny program, osobne konta w bazie. Pudełka dziennego
+to nie dotyka w żadnym miejscu — ani jednego pliku, ani jednego wpisu.
 
-Całość to jakieś 20 minut. Kolejność jest ważna:
+Całość to jakieś 25 minut:
 
-1. konto urządzenia w Firebase (5 min)
+1. konto **pudełka** i konto **dziewczyny** — to dwie różne rzeczy (10 min)
 2. gałąź `pillbox02` w bazie (5 min)
 3. `config.h` — trzy linie (2 min)
 4. wgranie kablem z Arduino IDE (5 min)
 5. sprawdzenie, czy się zameldowało
 
-Wgrane bez kroków 1–2 pudełko **będzie działać i piszczeć**, ale wszystko, co
-zapisze, zostanie w jego pamięci zamiast dojechać do telefonu. Nic nie przepada
-— dojedzie później, jak konto powstanie. Ale lepiej zrobić to po kolei.
+---
+
+# 0. Dlaczego są DWA konta, a nie jedno
+
+To jest jedyna rzecz w całej instrukcji, którą warto przeczytać uważnie,
+bo wszystko dalej z niej wynika.
+
+**Konto pudełka — `pillbox02@device.local`.** Loguje się nim **urządzenie**,
+nie człowiek. Nikt nigdy nie wpisuje go w aplikacji. Jego hasło ląduje
+w pamięci trwałej pudełka i po to tam jest, żeby reguły bazy mogły
+powiedzieć: *„to urządzenie pisze wyłącznie do swojej gałęzi i do niczego
+więcej"*. Adres jest zmyślony (`@device.local` nie istnieje w internecie)
+i to jest w porządku — Firebase nie wysyła na niego żadnej poczty.
+
+**Konto dziewczyny — jej prawdziwy e-mail i hasło, które sama zna.** Tym
+się loguje w aplikacji, na swoim telefonie. Dokładnie tak samo jak Ty
+swoim adresem.
+
+**Dlaczego pudełko nie może używać jej konta.** Dwa niezależne powody,
+każdy wystarczający:
+
+* Hasło, którym loguje się pudełko, przechodzi przez `config.h` i siedzi
+  potem w jego pamięci. Wpisanie tam jej prawdziwego hasła znaczyłoby, że
+  hasło do jej konta leży w urządzeniu, które ma być **zaklejone** i stać
+  latami — nie do zmiany bez kabla.
+* Konto pudełka jest **celowo ograniczone**: może pisać tylko do
+  `devices/pillbox02`. Jej konto ma widzieć kalendarz, ustawienia,
+  wszystko. To dwa różne poziomy dostępu i mieszanie ich znosi jedyną
+  barierę, jaka tu jest.
+
+**To nie jest „jakieś domyślne hasło".** To hasło maszyny — ma być długie
+i nieciekawe, i nikt go nie zapamiętuje. Jej hasło jest **jej** i tylko
+ona je zna.
 
 ---
 
-# 1. Konto urządzenia
-
-Każde pudełko loguje się do bazy **własnym kontem**. Nie Twoim — własnym.
-Dzięki temu reguły bazy mogą powiedzieć „to urządzenie pisze wyłącznie do
-swojej gałęzi". `pillbox01` ma takie konto od początku, `pillbox02` musi
-dostać swoje.
+# 1a. Konto pudełka
 
 **Wejdź:**
 https://console.firebase.google.com/project/pudelko-na-leki/authentication/users
 
 Zobaczysz listę, a na niej `pillbox01@device.local` i swój adres.
 
-**Kliknij `Add user`** (niebieski przycisk, prawy górny róg listy).
+**Kliknij `Add user`** (prawy górny róg listy).
 
 | pole | co wpisać |
 |---|---|
 | Email | `pillbox02@device.local` |
 | Password | **to samo hasło co przy `pillbox01`** |
 
-> **To samo hasło to nie lenistwo — to jedno hasło mniej do zgubienia.**
-> Oba konta są w Twoim prywatnym projekcie, oba służą wyłącznie pudełkom,
-> a to hasło i tak masz już zapisane. Jeśli wolisz nowe — wymyśl i **zapisz
-> sobie teraz**, bo za chwilę będzie potrzebne, a Firebase go nie pokaże
-> drugi raz.
+To samo hasło co drugie pudełko to nie lenistwo — oba są kontami maszyn
+w Twoim prywatnym projekcie, a to hasło masz już zapisane. Jeśli wolisz
+nowe: wymyśl i **zapisz sobie teraz**, bo Firebase nie pokaże go drugi raz.
 
-**Kliknij `Add user`.** Konto pojawi się na liście.
+**Skopiuj UID tego konta** — ten długi ciąg w kolumnie `User UID`. Najedź
+myszką, pokaże się ikonka kopiowania. Wklej go sobie w notatnik.
 
-**Teraz skopiuj jego UID.** To ten długi ciąg znaków w ostatniej kolumnie
-(`User UID`), coś w rodzaju `k3Jx9mQ2pVfR7dN8sT1yZ4wB6aC0`. Najedź na niego
-myszką — pokaże się ikonka kopiowania. **Wklej go sobie gdzieś na boku**,
-w notatniku. Będzie potrzebny w kroku 2.
+# 1b. Konto dziewczyny
+
+Ten sam ekran, znowu **`Add user`**:
+
+| pole | co wpisać |
+|---|---|
+| Email | jej **prawdziwy** adres |
+| Password | hasło, które jej podasz — najlepiej niech zmieni je u siebie |
+
+**Zmiana hasła po jej stronie.** Na ekranie logowania w aplikacji jest
+odzyskiwanie hasła — Firebase wyśle jej link na ten adres. Dlatego adres
+ma być prawdziwy: nie po to, żeby dostawała powiadomienia, ale żeby mogła
+odzyskać dostęp bez Ciebie.
+
+**Skopiuj też jej UID.** Masz teraz w notatniku **trzy** ciągi znaków
+i najłatwiej je pomylić:
+
+| UID | czyj | do czego |
+|---|---|---|
+| Twój | człowiek | `owner` — właściciel pudełka |
+| jej | człowiek | `owners` — współwłaściciel |
+| `pillbox02@device.local` | maszyna | `deviceUid` — samo pudełko |
+
+Twój UID jest już w bazie, skopiujesz go w kroku 2a — nie szukaj go tutaj.
 
 ---
 
@@ -58,59 +102,46 @@ https://console.firebase.google.com/project/pudelko-na-leki/database/pudelko-na-
 
 Zobaczysz drzewo. Rozwiń `devices` — jest tam `pillbox01`.
 
-## 2a. Najpierw skopiuj SWÓJ UID
+## 2a. Skopiuj SWÓJ UID
 
 Rozwiń `devices` → `pillbox01`. Pierwsze pole to **`owner`** — to jest UID
-**Twojego** konta (tego, którym logujesz się w aplikacji).
+Twojego konta.
 
-**Skopiuj tę wartość.** Nie przepisuj ręcznie, skopiuj — jedna pomylona
-litera i baza odrzuci wszystko, co pudełko wyśle, a błąd będzie wyglądał
-jak awaria sieci.
-
-Masz teraz dwa UID-y na boku:
-
-* **UID właściciela** — z `devices/pillbox01/owner` (Twój)
-* **UID urządzenia** — z kroku 1 (konta `pillbox02@device.local`)
-
-To są **dwie różne rzeczy** i najłatwiej je pomylić. Właściciel to Ty,
-urządzenie to pudełko.
+**Skopiuj tę wartość**, nie przepisuj. Jedna pomylona litera i baza odrzuci
+wszystko, co pudełko wyśle, a błąd będzie wyglądał jak awaria sieci.
 
 ## 2b. Utwórz `pillbox02`
 
-Najedź na węzeł **`devices`** — po prawej pojawią się ikonki. Kliknij
-**`+`**.
-
-Pojawi się pusty wiersz na nazwę i wartość:
+Najedź na węzeł **`devices`** — po prawej pojawią się ikonki. Kliknij **`+`**.
 
 * **Name:** `pillbox02`
 * **Value:** zostaw **puste** i kliknij **`+`** jeszcze raz — pojawi się
-  wcięty, zagnieżdżony wiersz. W nim:
+  wcięty wiersz. W nim:
   * **Name:** `owner`
-  * **Value:** wklej **UID właściciela**
+  * **Value:** wklej **swój** UID
 
-**Kliknij `Add`.** W drzewie powstanie `devices/pillbox02/owner`.
+**Kliknij `Add`.**
 
-(Po co ten jeden ręczny wpis, skoro za chwilę wkleimy całość: konsola
-pozwala wklejać JSON tylko do węzła, **który już istnieje**. Ten krok
-robi `pillbox02` bytem, w który da się celować.)
+(Po co ten jeden ręczny wpis, skoro zaraz wklejamy całość: konsola pozwala
+wklejać JSON tylko do węzła, **który już istnieje**. Ten krok robi
+`pillbox02` bytem, w który da się celować.)
 
 ## 2c. Wgraj resztę jednym wklejeniem
 
-Teraz najedź na węzeł **`pillbox02`** (ten świeżo utworzony) i kliknij
-**trzy kropki `⋮`** → **`Import JSON`**.
+Najedź na węzeł **`pillbox02`** i kliknij **trzy kropki `⋮`** →
+**`Import JSON`**.
 
-> **Uwaga, jedyne miejsce, w którym można tu narobić szkody:** upewnij się,
-> że trzy kropki klikasz na **`pillbox02`**, a nie na `devices`. Import
+> **Jedyne miejsce, w którym można tu narobić szkody:** upewnij się, że
+> trzy kropki klikasz na **`pillbox02`**, a nie na `devices`. Import
 > **zastępuje** zawartość węzła — zrobiony na `devices` skasowałby
 > `pillbox01`, czyli całą historię Warfinu. Na `pillbox02` jest zupełnie
 > bezpieczny, bo tam i tak nic jeszcze nie ma.
 
-Wklej to, podmieniając oba `WKLEJ_TU_...` na UID-y z notatnika:
-
 ```json
 {
-  "owner": "WKLEJ_TU_UID_SWOJEGO_KONTA",
-  "deviceUid": "WKLEJ_TU_UID_KONTA_pillbox02",
+  "owner": "TWOJ_UID",
+  "owners": { "JEJ_UID": true },
+  "deviceUid": "UID_KONTA_pillbox02",
   "config": {
     "schedule": ["20:00"],
     "profil": "tydzien"
@@ -118,60 +149,63 @@ Wklej to, podmieniając oba `WKLEJ_TU_...` na UID-y z notatnika:
 }
 ```
 
-(ten sam plik leży w repo jako `firmware/PillBoxWeek/pillbox02-baza.json`,
-jeśli wygodniej Ci go edytować w edytorze i wybrać z dysku)
+(ten sam plik leży w repo jako `firmware/PillBoxWeek/pillbox02-baza.json`)
+
+Uwaga: w `owners` **kluczem jest UID**, a wartością `true`. Nie odwrotnie.
 
 **Co to znaczy, linia po linii:**
 
 | pole | znaczenie |
 |---|---|
-| `owner` | Ty. Bez tego aplikacja nie zobaczy pudełka. |
-| `deviceUid` | pudełko. Bez tego **nic nie zapisze** — reguły odrzucą każdy wpis. |
-| `schedule` | **godziny przypomnień**, nie pory brania. Możesz dać dwie: `["20:00","22:30"]` — wtedy pudełko przypomni jeszcze raz, jeśli do tej pory klapka nie została otwarta. |
+| `owner` | Ty. Zarządzasz pudełkiem. |
+| `owners` | dziewczyna. Ma **te same prawa** co Ty do tego pudełka. |
+| `deviceUid` | samo pudełko. Bez tego **nic nie zapisze** — reguły odrzucą każdy wpis. |
+| `schedule` | **godziny przypomnień**, nie pory brania. Możesz dać dwie: `["20:00","22:30"]` — wtedy pudełko przypomni jeszcze raz, jeśli klapka nadal nie została otwarta. |
 | `profil` | po tym aplikacja pozna, że ma pokazać pudełko tygodniowe, a nie ekrany Warfinu. |
 
-Kliknij **`Import`**. Drzewo powinno wyglądać tak:
+Po imporcie **sprawdź wzrokiem, że `pillbox01` nadal ma swoje dane.**
 
-```
-devices
-├── pillbox01
-│   └── ... (nietknięte)
-└── pillbox02
-    ├── owner      "..."
-    ├── deviceUid  "..."
-    └── config
-        ├── schedule
-        │   └── 0   "20:00"
-        └── profil  "tydzien"
-```
+## 2d. Czego jej konto NIE widzi — i to jest celowe
 
-**Sprawdź wzrokiem, że `pillbox01` nadal ma swoje dane.** Jedno spojrzenie,
-a spokój na całą resztę.
+Do `pillbox01` **nie dopisujemy jej nigdzie**. Twoje INR, dawki Warfinu
+i raport dla lekarza to dane medyczne i zostają tylko Twoje. W aplikacji
+zobaczy to pudełko na liście jako **wygaszone, z podpisem „to konto nie ma
+dostępu"** — nie zniknie, bo znikające pudełko każe szukać usterki tam,
+gdzie jej nie ma.
+
+Ty widzisz oba.
+
+**Jedna rzecz, którą trzeba powiedzieć wprost:** kalendarz każdy ma swój.
+Otwarcia klapek pochodzą z pudełka, więc oboje widzicie **to samo** — ale
+gdyby ktoś coś ręcznie poprawił w aplikacji, ta poprawka zostaje u niego.
+Dane z urządzenia są wspólne, ręczne korekty nie.
 
 ---
 
 # 3. `config.h`
 
 Pobierz z GitHuba folder **`firmware/PillBoxWeek`** w całości. Oba pliki
-muszą leżeć razem w folderze o nazwie **`PillBoxWeek`** — inaczej Arduino IDE
-nie otworzy szkicu.
+muszą leżeć razem w folderze o nazwie **`PillBoxWeek`** — inaczej Arduino
+IDE nie otworzy szkicu.
 
-Otwórz `config.h` i wypełnij trzy linie:
+Trzy linie do wypełnienia:
 
 ```c
-#define DEVICE_PASSWORD     "TUTAJ_WPISZ_HASLO"        // hasło konta z kroku 1
+#define DEVICE_PASSWORD     "TUTAJ_WPISZ_HASLO"        // hasło konta z kroku 1a
 #define WIFI_SSID           "TUTAJ_WPISZ_SIEC"         // nazwa Waszego WiFi
-#define WIFI_PASS           "TUTAJ_WPISZ_HASLO_WIFI"   // hasło do WiFi
+#define WIFI_PASS           "TUTAJ_WPISZ_HASLO_WIFI"   // hasło WiFi
 ```
 
-**Hasło do bazy wpisujesz ostatni raz.** Przy pierwszym udanym logowaniu
-pudełko przepisze je do własnej pamięci trwałej i od tej pory bierze je
-stamtąd — dokładnie tak jak pudełko dzienne. Do repozytorium wraca
-placeholder i tak ma zostać.
+To hasło **pudełka** z kroku 1a, nie jej. Jej hasło nie pojawia się
+w żadnym pliku, nigdy.
 
-**Sieć musi być 2,4 GHz.** ESP32-C3 nie widzi 5 GHz w ogóle — jeśli router
-rozgłasza obie pod tą samą nazwą, zwykle jest dobrze, ale gdy pudełko
-uparcie nie łapie sieci, to jest pierwsza rzecz do sprawdzenia.
+**Wpisujesz je ostatni raz.** Przy pierwszym udanym logowaniu pudełko
+przepisze je do własnej pamięci trwałej i od tej pory bierze je stamtąd.
+Do repozytorium wraca placeholder i tak ma zostać.
+
+**Sieć musi być 2,4 GHz.** ESP32-C3 nie widzi 5 GHz w ogóle. Jeśli router
+rozgłasza obie pod jedną nazwą, zwykle jest dobrze — ale gdy pudełko
+uparcie nie łapie sieci, to pierwsza rzecz do sprawdzenia.
 
 ---
 
@@ -186,15 +220,14 @@ Menu **Narzędzia** — identycznie jak przy pudełku dziennym:
 | Partition Scheme | **Minimal SPIFFS (1.9MB APP with OTA/190KB SPIFFS)** |
 | Erase All Flash Before Sketch Upload | **Disabled** |
 
-Program zajmuje **58%** pierwszej partycji.
-
-Podłącz kablem, wybierz port, **Wgraj**.
+Program zajmuje **58%** pierwszej partycji. Podłącz kablem, wybierz port,
+**Wgraj**.
 
 ---
 
 # 5. Czy się zameldowało
 
-Otwórz **Monitor portu szeregowego, 115200**. Po wgraniu powinno pójść tak:
+Otwórz **Monitor portu szeregowego, 115200**:
 
 ```
 ===== PillBoxWeek 0.1.0  (wybudzenie 1) =====
@@ -212,37 +245,37 @@ Otwórz **Monitor portu szeregowego, 115200**. Po wgraniu powinno pójść tak:
 **`[FB ] haslo zapisane w pamieci`** to ta linia, na którą czekasz — od niej
 pudełko radzi sobie samo i kolejne wgrania mogą iść z placeholderem.
 
-Jak coś nie gra:
-
 | co widzisz | co to znaczy |
 |---|---|
 | `[FB ] logowanie HTTP 400` | hasło w `config.h` ≠ hasło konta `pillbox02@device.local` |
-| `[FB ] zdarzenie HTTP 401` albo `403` | `deviceUid` w bazie nie zgadza się z UID konta (krok 2c) |
+| `[FB ] zdarzenie HTTP 401` albo `403` | `deviceUid` w bazie nie zgadza się z UID konta pudełka |
 | `[FB ] zdarzenie HTTP 400` | reguły odrzuciły wpis — przyślij mi linię `baza: ...` spod spodu |
 | `[NET] brak sieci` | WiFi: nazwa, hasło albo 5 GHz |
-| cisza, żadnego logu | zły port albo **USB CDC On Boot** ustawione na Disabled |
+| cisza, żadnego logu | zły port albo **USB CDC On Boot** na Disabled |
 
 Na koniec zajrzyj w bazę: w `devices/pillbox02` powinny dojść `events`
-i `status`. To jest dowód, że cała droga działa.
+i `status`. To dowód, że cała droga działa.
 
 ---
 
-# 6. W aplikacji
+# 6. Na jej telefonie
 
-**Ustawienia → Pudełko → Tygodniowe.** Aplikacja się przeładuje i od tej
-pory patrzy na `pillbox02`. Powrót do Warfinu tym samym kafelkiem.
+1. Otwiera aplikację, loguje się **swoim** adresem i hasłem.
+2. Aplikacja sama wybierze pudełko tygodniowe — bo do drugiego nie ma
+   dostępu i wie o tym, zanim cokolwiek pokaże.
+3. Dodaje do ekranu głównego (Safari → Udostępnij → Do ekranu początkowego).
 
-Wybór siedzi w pamięci **tego telefonu**, nie w bazie — więc Ty możesz mieć
-otwarte pudełko dzienne, a ona tygodniowe, na tym samym koncie.
+U Ciebie: **Ustawienia → Pudełko** i przełączasz między dwoma. Wybór siedzi
+w pamięci **tego telefonu**, nie w bazie — więc Ty możesz patrzeć na
+dzienne, ona na tygodniowe, na tym samym ekranie ustawień.
 
 ---
 
 # Jak tego używać
 
-**Otwarcie klapki = tabletka wzięta.** Nic nie trzeba potwierdzać, nic
-klikać. Pudełko pika tyle razy, która to komora — poniedziałek raz, wtorek
-dwa, ... niedziela siedem. To jest potwierdzenie, że wie, którą klapkę
-otworzyłaś.
+**Otwarcie klapki = tabletka wzięta.** Nic nie trzeba potwierdzać. Pudełko
+pika tyle razy, która to komora — poniedziałek raz, wtorek dwa, ...
+niedziela siedem. To potwierdzenie, że wie, którą klapkę otworzyła.
 
 **Jeśli do godziny z `schedule` klapka nie została otwarta** — pudełko
 przypomina. Nie odpuszcza po jednym piknięciu: wraca **trzy razy, co 10
@@ -250,12 +283,12 @@ minut**. Otwarcie klapki w trakcie alarmu ucina go natychmiast **i zapisuje
 dawkę**.
 
 **Kilka klapek naraz to napełnianie**, nie dawka — pudełko rozpoznaje to po
-napięciu (jeden długi, niski dźwięk) i niczego nie zapisuje. Możesz spokojnie
+napięciu (jeden długi, niski dźwięk) i niczego nie zapisuje. Można spokojnie
 otworzyć wszystkie siedem i wsypać tabletki na tydzień.
 
-**Klapkę zamknij.** Zostawiona otwarta trzyma pudełko w czuwaniu — po minucie
-samo pójdzie spać, ale będzie się budzić co dwie minuty, dopóki jest otwarta.
-Bateria tego nie lubi.
+**Klapkę zamknąć.** Zostawiona otwarta trzyma pudełko w czuwaniu — po
+minucie samo pójdzie spać, ale będzie się budzić co dwie minuty, dopóki
+jest otwarta. Bateria tego nie lubi.
 
 **Dwa krótkie piknięcia to ostrzeżenie o baterii** (poniżej 15%).
 
@@ -266,25 +299,21 @@ Trzymaj **przycisk** przy podłączaniu zasilania. Pudełko:
 1. piknie trzy razy — „jestem",
 2. zmierzy drabinkę i piknie numerem komory, którą widzi jako otwartą
    (albo jednym długim dźwiękiem, jeśli otwarta jest więcej niż jedna),
-3. piknie dwa razy niżej — koniec testu.
+3. piknie dwa razy niżej — koniec.
 
-Otwórz przy tym jedną klapkę i policz piknięcia. To sprawdza **całą** drogę:
+Otwórz przy tym jedną klapkę i policz piknięcia. Sprawdza **całą** drogę:
 rezystor, mikroprzełącznik, lutowanie i progi.
 
 ---
 
 # Czego to jeszcze nie ma
 
-Mówię wprost, żeby nie było niespodzianek rano:
-
 * **Nie było uruchomione na płytce.** Program się kompiluje i sprzęt jest
-  zmierzony osobnym szkicem testowym — ale ten konkretny kod nie chodził
-  w pudełku jeszcze ani minuty. To jest pierwszy raz.
-* **Nie ma aktualizacji przez WiFi.** Każda poprawka = kabel. Pudełko dzienne
-  dorobiło się OTA dopiero po kilkunastu wersjach.
+  zmierzony osobnym szkicem testowym — ale ten kod nie chodził w pudełku
+  ani minuty. To pierwszy raz.
+* **Nie ma aktualizacji przez WiFi.** Każda poprawka = kabel.
 * **Nie ma portalu do zmiany sieci.** Inne WiFi = kabel i `config.h`.
-* **Nie ma powiadomień na telefon.** Pudełko piszczy, aplikacja pokazuje —
-  Telegram przyjdzie później, jeśli będzie potrzebny.
+* **Nie ma powiadomień na telefon.** Pudełko piszczy, aplikacja pokazuje.
 * **Ekrany aplikacji to na razie te same co przy Warfinie.** Wybór pudełka
-  działa i dane są właściwe, ale INR i raport dla lekarza jeszcze z nich nie
-  zniknęły. To następny krok — biorę go, jak powiesz, że sprzęt gada z bazą.
+  i dostęp działają, dane są właściwe i nie mieszają się — ale INR
+  i raport dla lekarza z ekranów jeszcze nie zniknęły. To następny krok.

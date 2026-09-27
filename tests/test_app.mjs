@@ -1587,7 +1587,7 @@ head("Kolejka zaleglych zapisow dostaje szanse na starcie aplikacji");
      goly regex zlapalby wiec sam opis bledu, a nie prawdziwe wywolanie.
      Usuwamy komentarze blokowe przed szukaniem, tak jak audit_firmware.py
      robi to swoim strip() z tego samego powodu.                        */
-  const bezKomentarzy = html.slice(od, od + 3500).replace(/\/\*[\s\S]*?\*\//g, "");
+  const bezKomentarzy = html.slice(od, od + 7000).replace(/\/\*[\s\S]*?\*\//g, "");
   /* SAM `await` JEST SEDNEM NAPRAWY (B28, druga runda).
      Pierwsza wersja wolala oczekWyslij() bez await - funkcja startowala,
      ale boot() lecial dalej i rejestrowal nasluchy, zanim zalegly zapis
@@ -1713,7 +1713,7 @@ head("Automatyczne uzupelnianie kalendarza");
    MUSZA same wolac uzupelnianie, a jeden nieudany odczyt nie moze go zabic. */
 check(/onValue\(query\(ref\(db, `devices\/\$\{DEVICE_ID\}\/events`[\s\S]{0,1400}doReconcile\(true\)/.test(html),
       "nasluch zdarzen sam uzupelnia kalendarz");
-check(/users\/\$\{uid\}\/doses`\), s => \{[\s\S]{0,400}doReconcile\(true\)/.test(html),
+check(/\$\{korzenDanych\(\)\}\/doses`\), s => \{[\s\S]{0,400}doReconcile\(true\)/.test(html),
       "nasluch kalendarza tez - na wypadek innej kolejnosci nadejscia danych");
 check(html.includes("Promise.allSettled"),
       "odswiezanie znosi pojedynczy nieudany odczyt");
@@ -3672,7 +3672,7 @@ A.__resetRys();
 
 /* Osloniete ma byc RYSOWANIE, i nic wiecej. Zapis, ktory sie nie udal, ma
    krzyczec - polkniety wyjatek jest tam cena, nie ratunkiem.            */
-const zrodloNasluch = html.slice(html.indexOf("users/${uid}/doses`), s => {"),
+const zrodloNasluch = html.slice(html.indexOf("${korzenDanych()}/doses`), s => {"),
                                  html.indexOf("odczyt kalendarza dawek"));
 check(/settlePills\(\);/.test(zrodloNasluch) && !/rysuj\("[^"]*", settlePills\)/.test(zrodloNasluch),
       "settlePills() NIE jest owiniety oslona rysowania");
@@ -4581,7 +4581,7 @@ head("Historia rozpisania dawki");
   const zrodloPlan = html.slice(html.indexOf("async function zapiszPlanDnia"),
                                 html.indexOf("window.saveConfig"));
   check(zrodloPlan.includes("zapiszPewnie("), "zapis idzie przez zapiszPewnie()");
-  check(zrodloPlan.includes("users/${uid}/dosePlans/"), "pod galaz uzytkownika");
+  check(zrodloPlan.includes("${korzenDanych()}/dosePlans/"), "pod galaz uzytkownika");
 
   /* Widac ja w Ustawieniach - inaczej dane sa, ale nikt nie wie o ich
      istnieniu, a od nich zalezy, jak liczone sa dni sprzed korekty.   */
@@ -4798,6 +4798,88 @@ check(A.profilTydzien() === false, "nieznana wartosc profilu to pudelko dzienne"
 D({ cfg:{ profil:null } });
 check(A.profilTydzien() === false, "null w profilu to pudelko dzienne");
 D({});
+
+/* ═══════════ DWA PUDELKA, DWA KORZENIE DANYCH (D124) ═══════════
+
+   TU BYL NAJGROZNIEJSZY BLAD, jaki ta aplikacja moze miec. Dawki, INR,
+   rozpisania i kopie leza pod `users/<uid>/...`, czyli pod CZLOWIEKIEM -
+   w sciezce nie bylo numeru pudelka. Wybor urzadzenia zmienial tylko to,
+   skad czytane sa ZDARZENIA; kalendarz zapisywal sie dalej w to samo
+   miejsce. Wystarczylo raz przelaczyc sie na pudelko tygodniowe, zeby
+   doReconcile() wpisal jego otwarcia jako dawki do kalendarza WARFINU.
+
+   Te testy sa jedyna rzecza, ktora pilnuje, zeby to nie wrocilo.      */
+head("Dwa pudelka: dane czlowieka nie mieszaja sie");
+{
+  A.__setPudelko("pillbox01");
+  check(A.korzenDanych() === "users/testuid",
+        `pudelko dzienne zostaje tam, gdzie bylo (${A.korzenDanych()})`);
+  A.__setPudelko("pillbox02");
+  check(A.korzenDanych() === "users/testuid/pud/pillbox02",
+        `kazde inne pudelko ma wlasna galaz (${A.korzenDanych()})`);
+
+  /* SEDNO: otwarcie pudelka tygodniowego nie ma prawa dotknac kalendarza
+     Warfinu. Sprawdzamy SCIEZKI ZAPISOW, nie ich tresc - bo to sciezka
+     decyduje, czyj to dzien.                                          */
+  const ts8  = 1786237200 + 3600;
+  const dzien = A.devKey(ts8);
+  A.__resetDb();
+  A.__setState({ events: [{ id:"o1", ts: ts8, type:"open", slot:3 }], doses: {} });
+  await A.doReconcile(true);
+  const sciezki = A.__db.writes.flatMap(w => Object.keys(w.val && typeof w.val === "object"
+                                                         && !Array.isArray(w.val) ? w.val : {})
+                                            .concat(w.path ? [w.path] : []));
+  check(A.__db.writes.length > 0, "zdarzenie z pudelka tygodniowego cos zapisuje");
+  const doWarfinu = JSON.stringify(A.__db.writes).includes(`users/testuid/doses/${dzien}`);
+  check(!doWarfinu, "zapis NIE trafia do kalendarza Warfinu");
+  check(JSON.stringify(A.__db.writes).includes(`users/testuid/pud/pillbox02/doses/${dzien}`),
+        "trafia do galezi pudelka tygodniowego");
+  /* I to samo od drugiej strony: dane wyladowaly w bazie tam, gdzie maja. */
+  check(!A.__db.data?.users?.testuid?.doses?.[dzien],
+        "w bazie kalendarz Warfinu zostal pusty");
+  check(!!A.__db.data?.users?.testuid?.pud?.pillbox02?.doses?.[dzien],
+        "w bazie jest wpis pod pud/pillbox02");
+
+  A.__setPudelko("pillbox01");
+  A.__resetDb(); A.__setState({ events: [], doses: {} });
+}
+
+/* ═══════════ KTORE PUDELKA WIDZI TO KONTO (D124) ═══════════
+
+   Dziewczyna ma wlasne konto i wlasne haslo - dopisane do
+   `devices/pillbox02/owners`, bez dostepu do pudelka dziennego.
+   Aplikacja startuje na PIERWSZEJ pozycji listy, czyli na pillbox01,
+   wiec bez tego sprawdzenia jej konto dostawaloby sciane odmow.
+
+   Rozroznienie "odmowa" kontra "siec" jest tu calym sednem: blad sieci
+   nie ma prawa odciac nikogo od wlasnego pudelka.                     */
+head("Konto widzi tylko swoje pudelka");
+{
+  check(A.odmowaRegul({ code:"PERMISSION_DENIED" }), "kod PERMISSION_DENIED to odmowa");
+  check(A.odmowaRegul(new Error("permission_denied at /devices")), "tak samo po tresci bledu");
+  check(!A.odmowaRegul(new Error("baza nie odpowiada")), "blad sieci to NIE odmowa");
+  check(!A.odmowaRegul(undefined), "brak bledu to nie odmowa");
+
+  A.__resetDb();
+  A.__db.data = { devices: { pillbox01:{ owner:"ktos" }, pillbox02:{ owner:"testuid" } } };
+
+  A.__db.odmowaSciezek = ["devices/pillbox01"];
+  let widoczne = await A.sprawdzDostepPudelek();
+  check(widoczne.length === 1 && widoczne[0] === "pillbox02",
+        `odmowa na jedno pudelko zostawia drugie (${widoczne.join(",")})`);
+
+  /* Blad SIECI na tej samej sciezce: pudelko zostaje widoczne. Inaczej
+     slaby zasieg potrafilby przestawic komus aplikacje na cudze pudelko. */
+  A.__db.odmowaSciezek = [];
+  A.__db.bladSciezek   = ["devices/pillbox01"];
+  widoczne = await A.sprawdzDostepPudelek();
+  check(widoczne.length === 2, `blad sieci nie odcina pudelka (${widoczne.join(",")})`);
+
+  A.__db.bladSciezek = [];
+  widoczne = await A.sprawdzDostepPudelek();
+  check(widoczne.length === 2, "bez przeszkod widac oba");
+  A.__resetDb();
+}
 
 head("Zgodnosc wersji aplikacji");
 check(/const APP_VERSION = "([\d.\-]+)"/.test(html), "index.html deklaruje wersje");

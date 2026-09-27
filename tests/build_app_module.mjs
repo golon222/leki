@@ -28,7 +28,8 @@ import "./dom_stub.mjs";
 
 const footer = `
 export { renderSkan, brakujePokrycia, doReconcile, reconcileDecyzja, opisLadowan, minutyDoPelna, opisLadowania, tempoZHistorii, prognozaDni, opisPrognozy, czasKrotko, opisCzuwania, renderAll, toast, tablet3D, cieniuj, TAB3D_SEGMENTOW, busy, seriaDni, doNastepnej, opisCzasu,
-         pudelkoZnane, PUDELKA, profilTydzien,
+         pudelkoZnane, PUDELKA, profilTydzien, korzenDanych,
+         pudelkaWidoczne, sprawdzDostepPudelek, odmowaRegul,
          cfg, doses, inr, events, tabletSVG, doseGraphic,
          dayDose, dayStatus, devKey, devHM, devDate, inrState,
          dawkaNaDzien, tydzienDawek, dzienBezLeku, wyjatekNaDzien, opisDawkowania,
@@ -132,6 +133,13 @@ export function __setSkan(o){ skanSieci = o; renderSkan(); }
 export function __resetRys(){ rysBledy.length = 0; rysBledyRazem = 0; }
 export function __rysBledyRazem(){ return rysBledyRazem; }
 export function __setView(rok, miesiac){ viewYear = rok; viewMonth = miesiac; }
+/* Wybor pudelka siedzi w localStorage i normalnie zmienia sie przez
+   przeladowanie aplikacji - w testach przeladowania nie ma, wiec
+   podstawiamy je wprost. Bez tego nie da sie sprawdzic RZECZY
+   NAJWAZNIEJSZEJ: ze dane drugiego pudelka nie ladują w kalendarzu
+   Warfinu (D124).                                                 */
+export function __setPudelko(id){ DEVICE_ID = id; }
+export function __setWidoczne(lista){ pudelkaWidoczne = lista; }
 export { __db, __resetDb };
 `;
 

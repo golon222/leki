@@ -38,8 +38,8 @@ bash tests/run_all.sh
 ```
 
 Musi przejść przed zmianą i po zmianie. Stan wyjściowy:
-**642 + 52 firmware, 1312 (×6 pór doby) + 92 + 52 aplikacja, 48 zgodności,
-136 reguł bazy, 375 kontroli audytu, 30 kontroli statycznych — 0 błędów.**
+**642 + 52 firmware, 1326 (×6 pór doby) + 92 + 52 aplikacja, 48 zgodności,
+156 reguł bazy, 375 kontroli audytu, 32 kontrole statyczne — 0 błędów.**
 
 **Runner jest cichy przy sukcesie i głośny przy błędzie** (D66). Udany przebieg
 to 12 linii — **i te 12 linii TO JEST potwierdzenie, nie jego skrót.** Nie
@@ -214,6 +214,20 @@ odrzuca **cały** wpis kodem 400, a `trwaleOdrzucony(400)` go wtedy **kasuje**
    uznajemy dopiero potwierdzony zapis. Dziewięć kontroli audytu, każda
    sprawdzona mutacją.
 
+17. **Dane człowieka idą przez `korzenDanych()`, nigdy wprost przez
+   `users/${uid}`** (D124). W ścieżce dawek nie było numeru pudełka, więc
+   jedno przełączenie na pudełko tygodniowe wpisywało jego otwarcia jako
+   **dawki Warfinu**. Pudełko dzienne zostaje pod `users/<uid>` bez
+   końcówki — nie z wygody, tylko żeby nie przenosić kilkuset wpisów
+   o leku przeciwzakrzepowym; każde inne ma `users/<uid>/pud/<id>`.
+   Kontrola statyczna pilnuje, że nikt tego nie obszedł.
+   **Dostęp do pudełka daje `owner` ALBO `owners/<uid>`** — dziewczyna ma
+   własne konto i własne hasło, a konto urządzenia
+   (`pillbox02@device.local`) to osobny rodzaj konta i nie wolno go mieszać
+   z kontem człowieka: jego hasło siedzi w zaklejonym pudełku.
+   Aplikacja sprawdza dostęp **przed** nasłuchami; pudełko odcina
+   **wyłącznie jawna odmowa reguł**, nigdy błąd sieci.
+
 Blok pomiaru napięcia **wolno** zmieniać (zakaz zniesiony). Audyt nie blokuje —
 zgłasza tylko uwagę, żeby zmiana przypadkowa nie wyglądała jak świadoma.
 
@@ -238,6 +252,7 @@ DECYZJE.md                       indeks decyzji; pełne wpisy w decyzje/
 decyzje/                         dziennik decyzji po obszarach
 PROJEKT-PillBox-kontekst.md      pełny kontekst projektu
 WGRYWANIE.md                     instrukcja wgrywania kablem dla Kuby
+WGRYWANIE-TYDZIEN.md             uruchomienie pudelka tygodniowego (konta, baza)
 .github/workflows/firmware.yml   automat budujący binarkę do OTA
 ```
 

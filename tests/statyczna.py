@@ -455,6 +455,39 @@ if zlyplik:    bad += 1; print('  BLAD indeks wskazuje zly plik dla:', zlyplik)
 if not (osierocone or nieznane or zlyplik):
     print(f'  OK   indeks decyzji zgadza sie z decyzje/ ({len(w_plikach)} wpisow)')
 
+# ── Dwa pudelka: dane czlowieka nie moga sie mieszac (D124) ──────────
+#
+# TU BYL NAJGROZNIEJSZY BLAD, jaki ta aplikacja moze miec. Dawki, INR,
+# rozpisania i kopie leza pod `users/<uid>/...`, czyli pod CZLOWIEKIEM -
+# w sciezce nie bylo numeru pudelka. Wybor urzadzenia zmienial tylko to,
+# skad czytane sa ZDARZENIA; kalendarz zapisywal sie dalej w to samo
+# miejsce, wiec jedno przelaczenie na pudelko tygodniowe wpisywaloby jego
+# otwarcia jako dawki do kalendarza WARFINU.
+#
+# Naprawa jest jednym miejscem - korzenDanych(). Ta kontrola pilnuje, zeby
+# nikt go nie obszedl, dopisujac kiedys `users/${uid}/cokolwiek` wprost.
+html = (root/'index.html').read_text(encoding='utf-8')
+# Samo cialo korzenDanych() te sciezki oczywiscie zawiera - wycinamy je,
+# zeby kontrola patrzyla na WOLAJACYCH, a nie na definicje.
+bez_korzenia = re.sub(r'function korzenDanych\(\)\{[\s\S]*?\n\}', '', html)
+obejscia = re.findall(r'`users/\$\{uid\}[^`]*`', bez_korzenia)
+if obejscia:
+    bad += 1
+    print('  BLAD sciezka danych czlowieka omija korzenDanych():', obejscia[:3])
+else:
+    print(f'  OK   dane czlowieka ida przez korzenDanych() ({html.count("korzenDanych()")} miejsc)')
+
+# Wspolwlasciciel pudelka: dziewczyna ma wlasne konto i wlasne haslo, a nie
+# loginy Kuby. Wyrazenia z auth/data/root silnik testowy swiadomie pomija,
+# wiec ich KSZTALTU nie pilnuje nic poza ta kontrola.
+reg = json.loads((root/'database.rules.json').read_text(encoding='utf-8'))['rules']
+dev = reg['devices']['$deviceId']
+braki = [k for k in ('.read', '.write') if "owners" not in dev[k]]
+if braki or '$uid' not in dev.get('owners', {}):
+    bad += 1; print('  BLAD reguly nie znaja wspolwlascicieli pudelka:', braki)
+else:
+    print('  OK   reguly znaja wspolwlascicieli pudelka (owners)')
+
 t = root/"firmware/PillBoxTest/PillBoxTest.ino"
 if t.exists():
     src = t.read_text(encoding="utf-8")

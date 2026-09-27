@@ -2,13 +2,18 @@
   "rules": {
     "devices": {
       "$deviceId": {
-        ".read": "auth != null && (auth.uid === data.child('owner').val() || auth.uid === data.child('deviceUid').val())",
-        ".write": "auth != null && (auth.uid === root.child('devices').child($deviceId).child('owner').val() || auth.uid === root.child('devices').child($deviceId).child('deviceUid').val())",
+        ".read": "auth != null && (auth.uid === data.child('owner').val() || auth.uid === data.child('deviceUid').val() || data.child('owners').child(auth.uid).val() === true)",
+        ".write": "auth != null && (auth.uid === root.child('devices').child($deviceId).child('owner').val() || auth.uid === root.child('devices').child($deviceId).child('deviceUid').val() || root.child('devices').child($deviceId).child('owners').child(auth.uid).val() === true)",
         "owner": {
           ".validate": "newData.isString()"
         },
         "deviceUid": {
           ".validate": "newData.isString()"
+        },
+        "owners": {
+          "$uid": {
+            ".validate": "newData.isBoolean() && newData.val() === true"
+          }
         },
         "config": {
           ".validate": "newData.hasChildren(['schedule'])",
@@ -344,6 +349,86 @@
           "$data": {
             "$tag": {
               ".validate": "newData.isBoolean() && newData.val() == true && $tag.matches(/^(abx|alko|chory|dieta|lek|podroz)$/)"
+            }
+          }
+        },
+        "pud": {
+          "$pudelko": {
+            "doses": {
+              "$date": {
+                "$slot": {
+                  ".validate": "newData.hasChildren(['status'])",
+                  "status": {
+                    ".validate": "newData.val() === 'taken' || newData.val() === 'missed' || newData.val() === 'skipped'"
+                  },
+                  "dose": {
+                    ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 10"
+                  },
+                  "source": {
+                    ".validate": "newData.val() === 'device' || newData.val() === 'manual'"
+                  },
+                  "ts": {
+                    ".validate": "newData.isNumber()"
+                  },
+                  "openTs": {
+                    ".validate": "newData.isNumber()"
+                  },
+                  "note": {
+                    ".validate": "newData.isString() && newData.val().length <= 300"
+                  },
+                  "$other": {
+                    ".validate": false
+                  }
+                }
+              }
+            },
+            "inr": {
+              "$date": {
+                ".validate": "newData.hasChildren(['value'])",
+                "value": {
+                  ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() <= 15"
+                },
+                "ts": {
+                  ".validate": "newData.isNumber()"
+                },
+                "note": {
+                  ".validate": "newData.isString() && newData.val().length <= 300"
+                },
+                "$other": {
+                  ".validate": false
+                }
+              }
+            },
+            "dosePlans": {
+              "$od": {
+                ".validate": "newData.hasChildren(['dd'])",
+                "dd": {
+                  ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 10"
+                },
+                "dw": {
+                  "$i": {
+                    ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 10"
+                  }
+                },
+                "ts": {
+                  ".validate": "newData.isNumber()"
+                },
+                "$other": {
+                  ".validate": false
+                }
+              }
+            },
+            "backup": {
+              "$data": {
+                ".validate": "newData.hasChildren(['utworzona'])"
+              }
+            },
+            "tags": {
+              "$data": {
+                "$tag": {
+                  ".validate": "newData.isBoolean() && newData.val() == true && $tag.matches(/^(abx|alko|chory|dieta|lek|podroz)$/)"
+                }
+              }
             }
           }
         }

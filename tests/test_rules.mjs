@@ -467,6 +467,53 @@ odrzuc("tag spoza listy",            "users/u1/tags/2026-08-01", { cokolwiek: tr
 odrzuc("termin INR w zlym formacie", "devices/pillbox1/config/inrDue", "26-08-2026");
 ok("termin INR poprawny",            "devices/pillbox1/config/inrDue", "2026-08-26");
 
+/* ═══════════ DRUGIE PUDELKO I DRUGI CZLOWIEK (D124) ═══════════
+
+   Dwie rzeczy naraz, i obie wchodza w reguly:
+
+   1. Dziewczyna ma WLASNE konto - dopisane do `owners` pudelka
+      tygodniowego. Samego wyrazenia `.read`/`.write` ten silnik nie
+      policzy (nie umie auth/data/root i tak ma byc), ale jego KSZTALT
+      sprawdzamy nizej kontrola statyczna. Tu pilnujemy wartosci.
+
+   2. Dane czlowieka maja osobna galaz dla kazdego pudelka poza domyslnym.
+      Nowa sciezka musi miec DOKLADNIE te same walidacje co stara -
+      inaczej pod `pud/` dalo by sie zapisac smieci, ktorych korzen
+      nie przyjmuje.                                                   */
+head("Wspolwlasciciel pudelka");
+ok("wspolwlasciciel: true",          "devices/pillbox2/owners/uid2", true);
+odrzuc("wspolwlasciciel jako napis", "devices/pillbox2/owners/uid2", "tak");
+odrzuc("wspolwlasciciel jako false", "devices/pillbox2/owners/uid2", false);
+odrzuc("wspolwlasciciel jako liczba","devices/pillbox2/owners/uid2", 1);
+
+head("Dane czlowieka osobno dla kazdego pudelka");
+const PUD = "users/u1/pud/pillbox02";
+ok("dawka pod galezia pudelka",      `${PUD}/doses/2026-09-01/0`,
+   { status:"taken", dose:1, source:"device", ts:1750000000 });
+odrzuc("dawka bez statusu",          `${PUD}/doses/2026-09-01/0`, { dose:1 });
+odrzuc("dawka z nieznanym polem",    `${PUD}/doses/2026-09-01/0`,
+   { status:"taken", dose:1, komora:3 });
+odrzuc("status spoza listy",         `${PUD}/doses/2026-09-01/0`, { status:"otwarte" });
+ok("pomiar INR pod galezia pudelka", `${PUD}/inr/2026-09-01`, { value:2.4 });
+odrzuc("INR bez wartosci",           `${PUD}/inr/2026-09-01`, { note:"nic" });
+ok("rozpisanie pod galezia pudelka", `${PUD}/dosePlans/2026-09-01`, { dd:1 });
+odrzuc("rozpisanie bez dd",          `${PUD}/dosePlans/2026-09-01`, { ts:1 });
+ok("tag pod galezia pudelka",        `${PUD}/tags/2026-09-01`, { abx:true });
+odrzuc("tag spoza listy",            `${PUD}/tags/2026-09-01`, { cokolwiek:true });
+
+/* I kontrola, ze te dwie galezie naprawde sa BLIZNIACZE. Duplikat w pliku
+   regul rozjedzie sie przy pierwszej poprawce zrobionej tylko w jednym
+   miejscu, a objawem bylby zapis przechodzacy tam, gdzie nie powinien. */
+head("Galaz pud/ jest bliznaczo rowna korzeniowi");
+{
+  const u = R.users.$uid;           // wczytajReguly() zwraca juz samo .rules
+  const pud = u.pud && (u.pud.$pudelko || u.pud["$pudelko"]);
+  check(!!pud, "galaz pud/<pudelko> istnieje");
+  for (const g of ["doses", "inr", "dosePlans", "backup", "tags"])
+    check(JSON.stringify(pud?.[g]) === JSON.stringify(u[g]),
+          `walidacje '${g}' sa identyczne w obu galeziach`);
+}
+
 console.log("\n──────────────────────────────────────");
 console.log(`  ZALICZONE: ${PASS}    BLEDY: ${FAIL}`);
 console.log("──────────────────────────────────────");

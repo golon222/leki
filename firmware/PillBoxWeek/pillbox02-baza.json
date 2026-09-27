@@ -1,8 +1,13 @@
 {
-  "owner": "WKLEJ_TU_UID_SWOJEGO_KONTA",
-  "deviceUid": "WKLEJ_TU_UID_KONTA_pillbox02",
+  "owner": "TWOJ_UID",
+  "owners": {
+    "JEJ_UID": true
+  },
+  "deviceUid": "UID_KONTA_pillbox02",
   "config": {
-    "schedule": ["20:00"],
+    "schedule": [
+      "20:00"
+    ],
     "profil": "tydzien"
   }
 }
