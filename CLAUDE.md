@@ -39,7 +39,7 @@ bash tests/run_all.sh
 
 Musi przejść przed zmianą i po zmianie. Stan wyjściowy:
 **642 + 52 firmware, 1423 (×6 pór doby) + 92 + 52 aplikacja, 48 zgodności,
-156 reguł bazy, 375 kontroli audytu, 43 kontrole statyczne — 0 błędów.**
+156 reguł bazy, 375 kontroli audytu, 44 kontrole statyczne — 0 błędów.**
 
 **Runner jest cichy przy sukcesie i głośny przy błędzie** (D66). Udany przebieg
 to 12 linii — **i te 12 linii TO JEST potwierdzenie, nie jego skrót.** Nie
@@ -174,7 +174,7 @@ odrzuca **cały** wpis kodem 400, a `trwaleOdrzucony(400)` go wtedy **kasuje**
    `skanujSieci()` publikuje listę sieci z siłą sygnału do **własnej gałęzi
    `scan`** (D65) i kasuje zlecenie `wifiScan` dopiero po potwierdzonym zapisie.
 12. **Token bota Telegram idzie tą samą drogą co hasło WiFi i podlega tej
-   samej zasadzie 9** (D67). Aplikacja → baza → zapis w NVS → **odczyt
+   samej zasadzie 9** (D67, w pudełku tygodniowym D132). Aplikacja → baza → zapis w NVS → **odczyt
    kontrolny** → dopiero potem kasowanie z bazy. W `config.h` stać nie może
    z tego samego powodu co hasło do Firebase (ograniczenie 10).
    Wysyłka rusza **wyłącznie z `goToSleep()`** i jako **pierwsza** z trzech
@@ -183,7 +183,9 @@ odrzuca **cały** wpis kodem 400, a `trwaleOdrzucony(400)` go wtedy **kasuje**
    **przed** włączeniem radia. Powiadomienie starsze niż `TG_MAX_WIEK_S`
    **kasujemy zamiast wysyłać** — jedyny wyjątek od zasady 6 w tym obszarze,
    i nie dotyczy żadnych danych o leku. Token nie trafia **ani do logu, ani do
-   statusu**. Audyt pilnuje każdego z tych punktów.
+   statusu**. Audyt pilnuje każdego z tych punktów w pudełku dziennym,
+   a kontrola statyczna — tych samych sześciu w tygodniowym (audyt czyta
+   wyłącznie `PillBox.ino`).
 13. **Osłona rysowania (`rysuj()`) obejmuje WYŁĄCZNIE rysowanie** (D71).
    Wyjątek połknięty w renderze ratuje ekran; połknięty w zapisie gubi dawkę
    po cichu. `doReconcile()`, `settlePills()`, `zapiszPewnie()` i `zapiszCfg()`
@@ -327,7 +329,7 @@ na `esp32:esp32@3.3.11` i z **ustawieniami płytki z nagłówka `PillBox.ino`**.
 Nie jest częścią `run_all.sh`: wymaga sieci i ~500 MB toolchainu.
 **Uruchom to po każdej zmianie w firmware.**
 
-Stan: `PillBox.ino` **64% flasha** (1 265 417 B z 1,875 MB), `PillBoxWeek.ino` **61%** (1 200 423 B),
+Stan: `PillBox.ino` **64% flasha** (1 265 417 B z 1,875 MB), `PillBoxWeek.ino` **61%** (1 207 051 B),
 `PillBoxTest.ino` 20% bez `config.h` i **57%** z nim. Szkic diagnostyczny budujemy w OBU
 konfiguracjach — bez tego drugiego przebiegu 722 kB jego kodu (logowanie do
 bazy, zapis wyniku) nie było kompilowane ani razu (D103).
@@ -385,7 +387,13 @@ nie do publikacji. Szczegóły obejść — D17.
   meldunek mówi `[BTN]`**, i napisz. Zabezpieczenia są dwa: przycisku
   wciśniętego przy zasypianiu nie uzbrajamy, a po trzech wybudzeniach
   z rzędu odpoczywa jeden sen.
-  **Czego nadal nie ma:** powiadomień Telegram.
+  **Powiadomienia Telegram — dodane w `0.6.0` (D132), NIESPRAWDZONE na
+  płytce.** Pisze o dwóch rzeczach (nieodebrane przypomnienie z **nazwą
+  klapki**, słaba bateria), nie o czterech — bez zapasu tabletek i INR.
+  `tgDecyzja()` jest znak w znak ta sama co w pudełku dziennym i kontrola
+  statyczna to porównuje. Wymaga podłączenia bota w aplikacji.
+  **Pudełko tygodniowe ma teraz wszystko, co dzienne** poza skanem sieci
+  (niepotrzebnym, bo ma portal) i dziennikiem wieczka.
 - **Pomiar baterii pudełka tygodniowego — NIEWYJAŚNIONY.** Melduje `2,32 V`,
   czyli napięcie, przy którym płytka by nie chodziła. Program zgłasza to
   uczciwie jako brak danych (`-1%`), ale **przyczyny nie znamy**. Najpierw

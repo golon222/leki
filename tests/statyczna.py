@@ -910,6 +910,76 @@ if w.exists():
     else:
         print('  OK   portal WiFi: siec po potwierdzeniu, przycisk bez petli, haslo w Instrukcji')
 
+    # ── POWIADOMIENIA NA TELEFON: ZASADA 12 W CALOSCI ──────────────
+    #
+    # Token bota jest sekretem tej samej klasy co haslo do WiFi: kto go ma,
+    # pisze w imieniu bota. Zasada 12 z CLAUDE.md mowi o nim szesc rzeczy
+    # i kazda z nich ma tu swoja kontrole - w pudelku dziennym pilnuje ich
+    # audyt firmware, ktory czyta wylacznie tamten szkic.
+    _zle = []
+    _tgSlij = _bez(_cialo(src, 'void tgWyslijZalegle') or '')
+    _tgTekst = _bez(_cialo(src, 'bool tgWyslijTekst') or '')
+    _status  = _bez(_cialo(src, 'void wyslijStatus') or '')
+    _ustaw   = _bez(_cialo(src, 'void pobierzUstawienia') or '')
+
+    # 1. Ta sama decyzja co w pudelku dziennym, znak w znak.
+    _a = _cialo(ino, 'TgDecyzja tgDecyzja')
+    _b = _cialo(src, 'TgDecyzja tgDecyzja')
+    if not _a or not _b:
+        _zle.append('nie znalazlem tgDecyzja() w obu szkicach')
+    elif _sameKod(_a) != _sameKod(_b):
+        _zle.append('tgDecyzja() rozjechala sie z pudelkiem dziennym')
+
+    # 2-3. Wysylka rusza WYLACZNIE z idzSpac() i jako PIERWSZA z rzeczy
+    #      przed snem: udana aktualizacja konczy sie restartem, wiec
+    #      wiadomosc za nia nie poszlaby wcale.
+    if len(re.findall(r'\btgWyslijZalegle\s*\(\s*\)', _kod)) != 2:
+        _zle.append('tgWyslijZalegle() nie jest wolane z dokladnie jednego miejsca')
+    elif 'tgWyslijZalegle()' not in _sen:
+        _zle.append('tgWyslijZalegle() nie jest wolane z idzSpac()')
+    else:
+        _t, _o = _sen.find('tgWyslijZalegle()'), _sen.find('otaSprobuj()')
+        if _o >= 0 and _t > _o:
+            _zle.append('wiadomosc idzie PO aktualizacji - restart by ja zjadl')
+
+    # 4. Przy pustej skrzynce wychodzimy PRZED wlaczeniem radia.
+    _dec, _radio = _tgSlij.find('tgDecyzja('), _tgSlij.find('wifiPolacz()')
+    if _dec < 0:
+        _zle.append('tgWyslijZalegle() nie pyta tgDecyzja()')
+    elif _radio >= 0 and _radio < _dec:
+        _zle.append('radio wlaczane przed sprawdzeniem, czy jest co wysylac')
+
+    # 5. Powiadomienie za stare KASUJEMY zamiast wysylac - jedyny wyjatek
+    #    od zasady 6 w tym obszarze, i nie dotyczy danych o leku.
+    _i = _tgSlij.find('TG_ZA_STARE')
+    if _i < 0 or 'rtcTgSlot = -1' not in _tgSlij[_i:_i+300].replace('rtcTgSlot   = -1', 'rtcTgSlot = -1'):
+        _zle.append('za stare powiadomienie nie jest kasowane')
+
+    # 6. TOKEN NIE TRAFIA ANI DO LOGU, ANI DO STATUSU. Aplikacja dostaje
+    #    wylacznie "jest/nie ma" i powod - token czyta caly dostep do bazy.
+    for _l in _kod.split('\n'):
+        if 'tgTok' in _l and ('LOG(' in _l or 'snprintf(rtcTg' in _l):
+            _zle.append('token bota trafia do logu albo do statusu')
+            break
+    if 'tgTok' in _status or 'token' in _status:
+        _zle.append('token bota jest w statusie wysylanym do bazy')
+    if re.search(r'LOG\([^)]*\btoken\b', _tgTekst):
+        _zle.append('adres z tokenem trafia do logu')
+
+    # 7. Token kasujemy z bazy DOPIERO po potwierdzonym zapisie w NVS
+    #    (zasada 9, ta sama co przy hasle WiFi).
+    _u = _ustaw.find('tgUtrwal(')
+    _d2 = _ustaw.find('config/tgNowy.json')
+    if _u < 0 or _d2 < 0 or _u > _d2:
+        _zle.append('token kasowany z bazy bez potwierdzonego zapisu w NVS')
+
+    if _zle:
+        bad += 1
+        print('  BLAD powiadomienia pudelka tygodniowego:')
+        for _z in _zle: print('       ' + _z)
+    else:
+        print('  OK   Telegram: token tylko w NVS, wysylka pierwsza i tylko ze snu')
+
 t = root/"firmware/PillBoxTest/PillBoxTest.ino"
 if t.exists():
     src = t.read_text(encoding="utf-8")

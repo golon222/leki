@@ -19,7 +19,7 @@
  *    miejsce w bazie i kalendarze wymieszalyby sie po cichu.
  * ------------------------------------------------------------------ */
 #define DEVICE_ID           "pillbox02"     // klucz w /devices/<DEVICE_ID>
-#define FW_VERSION          "0.5.0"         // widoczna w aplikacji
+#define FW_VERSION          "0.6.0"         // widoczna w aplikacji
 
 /* ---------------------------------------------------------------------
  * 2. FIREBASE
@@ -132,7 +132,35 @@
 #define PRZYCISK_ZWARTY_MAX 3
 
 /* ---------------------------------------------------------------------
- * 8. AKTUALIZACJA PROGRAMU PRZEZ WIFI  (OTA)
+ * 8. POWIADOMIENIA NA TELEFON  (bot Telegram)
+ *
+ *  Dzwonek slychac w pokoju, wiadomosc dociera wszedzie. Wysyla je
+ *  PUDELKO, nie aplikacja: telefon spi razem z wlascicielem, a iOS nie
+ *  budzi stron dodanych do ekranu glownego.
+ *
+ *  TOKENU BOTA TU NIE MA I BYC NIE MOZE - z tego samego powodu co hasla
+ *  do bazy (ograniczenie 3 i 10). Przychodzi z aplikacji przez baze
+ *  i mieszka w pamieci trwalej pudelka.
+ * ------------------------------------------------------------------ */
+#define TG_ENABLED          1
+#define TG_HOST             "api.telegram.org"
+
+/*     Po tylu sekundach powiadomienie przestaje miec sens i KASUJEMY je
+ *     zamiast wysylac. To jedyny wyjatek od zasady 6 w tym obszarze -
+ *     i nie dotyczy zadnych danych o leku, tylko przypomnienia, ktore
+ *     przyszloby trzy godziny za pozno.                               */
+#define TG_MAX_WIEK_S       10800           // 3 h
+
+/*     Powyzej tego poziomu wolno znow ostrzec o baterii. Bez tego progu
+ *     druga wiadomosc nie przyszlaby nigdy, a ogniwo rozladuje sie
+ *     jeszcze wiele razy.                                             */
+#define TG_BATT_RESET_PCT   50
+
+#define TG_TOKEN_MAX        64              // tyle znakow ma token z BotFathera
+#define TG_CHAT_MAX         24              // id czatu to liczba, czasem ujemna
+
+/* ---------------------------------------------------------------------
+ * 9. AKTUALIZACJA PROGRAMU PRZEZ WIFI  (OTA)
  *
  *  Binarke buduje automat na GitHubie i kladzie ja obok aplikacji na
  *  GitHub Pages. Pudelko pobiera najpierw MALY plik z opisem, a caly

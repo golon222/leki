@@ -11,7 +11,7 @@ zamiast 60 tys. tokenów wchodzi 2,5 tys. plus jeden obszar.
 |---|---|---|
 | `decyzje/pudelko.md` | Pudełko — sen, alarm, NVS, WiFi | 41 |
 | `decyzje/ota.md` | Aktualizacja przez WiFi i skan sieci | 9 |
-| `decyzje/telegram.md` | Powiadomienia Telegram | 5 |
+| `decyzje/telegram.md` | Powiadomienia Telegram | 6 |
 | `decyzje/aplikacja.md` | Aplikacja — ekrany i wygląd | 42 |
 | `decyzje/dane.md` | Dane, kolejka, dawkowanie | 20 |
 | `decyzje/testy.md` | Testy, audyt, kompilacja | 16 |
@@ -63,6 +63,7 @@ Od najnowszej. Kolumna „gdzie" mówi, który plik w `decyzje/` trzymać otwart
 
 | # | O co chodziło | gdzie |
 |---|---|---|
+| **D132** | **Telegram w pudełku tygodniowym**: nieodebrane przypomnienie (z **nazwą klapki**) i słaba bateria — bez zapasu i INR. `tgDecyzja()` znak w znak ta sama co w pudełku dziennym, wysyłka pierwsza i tylko ze snu, token ani do logu, ani do statusu. Sześć kontroli, pięć mutacji | `telegram` |
 | **D131** | **Portal WiFi z przycisku** w pudełku tygodniowym, i przycisk **budzący z głębokiego snu** — tu się dało, bo oba piny budzą stanem niskim (w dziennym poziomy były przeciwne). Trzy drogi do portalu, sieć zapisywana dopiero po potwierdzonym połączeniu (zasada 9). Niesprawdzone na płytce | `pudelko` |
 | **D130** | **Aktualizacja przez WiFi w pudełku tygodniowym.** Kod skopiowany, nie wspólny (ograniczenie 1) — ale `otaDecyzja()` musi być **znak w znak** ta sama i kontrola statyczna to porównuje. Każde pudełko pobiera własny plik i ma własny odcisk źródła w automacie; wgranie cudzego programu to dwie cegły. Enum musiał wyjechać na górę pliku — ścieżka `.ino` (B21) | `ota` |
 | **D129** | **Motyw jasny, pudrowy** dla pudełka tygodniowego — tło jasne, karty białe, tekst ciemny, akcent śliwkowy. Cztery kolory ciemnego tła wpisane wprost (nagłówek, pasek, liczby w kalendarzu, poświata tła) pokazał dopiero **zrzut ekranu**; chrom ma teraz własne zmienne, a dwie kontrole **mierzą** jasność powierzchni i kontrast WCAG zamiast zakazywać | `aplikacja` |

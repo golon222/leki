@@ -1779,18 +1779,30 @@ body[data-profil="tydzien"]{
       <p class="muted"><b>Wiadomość wysyła pudełko, nie ta aplikacja.</b> Dzięki temu
         przyjdzie także wtedy, gdy telefon leży zablokowany w kieszeni — ale wymaga,
         żeby <b>pudełko</b> miało internet. Bez sieci nie przyjdzie nic.</p>
-      <p class="muted">Pisze po każdym nieodebranym przypomnieniu, <b>raz</b> gdy
+      <p class="muted tylko-warfin">Pisze po każdym nieodebranym przypomnieniu, <b>raz</b> gdy
         bateria będzie na wyczerpaniu i <b>raz</b> gdy zostanie mniej niż siedem
         tabletek. Bez potwierdzeń wzięcia — powiadomienie, które przychodzi
         codziennie, przestaje być powiadomieniem.</p>
-      <p class="muted"><b>O pomiarze INR przypomni cztery razy:</b> dzień
+      <p class="muted tylko-warfin"><b>O pomiarze INR przypomni cztery razy:</b> dzień
         wcześniej o 12:00 oraz w dniu pomiaru o 8:00, 12:00 i 17:00.
         <b>Po wpisaniu wyniku milknie od razu</b> — nawet w środku tego dnia,
         bo wynik przesuwa termin na następny.</p>
-      <p class="muted">Znacznik „już pisałem" kasuje się sam: po naładowaniu, po
+      <p class="muted tylko-warfin">Znacznik „już pisałem" kasuje się sam: po naładowaniu, po
         wpisaniu nowego opakowania i przy następnym terminie. Bez ważnego zegara
         pudełko o terminie nie pisze — data wysłana na chybił trafił byłaby
         gorsza niż cisza.</p>
+      <!-- Pudelko tygodniowe pisze o DWOCH rzeczach, nie o czterech: nie ma
+           tu zapasu tabletek ani INR (D126). Wiadomosc podaje za to NAZWE
+           KLAPKI - przy siedmiu komorach samo "nie otwarto" zostawia
+           czlowieka z pytaniem, na ktore ma sobie odpowiedziec sam. -->
+      <p class="muted tylko-tydzien">Pisze po każdym nieodebranym przypomnieniu —
+        z <b>nazwą klapki</b>, której nikt nie otworzył — i <b>raz</b>, gdy bateria
+        będzie na wyczerpaniu. Bez potwierdzeń wzięcia: powiadomienie, które
+        przychodzi codziennie, przestaje być powiadomieniem.</p>
+      <p class="muted tylko-tydzien">Znacznik „już pisałem" o baterii kasuje się
+        sam po naładowaniu. Przypomnienie starsze niż <b>trzy godziny</b> pudełko
+        kasuje, zamiast wysyłać — wiadomość, która przychodzi o północy o tym,
+        co miało być o 20:00, tylko myli.</p>
       <label>Jak podłączyć bota</label>
       <p class="muted">1. W Telegramie znajdź <b>@BotFather</b> i napisz do niego
         <b>/newbot</b> — nie /start.<br>
@@ -2198,7 +2210,7 @@ window.wybierzPudelko = (id) => {
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-09-27.93";
+const APP_VERSION = "2026-09-27.94";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
