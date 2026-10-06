@@ -350,20 +350,77 @@ mówi „nie wiem". **Ten sam program chodzi z czujnikiem i bez.**
 Moduł Adafruit MAX17048 ma dwa złącza JST-PH (ogniwo), dwa STEMMA QT
 (I²C) i rząd pinów: `VIN GND SCL SDA INT QStart`.
 
-| pin modułu | gdzie na XIAO |
-|---|---|
-| **VIN** | `3V3` |
-| **GND** | `GND` |
-| **SDA** | **`D4`** |
-| **SCL** | **`D5`** |
-| `INT`, `QStart` | nigdzie — niepotrzebne |
+## Osiem przewodów
 
-**Ogniwo podłączasz RÓWNOLEGLE, nie w szereg.** MAX17048 tylko *mierzy*
-napięcie ogniwa — nie przepuszcza przez siebie prądu, więc **nie trzeba
-niczego przecinać**. Plus ogniwa do `+` modułu (albo do jednego ze złączy
-JST), minus do `−`. Ogniwo zostaje podłączone do płytki tak, jak jest.
+Moduł staje się **punktem, w którym ląduje ogniwo**: bateria wchodzi w niego,
+a zasilanie idzie z niego dalej do płytki. Dwa złącza JST na module są
+połączone równolegle właśnie po to.
+
+| # | od | do | uwaga |
+|---|---|---|---|
+| 1 | **ogniwo `+`** | moduł `+` (przy JST) | **polaryzacja — zmierz przed lutem** |
+| 2 | **ogniwo `−`** | moduł `−` (przy JST) | |
+| 3 | moduł `+` | XIAO **`BAT+`** (spód) | min. 26 AWG |
+| 4 | moduł `−` | XIAO **`BAT−`** (spód) | min. 26 AWG |
+| 5 | moduł **`VIN`** | XIAO **`3V3`** | |
+| 6 | moduł **`GND`** | XIAO **`GND`** | ta sama masa co wiersz 4 — zbędny, ale zostaw |
+| 7 | moduł **`SDA`** | XIAO **`D4`** | |
+| 8 | moduł **`SCL`** | XIAO **`D5`** | |
+| — | `INT`, `QStart` | nigdzie | niepotrzebne |
+
+```
+   ogniwo LiPo
+      +  −
+      │  │
+   ┌──┴──┴──────────────┐
+   │   MAX17048         │   VIN ──── 3V3  ┐
+   │  (oba złącza JST   │   GND ──── GND  │  XIAO
+   │   są równoległe)   │   SDA ──── D4   │  ESP32-C3
+   │                    │   SCL ──── D5   ┘
+   └──┬──┬──────────────┘
+      │  │
+     BAT+ BAT−   (pady na spodzie XIAO)
+```
 
 **D4 i D5 są wolne** — pudełko używa D0, D1, D2 i D3.
+
+**NIC NIE PRZECINASZ.** MAX17048 tylko *mierzy* napięcie ogniwa, nie jest
+licznikiem kulombów. Można go równie dobrze podpiąć po prostu równolegle
+do ogniwa i zostawić zasilanie tak, jak jest — tabelka wyżej opisuje
+wariant, w którym moduł jest punktem zbornym, bo tak jest porządniej.
+
+## Który pad przy JST to plus — ZMIERZ, nie czytaj
+
+Nadruk jest drobny, a odwrotna polaryzacja **zabija moduł w sekundę** i jest
+jedynym nieodwracalnym błędem w całej tej operacji.
+
+Miernik na **brzęczyk**. Jedna sonda na pin **`GND`** (ten jest podpisany
+wyraźnie), drugą dotykaj padów przy złączu JST:
+
+- **pad, który piszczy → `−`** (minus ogniwa to ta sama masa co `GND`)
+- **pad, który milczy → `+`**
+
+Kontrola: pad `+` jednego złącza JST piszczy z padem `+` drugiego — bo
+są połączone równolegle.
+
+## Wiersze 3 i 4 to CAŁE zasilanie pudełka
+
+Przez tę parę płynie prąd ESP, z szarpnięciami do pół ampera przy
+nadawaniu WiFi. Dlatego: nie cieniutkie żyłki (26 AWG albo grubiej,
+krótko) i **porządne luty**. Zimny lut na tej drodze daje restarty przy
+każdym połączeniu z siecią, a objaw wygląda wtedy jak błąd w programie,
+nie jak lut — i szuka się go w złym miejscu.
+
+## Kolejność
+
+1. **USB odłączone**, ogniwo odpięte, jeśli się da.
+2. Najpierw cztery cienkie przewody I²C (wiersze 5–8).
+3. Potem grube: moduł → XIAO (wiersze 3–4).
+4. **Na końcu ogniwo** (wiersze 1–2), po zmierzeniu polaryzacji.
+5. Przed podaniem prądu: brzęczyk na `3V3`↔`GND` i `SDA`↔`SCL` — żadne
+   nie może piszczeć.
+6. **Przyklej moduł** na gorąco albo dwustronną taśmą. Wiszący na
+   przewodach urwie pady po kilku otwarciach pudełka.
 
 **Zanim zakleisz obudowę:** w monitorze portu (115200) po wgraniu
 zobaczysz jedną z dwóch linii:
