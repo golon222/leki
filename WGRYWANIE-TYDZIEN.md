@@ -358,10 +358,10 @@ połączone równolegle właśnie po to.
 
 | # | od | do | uwaga |
 |---|---|---|---|
-| 1 | **ogniwo `+`** | moduł `+` (przy JST) | **polaryzacja — zmierz przed lutem** |
-| 2 | **ogniwo `−`** | moduł `−` (przy JST) | |
-| 3 | moduł `+` | XIAO **`BAT+`** (spód) | min. 26 AWG |
-| 4 | moduł `−` | XIAO **`BAT−`** (spód) | min. 26 AWG |
+| 1 | **ogniwo `+`** | moduł **`Bat`** | pady są podpisane na SPODZIE modułu |
+| 2 | **ogniwo `−`** | moduł **`GND`** (ten w środku płytki) | |
+| 3 | moduł **`Bat`** | XIAO **`BAT+`** (spód) | min. 26 AWG |
+| 4 | moduł **`GND`** | XIAO **`BAT−`** (spód) | min. 26 AWG |
 | 5 | moduł **`VIN`** | XIAO **`3V3`** | |
 | 6 | moduł **`GND`** | XIAO **`GND`** | ta sama masa co wiersz 4 — zbędny, ale zostaw |
 | 7 | moduł **`SDA`** | XIAO **`D4`** | |
@@ -389,19 +389,40 @@ licznikiem kulombów. Można go równie dobrze podpiąć po prostu równolegle
 do ogniwa i zostawić zasilanie tak, jak jest — tabelka wyżej opisuje
 wariant, w którym moduł jest punktem zbornym, bo tak jest porządniej.
 
-## Który pad przy JST to plus — ZMIERZ, nie czytaj
+## Polaryzacja — nazwy są na SPODZIE modułu
 
-Nadruk jest drobny, a odwrotna polaryzacja **zabija moduł w sekundę** i jest
-jedynym nieodwracalnym błędem w całej tej operacji.
+W środku płytki, od spodu, są dwa okrągłe otwory podpisane **`GND`** i
+**`Bat`**:
 
-Miernik na **brzęczyk**. Jedna sonda na pin **`GND`** (ten jest podpisany
-wyraźnie), drugą dotykaj padów przy złączu JST:
+- **`Bat` → plus ogniwa**
+- **`GND` → minus ogniwa**
 
-- **pad, który piszczy → `−`** (minus ogniwa to ta sama masa co `GND`)
-- **pad, który milczy → `+`**
+Spód nosi też napis **„Either JST 2 PH for Batt/Load"** — czyli oba złącza
+JST są równorzędne: w jedno wchodzi bateria, z drugiego wychodzi zasilanie
+do płytki. Można więc użyć złączy zamiast lutowania do padów.
 
-Kontrola: pad `+` jednego złącza JST piszczy z padem `+` drugiego — bo
-są połączone równolegle.
+Kontrola, jeśli chcesz pewności: brzęczyk między środkowym `GND`
+a `GND` w dolnym rzędzie pinów musi zapiszczeć.
+
+**Odwrotna polaryzacja zabija moduł w sekundę** i jest jedynym
+nieodwracalnym błędem w całej tej operacji — sprawdź dwa razy.
+
+## Dwie zworki na spodzie
+
+**`Vin` / `VDD` / `Bat`** — wybiera, skąd zasilany jest sam układ
+pomiarowy. **Nie ruszaj.** Skoro `VIN` idzie z 3V3, działa w każdym
+ustawieniu. Wracamy do niej tylko wtedy, gdy monitor powie „czujnik nie
+odpowiada".
+
+**`LED`** (prawy górny róg) — rozłącza diodę zasilania. **Na pudełku
+bateryjnym to nie jest drobiazg:** dioda świecąca całą dobę zjada rząd
+miliampera, czyli więcej niż całe pudełko w normalnej pracy. Po podaniu
+zasilania zobacz, czy coś się świeci — jeśli tak, przetnij zworkę nożykiem
+między padami.
+
+Spód podaje jeszcze dwie rzeczy warte sprawdzenia przy kłopotach:
+**`i2c addr: 0x36`** (zgadza się z firmware) i **`VLogic/Vcc: 3-5VDC`**
+(3,3 V z XIAO jest w zakresie).
 
 ## Wiersze 3 i 4 to CAŁE zasilanie pudełka
 
