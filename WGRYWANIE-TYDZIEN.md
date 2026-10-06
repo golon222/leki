@@ -458,6 +458,87 @@ czy nie przyszła wcale.
 
 ---
 
+# 4c. Klapki — mikroprzełączniki i drabinka
+
+To jest zlutowane i **zmierzone na płytce 2026-09-22**. Sekcja jest tu na
+wypadek, gdyby trzeba było coś przelutować — nie było tego nigdzie zapisane,
+a same napięcia w `config.h` nie mówią, jak to jest połączone.
+
+## Zasada, z której wynika wszystko inne
+
+Otwarta klapka musi **ściągnąć pin D1 do masy**. Zamknięta — rozwarcie,
+wtedy pin stoi na 1125 mV i pudełko spokojnie śpi. Czyli **styk zwiera, gdy
+klapka jest OTWARTA.**
+
+## Co do `C`, a co do `NC`
+
+Mikroprzełącznik dźwigniowy jest wciśnięty przez **zamkniętą** klapkę.
+Wciśnięty znaczy `C–NO` zwarte, `C–NC` rozwarte — więc potrzebna jest para,
+która zwiera **puszczona**: `C–NC`.
+
+| wyprowadzenie | co lutujesz |
+|---|---|
+| **C** (common) | **masa** — jeden wspólny przewód GND przez wszystkie siedem |
+| **NC** | **swój rezystor**, drugim końcem do drabinki / pinu **D1** |
+| **NO** | **nic** — odetnij albo zostaw wolne |
+
+Która strona idzie do masy, a która do rezystora, elektrycznie nie ma
+znaczenia: to zwykły styk. Wspólna masa na `C` jest tylko wygodniejsza —
+jeden przewód łańcuchem, siedem rezystorów osobno.
+
+**Sprawdź multimetrem (brzęczyk, sondy na `C` i `NC`), zanim przylutujesz
+siódmy:**
+
+- klapka **otwarta** → **piszczy**
+- klapka **zamknięta**, dźwignia wciśnięta → **cisza**
+
+Jeśli wychodzi odwrotnie, Twoja mechanika wciska dźwignię przy otwieraniu —
+wtedy ten jeden przełącznik idzie na `NO`. **Decyduje pomiar, nie nazwa na
+obudowie.**
+
+## Objaw pomylonego styku — rozpoznasz bez komputera
+
+Na `NO` wszystkie siedem rezystorów wisi na masie przy **zamkniętych**
+klapkach, więc napięcie leci pod 72 mV: pudełko melduje *„kilka naraz"*
+(jeden długi, niski dźwięk, jak przy napełnianiu) i **budzi się w kółko**,
+bo pin jest cały czas nisko. Objaw jak w B30, przyczyna inna i tania.
+
+## Czego nie wolno zmienić
+
+**Żaden rezystor gałęzi powyżej 3 kΩ.** Niedziela stoi na 761 mV, a próg
+stanu niskiego przy wybudzaniu z głębokiego snu to 825 mV — margines wynosi
+**64 mV**. Większy rezystor i niedziela przestaje budzić pudełko; klapka
+zostanie zauważona dopiero przy następnym wybudzeniu z zegara, czyli
+najwcześniej o pełnej godzinie.
+
+## Po przelutowaniu: nowe progi do `config.h`
+
+Zmierzone napięcia (2026-09-22):
+
+| komora | PON | WT | ŚR | CZW | PT | SOB | ND | zamknięte |
+|---|---|---|---|---|---|---|---|---|
+| mV | 105 | 170 | 300 | 388 | 557 | 633 | 761 | 1125 |
+
+Progi to **połowy odstępów** między kolejnymi pomiarami: 105/170 → 137,
+170/300 → 235, 300/388 → 344, 388/557 → 472, 557/633 → 595, 633/761 → 697,
+761/1125 → 943. Pierwszy, `PROGI[0] = 72`, leży o jeden odstęp **pod**
+poniedziałkiem — poniżej niego pudełko uznaje, że otwarto kilka klapek naraz.
+
+Nowe napięcie odczytasz z logu — każde wybudzenie przez klapkę pisze
+`klapka: ... (xxx mV, progi 72..943)` — albo **autotestem bez komputera**:
+trzymaj przycisk przy podłączaniu zasilania, otwórz jedną klapkę, policz
+piknięcia (opis na końcu pliku).
+
+## Kolejność rezystorów nie ma znaczenia
+
+Pudełko zapisuje **numer komory**, nie dzień tygodnia. Przełożony przewód
+zamieni komorę 1 na komorę 3 i nic się od tego nie rozjedzie. Potrzebna
+zostaje tylko **rozróżnialność**: jedna komora kontra kilka naraz
+(napełnianie) i ta sama komora drugi raz tego samego dnia (zaglądanie,
+odbicie styku).
+
+---
+
 # 5. Czy się zameldowało
 
 Otwórz **Monitor portu szeregowego, 115200**:
