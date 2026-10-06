@@ -34,6 +34,9 @@
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 #include <Preferences.h>
+#if GAUGE_ENABLED
+  #include <Wire.h>
+#endif
 #include <ArduinoJson.h>
 #include <time.h>
 #include "esp_sleep.h"
@@ -62,7 +65,7 @@
 
     Numer wersji, ktory mieszka w NAGLOWKU, opisuje naglowek. Ten opisuje
     program. Gdy sie rozjada, log krzyczy o tym w pierwszej linii.        */
-#define KOD_WERSJA "0.9.0"
+#define KOD_WERSJA "0.10.0"
 
 /*  Po tym napisie pudelko poznaje config.h wzięty prosto z repozytorium -
     czyli "nie ma zadnej sieci", a nie "ma siec o takiej nazwie". Bez tego
@@ -181,6 +184,10 @@ bool    czasZsync     = false;
     „zamkniete" zamienialo sie w „otwarte" i nikt tego juz nie prostowal
     (D96). Tutaj ten sam blad byl do popelnienia dokladnie tak samo.  */
 bool    otwarteTeraz  = false;
+/*  SKAD WZIAL SIE PROCENT BATERII. Idzie do statusu, bo to jest jedyna
+    rzecz, ktora rozstrzyga pytanie "czy czujnik w ogole gada" - a do
+    tego pytania wracalismy juz kilka razy (D136, D139).              */
+const char* battZrodlo = "brak";
 
 /* Harmonogram przypomnien. To sa godziny PRZYPOMNIEN, nie pory brania -
    dokladnie jak w pudelku dziennym. Domyslnie jedna, 20:00.            */
@@ -257,7 +264,74 @@ void beepBateria()    { for (int i=0;i<2;i++){ pik(1200,300); delay(180);} }
  *  Pin 3V3 dalby stale 3,3 V niezaleznie od stanu ogniwa - to jest
  *  wyjscie stabilizatora i mierzenie go nie mowi nic o baterii.
  * ===================================================================== */
+#if GAUGE_ENABLED
+/*  JEDEN REJESTR Z CZUJNIKA. Zwraca false przy kazdym potknieciu - brak
+    czujnika na magistrali jest tu zwyklym, spodziewanym wynikiem, a nie
+    awaria: ten sam program ma chodzic na plytce z czujnikiem i bez.
+
+    DWA ODCZYTY DO OSOBNYCH ZMIENNYCH, nie w jednym wyrazeniu. Kolejnosc
+    obliczania argumentow `|` jest w C++ NIEOKRESLONA, wiec zapis
+    `(Wire.read() << 8) | Wire.read()` potrafi przeczytac bajty odwrotnie
+    - raz na jednym kompilatorze dobrze, raz na innym zle. Klasyczna
+    pulapka, ktorej nie widac, dopoki nie zmieni sie rdzenia.         */
+bool gaugeRejestr(uint8_t rej, uint16_t& wynik) {
+  Wire.beginTransmission(GAUGE_ADDR);
+  Wire.write(rej);
+  if (Wire.endTransmission(false) != 0) return false;
+  if (Wire.requestFrom((int)GAUGE_ADDR, 2) != 2) return false;
+  const uint8_t hi = Wire.read();
+  const uint8_t lo = Wire.read();
+  wynik = ((uint16_t)hi << 8) | lo;
+  return true;
+}
+
+/*  Napiecie i stan naladowania z czujnika.
+
+    VCELL (0x02): krok 78,125 uV. SOC (0x04): gorny bajt to cale procenty,
+    dolny - 1/256 procenta.
+
+    Wynik poza granicami zdrowego rozsadku traktujemy jak brak czujnika.
+    MAX17048 po podlaczeniu ogniwa potrzebuje chwili, zanim poda sensowny
+    procent, a przez ten czas lepiej wziac odczyt z dzielnika niz podac
+    liczbe, ktorej sami byśmy nie uwierzyli.                          */
+bool gaugeCzytaj(float& napiecie, int& procent) {
+  uint16_t vcell = 0, soc = 0;
+  if (!gaugeRejestr(0x02, vcell)) return false;
+  if (!gaugeRejestr(0x04, soc))   return false;
+
+  const float v = vcell * 0.000078125f;
+  const float p = soc / 256.0f;
+  if (v < GAUGE_MIN_V || v > GAUGE_MAX_V) return false;
+  if (p < 0.0f || p > 100.0f)             return false;
+
+  napiecie = v;
+  procent  = (int)(p + 0.5f);
+  if (procent > 100) procent = 100;
+  return true;
+}
+#endif  /* GAUGE_ENABLED */
+
 void czytajBaterie() {
+#if GAUGE_ENABLED
+  /*  CZUJNIK MA PIERWSZENSTWO, dzielnik jest zapasem - nie odwrotnie.
+
+      Dzielnik na tej plytce melduje 2,32 V, czyli wartosc niemozliwa
+      przy dzialajacym radiu (D136), i nie wiemy dlaczego. Czujnik mierzy
+      ogniwo bezposrednio i liczy procent wlasnym modelem LiPo, wiec gdy
+      odpowiada, jest po prostu lepszym zrodlem.
+
+      Gdy nie odpowiada - bo go nie ma albo przewod odszedl - schodzimy
+      nizej bez slowa skargi. Pudelko bez czujnika ma dzialac tak samo
+      jak przed jego dolozeniem.                                       */
+  Wire.begin(PIN_SDA, PIN_SCL);
+  if (gaugeCzytaj(battVolt, battProcent)) {
+    battZrodlo = "max17048";
+    LOG("[BAT] czujnik: %d%%  %.2f V\n", battProcent, battVolt);
+    return;
+  }
+  LOG("[BAT] czujnik nie odpowiada - biore odczyt z dzielnika\n");
+#endif
+
   uint32_t suma = 0;
   for (int i = 0; i < 32; i++) suma += analogReadMilliVolts(PIN_BATERIA);
   battVolt = (suma / 32.0f) * 2.0f / 1000.0f;
@@ -279,12 +353,14 @@ void czytajBaterie() {
       pokazac jako brak danych.                                        */
   if (battVolt < BATT_MIN_SENS_V) {
     battProcent = -1;
+    battZrodlo  = "brak";
     LOG("[BAT] odczyt %.2f V niemozliwy przy dzialajacej plytce - zglaszam brak danych\n",
         battVolt);
     return;
   }
   float p = (battVolt - 3.30f) / (4.20f - 3.30f) * 100.0f;
   battProcent = (int)(p < 0 ? 0 : (p > 100 ? 100 : p));
+  battZrodlo  = "dzielnik";
 }
 
 /* =====================================================================
@@ -693,6 +769,10 @@ bool wyslijStatus() {
       a 0% znaczy "naladuj natychmiast" - falszywy alarm o tym samym
       ciezarze co przegapiona dawka.                                  */
   doc["volt"]    = battVolt;
+  /*  SKAD jest ten pomiar. Bez tego pola "62%" z czujnika i "62%"
+      z dzielnika wygladaja identycznie, a to one wlasnie rozstrzygaja,
+      czy czujnik gada - jedyne pytanie, ktore w tej sprawie zostalo. */
+  doc["battSrc"] = battZrodlo;
   doc["fw"]      = FW_VERSION;
   doc["rssi"]    = WiFi.RSSI();
   doc["queue"]   = kolejkaIle();

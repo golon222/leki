@@ -1030,6 +1030,45 @@ if w.exists():
     else:
         print('  OK   status tygodniowego niesie pola czytane przez aplikacje')
 
+    # ── CZUJNIK BATERII JEST OPCJONALNY, NIE WYMAGANY (D139) ────────
+    #
+    # Kuba dolozyl MAX17048, bo dzielnik na tej plytce melduje 2,32 V
+    # i nie wiemy dlaczego (D136). Czujnik ma PIERWSZENSTWO, ale ten sam
+    # program musi chodzic takze na plytce bez niego - inaczej jedno
+    # odejscie przewodu zamienia dzialajace pudelko w martwe.
+    #
+    # Trzy rzeczy, kazda byla do pomylenia: kolejnosc zrodel, zapas przy
+    # milczacym czujniku i to, ze aplikacja widzi, KTORE zrodlo dalo
+    # liczbe. Bez tego trzeciego "62%" z czujnika i z dzielnika wygladaja
+    # identycznie, a to one rozstrzygaja, czy czujnik w ogole gada.
+    _bat = _bez(_cialo(src, 'void czytajBaterie') or '')
+    _zle = []
+    _g, _d = _bat.find('gaugeCzytaj('), _bat.find('analogReadMilliVolts')
+    if _g < 0:
+        _zle.append('czytajBaterie() nie pyta czujnika w ogole')
+    elif _d < 0:
+        _zle.append('czytajBaterie() nie ma juz zapasu w dzielniku')
+    elif _g > _d:
+        _zle.append('dzielnik ma pierwszenstwo przed czujnikiem - odwrotnie niz trzeba')
+    if 'return' not in _bat[max(_g, 0):_d if _d > 0 else len(_bat)]:
+        _zle.append('odczyt z czujnika nie konczy funkcji - dzielnik go nadpisze')
+    if 'doc["battSrc"]' not in _st:
+        _zle.append('status nie mowi, ktore zrodlo dalo pomiar')
+    if 'const OPIS_BATT_SRC' not in _html or 'wiersz("Pomiar baterii"' not in _html:
+        _zle.append('aplikacja nie pokazuje zrodla pomiaru w Urzadzeniu')
+    # Odczyt dwoch bajtow w JEDNYM wyrazeniu ma w C++ nieokreslona
+    # kolejnosc - bajty potrafia wyjsc odwrotnie przy zmianie rdzenia.
+    # (na KODZIE bez komentarzy - komentarz obok tej linii pokazuje
+    #  wlasnie ten zly zapis jako przestroge i zglaszalby sam siebie)
+    if re.search(r'Wire\.read\(\)[^;]*Wire\.read\(\)', _kod):
+        _zle.append('dwa Wire.read() w jednym wyrazeniu - kolejnosc nieokreslona')
+    if _zle:
+        bad += 1
+        print('  BLAD czujnik baterii w pudelku tygodniowym:')
+        for _z in _zle: print('       ' + _z)
+    else:
+        print('  OK   czujnik baterii ma pierwszenstwo, dzielnik zostaje zapasem')
+
 t = root/"firmware/PillBoxTest/PillBoxTest.ino"
 if t.exists():
     src = t.read_text(encoding="utf-8")

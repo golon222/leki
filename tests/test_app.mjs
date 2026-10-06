@@ -5413,6 +5413,42 @@ head("Baner o otwartej klapce");
   A.__setState({ cfg:{ profil:undefined } });
 }
 
+/* ═══════════ SKAD JEST PROCENT BATERII (D139) ═══════════
+
+   Kuba dolozyl czujnik MAX17048, bo dzielnik na tej plytce melduje
+   2,32 V i nie wiemy dlaczego (D136). "62%" z czujnika i "62%"
+   z dzielnika wygladaja na ekranie identycznie - a to wlasnie ta roznica
+   rozstrzyga jedyne pytanie, ktore w tej sprawie zostalo: czy czujnik
+   w ogole sie odzywa.                                                 */
+head("Zrodlo pomiaru baterii");
+{
+  const dev = () => document.getElementById("devInfo").innerHTML;
+  const teraz = Math.round(Date.now()/1000);
+
+  A.renderStatus({ lastSeen: teraz, battery: 62, volt: 3.9, battSrc: "max17048" });
+  check(/Pomiar baterii/.test(dev()) && /MAX17048/.test(dev()),
+        "pomiar z czujnika jest podpisany czujnikiem");
+
+  A.renderStatus({ lastSeen: teraz, battery: 62, volt: 3.9, battSrc: "dzielnik" });
+  check(/dzielnik napięcia/.test(dev()), "a pomiar z dzielnika - dzielnikiem");
+
+  A.renderStatus({ lastSeen: teraz, volt: 2.32, battSrc: "brak" });
+  check(/nie działa/.test(dev()), "zepsuty pomiar mowi wprost, ze nie dziala");
+  check(document.getElementById("batBig").textContent === "—",
+        "i nadal nie udaje zera procent");
+
+  /* Starszy program pudelka tego pola nie przysyla. Wtedy wiersza nie
+     ma - zamiast zgadywac za niego.                                  */
+  A.renderStatus({ lastSeen: teraz, battery: 62, volt: 3.9 });
+  check(!/Pomiar baterii/.test(dev()),
+        "bez tego pola nie zmyslamy zrodla");
+
+  /* Nazwa, ktorej nie znamy, idzie na ekran surowo - udawanie, ze ja
+     rozumiemy, byloby gorsze niz przyznanie sie.                     */
+  A.renderStatus({ lastSeen: teraz, battery: 62, volt: 3.9, battSrc: "cosNowego" });
+  check(/cosNowego/.test(dev()), "nieznane zrodlo pokazujemy surowo");
+}
+
 head("Zgodnosc wersji aplikacji");
 check(/const APP_VERSION = "([\d.\-]+)"/.test(html), "index.html deklaruje wersje");
 const av = html.match(/const APP_VERSION = "([\d.\-]+)"/)?.[1];

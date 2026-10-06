@@ -2295,7 +2295,7 @@ window.wybierzPudelko = (id) => {
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-09-27.101";
+const APP_VERSION = "2026-09-27.102";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -5367,6 +5367,14 @@ function renderEvents(){
    w ogóle żyje, ten — czy KONKRETNY stan jest jeszcze aktualny.          */
 const OPEN_SWIEZOSC_H = 3;
 
+/*  Czym pudełko zmierzyło baterię. Nazwy przychodzą z firmware; nieznaną
+    pokazujemy surowo, zamiast udawać, że rozumiemy.                   */
+const OPIS_BATT_SRC = {
+  max17048: "czujnik MAX17048",
+  dzielnik: "dzielnik napięcia",
+  brak:     `<span style="color:var(--warn)">nie działa</span>`
+};
+
 /*  „Wieczko" kontra „klapka" — pudełko tygodniowe nie ma wieczka, ma
     siedem klapek. Zdanie o cudzej części urządzenia czyta się jak błąd
     aplikacji, a nie jak ostrzeżenie (D137).                           */
@@ -5757,6 +5765,14 @@ function renderStatus(st){
              (+st.openSince > 1 ? ` <span class="dim2">od ${devHM(+st.openSince)}</span>` : "")
            : "zamknięte") : "") +
     wiersz("Identyfikator", esc(DEVICE_ID)) +
+    /*  SKĄD JEST PROCENT BATERII (D139). „62%" z czujnika i „62%"
+        z dzielnika wyglądają identycznie, a to właśnie ta różnica
+        rozstrzyga, czy dołożony czujnik w ogóle się odzywa. Starszy
+        program pudełka tego pola nie przysyła — wtedy wiersza nie ma,
+        zamiast zgadywać za niego.                                    */
+    (typeof st.battSrc === "string" && st.battSrc
+       ? wiersz("Pomiar baterii", OPIS_BATT_SRC[st.battSrc] ||
+                `<span class="dim2">${esc(st.battSrc)}</span>`) : "") +
     wiersz("Sieć WiFi", `${esc(st.ssid) || "—"}` +
            (Number.isFinite(+st.rssi) ? ` <span class="dim2">${+st.rssi} dBm</span>` : "")) +
     wiersz("Wybudzeń", String(st.boots || 0)) +

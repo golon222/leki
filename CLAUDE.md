@@ -38,8 +38,8 @@ bash tests/run_all.sh
 ```
 
 Musi przejść przed zmianą i po zmianie. Stan wyjściowy:
-**642 + 52 firmware, 1458 (×6 pór doby) + 92 + 52 aplikacja, 48 zgodności,
-156 reguł bazy, 375 kontroli audytu, 45 kontroli statycznych — 0 błędów.**
+**642 + 52 firmware, 1464 (×6 pór doby) + 92 + 52 aplikacja, 48 zgodności,
+156 reguł bazy, 375 kontroli audytu, 46 kontroli statycznych — 0 błędów.**
 
 **Nazwy leku w pudełku tygodniowym NIE MA** (D135, cofnięte z D126 na
 wyraźną prośbę Kuby — nie przywracaj). Nazwa jest potrzebna tam, gdzie się
@@ -111,7 +111,14 @@ odrzuca **cały** wpis kodem 400, a `trwaleOdrzucony(400)` go wtedy **kasuje**
    `firmware/PillBoxWeek/` — i to też jest decyzja, nie przypadek (D121):
    wspólny szkic z rozgałęzieniem znaczyłby, że każda zmiana w pudełku
    dziewczyny dotyka kodu pilnującego Warfinu.
-2. **Żadnych zmian sprzętowych.** Płytka jest zlutowana i docelowo zaklejona.
+2. **Żadnych zmian sprzętowych** — z jednym świadomym wyjątkiem, który
+   zniósł sam Kuba: **czujnik baterii MAX17048 w pudełku tygodniowym**
+   (D139, kupił go i podłączył). Płytka pudełka dziennego jest zlutowana
+   i docelowo zaklejona; tam zakaz obowiązuje bez zmian.
+   Czujnik jest **opcjonalny**: ma pierwszeństwo przed dzielnikiem, ale
+   gdy nie odpowiada, pudełko schodzi na dzielnik, a potem na uczciwe
+   „nie wiem". **Ten sam program chodzi z czujnikiem i bez** — inaczej
+   jedno odejście przewodu zamieniłoby działające pudełko w martwe.
 3. **`config.h` JEST w repo — celowo, i tak ma zostać.**
    Trzyma wyłącznie placeholder `TUTAJ_WPISZ_HASLO`, nigdy prawdziwego hasła.
 
@@ -346,7 +353,7 @@ na `esp32:esp32@3.3.11` i z **ustawieniami płytki z nagłówka `PillBox.ino`**.
 Nie jest częścią `run_all.sh`: wymaga sieci i ~500 MB toolchainu.
 **Uruchom to po każdej zmianie w firmware.**
 
-Stan: `PillBox.ino` **64% flasha** (1 265 417 B z 1,875 MB), `PillBoxWeek.ino` **61%** (1 207 685 B),
+Stan: `PillBox.ino` **64% flasha** (1 265 417 B z 1,875 MB), `PillBoxWeek.ino` **62%** (1 233 793 B),
 `PillBoxTest.ino` 20% bez `config.h` i **57%** z nim. Szkic diagnostyczny budujemy w OBU
 konfiguracjach — bez tego drugiego przebiegu 722 kB jego kodu (logowanie do
 bazy, zapis wyniku) nie było kompilowane ani razu (D103).
@@ -418,7 +425,15 @@ nie do publikacji. Szczegóły obejść — D17.
   nazwę w aplikacji** — kontrola statyczna porównuje je teraz po nazwach.
   **Pudełko tygodniowe ma teraz wszystko, co dzienne** poza skanem sieci
   (niepotrzebnym, bo ma portal) i dziennikiem wieczka.
-- **Pomiar baterii pudełka tygodniowego — NIEWYJAŚNIONY, ale od `0.7.0`
+- **Pomiar baterii pudełka tygodniowego — od `0.10.0` jest CZUJNIK**
+  (D139): Kuba kupił MAX17048 i podłączył go po I²C. Czujnik ma
+  pierwszeństwo, dzielnik został zapasem. **Niesprawdzone na płytce** —
+  przy pierwszym wgraniu zobacz w logu `[BAT] czujnik: ...%` albo
+  `[BAT] czujnik nie odpowiada`, a potem w Ustawieniach → Urządzenie →
+  **Pomiar baterii**. Dopóki tego nie widzieliśmy, poniższe zostaje
+  w mocy, bo dzielnik nadal jest tym, co odpowiada przy milczącym
+  czujniku.
+- **Sam dzielnik — NIEWYJAŚNIONY, ale od `0.7.0`
   MIERZALNY Z ZEWNĄTRZ** (D136): napięcie idzie w statusie **zawsze**, także
   przy niemożliwym odczycie. Do `0.6.0` szło razem z procentem, więc przy
   zepsutym pomiarze nie szło nic. Pytanie do rozstrzygnięcia jest jedno:

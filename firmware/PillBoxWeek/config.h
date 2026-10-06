@@ -19,7 +19,7 @@
  *    miejsce w bazie i kalendarze wymieszalyby sie po cichu.
  * ------------------------------------------------------------------ */
 #define DEVICE_ID           "pillbox02"     // klucz w /devices/<DEVICE_ID>
-#define FW_VERSION          "0.9.0"         // widoczna w aplikacji
+#define FW_VERSION          "0.10.0"         // widoczna w aplikacji
 
 /* ---------------------------------------------------------------------
  * 2. FIREBASE
@@ -55,6 +55,11 @@
 #define PIN_PRZYCISK        5      // D3 - przycisk do masy
 #define PIN_BATERIA         2      // D0 - dzielnik 100k/100k z BAT+
 
+/*  Czujnik naladowania MAX17048 (Adafruit, STEMMA QT) na I2C.
+ *  D4 i D5 to domyslna magistrala XIAO ESP32-C3 i obie byly wolne.     */
+#define PIN_SDA             6      // D4
+#define PIN_SCL             7      // D5
+
 /* ---------------------------------------------------------------------
  * 5. PROGI DRABINKI  -  Z POMIARU, NIE Z OBLICZEN
  *
@@ -84,6 +89,26 @@
  *  POZIOM. Bez czekania na zamkniecie pudelko budziloby sie w kolko. */
 #define CZEKAJ_ZAMKNIECIE_S 60     // ile czekac na zamkniecie klapki
 #define SEN_PRZY_OTWARTEJ_S 120    // sen na sam zegar, gdy nadal otwarta
+
+/* ---------------------------------------------------------------------
+ * 6a. CZUJNIK NALADOWANIA  (MAX17048)
+ *
+ *  Uklad siedzi na ogniwie i liczy stan naladowania wlasnym modelem
+ *  LiPo - znacznie uczciwiej, niz da sie to wyliczyc z jednego napiecia.
+ *  Podaje gotowy procent i napiecie przez I2C.
+ *
+ *  JEST OPCJONALNY i to jest wazne: przy braku czujnika na magistrali
+ *  pudelko wraca do dzielnika, a przy zepsutym dzielniku - do uczciwego
+ *  "nie wiem". Ten sam program chodzi na plytce z czujnikiem i bez (D139).
+ * ------------------------------------------------------------------ */
+#define GAUGE_ENABLED       1
+#define GAUGE_ADDR          0x36   // staly adres MAX17048/MAX17043
+
+/*  Granice zdrowego rozsadku dla odczytu z czujnika. Poza nimi uznajemy,
+ *  ze czujnik nie jest jeszcze gotowy (po wlaczeniu potrzebuje chwili)
+ *  albo odpowiada smieciami - i schodzimy na dzielnik.                 */
+#define GAUGE_MIN_V         2.0f
+#define GAUGE_MAX_V         5.0f
 
 /*  Ponizej tego napiecia plytka po prostu nie chodzi - wiec taki odczyt
  *  znaczy "dzielnik nie ma kontaktu", a nie "bateria pusta". Zglaszamy

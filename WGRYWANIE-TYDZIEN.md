@@ -341,6 +341,45 @@ je skasuje i będzie można spróbować jeszcze raz.
 
 ---
 
+# 4b. Czujnik baterii MAX17048 — podłączenie
+
+Opcjonalny. Pudełko bez niego działa tak samo jak dotąd — po prostu wraca
+do dzielnika na płytce, a gdy i ten nie daje sensownego odczytu, uczciwie
+mówi „nie wiem". **Ten sam program chodzi z czujnikiem i bez.**
+
+Moduł Adafruit MAX17048 ma dwa złącza JST-PH (ogniwo), dwa STEMMA QT
+(I²C) i rząd pinów: `VIN GND SCL SDA INT QStart`.
+
+| pin modułu | gdzie na XIAO |
+|---|---|
+| **VIN** | `3V3` |
+| **GND** | `GND` |
+| **SDA** | **`D4`** |
+| **SCL** | **`D5`** |
+| `INT`, `QStart` | nigdzie — niepotrzebne |
+
+**Ogniwo podłączasz RÓWNOLEGLE, nie w szereg.** MAX17048 tylko *mierzy*
+napięcie ogniwa — nie przepuszcza przez siebie prądu, więc **nie trzeba
+niczego przecinać**. Plus ogniwa do `+` modułu (albo do jednego ze złączy
+JST), minus do `−`. Ogniwo zostaje podłączone do płytki tak, jak jest.
+
+**D4 i D5 są wolne** — pudełko używa D0, D1, D2 i D3.
+
+**Zanim zakleisz obudowę:** w monitorze portu (115200) po wgraniu
+zobaczysz jedną z dwóch linii:
+
+```
+[BAT] czujnik: 87%  3.98 V          ← czujnik gada, gotowe
+[BAT] czujnik nie odpowiada - biore odczyt z dzielnika
+```
+
+Druga linia znaczy, że coś jest nie tak z SDA/SCL albo z zasilaniem
+modułu. To samo widać potem w aplikacji: **Ustawienia → Urządzenie →
+Pomiar baterii** mówi wprost, czy liczba przyszła z czujnika, z dzielnika,
+czy nie przyszła wcale.
+
+---
+
 # 5. Czy się zameldowało
 
 Otwórz **Monitor portu szeregowego, 115200**:

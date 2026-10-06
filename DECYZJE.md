@@ -9,7 +9,7 @@ zamiast 60 tys. tokenów wchodzi 2,5 tys. plus jeden obszar.
 
 | plik | o czym | ile |
 |---|---|---|
-| `decyzje/pudelko.md` | Pudełko — sen, alarm, NVS, WiFi | 42 |
+| `decyzje/pudelko.md` | Pudełko — sen, alarm, NVS, WiFi | 43 |
 | `decyzje/ota.md` | Aktualizacja przez WiFi i skan sieci | 10 |
 | `decyzje/telegram.md` | Powiadomienia Telegram | 6 |
 | `decyzje/aplikacja.md` | Aplikacja — ekrany i wygląd | 46 |
@@ -63,6 +63,7 @@ Od najnowszej. Kolumna „gdzie" mówi, który plik w `decyzje/` trzymać otwart
 
 | # | O co chodziło | gdzie |
 |---|---|---|
+| **D139** | **Czujnik MAX17048** w pudełku tygodniowym: ma pierwszeństwo przed dzielnikiem, ale jest **opcjonalny** — bez niego ten sam program działa jak dotąd. Podłączenie równoległe (nic nie przecinamy), dwa rejestry przez `Wire` bez biblioteki, a status mówi, SKĄD jest procent. `(Wire.read()<<8)|Wire.read()` ma nieokreśloną kolejność — kontrola statyczna tego zabrania | `pudelko` |
 | **D138** | **Próg baterii dla OTA zniesiony w pudełku tygodniowym** — próg oparty na pomiarze, którego nie rozumiemy (D136), nie jest zabezpieczeniem, tylko loterią, a stawką jest jedyna zdalna droga naprawy. Wraca dopiero razem z naprawionym pomiarem i kontrola statyczna tego pilnuje. `otaDecyzja()` nietknięta — różnica siedzi w makrze | `ota` |
 | **D137** | **„Nie pokazuje, że otwarte"** — pudełko tygodniowe nie wysyłało `boxOpen`, a chwilę „ostatnio widziane" słało jako `ts`, czyli pole, którego aplikacja nie czyta nigdzie (czyta `lastSeen`, w kilkunastu miejscach). Do tego czekanie na zamknięcie klapki stało ZA `wifiWylacz()` — nie było czym zgłosić zamknięcia. Kontrola statyczna porównuje teraz nazwy pól | `pudelko` |
 | **D136** | **Brak pomiaru baterii to nie jest 0%** — pudełko uczciwie nie wysyła pola, a aplikacja robiła z tego czerwone „0%" i fałszywy alarm. Napięcie idzie teraz w statusie ZAWSZE, żeby dało się zrozumieć, czemu pomiar nie wychodzi. Plus: **pora brania** znika z pudełka tygodniowego — komora należy do dnia, nie do godziny | `aplikacja` |
