@@ -9,7 +9,7 @@ zamiast 60 tys. tokenów wchodzi 2,5 tys. plus jeden obszar.
 
 | plik | o czym | ile |
 |---|---|---|
-| `decyzje/pudelko.md` | Pudełko — sen, alarm, NVS, WiFi | 49 |
+| `decyzje/pudelko.md` | Pudełko — sen, alarm, NVS, WiFi | 50 |
 | `decyzje/ota.md` | Aktualizacja przez WiFi i skan sieci | 10 |
 | `decyzje/telegram.md` | Powiadomienia Telegram | 6 |
 | `decyzje/aplikacja.md` | Aplikacja — ekrany i wygląd | 47 |
@@ -66,6 +66,7 @@ Od najnowszej. Kolumna „gdzie" mówi, który plik w `decyzje/` trzymać otwart
 | **D140** | **Komora przestaje znaczyć dzień tygodnia** — przypisanie żyło wyłącznie w kolejności rezystorów, czyli w czymś, czego pudełko nie umie sprawdzić, a mówiło o tym jak o fakcie. Przełożone lutowanie i powiadomienie wskazuje **złą** przegrodkę. Numer komory zostaje (napełnianie, powtórka, piknięcia), odpada tłumaczenie go na dzień — i samego numeru też człowiekowi nie pokazujemy | `pudelko` |
 | **D144** | **Brak pola to trzeci stan, nie drugi** — wiersz „Wieczko/Klapka" znikał, gdy pudełko nie przysłało `boxOpen`, a ekran bez wiersza czyta się jak „zamknięte". Starszy program tego pola nie wysyła wcale, więc człowiek szukał usterki zamiast wgrać firmware. Teraz: „nie wiadomo — wymaga programu pudełka 0.8.0", z numerem właściwym dla TEGO pudełka | `aplikacja` |
 | **D145** | **Przypomnienia nie działały przy więcej niż jednej godzinie** — pudełko znało 4 godziny, aplikacja dawała ustawić 12 i po cichu się rozjeżdżały; `slotTeraz()` brało pierwszy slot w oknie zamiast najbliższego (więc drugie przypomnienie nie dzwoniło nigdy) i mogło zadzwonić 25 minut za wcześnie. Przy okazji powstały **pierwsze testy jednostkowe pudełka tygodniowego** (krok 1c, 133 kontrole) | `pudelko` |
+| **D147** | **Otwarcie brzmi dwoma dźwiękami, nie liczeniem komór** — numer komory zależy od kolejności rezystorów, więc nie niósł nic użytecznego, a dwie sekundy piknięć zagłuszały jedyną różnicę, która ma znaczenie. Dwa tony w górę = zapisane, trzy w dół = już dziś było. Liczenie zostaje tylko w autoteście | `pudelko` |
 | **D146** | **Drugie otwarcie tej samej komory brzmi inaczej** — brzmiało identycznie jak pierwsze, czyli pudełko potwierdzało dźwiękiem dawkę, której nie zapisało. Trzy tony w dół: jedyny dźwięk, który nie idzie w górę | `pudelko` |
 | **D143** | **Ładowanie zmierzone, nie zgadnięte** — rejestr CRATE daje tempo w %/h, więc pudełko tygodniowe nie musi wnioskować ze wzrostu napięcia jak dzienne. Procent przy kablu jest wtedy PRAWDZIWY, więc go nie wyszarzamy; czas do pełna liczymy z tempa. Na ładowarce pudełko melduje się co minutę, bo inaczej „pokaże się, że się ładuje" znaczyłoby „za cztery godziny" | `pudelko` |
 | **D142** | **Diagnostyka czujnika baterii widoczna w aplikacji, nie w monitorze portu** — „czujnik jeszcze liczy" (odczekaj minutę) kontra „czujnik się nie odzywa" (lutownica) to ta sama liczba na ekranie, a dwie różne roboty. Pola `gauge` i `voltDz` w statusie; reguł bazy nie trzeba publikować (`$other: true`). Przy okazji: „Wieczko" w pudełku, które ma klapki | `pudelko` |

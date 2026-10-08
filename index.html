@@ -1924,6 +1924,10 @@ body[data-profil="tydzien"] .stat-solo{grid-column:1/-1}
         i dojedzie później.</p>
       <!-- Pudelko tygodniowe: autotest JEST, ale wylacznie na sluch - nie ma
            czego raportowac do bazy, wiec nie ma tez karty z wynikami. -->
+      <p class="muted tylko-tydzien"><b>Dwa dźwięki przy otwarciu klapki:</b>
+        dwa tony <b>w górę</b> — dawka zapisana; trzy tony <b>w dół</b> — tę komorę
+        już dziś otwierano, nie bierz drugi raz. Numeru komory pudełko nie
+        wypikuje: zależy od kolejności rezystorów i zagłuszał tę różnicę.</p>
       <p class="muted tylko-tydzien"><b>Autotest na słuch</b> — trzymaj ukryty
         przycisk przy włączaniu pudełka (krócej niż 3 sekundy, bo dłużej otwiera
         portal WiFi). Trzy piknięcia to start, potem pudełko wypika <b>numer
@@ -2307,7 +2311,7 @@ window.wybierzPudelko = (id) => {
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-10-08.107";
+const APP_VERSION = "2026-10-08.108";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
