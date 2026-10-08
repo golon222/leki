@@ -605,9 +605,19 @@ dzienne, ona na tygodniowe, na tym samym ekranie ustawień.
 
 # Jak tego używać
 
-**Otwarcie klapki = tabletka wzięta.** Nic nie trzeba potwierdzać. Pudełko
-pika tyle razy, który to numer komory — od jednego do siedmiu. To
-potwierdzenie, że rozpoznało, która klapka się ruszyła.
+**Otwarcie klapki = tabletka wzięta.** Nic nie trzeba potwierdzać.
+Pudełko odpowiada **jednym z dwóch dźwięków** i to jedyne dwie rzeczy,
+które trzeba usłyszeć:
+
+| dźwięk | znaczy |
+|---|---|
+| **dwa tony w GÓRĘ** | zapisałem dawkę |
+| **trzy tony w DÓŁ** | tę komorę już dziś otwierano — **nie bierz drugi raz** |
+
+Numeru komory pudełko **nie wypikuje** przy zwykłym otwarciu (robi to
+tylko w autoteście). Numer zależy od kolejności rezystorów, więc nie
+niósł nic, czego dałoby się użyć — a zagłuszał tę jedną różnicę, która
+ma znaczenie.
 
 **Pudełko nie przypisuje komorom dni tygodnia** i to jest decyzja, nie
 brak (D140). Numer komory bierze się z kolejności rezystorów, a tego
@@ -627,11 +637,6 @@ otworzyć wszystkie siedem i wsypać tabletki na tydzień.
 **Klapkę zamknąć.** Zostawiona otwarta trzyma pudełko w czuwaniu — po
 minucie samo pójdzie spać, ale będzie się budzić co dwie minuty, dopóki
 jest otwarta. Bateria tego nie lubi.
-
-**Trzy tony W DÓŁ znaczą „tę komorę już dziś otwierano"** — pudełko nie
-zapisuje drugiej dawki z tej samej przegrodki, a teraz też tego nie
-udaje. To jedyny dźwięk, który nie idzie w górę; każdy inny jest
-potwierdzeniem.
 
 **Dwa krótkie piknięcia to ostrzeżenie o baterii** (poniżej 15%).
 

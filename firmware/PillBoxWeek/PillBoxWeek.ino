@@ -65,7 +65,7 @@
 
     Numer wersji, ktory mieszka w NAGLOWKU, opisuje naglowek. Ten opisuje
     program. Gdy sie rozjada, log krzyczy o tym w pierwszej linii.        */
-#define KOD_WERSJA "0.15.0"
+#define KOD_WERSJA "0.16.0"
 
 /*  Po tym napisie pudelko poznaje config.h wzięty prosto z repozytorium -
     czyli "nie ma zadnej sieci", a nie "ma siec o takiej nazwie". Bez tego
@@ -288,8 +288,15 @@ void pik(uint32_t hz, uint32_t ms) {
   ledcWriteTone(PIN_BUZZER, 0);
 }
 
-/* Tyle piknięc, ktora to komora: 1 ... 7. Kuba prosil wprost,
-   zeby dalo sie sprawdzic pudelko na sluch, bez podlaczania komputera. */
+/*  Tyle piknięc, ktora to komora: 1 ... 7.
+
+    WYLACZNIE DO AUTOTESTU (D147). Przy zwyklym otwarciu klapki numer
+    komory nie jest wypikiwany - zalezy od kolejnosci rezystorow, wiec
+    nie niesie nic, czego da sie uzyc, a zagluszal jedyna roznice, ktora
+    ma znaczenie: zapisane kontra juz dzis bylo.
+
+    W autotescie liczenie na ucho jest calym sensem: sprawdza rezystor,
+    mikroprzelacznik, lutowanie i progi, bez podlaczania komputera.   */
 void pikniecia(int ile) {
   for (int i = 0; i < ile; i++) { pik(BUZZER_HZ, 130); if (i < ile-1) delay(190); }
 }
@@ -298,6 +305,24 @@ void beepBlad()       { pik(700, 260); }
 void beepKilkaNaraz() { pik(700, 700); }
 void beepAlarm()      { for (int i=0;i<3;i++){ pik(BUZZER_HZ,180); delay(120);} }
 void beepBateria()    { for (int i=0;i<2;i++){ pik(1200,300); delay(180);} }
+
+/*  „ZAPISALEM DAWKE" - dwa tony W GORE (D147).
+
+    Do 0.15.0 pudelko wypikiwalo tu NUMER KOMORY: raz, dwa, ... siedem.
+    Kuba: *„to pika raz na poniedzialek, dwa na wtorek i tak dalej, wiec
+    tak tez nie moze byc - musi byc dzwiek na zapisana dawke i inny na
+    to, ze juz wzieta"*. Ma racje i to ten sam blad co nazwy dni (D140):
+    liczenie piknien niesie informacje, ktora NICZEGO NIE ZMIENIA
+    (numer przegrodki zalezy od kolejnosci rezystorow), a zagluszala te
+    jedna, ktora zmienia - czy pudelko zapisalo dawke, czy nie.
+
+    Siedem piknien i jedno pikniecie potwierdzenia trwaly tez ponad dwie
+    sekundy, wiec roznica miedzy "zapisane" a "juz bylo" ginela na koncu
+    dlugiego ciagu.
+
+    Numer komory zostaje TYLKO w autotescie, gdzie liczenie na ucho jest
+    calym sensem: sprawdza rezystor, mikroprzelacznik, lutowanie i progi. */
+void beepZapisane()   { pik(1000,110); delay(55); pik(1500,180); }
 
 /*  „TA DAWKA JUZ BYLA DZIS" - trzy tony w DOL (D146).
 
@@ -2409,10 +2434,13 @@ void setup() {
 
     if (k >= 0) {
       rtcPuste = 0;                       // pin powiedzial cos sensownego
-      pikniecia(k + 1);                   // potwierdzenie na sluch
-      /*  DRUGIE OTWARCIE TEJ SAMEJ KOMORY BRZMI INACZEJ (D146) - tak,
-          zeby po dzwieku dalo sie poznac, czy pudelko cos zapisalo. */
-      if (zapiszOtwarcie(k)) beepAck();
+      /*  DWA DZWIEKI, I TO SA JEDYNE DWIE RZECZY, KTORE CZLOWIEK MUSI
+          USLYSZEC (D146, D147): w gore - zapisalem dawke; w dol - ta
+          komora byla juz dzis otwierana, nie bierz drugi raz.
+
+          Numeru komory NIE wypikujemy: zalezy od kolejnosci rezystorow,
+          wiec nie niesie nic, czego da sie uzyc, a zagluszal te roznice. */
+      if (zapiszOtwarcie(k)) beepZapisane();
       else                   beepJuzDzis();
     } else if (k == -2) {
       /* Kilka klapek naraz to NAPELNIANIE, nie dawka. Zapisanie tego jako
@@ -2490,7 +2518,7 @@ void setup() {
       } else {
         LOG("[ALM] przypomnienie, slot %d (proba %d)\n", slot, rtcAlarmPonowien + 1);
         int przerwane = zagrajAlarm();
-        if (przerwane >= 0) { if (zapiszOtwarcie(przerwane)) beepAck(); else beepJuzDzis(); }
+        if (przerwane >= 0) { if (zapiszOtwarcie(przerwane)) beepZapisane(); else beepJuzDzis(); }
 #if TG_ENABLED
         /* --- Powiadomienie po KAZDYM nieodebranym, nie po ostatnim ---
            Zdarzenie "missed" powstaje dopiero z koncem doby (D64), bo

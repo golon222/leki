@@ -1157,6 +1157,29 @@ if w.exists():
         print('  OK   otwarcie melduje sie takze bez nowej dawki')
 
     # ------------------------------------------------------------------
+    # DWA DZWIEKI, NIE LICZENIE KOMOR (D147). Kuba: "to pika raz na
+    # poniedzialek, dwa na wtorek i tak dalej, wiec tak tez nie moze byc -
+    # musi byc dzwiek na zapisana dawke i inny na to, ze juz wzieta".
+    # Numer komory zalezy od kolejnosci rezystorow, wiec nie niesie nic,
+    # czego da sie uzyc - a zagluszal jedyna roznice, ktora ma znaczenie.
+    # Liczenie zostaje TYLKO w autotescie, gdzie jest calym sensem.
+    _zle = []
+    if _a >= 0 and _b > _a:
+        if 'pikniecia(' in _kod[_a:_b]:
+            _zle.append('zwykle otwarcie znowu wypikuje numer komory')
+        for _f in ('beepZapisane(', 'beepJuzDzis('):
+            if _f not in _kod[_a:_b]:
+                _zle.append(f'galaz klapki nie wola {_f})')
+    if len(re.findall(r'\bpikniecia\s*\(', _kod)) != 2:
+        _zle.append('pikniecia() ma byc definicja + JEDNO wywolanie (autotest)')
+    if _zle:
+        bad += 1
+        print('  BLAD dzwiek przy otwarciu klapki:')
+        for _z in _zle: print('       ' + _z)
+    else:
+        print('  OK   otwarcie brzmi "zapisane" albo "juz dzis", bez liczenia komor')
+
+    # ------------------------------------------------------------------
     # ZADNEGO DNIA TYGODNIA PRZY KOMORZE (D140).
     #
     # Do 0.10.0 drabinka nadawala komorom dni: komora 0 byla "PON", a

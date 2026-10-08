@@ -39,7 +39,7 @@ bash tests/run_all.sh
 
 Musi przejść przed zmianą i po zmianie. Stan wyjściowy:
 **642 + 52 + 133 firmware, 1492 (×6 pór doby) + 92 + 52 aplikacja, 48 zgodności,
-156 reguł bazy, 375 kontroli audytu, 49 kontroli statycznych — 0 błędów.**
+156 reguł bazy, 375 kontroli audytu, 50 kontroli statycznych — 0 błędów.**
 
 **Nazwy leku w pudełku tygodniowym NIE MA** (D135, cofnięte z D126 na
 wyraźną prośbę Kuby — nie przywracaj). Nazwa jest potrzebna tam, gdzie się
@@ -51,6 +51,13 @@ w **jednym** miejscu (`opisLeku()`); stał w dwóch, słowo w słowo.
 **Przy profilu, który widzi mniej, domyślną odpowiedzią jest SCHOWAĆ**, a nie
 zostawić „na wszelki wypadek". Kuba zgłosił to trzy razy z rzędu (skan sieci,
 nazwa leku, „INR a regularność") i za każdym razem miał rację.
+
+**To samo dotyczy DŹWIĘKU i wszystkiego innego, co pudełko komunikuje**
+(D140, D147): informacja, której odbiorca nie może użyć do żadnej decyzji,
+**nie jest neutralna — zajmuje miejsce tej, która może**. Numer komory
+wypikiwany przy każdym otwarciu (dwie sekundy piknięć) zagłuszał jedyną
+różnicę, która coś znaczy: czy dawka została zapisana, czy ta komora była
+już dziś otwierana. Zostały dwa dźwięki: w górę = zapisane, w dół = już było.
 
 **Pudełko tygodniowe widzi mniej z DWÓCH powodów i to są różne powody**
 (D126 i D133): czego nie potrzebuje (INR, zapas, raport) i czego nie umie
@@ -361,7 +368,7 @@ na `esp32:esp32@3.3.11` i z **ustawieniami płytki z nagłówka `PillBox.ino`**.
 Nie jest częścią `run_all.sh`: wymaga sieci i ~500 MB toolchainu.
 **Uruchom to po każdej zmianie w firmware.**
 
-Stan: `PillBox.ino` **64% flasha** (1 265 417 B z 1,875 MB), `PillBoxWeek.ino` **63%** (1 235 017 B),
+Stan: `PillBox.ino` **64% flasha** (1 265 417 B z 1,875 MB), `PillBoxWeek.ino` **62%** (1 235 075 B),
 `PillBoxTest.ino` 20% bez `config.h` i **57%** z nim. Szkic diagnostyczny budujemy w OBU
 konfiguracjach — bez tego drugiego przebiegu 722 kB jego kodu (logowanie do
 bazy, zapis wyniku) nie było kompilowane ani razu (D103).
