@@ -1021,18 +1021,27 @@ if w.exists():
              if f'doc["{f}"]' not in _st]
     # Pole czytane przez aplikacje, ktorego nikt nie wysyla, to ekran
     # mowiacy "nigdy" bez zadnego powodu.
-    _czytane = set(re.findall(r'st\.([A-Za-z][A-Za-z0-9]*)', _html))
+    # `st.pole` i `st?.pole` to to samo odczytanie - wzorzec bez `?`
+    # przegapial polowe aplikacji i mowil "nie czyta" o polu, ktore czyta.
+    _czytane = set(re.findall(r'st\??\.([A-Za-z][A-Za-z0-9]*)', _html))
     if 'lastSeen' not in _czytane:
         _brak.append('aplikacja nie czyta juz lastSeen - sprawdz, czy ta kontrola ma sens')
     # Diagnostyka czujnika baterii ma dojechac DO TELEFONU, nie do logu
     # przez kabel (D142): "nie bede patrzyl na monitor, zobacze
     # w aplikacji". Pole wyslane pod nazwa, ktorej aplikacja nie czyta,
     # to dokladnie blad D137 - wtedy kosztowal baner o otwartej klapce.
-    for _f in ('gauge', 'voltDz'):
+    for _f in ('gauge', 'voltDz', 'charging', 'crate'):
         if f'doc["{_f}"]' not in _st:
             _brak.append(f'pudelko nie wysyla {_f}')
         elif _f not in _czytane:
             _brak.append(f'{_f} jedzie do bazy, ale aplikacja go nie czyta')
+    # LADOWANIA NIE ZGADUJEMY (D143). `charging` wolno wyslac TYLKO wtedy,
+    # gdy czujnik podal tempo - bez niego pudelko tygodniowe nie ma czym
+    # poznac kabla. Falszywe "laduje sie" kazaloby czlowiekowi odejsc od
+    # pudelka, ktore sie nie laduje.
+    _tz, _ch = _st.find('battTempoZnane'), _st.find('doc["charging"]')
+    if _ch >= 0 and (_tz < 0 or _tz > _ch):
+        _brak.append('charging jedzie bez sprawdzenia, czy czujnik podal tempo')
     if _brak:
         bad += 1
         print('  BLAD status pudelka tygodniowego bez pol, ktore czyta aplikacja:', _brak)

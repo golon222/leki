@@ -65,7 +65,7 @@
 
     Numer wersji, ktory mieszka w NAGLOWKU, opisuje naglowek. Ten opisuje
     program. Gdy sie rozjada, log krzyczy o tym w pierwszej linii.        */
-#define KOD_WERSJA "0.12.0"
+#define KOD_WERSJA "0.13.0"
 
 /*  Po tym napisie pudelko poznaje config.h wzięty prosto z repozytorium -
     czyli "nie ma zadnej sieci", a nie "ma siec o takiej nazwie". Bez tego
@@ -203,6 +203,15 @@ const char* gaugeStan  = "";
     z czujnika. -1 znaczy "nie bylo czego porownywac". Jedyny cel:
     rozstrzygnac zagadke 2,32 V bez monitora portu (D141).           */
 float   battVoltDz     = -1.0f;
+
+/*  TEMPO zmiany naladowania w %/h, ze znakiem, prosto z czujnika
+    (rejestr CRATE). Dodatnie znaczy "rosnie", czyli ladowanie (D143).
+    `battTempoZnane` rozroznia "tempo zero" od "nie wiem" - a to dwie
+    rozne rzeczy: pierwsze znaczy, ze pudelko stoi i nie laduje sie,
+    drugie, ze nie ma czym zmierzyc.                                 */
+float   battTempo      = 0.0f;
+bool    battTempoZnane = false;
+bool    battLaduje     = false;
 
 /* Harmonogram przypomnien. To sa godziny PRZYPOMNIEN, nie pory brania -
    dokladnie jak w pudelku dziennym. Domyslnie jedna, 20:00.            */
@@ -358,6 +367,26 @@ bool gaugeCzytaj(float& napiecie, int& procent) {
   return false;
 }
 
+/*  TEMPO ZMIANY NALADOWANIA - %/h ZE ZNAKIEM  (rejestr CRATE, 0x16).
+
+    Po tym poznajemy ladowanie, zamiast je zgadywac ze wzrostu napiecia
+    jak pudelko dzienne (D143). Krok rejestru to 0,208 %/h, wartosc jest
+    ZE ZNAKIEM w uzupelnieniu do dwoch - stad rzutowanie na int16_t,
+    bez ktorego rozladowanie wygladaloby jak ladowanie w tempie
+    kilkunastu tysiecy procent na godzine.
+
+    Wynik poza granica rozsadku odrzucamy: MAX17043 siedzi pod tym samym
+    adresem, tego rejestru nie ma i odda smieci. "Nie wiem" jest tu
+    tansze niz falszywe "laduje sie".                                 */
+bool gaugeTempo(float& tempo) {
+  uint16_t surowe = 0;
+  if (!gaugeRejestr(0x16, surowe)) return false;
+  const float t = (int16_t)surowe * 0.208f;
+  if (t > GAUGE_CRATE_MAX || t < -GAUGE_CRATE_MAX) return false;
+  tempo = t;
+  return true;
+}
+
 /*  CZY UKLAD W OGOLE ODPOWIADA NA MAGISTRALI.
 
     Rozroznia dwie rzeczy, ktore inaczej wygladaja w logu identycznie:
@@ -415,6 +444,13 @@ void czytajBaterie() {
         a telefon ma sie przy sobie zawsze (D142). Kosztuje 32 odczyty
         ADC, czyli ulamek milisekundy, i nie zmienia ani jednej liczby,
         ktora aplikacja pokazuje jako stan baterii.                   */
+    /*  TEMPO - tylko z czujnika i tylko gdy sie odezwal. Bez niego
+        pudelko NIE ZGADUJE, czy stoi na ladowarce: falszywe "laduje
+        sie" kazaloby czlowiekowi odejsc od pustego pudelka.        */
+    battTempoZnane = gaugeTempo(battTempo);
+    battLaduje     = battTempoZnane && battTempo > GAUGE_CRATE_PROG;
+    if (battTempoZnane)
+      LOG("[BAT] tempo %+.1f %%/h%s\n", battTempo, battLaduje ? "  - laduje sie" : "");
     const float vDz = dzielnikVolt();
     battVoltDz = vDz;
     LOG("[BAT] dzielnik w tej samej chwili: %.2f V (czujnik %.2f V, iloraz %.2f)\n",
@@ -861,6 +897,14 @@ bool wyslijStatus() {
       albo wziac lutownice. Pudelko wie, ktora to; aplikacja bez tego
       pola nie ma jak sie dowiedziec.                                 */
   doc["gauge"]   = gaugeStan;
+  /*  LADOWANIE - zmierzone, nie zgadniete (D143). Pole jedzie TYLKO gdy
+      czujnik podal tempo; bez niego aplikacja ma nie wiedziec, zamiast
+      wiedziec zle. Nazwa `charging` jest ta sama co w pudelku dziennym,
+      bo aplikacja czyta oba urzadzenia jednym kodem.                */
+  if (battTempoZnane) {
+    doc["charging"] = battLaduje;
+    doc["crate"]    = battTempo;
+  }
   /*  Dzielnik zmierzony obok czujnika. Idzie tylko wtedy, gdy naprawde
       bylo co zmierzyc - zero wygladaloby jak pomiar.                 */
   if (battVoltDz >= 0) doc["voltDz"] = battVoltDz;
@@ -2031,6 +2075,21 @@ uint64_t sekundDoNastepnego() {
   if (doGranicy < najblizej) najblizej = doGranicy;
 
   if (kolejkaIle() > 0 && najblizej > 30) najblizej = 30;   // zalegle zdarzenia
+
+  /*  NA LADOWARCE MELDUJEMY SIE CZESCIEJ  (D143).
+
+      Bez tego Kuba podlaczylby kabel i nie zobaczyl w aplikacji nic az
+      do nastepnego wybudzenia - czyli nawet kilka godzin. Pytanie
+      brzmialo wprost: "jak bedzie mi sie ladowalo, to sie pokaze, ze sie
+      laduje". Pokaze sie, jesli pudelko ma kiedy o tym powiedziec.
+
+      Prad plynie z kabla, wiec czestsze wybudzenia nic nie kosztuja -
+      i same sie koncza: tempo mierzymy przy kazdym wybudzeniu, a po
+      odlaczeniu ladowarki schodzi ponizej progu i wracamy do zwyklego
+      rytmu. Pudelko dzienne robi dokladnie to samo, tylko ladowanie
+      zgaduje z napiecia zamiast je mierzyc.                          */
+  if (battLaduje && najblizej > 1) najblizej = 1;
+
   return (uint64_t)najblizej * 60;
 }
 

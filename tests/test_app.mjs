@@ -5490,6 +5490,58 @@ head("Zrodlo pomiaru baterii");
         "bez pomiaru porownawczego wiersza nie ma - zero wygladaloby jak pomiar");
 }
 
+/*  LADOWANIE ZMIERZONE, NIE ZGADNIETE (D143).
+
+    Pytanie Kuby: "a jak bedzie mi sie ladowalo, to sie pokaze, ze sie
+    laduje". Do 0.12.0 pudelko tygodniowe nie wysylalo `charging` w ogole
+    - nie mialo czym tego poznac. Czujnik podaje TEMPO w %/h, wiec
+    ladowanie jest pomiarem, a nie wnioskiem ze wzrostu napiecia.
+
+    Przy czujniku procent przy kablu jest PRAWDZIWY i to odwraca
+    zachowanie z pudelka dziennego: tam liczbe wyszarzamy jako "sprzed
+    ladowania", bo dzielnik mierzy wtedy ladowarke.                   */
+head("Ladowanie w pudelku z czujnikiem");
+{
+  const teraz = Math.round(Date.now()/1000);
+  const big = () => document.getElementById("batBig");
+  const txt = (id) => document.getElementById(id).textContent;
+
+  A.renderStatus({ lastSeen: teraz, battery: 64, volt: 3.9, battSrc: "max17048",
+                   gauge: "ok", charging: true, crate: 36 });
+  check(txt("batChip").startsWith("ładuje"), "plakietka mowi, ze sie laduje");
+  check(big().textContent === "64%", "a procent jest widoczny, nie schowany");
+  check(!/sprzed ładowania/.test(txt("batEta")),
+        "czujnik mierzy przy kablu, wiec nie straszymy odczytem sprzed ladowania");
+  check(/Pełne za ok\./.test(txt("batEta")) && /36 %\/h/.test(txt("batEta")),
+        `czas do pelna liczony z tempa ("${txt("batEta")}")`);
+  check(big().style.color !== "var(--dim2)", "liczby nie wyszarzamy - ona jest prawdziwa");
+
+  /* 64% przy 36 %/h to 60 minut do pelna. Liczba ma wyjsc z pomiaru,
+     a nie z zaokraglenia w przyblizeniu.                             */
+  check(/1 h 0 min/.test(txt("batEta")), `60 minut z 36 %/h ("${txt("batEta")}")`);
+
+  /* Pudelko dzienne zostaje po staremu: tam procent przy kablu NIE jest
+     pomiarem ogniwa, tylko napiecia ladowarki.                       */
+  A.renderStatus({ lastSeen: teraz, battery: 64, volt: 4.2, battSrc: "dzielnik",
+                   charging: true });
+  check(/sprzed ładowania|nie da się go zmierzyć/.test(txt("batEta")),
+        "przy dzielniku dalej mowimy, ze procentu przy kablu nie da sie zmierzyc");
+  check(big().style.color === "var(--dim2)", "i dalej wyszarzamy liczbe");
+
+  /* Tempa moze nie byc (starszy program, 17043 pod tym samym adresem).
+     Wtedy mowimy tylko tyle, ile wiemy.                              */
+  A.renderStatus({ lastSeen: teraz, battery: 64, volt: 3.9, battSrc: "max17048",
+                   gauge: "ok", charging: true });
+  check(txt("batEta") === "Ładuje się.", `bez tempa nie zmyslamy czasu ("${txt("batEta")}")`);
+
+  /* Pudelko, ktore NIE laduje, nie moze o tym pisac - pole `charging`
+     ma znaczyc dokladnie to, co znaczy.                              */
+  A.renderStatus({ lastSeen: teraz, battery: 64, volt: 3.9, battSrc: "max17048",
+                   gauge: "ok", charging: false, crate: -0.4 });
+  check(!/ładuje|Ładuje/.test(txt("batChip") + txt("batEta")),
+        "przy ujemnym tempie nie ma mowy o ladowaniu");
+}
+
 head("Zgodnosc wersji aplikacji");
 check(/const APP_VERSION = "([\d.\-]+)"/.test(html), "index.html deklaruje wersje");
 const av = html.match(/const APP_VERSION = "([\d.\-]+)"/)?.[1];

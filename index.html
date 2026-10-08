@@ -2295,7 +2295,7 @@ window.wybierzPudelko = (id) => {
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-10-08.104";
+const APP_VERSION = "2026-10-08.105";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -5476,6 +5476,27 @@ function opisLadowania(st){
   return `Szacunkowo jeszcze ok. ${czas} do pełna (start z ${odPct}%).`;
 }
 
+/*  ŁADOWANIE ZMIERZONE, NIE ZGADNIĘTE (D143).
+
+    Pudełko tygodniowe ma czujnik, który podaje **tempo** zmiany
+    naładowania w %/h (rejestr CRATE). To zmienia dwie rzeczy naraz:
+    wiadomo, że kabel jest podłączony, i wiadomo, ile zostało do pełna —
+    bez historii ładowań, z której liczy `opisLadowania()` w pudełku
+    dziennym.
+
+    Szacunek jest OPTYMISTYCZNY pod koniec i trzeba to wiedzieć: ładowarka
+    pod koniec zwalnia, więc ostatnie procenty idą wolniej, niż wychodzi
+    z bieżącego tempa. Dlatego „ok.", a nie konkretna godzina.        */
+function opisLadowaniaCzujnik(st, pct){
+  const tempo = Number(st?.crate);
+  if (!Number.isFinite(tempo) || tempo <= 0) return "Ładuje się.";
+  if (pct >= 99) return "Naładowane.";
+  const min = Math.round((100 - pct) / tempo * 60);
+  if (min <= 1) return `Już prawie pełne (${Math.round(tempo)} %/h).`;
+  const h = Math.floor(min/60), m = min % 60;
+  return `Pełne za ok. ${h ? `${h} h ${m} min` : `${m} min`} (${Math.round(tempo)} %/h).`;
+}
+
 let ostatniStatus = null;
 
 /* Ile dni od ostatniego ładowania i ile starczyło poprzednim razem.
@@ -5646,6 +5667,18 @@ function renderStatus(st){
      celowe: w bazie może siedzieć cokolwiek, a "cokolwiek" nie może
      zapalić wskaźnika ładowania.                                     */
   const laduje = st.charging === true;
+  /*  CZUJNIK MIERZY TAKŻE PRZY PODŁĄCZONYM KABLU — i to przewraca całe
+      zdanie o ładowaniu (D143).
+
+      W pudełku dziennym procent liczy się z napięcia, a przy ładowaniu
+      układ ładujący trzyma na ogniwie swoje — więc każdy odczyt wychodzi
+      100% i pokazywanie go byłoby kłamstwem. MAX17048 liczy stan
+      naładowania własnym modelem i przy kablu podaje PRAWDZIWĄ liczbę;
+      wyszarzanie jej jako „sprzed ładowania" byłoby wtedy ostrzeżeniem
+      przed niczym — a przy okazji zabierałoby to, po co człowiek w ogóle
+      podłączył kabel: widok, jak rośnie.                              */
+  const zCzujnika    = st.battSrc === "max17048";
+  const procentStary = laduje && !zCzujnika;
 
   /*  BRAK POMIARU TO NIE JEST ZERO PROCENT (D136).
 
@@ -5669,11 +5702,13 @@ function renderStatus(st){
      podłączenia kabla, nie stanem bieżącym — układ ładujący trzyma na
      ogniwie swoje napięcie, więc każdy pomiar wychodziłby 100%. Dlatego
      wyszarzamy liczbę: ma być widoczna, ale nie ma udawać aktualnej.  */
-  document.getElementById("batBig").style.color = laduje ? "var(--dim2)" : col;
+  document.getElementById("batBig").style.color = procentStary ? "var(--dim2)" : col;
   /* „0.00 V" czyta się jak awaria, a znaczy tylko tyle, że starszy program
      pudełka tego pola nie przysyła. Brak pomiaru mówimy słowem, nie zerem. */
   const volt = num(st.volt);
-  document.getElementById("batVolt").textContent = laduje
+  document.getElementById("batVolt").textContent = laduje && zCzujnika
+    ? (volt > 0 ? `${volt.toFixed(2)} V · ładowanie` : "Ładowanie")
+    : laduje
     ? "Ładowanie — napięcie pokazuje ładowarkę, nie ogniwo"
     /*  Napięcie pokazujemy TAKŻE bez procentu — to jedyna liczba, z której
         da się kiedyś zrozumieć, czemu pomiar nie wychodzi.            */
@@ -5698,7 +5733,9 @@ function renderStatus(st){
      połowie skali, gdzie liczenie z napięcia wprost zawyżało.          */
   const eta = document.getElementById("batEta");
   const odlicz = laduje ? opisLadowania(st) : null;
-  eta.textContent = laduje
+  eta.textContent = laduje && zCzujnika
+    ? opisLadowaniaCzujnik(st, pct)
+    : laduje
     ? (odlicz ? odlicz + " Procent powyżej jest sprzed ładowania — przy " +
                 "podłączonym kablu nie da się go zmierzyć."
               : "Stanu naładowania nie da się zmierzyć przy podłączonym kablu. " +

@@ -38,7 +38,7 @@ bash tests/run_all.sh
 ```
 
 Musi przejść przed zmianą i po zmianie. Stan wyjściowy:
-**642 + 52 firmware, 1473 (×6 pór doby) + 92 + 52 aplikacja, 48 zgodności,
+**642 + 52 firmware, 1483 (×6 pór doby) + 92 + 52 aplikacja, 48 zgodności,
 156 reguł bazy, 375 kontroli audytu, 47 kontroli statycznych — 0 błędów.**
 
 **Nazwy leku w pudełku tygodniowym NIE MA** (D135, cofnięte z D126 na
@@ -353,7 +353,7 @@ na `esp32:esp32@3.3.11` i z **ustawieniami płytki z nagłówka `PillBox.ino`**.
 Nie jest częścią `run_all.sh`: wymaga sieci i ~500 MB toolchainu.
 **Uruchom to po każdej zmianie w firmware.**
 
-Stan: `PillBox.ino` **64% flasha** (1 265 417 B z 1,875 MB), `PillBoxWeek.ino` **62%** (1 234 337 B),
+Stan: `PillBox.ino` **64% flasha** (1 265 417 B z 1,875 MB), `PillBoxWeek.ino` **62%** (1 234 805 B),
 `PillBoxTest.ino` 20% bez `config.h` i **57%** z nim. Szkic diagnostyczny budujemy w OBU
 konfiguracjach — bez tego drugiego przebiegu 722 kB jego kodu (logowanie do
 bazy, zapis wyniku) nie było kompilowane ani razu (D103).
@@ -439,6 +439,14 @@ nie do publikacji. Szczegóły obejść — D17.
   w praktyce nie istnieje: pudełko stoi u kogoś innego. Pola `gauge`
   i `voltDz` w statusie; `status` ma w regułach `$other: true`, więc
   **nic nie trzeba publikować w konsoli**.
+  **Ładowanie poznaje po TEMPIE z czujnika** (D143, rejestr CRATE, próg
+  2 %/h) — nie po wzroście napięcia, jak zgaduje pudełko dzienne. Pole
+  `charging` wychodzi **wyłącznie** wtedy, gdy czujnik podał tempo, i to
+  pilnuje kontrola statyczna. Dwa skutki: procent przy kablu jest
+  prawdziwy, więc aplikacja go **nie wyszarza** (w pudełku dziennym
+  wyszarza, bo dzielnik mierzy wtedy ładowarkę), a pudełko na ładowarce
+  **śpi minutę zamiast godzin** — inaczej „pokaże się, że się ładuje"
+  znaczyłoby „za cztery godziny".
   **Odczyt z czujnika ponawiamy trzy razy** (D141): pierwsze włączenie po
   przylutowaniu jest jedyną chwilą, w której ta ścieżka coś rozstrzyga,
   i najmniej pewną — MAX17048 potrzebuje chwili po podaniu zasilania.

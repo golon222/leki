@@ -630,6 +630,13 @@ jest otwarta. Bateria tego nie lubi.
 
 **Dwa krótkie piknięcia to ostrzeżenie o baterii** (poniżej 15%).
 
+**Ładowanie widać w aplikacji** — plakietka u góry pisze „ładuje · 64%",
+a pod procentem stoi czas do pełna. Pudełko poznaje kabel po **tempie**
+ładowania z czujnika, nie po napięciu, i dopóki stoi na ładowarce,
+melduje się **co minutę** — więc liczba rośnie na oczach. Bez czujnika
+pudełko o ładowaniu nie wie i nic o nim nie pisze: zgadywanie kończyłoby
+się „ładuje się" przy pustym ogniwie.
+
 ## Autotest bez komputera
 
 Trzymaj **przycisk** przy podłączaniu zasilania. Pudełko:
