@@ -1,8 +1,8 @@
 {
-  "wersja": "0.11.0",
-  "md5": "fa17ba8f29989fa3f41501ba7b11fce6",
-  "rozmiar": 1234544,
-  "zbudowano": "2026-10-08T15:36:53Z",
-  "commit": "2b7141640f9668d2b235d3884b38873215b33de5",
-  "zrodlo": "12014488373250f4d9e8c338f26ae5ad796658071431ed010130ddf91a82642d"
+  "wersja": "0.12.0",
+  "md5": "b17033249a2e2e96b00f7b51e603044f",
+  "rozmiar": 1234720,
+  "zbudowano": "2026-10-08T15:48:55Z",
+  "commit": "a41e0b60e7263f513b1170acd4d21dfd0c150f93",
+  "zrodlo": "7ec5bdd8c3358a17beb9d58b4bdcae7a683f42c73c6532d677dcb8f34e8f656a"
 }
