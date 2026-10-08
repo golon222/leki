@@ -2295,7 +2295,7 @@ window.wybierzPudelko = (id) => {
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-10-08.103";
+const APP_VERSION = "2026-10-08.104";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -5365,6 +5365,27 @@ const OPIS_BATT_SRC = {
   brak:     `<span style="color:var(--warn)">nie działa</span>`
 };
 
+/*  CO SIĘ DZIEJE Z CZUJNIKIEM — jednym zdaniem i z czynnością (D142).
+
+    Kuba, po wgraniu `0.11.0`: *„nie będę patrzył na monitor, zobaczę
+    w aplikacji"*. Ma rację i to przewraca podział ról: monitor portu
+    wymaga kabla i komputera, a telefon jest przy pudełku zawsze.
+
+    Rozróżnienie, o które chodzi, jest praktyczne, nie opisowe. Przy
+    `czeka` i przy `cichy` procent wygląda tak samo — oba razy przychodzi
+    z dzielnika — ale pierwsze naprawia się ODCZEKANIEM MINUTY, a drugie
+    LUTOWNICĄ. Bez tego pola człowiek stojący nad pudełkiem nie ma jak
+    wybrać, więc wybierze źle: rozlutuje działający moduł albo będzie
+    czekał na czujnik, którego nikt nie podłączył.                     */
+function opisPomiaruBaterii(st){
+  const src = OPIS_BATT_SRC[st.battSrc] ||
+              `<span class="dim2">${esc(st.battSrc)}</span>`;
+  return src + (
+    st.gauge === "czeka" ? ` <span class="dim2">· czujnik jeszcze liczy, odczekaj minutę</span>`
+  : st.gauge === "cichy" ? ` <span style="color:var(--warn)">· czujnik się nie odzywa</span>`
+  : "");
+}
+
 /*  „Wieczko" kontra „klapka" — pudełko tygodniowe nie ma wieczka, ma
     siedem klapek. Zdanie o cudzej części urządzenia czyta się jak błąd
     aplikacji, a nie jak ostrzeżenie (D137).                           */
@@ -5749,8 +5770,15 @@ function renderStatus(st){
        Dlatego stan wieczka stoi TAKŻE tutaj, obok pozostałych pomiarów.
        Ekran, na którym się sprawdza, ma odpowiadać na pytanie, z którym
        się na niego wchodzi (D100).                                     */
+    /*  „Wieczko" kontra „Klapka" - tu TEZ, nie tylko w banerze.
+
+        Znalezione na renderze ekranu Urzadzenie (D127, D142): baner na
+        karcie dnia mowil juz „klapka" (D137), a ten wiersz nadal
+        „Wieczko" - w pudelku, ktore wieczka nie ma. Zdanie o cudzej
+        czesci urzadzenia czyta sie jak blad aplikacji. Zadna kontrola
+        tego nie zglosila; zobaczyl to dopiero zrzut ekranu.          */
     (typeof st.boxOpen === "boolean"
-       ? wiersz("Wieczko", st.boxOpen
+       ? wiersz(profilTydzien() ? "Klapka" : "Wieczko", st.boxOpen
            ? `<span style="color:var(--warn)">otwarte</span>` +
              (+st.openSince > 1 ? ` <span class="dim2">od ${devHM(+st.openSince)}</span>` : "")
            : "zamknięte") : "") +
@@ -5761,8 +5789,19 @@ function renderStatus(st){
         program pudełka tego pola nie przysyła — wtedy wiersza nie ma,
         zamiast zgadywać za niego.                                    */
     (typeof st.battSrc === "string" && st.battSrc
-       ? wiersz("Pomiar baterii", OPIS_BATT_SRC[st.battSrc] ||
-                `<span class="dim2">${esc(st.battSrc)}</span>`) : "") +
+       ? wiersz("Pomiar baterii", opisPomiaruBaterii(st)) : "") +
+    /*  DWA POMIARY TEJ SAMEJ BATERII W JEDNEJ CHWILI (D141, D142).
+
+        Nie jest to stan urządzenia, tylko jedyna droga do odpowiedzi na
+        pytanie, które wisi od `0.3.0`: dzielnik melduje 2,32 V i nie
+        wiadomo, czy to zły współczynnik, czy brak kontaktu. Z czujnikiem
+        obok jest wreszcie z czym porównać — a skoro Kuba nie czyta logu,
+        liczba musi dojechać tutaj.                                     */
+    (Number.isFinite(+st.voltDz)
+       ? wiersz("Dzielnik obok czujnika",
+                `${(+st.voltDz).toFixed(2)} V` +
+                (Number.isFinite(+st.volt) && +st.volt > 0
+                   ? ` <span class="dim2">przy ${(+st.volt).toFixed(2)} V z czujnika</span>` : "")) : "") +
     wiersz("Sieć WiFi", `${esc(st.ssid) || "—"}` +
            (Number.isFinite(+st.rssi) ? ` <span class="dim2">${+st.rssi} dBm</span>` : "")) +
     wiersz("Wybudzeń", String(st.boots || 0)) +

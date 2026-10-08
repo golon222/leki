@@ -38,7 +38,7 @@ bash tests/run_all.sh
 ```
 
 Musi przejść przed zmianą i po zmianie. Stan wyjściowy:
-**642 + 52 firmware, 1467 (×6 pór doby) + 92 + 52 aplikacja, 48 zgodności,
+**642 + 52 firmware, 1473 (×6 pór doby) + 92 + 52 aplikacja, 48 zgodności,
 156 reguł bazy, 375 kontroli audytu, 47 kontroli statycznych — 0 błędów.**
 
 **Nazwy leku w pudełku tygodniowym NIE MA** (D135, cofnięte z D126 na
@@ -353,7 +353,7 @@ na `esp32:esp32@3.3.11` i z **ustawieniami płytki z nagłówka `PillBox.ino`**.
 Nie jest częścią `run_all.sh`: wymaga sieci i ~500 MB toolchainu.
 **Uruchom to po każdej zmianie w firmware.**
 
-Stan: `PillBox.ino` **64% flasha** (1 265 417 B z 1,875 MB), `PillBoxWeek.ino` **62%** (1 234 167 B),
+Stan: `PillBox.ino` **64% flasha** (1 265 417 B z 1,875 MB), `PillBoxWeek.ino` **62%** (1 234 337 B),
 `PillBoxTest.ino` 20% bez `config.h` i **57%** z nim. Szkic diagnostyczny budujemy w OBU
 konfiguracjach — bez tego drugiego przebiegu 722 kB jego kodu (logowanie do
 bazy, zapis wyniku) nie było kompilowane ani razu (D103).
@@ -429,12 +429,16 @@ nie do publikacji. Szczegóły obejść — D17.
 - **Pomiar baterii pudełka tygodniowego — od `0.10.0` jest CZUJNIK**
   (D139, rozszerzony w D141): Kuba kupił MAX17048; **lutowania jeszcze nie
   ma**. Czujnik ma pierwszeństwo, dzielnik został zapasem.
-  **Niesprawdzone na płytce** — przy pierwszym wgraniu log rozróżnia
-  **trzy** rzeczy, nie dwie, i każdą naprawia się inaczej:
-  `[BAT] czujnik: ...%` (gotowe), `czujnik ODPOWIADA (wersja 0x....), ale
-  nie podal jeszcze procentu` (przewody dobre, odczekaj minutę) oraz
-  `czujnik nie odpowiada` (dopiero to jest lutownica). Potem widać to
-  w Ustawieniach → Urządzenie → **Pomiar baterii**.
+  **Niesprawdzone na płytce** — stan czujnika rozróżnia **trzy** rzeczy,
+  nie dwie, i każdą naprawia się inaczej: pomiar z czujnika (gotowe),
+  „czujnik jeszcze liczy" (przewody dobre, odczekaj minutę) oraz
+  „czujnik się nie odzywa" (dopiero to jest lutownica).
+  **Widać to w Ustawieniach → Urządzenie → Pomiar baterii, nie tylko
+  w logu** (D142) — Kuba: *„nie będę patrzył na monitor, zobaczę
+  w aplikacji"*. Diagnostyka, której warunkiem jest kabel i komputer,
+  w praktyce nie istnieje: pudełko stoi u kogoś innego. Pola `gauge`
+  i `voltDz` w statusie; `status` ma w regułach `$other: true`, więc
+  **nic nie trzeba publikować w konsoli**.
   **Odczyt z czujnika ponawiamy trzy razy** (D141): pierwsze włączenie po
   przylutowaniu jest jedyną chwilą, w której ta ścieżka coś rozstrzyga,
   i najmniej pewną — MAX17048 potrzebuje chwili po podaniu zasilania.
@@ -447,10 +451,11 @@ nie do publikacji. Szczegóły obejść — D17.
   **czy ta liczba rusza się przy ładowaniu.** Jeśli tak — to dzielnik
   i da się to skalibrować; jeśli stoi — to zły pin albo brak kontaktu.
   **Od `0.11.0` odpowie na to sam czujnik** (D141): gdy odpowiada, pudełko
-  mierzy w tej samej chwili także dzielnik i loguje oba napięcia z ilorazem
-  (`[BAT] dzielnik w tej samej chwili: ...`). Dwa pomiary tej samej
-  baterii w jednej sekundzie to pierwszy punkt odniesienia, jaki ta
-  płytka miała — **ta linia z pierwszego logu rozstrzyga sprawę.**
+  mierzy w tej samej chwili także dzielnik. Dwa pomiary tej samej baterii
+  w jednej sekundzie to pierwszy punkt odniesienia, jaki ta płytka miała.
+  Jedzie to do aplikacji jako wiersz **„Dzielnik obok czujnika"**
+  w Urządzeniu (D142) i do logu z ilorazem — **ten jeden wiersz
+  rozstrzyga sprawę.**
   Procentu przy tym nie zgadujemy: `0%` znaczy „naładuj natychmiast".
   **Próg baterii dla aktualizacji jest w tym pudełku ZNIESIONY** (D138,
   `OTA_MIN_BATT_PCT = 0`): próg oparty na liczbie, której nie rozumiemy,

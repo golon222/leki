@@ -65,7 +65,7 @@
 
     Numer wersji, ktory mieszka w NAGLOWKU, opisuje naglowek. Ten opisuje
     program. Gdy sie rozjada, log krzyczy o tym w pierwszej linii.        */
-#define KOD_WERSJA "0.11.0"
+#define KOD_WERSJA "0.12.0"
 
 /*  Po tym napisie pudelko poznaje config.h wzięty prosto z repozytorium -
     czyli "nie ma zadnej sieci", a nie "ma siec o takiej nazwie". Bez tego
@@ -186,6 +186,23 @@ bool    otwarteTeraz  = false;
     rzecz, ktora rozstrzyga pytanie "czy czujnik w ogole gada" - a do
     tego pytania wracalismy juz kilka razy (D136, D139).              */
 const char* battZrodlo = "brak";
+
+/*  STAN CZUJNIKA - OSOBNO OD ZRODLA POMIARU (D142).
+
+    `battZrodlo` mowi, SKAD jest procent. To nie wystarcza, bo dwa
+    zupelnie rozne klopoty koncza sie tak samo ("dzielnik"): czujnika
+    NIE MA na magistrali - i to naprawia sie lutownica - albo czujnik
+    JEST, lecz jeszcze nie policzyl - i to naprawia sie odczekaniem
+    minuty. Kuba: "nie bede patrzyl na monitor, zobacze w aplikacji",
+    wiec rozroznienie musi dojechac do telefonu, nie tylko do logu.
+
+    "ok" | "czeka" | "cichy" - puste znaczy "pudelko bez czujnika".   */
+const char* gaugeStan  = "";
+
+/*  Napiecie z dzielnika zmierzone W TEJ SAMEJ CHWILI co odczyt
+    z czujnika. -1 znaczy "nie bylo czego porownywac". Jedyny cel:
+    rozstrzygnac zagadke 2,32 V bez monitora portu (D141).           */
+float   battVoltDz     = -1.0f;
 
 /* Harmonogram przypomnien. To sa godziny PRZYPOMNIEN, nie pory brania -
    dokladnie jak w pudelku dziennym. Domyslnie jedna, 20:00.            */
@@ -383,25 +400,30 @@ void czytajBaterie() {
   Wire.begin(PIN_SDA, PIN_SCL);
   if (gaugeCzytaj(battVolt, battProcent)) {
     battZrodlo = "max17048";
+    gaugeStan  = "ok";
     LOG("[BAT] czujnik: %d%%  %.2f V\n", battProcent, battVolt);
     /*  DZIELNIK MIERZYMY TAKZE WTEDY, GDY CZUJNIK ODPOWIEDZIAL.
 
-        Nie do pokazania - do rozstrzygniecia JEDNEGO otwartego pytania
+        Do rozstrzygniecia JEDNEGO otwartego pytania
         z CLAUDE.md: dzielnik melduje 2,32 V i nie wiemy, czy to zly
         wspolczynnik (do skalibrowania), czy brak kontaktu (do
         przelutowania). Czujnik jest pierwszym wiarygodnym punktem
         odniesienia, jaki ta plytka kiedykolwiek miala, wiec roznica
         dwoch pomiarow w jednej chwili odpowiada na to sama.
 
-        Kosztuje 32 odczyty ADC, czyli ulamek milisekundy, i nie zmienia
-        ani jednej liczby wysylanej do bazy.                          */
+        Jedzie do statusu jako `voltDz`, bo log czyta sie przez kabel,
+        a telefon ma sie przy sobie zawsze (D142). Kosztuje 32 odczyty
+        ADC, czyli ulamek milisekundy, i nie zmienia ani jednej liczby,
+        ktora aplikacja pokazuje jako stan baterii.                   */
     const float vDz = dzielnikVolt();
+    battVoltDz = vDz;
     LOG("[BAT] dzielnik w tej samej chwili: %.2f V (czujnik %.2f V, iloraz %.2f)\n",
         vDz, battVolt, vDz > 0.01f ? battVolt / vDz : 0.0f);
     return;
   }
   uint16_t wersja = 0;
-  if (gaugeObecny(wersja))
+  gaugeStan = gaugeObecny(wersja) ? "czeka" : "cichy";
+  if (strcmp(gaugeStan, "czeka") == 0)
     LOG("[BAT] czujnik ODPOWIADA (wersja 0x%04X), ale nie podal jeszcze procentu - "
         "biore odczyt z dzielnika\n", wersja);
   else
@@ -831,6 +853,18 @@ bool wyslijStatus() {
       z dzielnika wygladaja identycznie, a to one wlasnie rozstrzygaja,
       czy czujnik gada - jedyne pytanie, ktore w tej sprawie zostalo. */
   doc["battSrc"] = battZrodlo;
+#if GAUGE_ENABLED
+  /*  STAN CZUJNIKA, A NIE TYLKO ZRODLO LICZBY (D142).
+
+      "czeka" i "cichy" to z punktu widzenia procentu to samo - dzielnik
+      - a z punktu widzenia czlowieka dwie rozne roboty: odczekac minute
+      albo wziac lutownice. Pudelko wie, ktora to; aplikacja bez tego
+      pola nie ma jak sie dowiedziec.                                 */
+  doc["gauge"]   = gaugeStan;
+  /*  Dzielnik zmierzony obok czujnika. Idzie tylko wtedy, gdy naprawde
+      bylo co zmierzyc - zero wygladaloby jak pomiar.                 */
+  if (battVoltDz >= 0) doc["voltDz"] = battVoltDz;
+#endif
   doc["fw"]      = FW_VERSION;
   doc["rssi"]    = WiFi.RSSI();
   doc["queue"]   = kolejkaIle();

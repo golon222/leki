@@ -443,8 +443,26 @@ nie jak lut — i szuka się go w złym miejscu.
 6. **Przyklej moduł** na gorąco albo dwustronną taśmą. Wiszący na
    przewodach urwie pady po kilku otwarciach pudełka.
 
-**Zanim zakleisz obudowę:** w monitorze portu (115200) po wgraniu
-zobaczysz jedną z trzech linii:
+**Zanim zakleisz obudowę** — i **bez kabla**: w aplikacji,
+**Ustawienia → Urządzenie → Pomiar baterii**, stoi jedno z czterech zdań:
+
+| co pisze | co to znaczy | co zrobić |
+|---|---|---|
+| **czujnik MAX17048** | procent idzie z czujnika | nic, gotowe |
+| dzielnik napięcia · **czujnik jeszcze liczy, odczekaj minutę** | przewody dobre, układ żyje, liczy swój model ogniwa | odczekać i otworzyć klapkę ponownie |
+| dzielnik napięcia · **czujnik się nie odzywa** | układu nie ma na magistrali | `SDA`/`SCL` albo zasilanie modułu — lutownica |
+| **nie działa** | ani czujnik, ani dzielnik nie dają sensownego odczytu | napisz, to osobna sprawa |
+
+Pudełko pokazuje to przy **każdym meldunku**, więc najprościej otworzyć
+klapkę i spojrzeć w telefon kilkanaście sekund później.
+
+Wiersz **„Dzielnik obok czujnika"** pojawia się tylko wtedy, gdy czujnik
+odpowiedział: to dwa pomiary tej samej baterii z jednej chwili
+(np. `2.32 V przy 3.98 V z czujnika`). Nie dotyczy niczego, co widzisz
+na co dzień — **zrób mi zrzut tego wiersza**, rozstrzyga starą zagadkę
+dzielnika.
+
+Jeśli akurat masz kabel i monitor portu (115200), to samo widać w logu:
 
 ```
 [BAT] czujnik: 87%  3.98 V                      ← gotowe, procent jest
@@ -453,26 +471,8 @@ zobaczysz jedną z trzech linii:
 [BAT] czujnik nie odpowiada - biore odczyt z dzielnika
 ```
 
-Te linie rozróżniają trzy różne kłopoty, bo naprawia się je zupełnie
-inaczej:
-
-- **„czujnik: 87%"** — koniec roboty. Procent widać w aplikacji przy
-  najbliższym meldunku pudełka.
-- **„ODPOWIADA, ale nie podał"** — przewody są dobre, układ żyje, tylko
-  liczy jeszcze swój model ogniwa. Odczekaj minutę i otwórz klapkę
-  ponownie; nic nie przelutowuj.
-- **„nie odpowiada"** — dopiero to jest robota lutownicą: `SDA`/`SCL`
-  albo zasilanie modułu.
-
-Druga linia (dzielnik obok czujnika) nie dotyczy niczego, co widzisz
-w aplikacji — **wklej mi ją, gdy się pokaże**. Rozstrzyga starą zagadkę:
-dzielnik na tej płytce melduje 2,32 V i nie wiadomo, czy to zły
-współczynnik, czy brak kontaktu. Z czujnikiem obok mamy wreszcie
-z czym to porównać.
-
-To samo widać potem w aplikacji: **Ustawienia → Urządzenie →
-Pomiar baterii** mówi wprost, czy liczba przyszła z czujnika, z dzielnika,
-czy nie przyszła wcale.
+To te same cztery stany co w tabeli wyżej — log podaje przy okazji
+wersję układu i iloraz obu napięć.
 
 ---
 
