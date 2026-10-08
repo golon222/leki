@@ -2186,9 +2186,9 @@ const firebaseConfig = {
     nazwie, więc nazwa jest częścią bezpieczeństwa.                    */
 const PUDELKA = [
   { id:"pillbox01", nazwa:"Dzienne",     opis:"Warfin, jedna komora, INR",
-    fw:"PillBox.json",     fwTg:"1.45.0" },
+    fw:"PillBox.json",     fwTg:"1.45.0", fwOpen:"1.53.0" },
   { id:"pillbox02", nazwa:"Tygodniowe",  opis:"siedem klapek, otwarte = wzięte",
-    fw:"PillBoxWeek.json", fwTg:"0.6.0"  }
+    fw:"PillBoxWeek.json", fwTg:"0.6.0",  fwOpen:"0.8.0"  }
 ];
 
 /*  Opis wersji dla WYBRANEGO pudełka. Pudełko nieznane (gdyby kiedyś
@@ -2206,6 +2206,18 @@ function opisPlikFirmware(){
 function wersjaZTelegramem(){
   const p = PUDELKA.find(x => x.id === DEVICE_ID);
   return p && p.fwTg ? p.fwTg : null;
+}
+
+/*  Od której wersji TO pudełko melduje otwarcie (D144).
+
+    Nie jest to ciekawostka o numerach. Starszy program **nie wysyła
+    `boxOpen` w ogóle** — i wtedy aplikacja nie ma z czego zapalić
+    banera. Dla człowieka wygląda to dokładnie tak samo jak „zamknięte",
+    czyli jak zepsuta aplikacja: otwiera klapkę i nic się nie dzieje.
+    Dokładnie to zgłosił Kuba dwa razy, raz o każdym pudełku.        */
+function wersjaZOtwarciem(){
+  const p = PUDELKA.find(x => x.id === DEVICE_ID);
+  return p && p.fwOpen ? p.fwOpen : null;
 }
 const PUDELKO_KLUCZ = "pillbox.device";
 
@@ -2295,7 +2307,7 @@ window.wybierzPudelko = (id) => {
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-10-08.105";
+const APP_VERSION = "2026-10-08.106";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -5818,7 +5830,19 @@ function renderStatus(st){
        ? wiersz(profilTydzien() ? "Klapka" : "Wieczko", st.boxOpen
            ? `<span style="color:var(--warn)">otwarte</span>` +
              (+st.openSince > 1 ? ` <span class="dim2">od ${devHM(+st.openSince)}</span>` : "")
-           : "zamknięte") : "") +
+           : "zamknięte")
+       /*  BRAK POLA MUSI WYGLĄDAĆ INACZEJ NIŻ „ZAMKNIĘTE" (D144).
+
+           Do tej pory wiersz po prostu znikał — a ekran bez wiersza
+           czyta się jak „wszystko w porządku". Starszy program pudełka
+           `boxOpen` nie wysyła wcale (D137, doszło w `0.8.0`), więc
+           człowiek otwiera klapkę, patrzy w aplikację i widzi to samo
+           co przy zamkniętej. Szuka wtedy usterki w aplikacji albo
+           w czujniku, a brakuje **wgrania programu**.                */
+       : wiersz(profilTydzien() ? "Klapka" : "Wieczko",
+                `<span class="dim2">` + (wersjaZOtwarciem()
+                   ? `nie wiadomo — wymaga programu pudełka ${wersjaZOtwarciem()}`
+                   : `pudełko tego nie zgłasza`) + `</span>`)) +
     wiersz("Identyfikator", esc(DEVICE_ID)) +
     /*  SKĄD JEST PROCENT BATERII (D139). „62%" z czujnika i „62%"
         z dzielnika wyglądają identycznie, a to właśnie ta różnica

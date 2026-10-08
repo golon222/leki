@@ -4349,9 +4349,20 @@ head("Diagnostyka pokazuje drgniecia styku");
   A.renderStatus(stan({ boxOpen: false }));
   check(devInfo().includes("Wieczko") && devInfo().includes("zamknięte"),
         "i zamkniete tak samo - inaczej brak wiersza znaczylby dwie rzeczy");
+  /*  BRAK POLA TO TRZECI STAN, NIE DRUGI (D144).
+
+      Do `2026-10-08.106` wiersz po prostu znikal - a ekran bez wiersza
+      czyta sie jak "wszystko w porzadku". Starszy program pudelka
+      `boxOpen` nie wysyla wcale (doszlo w 0.8.0), wiec czlowiek otwiera
+      wieczko, patrzy w aplikacje i widzi to samo co przy zamknietym.
+      Szuka wtedy usterki w aplikacji albo w kontaktronie, a brakuje
+      WGRANIA PROGRAMU. Kuba zglosil ten objaw dwa razy, raz o kazdym
+      pudelku - za pierwszym razem kosztowal cala runde diagnostyki.  */
   A.renderStatus(stan({}));
-  check(!devInfo().includes("Wieczko"),
-        "ale bez stanu z pudelka nie zmyslamy 'zamkniete'");
+  check(devInfo().includes("Wieczko"), "wiersz zostaje takze bez pola z pudelka");
+  check(!/zamknięte/.test(devInfo()), "ale nie zmyslamy 'zamkniete'");
+  check(/1\.53\.0/.test(devInfo()),
+        `mowi, ktorej wersji programu to wymaga ("${devInfo().match(/Wieczko[^<]*<[^>]*>([^<]*)/)?.[1]}")`);
 
   A.renderStatus(stan({ netMs: 1840, lidMs: 2610 }));
   check(devInfo().includes("Po otwarciu wieczka"), "pomiar widoczny w Diagnostyce");
@@ -5500,6 +5511,33 @@ head("Zrodlo pomiaru baterii");
     Przy czujniku procent przy kablu jest PRAWDZIWY i to odwraca
     zachowanie z pudelka dziennego: tam liczbe wyszarzamy jako "sprzed
     ladowania", bo dzielnik mierzy wtedy ladowarke.                   */
+/*  TO SAMO W PUDELKU TYGODNIOWYM - z jego numerem wersji i jego slowem
+    (D144). "wymaga 1.45.0" na pudelku, ktore ma 0.3.0, kazaloby szukac
+    aktualizacji, ktorej nie ma i nigdy nie bedzie: to dwa osobne
+    programy i dwie osobne numeracje.                                 */
+head("Stary program pudelka a meldunek o klapce");
+{
+  const teraz = Math.round(Date.now()/1000);
+  const dev = () => document.getElementById("devInfo").innerHTML;
+  A.__setState({ cfg:{ profil:"tydzien" } });
+  A.__setPudelko("pillbox02");
+
+  A.renderStatus({ lastSeen: teraz, battery: 60, volt: 3.9 });
+  check(/Klapka/.test(dev()) && !/Wieczko/.test(dev()),
+        "pudelko tygodniowe ma klapki, nie wieczko");
+  check(/0\.8\.0/.test(dev()) && !/1\.53\.0/.test(dev()),
+        "i swoj numer wersji, nie numer pudelka dziennego");
+
+  A.renderStatus({ lastSeen: teraz, battery: 60, volt: 3.9, boxOpen: true });
+  check(/otwarte/.test(dev()) && !/wymaga programu/.test(dev()),
+        "a gdy pole przychodzi, mowimy stan zamiast o wersji");
+
+  /* Wracamy do pudelka dziennego - stan globalny zostaje po tym bloku
+     i nastepne testy mialyby cudze urzadzenie pod reka.              */
+  A.__setPudelko("pillbox01");
+  A.__setState({ cfg:{ profil:"warfin" } });
+}
+
 head("Ladowanie w pudelku z czujnikiem");
 {
   const teraz = Math.round(Date.now()/1000);

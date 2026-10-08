@@ -38,7 +38,7 @@ bash tests/run_all.sh
 ```
 
 Musi przejść przed zmianą i po zmianie. Stan wyjściowy:
-**642 + 52 firmware, 1483 (×6 pór doby) + 92 + 52 aplikacja, 48 zgodności,
+**642 + 52 firmware, 1488 (×6 pór doby) + 92 + 52 aplikacja, 48 zgodności,
 156 reguł bazy, 375 kontroli audytu, 47 kontroli statycznych — 0 błędów.**
 
 **Nazwy leku w pudełku tygodniowym NIE MA** (D135, cofnięte z D126 na
