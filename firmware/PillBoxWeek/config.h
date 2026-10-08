@@ -19,7 +19,7 @@
  *    miejsce w bazie i kalendarze wymieszalyby sie po cichu.
  * ------------------------------------------------------------------ */
 #define DEVICE_ID           "pillbox02"     // klucz w /devices/<DEVICE_ID>
-#define FW_VERSION          "0.12.0"         // widoczna w aplikacji
+#define FW_VERSION          "0.13.0"         // widoczna w aplikacji
 
 /* ---------------------------------------------------------------------
  * 2. FIREBASE
@@ -109,6 +109,22 @@
  *  albo odpowiada smieciami - i schodzimy na dzielnik.                 */
 #define GAUGE_MIN_V         2.0f
 #define GAUGE_MAX_V         5.0f
+
+/*  LADOWANIE POZNAJEMY PO TEMPIE, NIE PO NAPIECIU  (D143)
+ *
+ *  MAX17048 ma rejestr CRATE (0x16): tempo zmiany naladowania w %/h,
+ *  ze znakiem. Ladowanie ogniwa 470 mAh pradem z USB to kilkadziesiat
+ *  %/h, a pudelko spiace rozladowuje sie w tempie ulamka %/h - wiec
+ *  prog 2 %/h jest daleko od obu i nie da sie go przypadkiem przekroczyc.
+ *
+ *  Pudelko dzienne zgaduje ladowanie ze WZROSTU napiecia miedzy
+ *  wybudzeniami, bo nie ma czym zmierzyc tempa. Tutaj nie zgadujemy.
+ *
+ *  Gorna granica rozsadku: 17043 (ten sam adres, inny uklad) nie ma
+ *  tego rejestru i odda smieci. Powyzej tej wartosci uznajemy, ze
+ *  tempa nie znamy, zamiast meldowac ladowanie, ktorego nie ma.      */
+#define GAUGE_CRATE_PROG    2.0f    // %/h - powyzej tego mowimy "laduje sie"
+#define GAUGE_CRATE_MAX     300.0f  // %/h - powyzej tego to nie jest pomiar
 
 /*  Ponizej tego napiecia plytka po prostu nie chodzi - wiec taki odczyt
  *  znaczy "dzielnik nie ma kontaktu", a nie "bateria pusta". Zglaszamy
