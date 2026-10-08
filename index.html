@@ -1859,13 +1859,13 @@ body[data-profil="tydzien"] .stat-solo{grid-column:1/-1}
         pudełko o terminie nie pisze — data wysłana na chybił trafił byłaby
         gorsza niż cisza.</p>
       <!-- Pudelko tygodniowe pisze o DWOCH rzeczach, nie o czterech: nie ma
-           tu zapasu tabletek ani INR (D126). Wiadomosc podaje za to NAZWE
-           KLAPKI - przy siedmiu komorach samo "nie otwarto" zostawia
-           czlowieka z pytaniem, na ktore ma sobie odpowiedziec sam. -->
-      <p class="muted tylko-tydzien">Pisze po każdym nieodebranym przypomnieniu —
-        z <b>nazwą klapki</b>, której nikt nie otworzył — i <b>raz</b>, gdy bateria
-        będzie na wyczerpaniu. Bez potwierdzeń wzięcia: powiadomienie, które
-        przychodzi codziennie, przestaje być powiadomieniem.</p>
+           tu zapasu tabletek ani INR (D126). NAZWY KLAPKI tez nie podaje -
+           byla wyliczana z kolejnosci rezystorow i wskazywala zla
+           przegrodke, gdy ta kolejnosc sie zmienila (D140). -->
+      <p class="muted tylko-tydzien">Pisze po każdym nieodebranym przypomnieniu
+        i <b>raz</b>, gdy bateria będzie na wyczerpaniu. Bez potwierdzeń wzięcia:
+        powiadomienie, które przychodzi codziennie, przestaje być
+        powiadomieniem.</p>
       <p class="muted tylko-tydzien">Znacznik „już pisałem" o baterii kasuje się
         sam po naładowaniu. Przypomnienie starsze niż <b>trzy godziny</b> pudełko
         kasuje, zamiast wysyłać — wiadomość, która przychodzi o północy o tym,
@@ -1926,8 +1926,8 @@ body[data-profil="tydzien"] .stat-solo{grid-column:1/-1}
            czego raportowac do bazy, wiec nie ma tez karty z wynikami. -->
       <p class="muted tylko-tydzien"><b>Autotest na słuch</b> — trzymaj ukryty
         przycisk przy włączaniu pudełka (krócej niż 3 sekundy, bo dłużej otwiera
-        portal WiFi). Trzy piknięcia to start, potem pudełko wypika numer
-        otwartej klapki: raz = poniedziałek, siedem razy = niedziela. Długi niski
+        portal WiFi). Trzy piknięcia to start, potem pudełko wypika <b>numer
+        klapki</b>, którą widzi jako otwartą — od jednego do siedmiu. Długi niski
         ton znaczy „kilka klapek naraz". Na koniec dwa sygnały baterii.</p>
       <p class="muted tylko-tydzien">Wyniku nie zapisuje do bazy i nie prowadzi
         historii wybudzeń — sprawdzasz je uchem, przy pudełku, bez telefonu.</p>
@@ -2295,7 +2295,7 @@ window.wybierzPudelko = (id) => {
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-09-27.102";
+const APP_VERSION = "2026-10-08.103";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -2345,27 +2345,6 @@ let cfg = { schedule:["08:00"], tz:"Europe/Warsaw", tzOffsetMin:120,
    wczytaniu nowej wersji aplikacji — łącznie z INR, czyli danymi, których
    nie da się odtworzyć z pamięci pudełka.                                */
 const profilTydzien = () => cfg.profil === "tydzien";
-
-/*  KTORA KOMORE OTWARTO tego dnia. Tylko pudelko tygodniowe - tam numer
-    komory jedzie w polu `slot` zdarzenia (galaz `events` ma `$other:false`,
-    wiec nowego pola dolozyc sie nie da, zasada 7).
-
-    Po co to na ekranie: przy siedmiu klapkach da sie otworzyc NIE TE.
-    Sama data mowi, ze cos wzieto; komora mowi, czy z wlasciwej przegrodki.
-    Bierzemy NAJWCZESNIEJSZE otwarcie doby - to samo, ktore `doReconcile()`
-    uznaje za dawke, zeby ekran i kalendarz nie mowily dwoch rzeczy.     */
-const KOMORY_PL = ["poniedziałek","wtorek","środa","czwartek","piątek","sobota","niedziela"];
-function komoraDnia(key){
-  if (!profilTydzien()) return null;
-  let naj = null;
-  for (const e of events){
-    if (e?.type !== "open" || !Number.isFinite(+e.ts)) continue;
-    if (devKey(e.ts) !== key) continue;
-    if (!naj || e.ts < naj.ts) naj = e;
-  }
-  const i = naj ? +naj.slot : -1;
-  return (Number.isFinite(i) && i >= 0 && i < 7) ? KOMORY_PL[i] : null;
-}
 
 /*  Profil trafia na <body>, bo stamtad siega po niego CSS. Wolamy to przy
     kazdym przyjsciu konfiguracji, nie raz na starcie: `cfg` na poczatku ma
@@ -3969,10 +3948,21 @@ function renderToday(){
     el.textContent = pelna ? "Wzięte" : "Wzięte — mniejsza dawka";
     el.style.color = pelna ? "var(--ok)" : "var(--warn)";
     const r = (doses[key]||{})[0];
-    const kom = komoraDnia(key);
+    /*  NAZWY KOMORY TU NIE MA I TO JEST DECYZJA (D140).
+
+        Stalo tu "komora: środa" - dzien tygodnia wyliczony z numeru
+        klapki, czyli z KOLEJNOSCI REZYSTOROW. Kuba: "chce zrezygnowac
+        z tych dni, bo to i tak bez sensu, jak sie zmienia polaczenie".
+        Jedno przelozone lutowanie i aplikacja pisze "środa" o niedzielnej
+        przegrodce - z pelna pewnoscia, bo numer jest prawdziwy, a jego
+        znaczenie nie.
+
+        Numeru samego tez nie pokazujemy: nikt nie wie, ktora przegrodka
+        jest "trzecia", wiec nie pomaga w zadnej decyzji o leku (D75).
+        Zostaje to, co jest prawda bez zadnego zalozenia: otwarte.    */
     document.getElementById("todayWhen").textContent =
-      (profilTydzien() ? (kom ? `komora: ${kom}` : "otwarte")
-                       : `${nf(sum)} tabl.`) + (r?.ts ? ` · o ${devHM(r.ts)}` : "");
+      (profilTydzien() ? "otwarte" : `${nf(sum)} tabl.`) +
+      (r?.ts ? ` · o ${devHM(r.ts)}` : "");
   }
   /* Poświata karty w kolorze stanu dnia. To jedyne miejsce, gdzie kolor
      wychodzi poza tekst — i robi dokładnie to samo, co on: mówi, jak jest

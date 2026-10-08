@@ -1041,16 +1041,25 @@ if w.exists():
     # milczacym czujniku i to, ze aplikacja widzi, KTORE zrodlo dalo
     # liczbe. Bez tego trzeciego "62%" z czujnika i z dzielnika wygladaja
     # identycznie, a to one rozstrzygaja, czy czujnik w ogole gada.
+    #
+    # Mierzymy to po ZAPISIE do battVolt, nie po samym wywolaniu ADC
+    # (D141). Od 0.11.0 dzielnik czytamy TAKZE w galezi czujnika - jako
+    # punkt porownania do logu - wiec "pierwszy analogRead w funkcji"
+    # przestal znaczyc "zapas". Liczy sie to, co nadpisuje wynik.
     _bat = _bez(_cialo(src, 'void czytajBaterie') or '')
     _zle = []
-    _g, _d = _bat.find('gaugeCzytaj('), _bat.find('analogReadMilliVolts')
+    if 'float dzielnikVolt' not in _bez(src):
+        _zle.append('nie ma osobnego dzielnikVolt() - pomiar stoi w dwoch kopiach')
+    _g = _bat.find('gaugeCzytaj(')
+    _d = _bat.find('battVolt = dzielnikVolt()')
+    _r = _bat.find('return;', _g) if _g >= 0 else -1
     if _g < 0:
         _zle.append('czytajBaterie() nie pyta czujnika w ogole')
     elif _d < 0:
         _zle.append('czytajBaterie() nie ma juz zapasu w dzielniku')
     elif _g > _d:
         _zle.append('dzielnik ma pierwszenstwo przed czujnikiem - odwrotnie niz trzeba')
-    if 'return' not in _bat[max(_g, 0):_d if _d > 0 else len(_bat)]:
+    elif _r < 0 or _r > _d:
         _zle.append('odczyt z czujnika nie konczy funkcji - dzielnik go nadpisze')
     if 'doc["battSrc"]' not in _st:
         _zle.append('status nie mowi, ktore zrodlo dalo pomiar')
@@ -1068,6 +1077,35 @@ if w.exists():
         for _z in _zle: print('       ' + _z)
     else:
         print('  OK   czujnik baterii ma pierwszenstwo, dzielnik zostaje zapasem')
+
+    # ------------------------------------------------------------------
+    # ZADNEGO DNIA TYGODNIA PRZY KOMORZE (D140).
+    #
+    # Do 0.10.0 drabinka nadawala komorom dni: komora 0 byla "PON", a
+    # powiadomienie na telefon pisalo "nikt nie otworzyl klapki PON".
+    # Kuba: "chce zrezygnowac z tych dni, bo to i tak bez sensu, jak sie
+    # zmienia polaczenie". Przypisanie zylo WYLACZNIE w kolejnosci
+    # rezystorow - czego pudelko nie umie sprawdzic, a mowilo jak fakt.
+    # Wiadomosc wskazujaca ZLA przegrodke jest gorsza od tej, ktora nie
+    # wskazuje zadnej: czlowiek bierze dawke z innego dnia.
+    #
+    # Numer komory ZOSTAJE (rozroznialnosc jest potrzebna: jedna klapka
+    # kontra kilka naraz, i ta sama komora drugi raz tego samego dnia) -
+    # odpada tylko jego tlumaczenie na dzien.
+    _zle = []
+    if re.search(r'"(PON|WT|SR|CZW|PT|SOB|ND)"', _kod):
+        _zle.append('skroty dni tygodnia wrocily do kodu')
+    for _f in ('komoraDoby', 'rtcTgKomora'):
+        if _f in _kod:
+            _zle.append(f'{_f} wrocilo - to byla droga od numeru komory do dnia')
+    if 'tgTekstNieodebrane(int slot)' not in _kod:
+        _zle.append('tgTekstNieodebrane() bierze znowu wiecej niz numer przypomnienia')
+    if _zle:
+        bad += 1
+        print('  BLAD komora nie moze znowu znaczyc dnia tygodnia:')
+        for _z in _zle: print('       ' + _z)
+    else:
+        print('  OK   komora ma numer, nie dzien tygodnia')
 
 t = root/"firmware/PillBoxTest/PillBoxTest.ino"
 if t.exists():

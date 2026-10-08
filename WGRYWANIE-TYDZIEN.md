@@ -444,15 +444,33 @@ nie jak lut — i szuka się go w złym miejscu.
    przewodach urwie pady po kilku otwarciach pudełka.
 
 **Zanim zakleisz obudowę:** w monitorze portu (115200) po wgraniu
-zobaczysz jedną z dwóch linii:
+zobaczysz jedną z trzech linii:
 
 ```
-[BAT] czujnik: 87%  3.98 V          ← czujnik gada, gotowe
+[BAT] czujnik: 87%  3.98 V                      ← gotowe, procent jest
+[BAT] dzielnik w tej samej chwili: 2.32 V (czujnik 3.98 V, iloraz 1.72)
+[BAT] czujnik ODPOWIADA (wersja 0x0012), ale nie podal jeszcze procentu
 [BAT] czujnik nie odpowiada - biore odczyt z dzielnika
 ```
 
-Druga linia znaczy, że coś jest nie tak z SDA/SCL albo z zasilaniem
-modułu. To samo widać potem w aplikacji: **Ustawienia → Urządzenie →
+Te linie rozróżniają trzy różne kłopoty, bo naprawia się je zupełnie
+inaczej:
+
+- **„czujnik: 87%"** — koniec roboty. Procent widać w aplikacji przy
+  najbliższym meldunku pudełka.
+- **„ODPOWIADA, ale nie podał"** — przewody są dobre, układ żyje, tylko
+  liczy jeszcze swój model ogniwa. Odczekaj minutę i otwórz klapkę
+  ponownie; nic nie przelutowuj.
+- **„nie odpowiada"** — dopiero to jest robota lutownicą: `SDA`/`SCL`
+  albo zasilanie modułu.
+
+Druga linia (dzielnik obok czujnika) nie dotyczy niczego, co widzisz
+w aplikacji — **wklej mi ją, gdy się pokaże**. Rozstrzyga starą zagadkę:
+dzielnik na tej płytce melduje 2,32 V i nie wiadomo, czy to zły
+współczynnik, czy brak kontaktu. Z czujnikiem obok mamy wreszcie
+z czym to porównać.
+
+To samo widać potem w aplikacji: **Ustawienia → Urządzenie →
 Pomiar baterii** mówi wprost, czy liczba przyszła z czujnika, z dzielnika,
 czy nie przyszła wcale.
 
@@ -515,7 +533,7 @@ najwcześniej o pełnej godzinie.
 
 Zmierzone napięcia (2026-09-22):
 
-| komora | PON | WT | ŚR | CZW | PT | SOB | ND | zamknięte |
+| komora | 1 | 2 | 3 | 4 | 5 | 6 | 7 | zamknięte |
 |---|---|---|---|---|---|---|---|---|
 | mV | 105 | 170 | 300 | 388 | 557 | 633 | 761 | 1125 |
 
@@ -588,8 +606,14 @@ dzienne, ona na tygodniowe, na tym samym ekranie ustawień.
 # Jak tego używać
 
 **Otwarcie klapki = tabletka wzięta.** Nic nie trzeba potwierdzać. Pudełko
-pika tyle razy, która to komora — poniedziałek raz, wtorek dwa, ...
-niedziela siedem. To potwierdzenie, że wie, którą klapkę otworzyła.
+pika tyle razy, który to numer komory — od jednego do siedmiu. To
+potwierdzenie, że rozpoznało, która klapka się ruszyła.
+
+**Pudełko nie przypisuje komorom dni tygodnia** i to jest decyzja, nie
+brak (D140). Numer komory bierze się z kolejności rezystorów, a tego
+pudełko nie umie sprawdzić — po jednym przelutowaniu „poniedziałek"
+wskazywałby inną przegrodkę, z pełną pewnością w głosie. Aplikacja pisze
+więc o dniu tylko to, co wie na pewno: że klapka została otwarta.
 
 **Jeśli do godziny z `schedule` klapka nie została otwarta** — pudełko
 przypomina. Nie odpuszcza po jednym piknięciu: wraca **trzy razy, co 10

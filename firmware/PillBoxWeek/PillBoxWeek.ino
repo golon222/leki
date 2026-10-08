@@ -20,12 +20,12 @@
  *  ---------------------------------------------------------------------
  *  CO ZOSTALO ZMIERZONE NA PLYTCE (2026-09-22)
  *
- *    komora    PON  WT   SR   CZW  PT   SOB  ND     zamkniete
+ *    komora      1    2    3    4    5    6    7     zamkniete
  *    napiecie  105  170  300  388  557  633  761    1125 mV
  *
  *  Wybudzanie z glebokiego snu przez najwyzsza galaz (761 mV) - dziala,
  *  sprawdzone. Margines do progu zera (825 mV) wynosi 64 mV, wiec
- *  ZADEN rezystor galezi nie moze byc wiekszy niz 3 kOhm: niedziela
+ *  ZADEN rezystor galezi nie moze byc wiekszy niz 3 kOhm: komora 7
  *  przestalaby budzic pudelko.
  * ===================================================================== */
 
@@ -65,7 +65,7 @@
 
     Numer wersji, ktory mieszka w NAGLOWKU, opisuje naglowek. Ten opisuje
     program. Gdy sie rozjada, log krzyczy o tym w pierwszej linii.        */
-#define KOD_WERSJA "0.10.0"
+#define KOD_WERSJA "0.11.0"
 
 /*  Po tym napisie pudelko poznaje config.h wzięty prosto z repozytorium -
     czyli "nie ma zadnej sieci", a nie "ma siec o takiej nazwie". Bez tego
@@ -113,7 +113,6 @@ enum TgDecyzja {
 };
 #endif
 
-static const char* NAZWY_DNI[7] = { "PON","WT","SR","CZW","PT","SOB","ND" };
 static const uint16_t PROGI[8]  = PROGI_KLAPEK;
 
 /* =====================================================================
@@ -151,7 +150,6 @@ RTC_DATA_ATTR uint8_t  rtcPrzyciskZwarty = 0;
     `rtcTgMsg` przezywa sen, zeby powod dojechal do aplikacji takze wtedy,
     gdy w chwili niepowodzenia nie bylo juz sieci.                       */
 RTC_DATA_ATTR int8_t   rtcTgSlot        = -1;   // ktore przypomnienie przepadlo
-RTC_DATA_ATTR int8_t   rtcTgKomora      = -1;   // i ktorej klapki dotyczylo
 RTC_DATA_ATTR uint32_t rtcTgSlotTs      = 0;    // kiedy - do liczenia wieku
 RTC_DATA_ATTR bool     rtcTgBattCzeka   = false;
 RTC_DATA_ATTR bool     rtcTgBattZgloszona = false;
@@ -208,8 +206,8 @@ uint16_t czytajKlapki(int probek = 64) {
 
    Progi stoja w config.h i pochodza Z POMIARU, nie z obliczen. Rezystory
    maja tolerancje, a roznica miedzy wyliczonym a zmierzonym napieciem
-   siega kilku miliwoltow - przy odstepie 65 mV miedzy poniedzialkiem
-   a wtorkiem to jeszcze nic, ale zgadywanie zamiast pomiaru bylo
+   siega kilku miliwoltow - przy odstepie 65 mV miedzy komora 1
+   a komora 2 to jeszcze nic, ale zgadywanie zamiast pomiaru bylo
    dokladnie tym, czego caly ten projekt unika.                        */
 int ktoraKomora(uint16_t mV) {
   if (mV > PROGI[7]) return -1;
@@ -221,10 +219,28 @@ int ktoraKomora(uint16_t mV) {
 /* Czy ktorakolwiek klapka jest teraz otwarta. */
 bool klapkiOtwarte();
 
+/*  NUMER, NIE DZIEN TYGODNIA (D140).
+
+    Do 0.10.0 stalo tu "PON".."ND" - drabinka nadawala komorom dni
+    tygodnia. Kuba: "chce zrezygnowac z tych dni, bo to i tak bez sensu,
+    jak sie zmienia polaczenie". Ma racje: przypisanie dnia zyje
+    w kolejnosci rezystorow, a nie w niczym, co pudelko moze sprawdzic.
+    Jeden przelozony przewod i pudelko mowi "PON" o srodowej klapce -
+    z pelna pewnoscia i bez sladu w logu.
+
+    Numer jest tym, co pudelko NAPRAWDE wie: komora o najnizszym
+    napieciu to 1. Zgadza sie z liczba piknien przy otwarciu i przy
+    autotescie, wiec log i ucho mowia to samo.
+
+    UWAGA: bufor jest statyczny, wiec nie wolaj tego dwa razy w jednym
+    printf - drugie wywolanie nadpisze pierwsze.                      */
 const char* opisKomory(int k) {
   if (k == -1) return "zamkniete";
   if (k == -2) return "kilka naraz";
-  return (k >= 0 && k < 7) ? NAZWY_DNI[k] : "?";
+  if (k < 0 || k >= 7) return "?";
+  static char buf[12];
+  snprintf(buf, sizeof(buf), "komora %d", k + 1);
+  return buf;
 }
 
 /* Czy ktorakolwiek klapka jest teraz otwarta. Stoi wysoko, bo korzysta
@@ -247,7 +263,7 @@ void pik(uint32_t hz, uint32_t ms) {
   ledcWriteTone(PIN_BUZZER, 0);
 }
 
-/* Tyle piknięc, ktory to dzien: PON=1 ... ND=7. Kuba prosil wprost,
+/* Tyle piknięc, ktora to komora: 1 ... 7. Kuba prosil wprost,
    zeby dalo sie sprawdzic pudelko na sluch, bez podlaczania komputera. */
 void pikniecia(int ile) {
   for (int i = 0; i < ile; i++) { pik(BUZZER_HZ, 130); if (i < ile-1) delay(190); }
@@ -295,21 +311,62 @@ bool gaugeRejestr(uint8_t rej, uint16_t& wynik) {
     procent, a przez ten czas lepiej wziac odczyt z dzielnika niz podac
     liczbe, ktorej sami byśmy nie uwierzyli.                          */
 bool gaugeCzytaj(float& napiecie, int& procent) {
-  uint16_t vcell = 0, soc = 0;
-  if (!gaugeRejestr(0x02, vcell)) return false;
-  if (!gaugeRejestr(0x04, soc))   return false;
+  /*  TRZY PROBY, NIE JEDNA (D141).
 
-  const float v = vcell * 0.000078125f;
-  const float p = soc / 256.0f;
-  if (v < GAUGE_MIN_V || v > GAUGE_MAX_V) return false;
-  if (p < 0.0f || p > 100.0f)             return false;
+      Pierwsze wlaczenie po przylutowaniu jest jedynym momentem, w ktorym
+      ta sciezka naprawde cos rozstrzyga - a akurat wtedy jest najmniej
+      pewna: MAX17048 po podaniu zasilania potrzebuje chwili, zanim poda
+      sensowny procent. Jedna nieudana proba zapisalaby "czujnika nie ma"
+      na cale wybudzenie i Kuba zobaczylby w aplikacji kreske, stojac nad
+      swiezo polutowanym czujnikiem.
 
-  napiecie = v;
-  procent  = (int)(p + 0.5f);
-  if (procent > 100) procent = 100;
-  return true;
+      Przy braku czujnika kosztuje to kilkaset milisekund na wybudzenie -
+      przy radiu liczonym w sekundach jest to nizej progu zauwazalnosci. */
+  for (int proba = 0; proba < 3; proba++) {
+    if (proba) delay(60);
+    uint16_t vcell = 0, soc = 0;
+    if (!gaugeRejestr(0x02, vcell)) continue;
+    if (!gaugeRejestr(0x04, soc))   continue;
+
+    const float v = vcell * 0.000078125f;
+    const float p = soc / 256.0f;
+    if (v < GAUGE_MIN_V || v > GAUGE_MAX_V) continue;
+    if (p < 0.0f || p > 100.0f)             continue;
+
+    napiecie = v;
+    procent  = (int)(p + 0.5f);
+    if (procent > 100) procent = 100;
+    return true;
+  }
+  return false;
+}
+
+/*  CZY UKLAD W OGOLE ODPOWIADA NA MAGISTRALI.
+
+    Rozroznia dwie rzeczy, ktore inaczej wygladaja w logu identycznie:
+    czujnika NIE MA (zle przewody, zly adres, brak zasilania modulu)
+    kontra czujnik JEST, ale jeszcze nie podaje sensownej liczby.
+    Pierwsze naprawia sie lutownica, drugie - odczekaniem minuty, wiec
+    pomylenie ich kosztuje wieczor przy rozlutowanym module.
+
+    Rejestr VERSION (0x08) odpowiada natychmiast po wlaczeniu, nie czeka
+    na zaden model ogniwa.                                             */
+bool gaugeObecny(uint16_t& wersja) {
+  return gaugeRejestr(0x08, wersja);
 }
 #endif  /* GAUGE_ENABLED */
+
+/*  NAPIECIE Z DZIELNIKA NA PLYTCE.
+
+    Osobna funkcja, bo ten odczyt sluzy teraz dwóm rzeczom: jest zapasem,
+    gdy czujnika nie ma, i jest punktem porownania, gdy czujnik
+    odpowiedzial (D141). Dwie kopie tej petli rozjechalyby sie przy
+    pierwszej poprawce wspolczynnika.                                  */
+float dzielnikVolt() {
+  uint32_t suma = 0;
+  for (int i = 0; i < 32; i++) suma += analogReadMilliVolts(PIN_BATERIA);
+  return (suma / 32.0f) * 2.0f / 1000.0f;
+}
 
 void czytajBaterie() {
 #if GAUGE_ENABLED
@@ -327,14 +384,31 @@ void czytajBaterie() {
   if (gaugeCzytaj(battVolt, battProcent)) {
     battZrodlo = "max17048";
     LOG("[BAT] czujnik: %d%%  %.2f V\n", battProcent, battVolt);
+    /*  DZIELNIK MIERZYMY TAKZE WTEDY, GDY CZUJNIK ODPOWIEDZIAL.
+
+        Nie do pokazania - do rozstrzygniecia JEDNEGO otwartego pytania
+        z CLAUDE.md: dzielnik melduje 2,32 V i nie wiemy, czy to zly
+        wspolczynnik (do skalibrowania), czy brak kontaktu (do
+        przelutowania). Czujnik jest pierwszym wiarygodnym punktem
+        odniesienia, jaki ta plytka kiedykolwiek miala, wiec roznica
+        dwoch pomiarow w jednej chwili odpowiada na to sama.
+
+        Kosztuje 32 odczyty ADC, czyli ulamek milisekundy, i nie zmienia
+        ani jednej liczby wysylanej do bazy.                          */
+    const float vDz = dzielnikVolt();
+    LOG("[BAT] dzielnik w tej samej chwili: %.2f V (czujnik %.2f V, iloraz %.2f)\n",
+        vDz, battVolt, vDz > 0.01f ? battVolt / vDz : 0.0f);
     return;
   }
-  LOG("[BAT] czujnik nie odpowiada - biore odczyt z dzielnika\n");
+  uint16_t wersja = 0;
+  if (gaugeObecny(wersja))
+    LOG("[BAT] czujnik ODPOWIADA (wersja 0x%04X), ale nie podal jeszcze procentu - "
+        "biore odczyt z dzielnika\n", wersja);
+  else
+    LOG("[BAT] czujnik nie odpowiada - biore odczyt z dzielnika\n");
 #endif
 
-  uint32_t suma = 0;
-  for (int i = 0; i < 32; i++) suma += analogReadMilliVolts(PIN_BATERIA);
-  battVolt = (suma / 32.0f) * 2.0f / 1000.0f;
+  battVolt = dzielnikVolt();
 
   /* Krzywa uproszczona: 4,20 V = 100%, 3,30 V = 0%. Nie jest liniowa
      naprawde, ale do ostrzezenia "laduj" wystarcza, a udawanie precyzji
@@ -452,22 +526,6 @@ int32_t numerDoby(time_t t) {
   return dniOdEry(lt.tm_year + 1900, lt.tm_mon + 1, lt.tm_mday);
 }
 int32_t dzisDoba() { return numerDoby(time(nullptr)); }
-
-/*  KTORA KLAPKA NALEZY DO TEJ DOBY.  PON=0 ... ND=6, dokladnie tak samo
-    jak indeksuje je drabinka i jak liczy aplikacja ((getDay()+6)%7).
-
-    Liczymy z numeru doby, nie z `tm_wday`: numer doby jest juz przesuniety
-    o granice doby lekowej, wiec klapka otwarta o 1:30 nalezy do wlasciwego
-    dnia sama z siebie. Dzien 0 (1970-01-01) byl CZWARTKIEM, stad +3:
-    (0+3)%7 = 3 = CZW. Sprawdzone na czterech datach.
-
-    Potrzebne wylacznie po to, zeby powiadomienie na telefon umialo
-    powiedziec, KTOREJ klapki nie otwarto - przy siedmiu komorach samo
-    "nie otwarto" zostawia czlowieka z pytaniem.                       */
-int komoraDoby(int32_t doba) {
-  if (doba < 0) return -1;                     // bez zegara nie zgadujemy
-  return (int)((doba + 3) % 7);
-}
 
 /*  Chwila, o ktorej zaczela sie doba lekowa zawierajaca `t`.
     Punkt odniesienia dla domykania dni - patrz domknijDoby().        */
@@ -901,7 +959,7 @@ void pobierzUstawienia() {
     String akcja = tgc["akcja"] | "";
     if (akcja == "usun") {
       tgZapomnij();
-      rtcTgSlot = -1; rtcTgKomora = -1; rtcTgSlotTs = 0;
+      rtcTgSlot = -1; rtcTgSlotTs = 0;
       rtcTgBattCzeka = false; rtcTgTestProsba = false;
       snprintf(rtcTgMsg, sizeof(rtcTgMsg), "bot odlaczony");
       int kod = rtdbWyslij("DELETE", "/devices/" DEVICE_ID "/config/tgCmd.json", "");
@@ -1539,9 +1597,8 @@ bool tgWyslijTekst(const String& tekst) {
    wybudzenia, a radio zabrane w tym miejscu weszloby miedzy nieodebrane
    przypomnienie a zapis zdarzenia. Dane ida pierwsze; wiadomosc czeka
    na `idzSpac()`, tak samo jak aktualizacja (zasada 11 i 12).       */
-void tgZglosNieodebrane(int slot, int komora) {
+void tgZglosNieodebrane(int slot) {
   rtcTgSlot   = (int8_t)slot;
-  rtcTgKomora = (int8_t)komora;
   rtcTgSlotTs = rtcCzasPewny ? (uint32_t)time(nullptr) : 0;
   LOG("[TG ] przypomnienie %d bez odzewu - napisze przed snem\n", slot);
 }
@@ -1568,24 +1625,26 @@ void tgSprawdzBaterie() {
    Godzina bierze sie z harmonogramu, nie z zegara: to pora PRZYPOMNIENIA
    (zasada 4b) i wlasnie ona ma stac w wiadomosci.
 
-   NAZWA KLAPKI jest tu czyms, czego pudelko dzienne nie ma i miec nie
-   moze: przy siedmiu komorach "nie otworzyles" bez wskazania ktorej
-   zostawia czlowieka z pytaniem, na ktore sam ma odpowiedziec.
+   NAZWY KLAPKI TU NIE MA I TO JEST ZMIANA, NIE BRAK (D140). Stalo tu
+   "nie otworzyl klapki PON" - nazwa dnia wyliczona z numeru doby, przy
+   zalozeniu, ze rezystory sa polutowane w kolejnosci tygodnia. Zalozenia
+   tego pudelko nie umie sprawdzic, a wiadomosc podawala je jako fakt.
+   Wiadomosc, ktora wskazuje ZLA klapke, jest gorsza od tej, ktora nie
+   wskazuje zadnej: czlowiek otwiera nie te przegrodke i bierze dawke
+   z innego dnia.
 
    Zdanie NIE mowi "nie wzielas" jako faktu, tylko opisuje to, co pudelko
    naprawde wie: dzwonilo i nikt nie otworzyl klapki. Tabletke da sie
    wziac z blistra lezacego obok - klamstwo w tym miejscu podkopaloby
    zaufanie do wszystkich pozostalych wiadomosci.                    */
-String tgTekstNieodebrane(int slot, int komora) {
+String tgTekstNieodebrane(int slot) {
   char godz[8] = "";
   if (slot >= 0 && slot < slotowIle)
     snprintf(godz, sizeof(godz), "%02d:%02d", slotyMin[slot]/60, slotyMin[slot]%60);
 
   String s = "⏰ Pudełko: tabletka nieodebrana\n\n";
   if (godz[0]) s += "Przypomnienie " + String(godz) + " — ";
-  s += "pudełko dzwoniło i nikt nie otworzył klapki";
-  if (komora >= 0 && komora < 7) s += " " + String(NAZWY_DNI[komora]);
-  s += ".";
+  s += "pudełko dzwoniło i nikt nie otworzył klapki.";
   s += "\n\nJeśli wzięłaś ją bez otwierania pudełka, zaznacz dzień ręcznie w aplikacji.";
   return s;
 }
@@ -1633,7 +1692,6 @@ void tgWyslijZalegle() {
     snprintf(rtcTgMsg, sizeof(rtcTgMsg), "przypomnienie za stare - nie wyslalem");
     LOG("[TG ] czekajace powiadomienie starsze niz %d s - kasuje je\n", TG_MAX_WIEK_S);
     rtcTgSlot   = -1;
-    rtcTgKomora = -1;
     rtcTgSlotTs = 0;
     return;
   }
@@ -1650,9 +1708,8 @@ void tgWyslijZalegle() {
   int wyslane = 0, nieudane = 0;
 
   if (rtcTgSlot >= 0) {
-    if (tgWyslijTekst(tgTekstNieodebrane(rtcTgSlot, rtcTgKomora))) {
+    if (tgWyslijTekst(tgTekstNieodebrane(rtcTgSlot))) {
       rtcTgSlot   = -1;
-      rtcTgKomora = -1;
       rtcTgSlotTs = 0;
       wyslane++;
     } else nieudane++;
@@ -2056,7 +2113,7 @@ void idzSpac() {
   pinMode(PIN_KLAPKI, INPUT);
 
   /* Wewnetrzne podciagniecia WYLACZAMY. Rownolegle do naszego 10 kOhm
-     podnosilyby wszystkie napiecia drabinki - niedziela (761 mV)
+     podnosilyby wszystkie napiecia drabinki - komora 7 (761 mV)
      przekroczylaby prog zera i przestalaby budzic pudelko.            */
   gpio_pullup_dis((gpio_num_t)PIN_KLAPKI);
   gpio_pulldown_dis((gpio_num_t)PIN_KLAPKI);
@@ -2283,7 +2340,7 @@ void setup() {
            Wiadomosc na telefon jest czyms innym: ma dotrzec wtedy, gdy
            jeszcze da sie cos z tym zrobic. O 23:00 na przypominanie jest
            po prostu pozno.                                            */
-        else tgZglosNieodebrane(slot, komoraDoby(doba));
+        else tgZglosNieodebrane(slot);
 #endif
         rtcAlarmPonowien++;
         /*  Wracamy, dopoki zostaly proby. Slot zamykamy dopiero po

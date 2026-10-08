@@ -38,8 +38,8 @@ bash tests/run_all.sh
 ```
 
 Musi przejść przed zmianą i po zmianie. Stan wyjściowy:
-**642 + 52 firmware, 1464 (×6 pór doby) + 92 + 52 aplikacja, 48 zgodności,
-156 reguł bazy, 375 kontroli audytu, 46 kontroli statycznych — 0 błędów.**
+**642 + 52 firmware, 1467 (×6 pór doby) + 92 + 52 aplikacja, 48 zgodności,
+156 reguł bazy, 375 kontroli audytu, 47 kontroli statycznych — 0 błędów.**
 
 **Nazwy leku w pudełku tygodniowym NIE MA** (D135, cofnięte z D126 na
 wyraźną prośbę Kuby — nie przywracaj). Nazwa jest potrzebna tam, gdzie się
@@ -353,7 +353,7 @@ na `esp32:esp32@3.3.11` i z **ustawieniami płytki z nagłówka `PillBox.ino`**.
 Nie jest częścią `run_all.sh`: wymaga sieci i ~500 MB toolchainu.
 **Uruchom to po każdej zmianie w firmware.**
 
-Stan: `PillBox.ino` **64% flasha** (1 265 417 B z 1,875 MB), `PillBoxWeek.ino` **62%** (1 233 793 B),
+Stan: `PillBox.ino` **64% flasha** (1 265 417 B z 1,875 MB), `PillBoxWeek.ino` **62%** (1 234 167 B),
 `PillBoxTest.ino` 20% bez `config.h` i **57%** z nim. Szkic diagnostyczny budujemy w OBU
 konfiguracjach — bez tego drugiego przebiegu 722 kB jego kodu (logowanie do
 bazy, zapis wyniku) nie było kompilowane ani razu (D103).
@@ -384,7 +384,8 @@ nie do publikacji. Szczegóły obejść — D17.
 - **Pudełko tygodniowe DZIAŁA — potwierdzone na płytce 2026-09-27, `0.3.0`.**
   Zmierzony przebieg Kuby: zimny start → `wybudzenie 1`, a **następne
   wybudzenie to prawdziwe otwarcie klapki**: `klapka: PON (105 mV, progi
-  72..943)`. 105 mV to **co do miliwolta** wartość z kalibracji na stole,
+  72..943)` — od `0.11.0` ten sam log mówi `komora 1`, bo komora przestała
+  znaczyć dzień tygodnia (D140). 105 mV to **co do miliwolta** wartość z kalibracji na stole,
   więc drabinka rozpoznaje komorę po wybudzeniu z głębokiego snu tak samo
   jak na biurku. Pętli wybudzeń nie ma. Działa też logowanie do bazy, zapis
   hasła w NVS, pobranie harmonogramu i wysyłka zdarzeń.
@@ -426,19 +427,30 @@ nie do publikacji. Szczegóły obejść — D17.
   **Pudełko tygodniowe ma teraz wszystko, co dzienne** poza skanem sieci
   (niepotrzebnym, bo ma portal) i dziennikiem wieczka.
 - **Pomiar baterii pudełka tygodniowego — od `0.10.0` jest CZUJNIK**
-  (D139): Kuba kupił MAX17048 i podłączył go po I²C. Czujnik ma
-  pierwszeństwo, dzielnik został zapasem. **Niesprawdzone na płytce** —
-  przy pierwszym wgraniu zobacz w logu `[BAT] czujnik: ...%` albo
-  `[BAT] czujnik nie odpowiada`, a potem w Ustawieniach → Urządzenie →
-  **Pomiar baterii**. Dopóki tego nie widzieliśmy, poniższe zostaje
-  w mocy, bo dzielnik nadal jest tym, co odpowiada przy milczącym
-  czujniku.
+  (D139, rozszerzony w D141): Kuba kupił MAX17048; **lutowania jeszcze nie
+  ma**. Czujnik ma pierwszeństwo, dzielnik został zapasem.
+  **Niesprawdzone na płytce** — przy pierwszym wgraniu log rozróżnia
+  **trzy** rzeczy, nie dwie, i każdą naprawia się inaczej:
+  `[BAT] czujnik: ...%` (gotowe), `czujnik ODPOWIADA (wersja 0x....), ale
+  nie podal jeszcze procentu` (przewody dobre, odczekaj minutę) oraz
+  `czujnik nie odpowiada` (dopiero to jest lutownica). Potem widać to
+  w Ustawieniach → Urządzenie → **Pomiar baterii**.
+  **Odczyt z czujnika ponawiamy trzy razy** (D141): pierwsze włączenie po
+  przylutowaniu jest jedyną chwilą, w której ta ścieżka coś rozstrzyga,
+  i najmniej pewną — MAX17048 potrzebuje chwili po podaniu zasilania.
+  Dopóki czujnika nikt nie widział na płytce, poniższe zostaje w mocy,
+  bo dzielnik nadal jest tym, co odpowiada przy milczącym czujniku.
 - **Sam dzielnik — NIEWYJAŚNIONY, ale od `0.7.0`
   MIERZALNY Z ZEWNĄTRZ** (D136): napięcie idzie w statusie **zawsze**, także
   przy niemożliwym odczycie. Do `0.6.0` szło razem z procentem, więc przy
   zepsutym pomiarze nie szło nic. Pytanie do rozstrzygnięcia jest jedno:
   **czy ta liczba rusza się przy ładowaniu.** Jeśli tak — to dzielnik
   i da się to skalibrować; jeśli stoi — to zły pin albo brak kontaktu.
+  **Od `0.11.0` odpowie na to sam czujnik** (D141): gdy odpowiada, pudełko
+  mierzy w tej samej chwili także dzielnik i loguje oba napięcia z ilorazem
+  (`[BAT] dzielnik w tej samej chwili: ...`). Dwa pomiary tej samej
+  baterii w jednej sekundzie to pierwszy punkt odniesienia, jaki ta
+  płytka miała — **ta linia z pierwszego logu rozstrzyga sprawę.**
   Procentu przy tym nie zgadujemy: `0%` znaczy „naładuj natychmiast".
   **Próg baterii dla aktualizacji jest w tym pudełku ZNIESIONY** (D138,
   `OTA_MIN_BATT_PCT = 0`): próg oparty na liczbie, której nie rozumiemy,

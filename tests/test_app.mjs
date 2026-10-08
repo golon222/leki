@@ -5093,27 +5093,30 @@ head("Pudelko tygodniowe: liczby tabletek znikaja z ekranu");
   check(A.opisDawkowania() === "jedna komora dziennie",
         `opis dawkowania nie wymysla tabletek (${A.opisDawkowania()})`);
 
-  /* KTORA komora - przy siedmiu klapkach da sie otworzyc NIE TE, a sama
-     data mowi tylko, ze cos wzieto.                                    */
-  check(A.komoraDnia(key) === "środa", `komora z pola slot (${A.komoraDnia(key)})`);
-  check(A.KOMORY_PL.length === 7 && A.KOMORY_PL[0] === "poniedziałek",
-        "komory nazwane po polsku, od poniedzialku");
+  /*  ZADNEGO DNIA TYGODNIA PRZY KOMORZE (D140).
 
-  /* Bierzemy NAJWCZESNIEJSZE otwarcie doby - to samo, ktore doReconcile()
-     uznaje za dawke. Inaczej ekran i kalendarz mowilyby dwie rzeczy.    */
-  A.__setState({ events:[{ id:"b", ts: ts+600, type:"open", slot:5 },
-                         { id:"a", ts, type:"open", slot:2 }] });
-  check(A.komoraDnia(key) === "środa", "przy dwoch otwarciach liczy sie pierwsze");
+      Do `2026-10-08.103` karta dnia pisala "komora: środa" - dzien
+      wyliczony z pola `slot`, czyli z KOLEJNOSCI REZYSTOROW w pudelku.
+      Kuba: "chce zrezygnowac z tych dni, bo to i tak bez sensu, jak sie
+      zmienia polaczenie". Przelozone lutowanie i aplikacja nazywa
+      niedzielna przegrodke "środą" - z pelna pewnoscia, bo numer jest
+      prawdziwy, tylko jego znaczenie nie.
 
-  A.__setState({ events:[{ id:"z", ts, type:"open", slot:99 }] });
-  check(A.komoraDnia(key) === null, "numer komory spoza zakresu to brak danych, nie smiec");
+      Test pilnuje tego z dwoch stron: zadnej nazwy dnia na karcie i
+      zadnej funkcji, ktora by ja z numeru komory wyliczala. Druga
+      polowa jest wazniejsza: dopoki taka funkcja istnieje, wroci na
+      ekran przy pierwszej nastepnej poprawce.                        */
+  check(A.komoraDnia === undefined && A.KOMORY_PL === undefined,
+        "nie ma czym zamienic numeru komory na dzien tygodnia");
 
   /* Karta "dzisiaj" i kalendarz: zadnych "N tabl." */
   A.__setState({ events:[{ id:"o1", ts, type:"open", slot:2 }] });
   A.renderToday();
   const gdy = document.getElementById("todayWhen").textContent;
   check(!/tabl\./.test(gdy), `karta dnia bez liczby tabletek ("${gdy}")`);
-  check(gdy.includes("komora: środa"), "za to z komora, ktora otwarto");
+  check(gdy.startsWith("otwarte"), `karta dnia mowi tylko "otwarte" ("${gdy}")`);
+  for (const d of ["poniedziałek","wtorek","środa","czwartek","piątek","sobota","niedziela"])
+    check(!gdy.includes(d), `bez nazwy dnia przy komorze (${d})`);
 
   const d = new Date(key + "T12:00:00");
   A.__setView(d.getFullYear(), d.getMonth());
@@ -5124,7 +5127,6 @@ head("Pudelko tygodniowe: liczby tabletek znikaja z ekranu");
   /* A w pudelku dziennym wszystko zostaje po staremu. */
   A.__setState({ cfg:{ profil:"warfin", defaultDose:1.5, drugName:"Warfin", tzOffsetMin: tz },
                  doses:{ [key]: { 0:{ status:"taken", dose:1.5, source:"device", ts } } } });
-  check(A.komoraDnia(key) === null, "komora to pojecie pudelka tygodniowego");
   check(/tabl\./.test(A.opisDawkowania()), "warfin dalej liczy tabletki");
   A.renderCalendar();
   check(document.getElementById("calGrid").innerHTML.includes('class="dose"'),
