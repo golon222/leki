@@ -628,7 +628,17 @@ otworzyć wszystkie siedem i wsypać tabletki na tydzień.
 minucie samo pójdzie spać, ale będzie się budzić co dwie minuty, dopóki
 jest otwarta. Bateria tego nie lubi.
 
+**Trzy tony W DÓŁ znaczą „tę komorę już dziś otwierano"** — pudełko nie
+zapisuje drugiej dawki z tej samej przegrodki, a teraz też tego nie
+udaje. To jedyny dźwięk, który nie idzie w górę; każdy inny jest
+potwierdzeniem.
+
 **Dwa krótkie piknięcia to ostrzeżenie o baterii** (poniżej 15%).
+
+**Przypomnień może być kilka.** W aplikacji: Ustawienia → Godziny
+przypomnień → **+ Dodaj przypomnienie**, do dwunastu. Pudełko dzwoni
+o każdej z nich, dopóki tego dnia nie otwarto żadnej klapki — pierwsze
+otwarcie ucisza wszystkie pozostałe na ten dzień.
 
 **Ładowanie widać w aplikacji** — plakietka u góry pisze „ładuje · 64%",
 a pod procentem stoi czas do pełna. Pudełko poznaje kabel po **tempie**

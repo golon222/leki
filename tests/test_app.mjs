@@ -5515,6 +5515,46 @@ head("Zrodlo pomiaru baterii");
     (D144). "wymaga 1.45.0" na pudelku, ktore ma 0.3.0, kazaloby szukac
     aktualizacji, ktorej nie ma i nigdy nie bedzie: to dwa osobne
     programy i dwie osobne numeracje.                                 */
+/*  KILKA GODZIN PRZYPOMNIEN (D145). Prosba Kuby: "zeby dalo sie ustawic
+    godziny przypomnien wiecej niz jedna". Dalo sie juz wczesniej, ale
+    karta dnia pokazywala ZAWSZE pierwsza z listy - czyli o 19:00 pisala
+    "przypomnienie o 08:00", podajac godzine, ktora dawno minela, jako to,
+    co dopiero bedzie.                                                  */
+head("Karta dnia przy kilku przypomnieniach");
+{
+  const key = A.todayKey();
+  const tz = -new Date().getTimezoneOffset();
+  const gdy = () => document.getElementById("todayWhen").textContent;
+  const teraz = new Date();
+  const hhmm = (m) => String(Math.floor(m/60)).padStart(2,"0") + ":" +
+                      String(m%60).padStart(2,"0");
+  const m = teraz.getHours()*60 + teraz.getMinutes();
+
+  /* Jedna godzina ZA nami i jedna PRZED - karta ma pokazac te przed. */
+  const minela  = hhmm((m + 1440 - 120) % 1440);
+  const przyszla = hhmm((m + 90) % 1440);
+
+  A.__setState({ cfg:{ profil:"tydzien", schedule:[minela, przyszla], tzOffsetMin: tz },
+                 doses:{}, events:[] });
+  A.renderToday();
+  check(gdy().includes(przyszla), `karta pokazuje najblizsze przypomnienie ("${gdy()}")`);
+  check(!gdy().includes(minela), "a nie to, ktore juz minelo");
+
+  /* Przy jednej godzinie zachowanie bez zmian. */
+  A.__setState({ cfg:{ profil:"tydzien", schedule:[przyszla], tzOffsetMin: tz },
+                 doses:{}, events:[] });
+  A.renderToday();
+  check(gdy().includes(przyszla), "przy jednej godzinie nic sie nie zmienia");
+
+  /* Pusty harmonogram nie moze wywalic ekranu ani pokazac "undefined". */
+  A.__setState({ cfg:{ profil:"tydzien", schedule:[], tzOffsetMin: tz },
+                 doses:{}, events:[] });
+  A.renderToday();
+  check(!/undefined/.test(gdy()), `bez godzin mowimy kreska ("${gdy()}")`);
+
+  A.__setState({ cfg:{ profil:"warfin", schedule:["20:00"], tzOffsetMin: tz } });
+}
+
 head("Stary program pudelka a meldunek o klapce");
 {
   const teraz = Math.round(Date.now()/1000);

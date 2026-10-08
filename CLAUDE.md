@@ -38,8 +38,8 @@ bash tests/run_all.sh
 ```
 
 Musi przejść przed zmianą i po zmianie. Stan wyjściowy:
-**642 + 52 firmware, 1488 (×6 pór doby) + 92 + 52 aplikacja, 48 zgodności,
-156 reguł bazy, 375 kontroli audytu, 48 kontroli statycznych — 0 błędów.**
+**642 + 52 + 133 firmware, 1492 (×6 pór doby) + 92 + 52 aplikacja, 48 zgodności,
+156 reguł bazy, 375 kontroli audytu, 49 kontroli statycznych — 0 błędów.**
 
 **Nazwy leku w pudełku tygodniowym NIE MA** (D135, cofnięte z D126 na
 wyraźną prośbę Kuby — nie przywracaj). Nazwa jest potrzebna tam, gdzie się
@@ -72,8 +72,14 @@ całości. Nie skracaj tej części: oszczędzamy wyłącznie na informacji
 „nic się nie stało".
 
 Testy pracują na **prawdziwym kodzie**, nie na kopii: `tests/extract.py` wycina
-funkcje z `PillBox.ino`, `tests/build_app_module.mjs` buduje moduł z `index.html`.
-Jeśli zmieniasz nazwę wyciąganej funkcji, popraw też `extract.py`.
+funkcje z `PillBox.ino`, **`tests/extract_tydzien.py` z `PillBoxWeek.ino`**,
+`tests/build_app_module.mjs` buduje moduł z `index.html`.
+Jeśli zmieniasz nazwę wyciąganej funkcji, popraw też właściwy `extract*.py`.
+
+**Pudełko tygodniowe do `0.15.0` nie miało ANI JEDNEGO testu jednostkowego** —
+stała za nim wyłącznie kontrola statyczna, a ta **czyta kod, nie uruchamia go**.
+Kosztowało to B31 i D145: trzy błędy w logice, którą test na biurku łapie
+w milisekundy. Dokładasz coś do tego szkicu — dołóż też test (krok `1c/10`).
 
 **Atrapa Firebase (`tests/firebase_stub.mjs`) sprawdza każdy zapis
 prawdziwym `database.rules.json`** i umie zawieść na żądanie:
@@ -316,6 +322,8 @@ index.html                       cała PWA w jednym pliku
 sw.js, tabletka.webp             service worker + tabletka na ekranie głównym
 tabletka.gif                     zapas dla przeglądarki bez WEBP (D72)
 tests/                           testy + audyt
+tests/extract_tydzien.py         wyciecie kodu PUDELKA TYGODNIOWEGO do testow
+tests/test_tydzien.cpp           testy logiki tygodniowego (krok 1c/10, D145)
 tests/statyczna.py               kontrola statyczna (krok 4/10)
 tests/mapa.py                    generator MAPA.md
 tests/podglad.mjs                podglad wygladu w przegladarce (D127)
@@ -353,7 +361,7 @@ na `esp32:esp32@3.3.11` i z **ustawieniami płytki z nagłówka `PillBox.ino`**.
 Nie jest częścią `run_all.sh`: wymaga sieci i ~500 MB toolchainu.
 **Uruchom to po każdej zmianie w firmware.**
 
-Stan: `PillBox.ino` **64% flasha** (1 265 417 B z 1,875 MB), `PillBoxWeek.ino` **62%** (1 234 813 B),
+Stan: `PillBox.ino` **64% flasha** (1 265 417 B z 1,875 MB), `PillBoxWeek.ino` **63%** (1 235 017 B),
 `PillBoxTest.ino` 20% bez `config.h` i **57%** z nim. Szkic diagnostyczny budujemy w OBU
 konfiguracjach — bez tego drugiego przebiegu 722 kB jego kodu (logowanie do
 bazy, zapis wyniku) nie było kompilowane ani razu (D103).

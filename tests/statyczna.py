@@ -1097,6 +1097,41 @@ if w.exists():
         print('  OK   czujnik baterii ma pierwszenstwo, dzielnik zostaje zapasem')
 
     # ------------------------------------------------------------------
+    # ILE PRZYPOMNIEN POZWALA USTAWIC APLIKACJA, A ILE PUDELKO ZAPAMIETA
+    # (D145). Do 0.14.0 pudelko tygodniowe mialo SLOTOW_MAX 4, a aplikacja
+    # MAX_PRZYPOMNIEN 12: pokazywala szesc godzin, zapisywala szesc do
+    # bazy, a pudelko po cichu znalo cztery. Cicha rozbieznosc miedzy
+    # ekranem a urzadzeniem to ta sama rodzina co B9/B10.
+    _zle = []
+    _m = re.search(r'#define\s+SLOTOW_MAX\s+(\d+)', _cfgW)
+    _a = re.search(r'const MAX_PRZYPOMNIEN = (\d+)', _html)
+    _d = re.search(r"String slots\[(\d+)\]", ino)
+    if not _m:
+        _zle.append('SLOTOW_MAX nie stoi w config.h pudelka tygodniowego')
+    if not _a:
+        _zle.append('nie znalazlem MAX_PRZYPOMNIEN w aplikacji')
+    if _m and _a and int(_a.group(1)) > int(_m.group(1)):
+        _zle.append(f'aplikacja daje ustawic {_a.group(1)} przypomnien, '
+                    f'a tygodniowe zapamieta {_m.group(1)}')
+    if _d and _a and int(_a.group(1)) > int(_d.group(1)):
+        _zle.append(f'aplikacja daje ustawic {_a.group(1)} przypomnien, '
+                    f'a dzienne zapamieta {_d.group(1)}')
+    # Maska wyczerpanych slotow musi miescic KAZDY slot - przy uint8_t
+    # dwunasty bit wypadal poza typ i slot nigdy by sie nie zamknal.
+    _mask = re.search(r'RTC_DATA_ATTR\s+(\w+)\s+rtcAlarmMaska', _kod)
+    _bity = {'uint8_t': 8, 'uint16_t': 16, 'uint32_t': 32}
+    if not _mask:
+        _zle.append('nie znalazlem rtcAlarmMaska')
+    elif _m and _bity.get(_mask.group(1), 0) < int(_m.group(1)):
+        _zle.append(f'maska alarmow jest {_mask.group(1)}, a slotow jest {_m.group(1)}')
+    if _zle:
+        bad += 1
+        print('  BLAD liczba przypomnien rozjechala sie miedzy aplikacja a pudelkiem:')
+        for _z in _zle: print('       ' + _z)
+    else:
+        print('  OK   tyle przypomnien, ile aplikacja daje ustawic, pudelka zapamietaja')
+
+    # ------------------------------------------------------------------
     # „OTWARTE" MELDUJEMY ZAWSZE, NIE TYLKO PRZY NOWEJ DAWCE (B31).
     #
     # Status z `boxOpen` wychodzil wylacznie ze sciezki zapisu zdarzenia,

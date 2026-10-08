@@ -89,6 +89,10 @@ python3 mapa.py >/dev/null || { echo "✖  nie udalo sie zbudowac MAPA.md"; exit
 
 krok "1/10  logika firmware (C++)"        bash -c 'python3 extract.py && g++ -O0 -std=c++17 test_firmware.cpp -o /tmp/pillbox_tests && /tmp/pillbox_tests'
 krok "1b/10 odpornosc firmware (C++)"     bash -c 'g++ -O0 -std=c++17 test_firmware_stress.cpp -o /tmp/pillbox_stress && /tmp/pillbox_stress'
+# Pudelko TYGODNIOWE ma wlasny szkic (D121), wiec i wlasne wyciecie kodu.
+# Do 0.15.0 nie mialo zadnego testu jednostkowego - stala za nim tylko
+# kontrola statyczna, ktora czyta kod, a nie uruchamia go (D145).
+krok "1c/10 logika tygodniowego (C++)"    bash -c 'python3 extract_tydzien.py && g++ -O0 -std=c++17 test_tydzien.cpp -o /tmp/pillbox_tydzien && /tmp/pillbox_tydzien'
 krok "2/10  logika aplikacji (Node)"      bash -c 'node build_app_module.mjs && node test_app.mjs'
 
 # Granica doby lekowej (DAY_START_HOUR) sprawia, ze aplikacja zachowuje sie
