@@ -65,7 +65,7 @@
 
     Numer wersji, ktory mieszka w NAGLOWKU, opisuje naglowek. Ten opisuje
     program. Gdy sie rozjada, log krzyczy o tym w pierwszej linii.        */
-#define KOD_WERSJA "0.13.0"
+#define KOD_WERSJA "0.14.0"
 
 /*  Po tym napisie pudelko poznaje config.h wzięty prosto z repozytorium -
     czyli "nie ma zadnej sieci", a nie "ma siec o takiej nazwie". Bez tego
@@ -2388,6 +2388,31 @@ void setup() {
       if (rtcPusteRazem < 65535) rtcPusteRazem++;
       LOG("[EV ] klapka zdazyla sie zamknac - nie pikam (puste z rzedu: %u)\n", rtcPuste);
     }
+    /*  MELDUNEK „OTWARTE" NIE MOZE ZALEZEC OD TEGO, CZY DAWKA BYLA NOWA.
+        To byl blad B31 i Kuba zglosil go jednym zdaniem: "nie pokazuje
+        sie w aplikacji, jak otwieram cokolwiek".
+
+        Status z `boxOpen` wychodzil TYLKO z `zglos()`, czyli ze sciezki
+        zapisu zdarzenia - a ta ma trzy wyjscia, ktore jej nie dotykaja:
+          - ta sama komora juz dzis zgloszona (`zapiszOtwarcie()` wraca
+            od razu, zeby nie zapisac drugiej dawki),
+          - kilka klapek naraz, czyli napelnianie,
+          - komora nierozpoznana.
+        W kazdym z nich pudelko wiedzialo, ze klapka jest otwarta, i nie
+        mowilo o tym nikomu. Potem w `idzSpac()` klapka byla juz
+        zamknieta, a `rtcKlapkiZglosz` mowil "baza to wie" - wiec nie
+        szlo nic. Przy drugim otwarciu tej samej komory tego samego dnia
+        baner nie mial jak sie zapalic ANI RAZU.
+
+        To sa dwie rozne rzeczy i trzeba je rozdzielic: odrzucenie
+        powtorki dotyczy DANYCH o leku (druga dawka z tej samej komory
+        to nie jest druga dawka), a `boxOpen` dotyczy STANU URZADZENIA
+        w tej chwili. Tu mieszanie ich kosztowalo cala funkcje.
+
+        Gdy zdarzenie poszlo, to wywolanie jest darmowe: `zglosKlapki()`
+        sprawdza `rtcKlapkiZglosz` i wychodzi bez radia.               */
+    zglosKlapki(otwarteTeraz);
+
     if (battProcent >= 0 && battProcent <= BATT_WARN_PCT) { delay(300); beepBateria(); }
     idzSpac();
   }
