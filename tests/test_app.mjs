@@ -5449,6 +5449,45 @@ head("Zrodlo pomiaru baterii");
      rozumiemy, byloby gorsze niz przyznanie sie.                     */
   A.renderStatus({ lastSeen: teraz, battery: 62, volt: 3.9, battSrc: "cosNowego" });
   check(/cosNowego/.test(dev()), "nieznane zrodlo pokazujemy surowo");
+
+  /*  DWA ROZNE KLOPOTY, DWIE ROZNE ROBOTY (D142).
+
+      Kuba: "nie bede patrzyl na monitor, zobacze w aplikacji". Przy
+      `czeka` i przy `cichy` procent przychodzi z dzielnika i wyglada
+      identycznie - ale pierwsze naprawia sie odczekaniem minuty,
+      a drugie lutownica. Bez tego rozroznienia czlowiek stojacy nad
+      pudelkiem wybierze zle: rozlutuje dzialajacy modul albo bedzie
+      czekal na czujnik, ktorego nikt nie podlaczyl.                  */
+  A.renderStatus({ lastSeen: teraz, battery: 48, volt: 3.8,
+                   battSrc: "dzielnik", gauge: "czeka" });
+  check(/odczekaj/.test(dev()) && !/nie odzywa/.test(dev()),
+        "czujnik, ktory jeszcze liczy, nie jest wzywaniem lutownicy");
+
+  A.renderStatus({ lastSeen: teraz, battery: 48, volt: 3.8,
+                   battSrc: "dzielnik", gauge: "cichy" });
+  check(/nie odzywa/.test(dev()) && !/odczekaj/.test(dev()),
+        "a milczacy czujnik mowi wprost, ze milczy");
+
+  /* Pudelko bez czujnika (albo starszy program) nie dostaje zadnego
+     dopisku - zgadywanie za nie byloby gorsze niz cisza.             */
+  A.renderStatus({ lastSeen: teraz, battery: 48, volt: 3.8, battSrc: "dzielnik" });
+  check(!/odczekaj/.test(dev()) && !/nie odzywa/.test(dev()),
+        "bez pola o czujniku nie dopisujemy nic");
+
+  /*  DWA POMIARY TEJ SAMEJ BATERII W JEDNEJ CHWILI (D141).
+
+      To jedyna droga do odpowiedzi na pytanie wiszace od 0.3.0: czy
+      2,32 V z dzielnika to zly wspolczynnik, czy brak kontaktu. Liczba
+      ma sens TYLKO razem z ta druga, wiec stoja w jednym wierszu.    */
+  A.renderStatus({ lastSeen: teraz, battery: 87, volt: 3.98,
+                   battSrc: "max17048", gauge: "ok", voltDz: 2.32 });
+  check(/Dzielnik obok czujnika/.test(dev()), "porownanie obu pomiarow jest w Urzadzeniu");
+  check(/2\.32 V/.test(dev()) && /3\.98 V/.test(dev()),
+        "i podaje obie liczby, bo kazda z osobna nie znaczy nic");
+
+  A.renderStatus({ lastSeen: teraz, battery: 87, volt: 3.98, battSrc: "max17048", gauge: "ok" });
+  check(!/Dzielnik obok czujnika/.test(dev()),
+        "bez pomiaru porownawczego wiersza nie ma - zero wygladaloby jak pomiar");
 }
 
 head("Zgodnosc wersji aplikacji");

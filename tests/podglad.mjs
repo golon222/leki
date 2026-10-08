@@ -66,6 +66,10 @@ function __podglad(stan = {}) {
   const d = new Date(); viewYear = d.getFullYear(); viewMonth = d.getMonth();
   ustawProfil();
   renderAll();
+  /*  STATUS PUDELKA, bo bez niego ekran Urzadzenie jest pusty - a to
+      wlasnie tam ladujemy diagnostyke, ktorej Kuba nie przeczyta
+      w monitorze portu (D142).                                      */
+  if (stan.status) renderStatus(stan.status);
   showTab(stan.ekran || "cal");
 }
 window.__podglad = __podglad;
@@ -89,7 +93,18 @@ function __dane(profil){
     ? { profil:"tydzien", schedule:["20:00"], drugName:"Escitalopram", defaultDose:1 }
     : { profil:"warfin",  schedule:["20:00"], drugName:"Warfin", drugStrength:5, defaultDose:1.5,
         pillsBase:100, pillsBaseFrom:"2026-08-25", inrMin:2, inrMax:3, inrEveryDays:21 };
-  return { cfg, doses, events, urzadzenie: profil === "tydzien" ? "pillbox02" : "pillbox01" };
+  const teraz = Math.floor(Date.now()/1000);
+  /*  Stan pudelka podstawiamy taki, jaki NAPRAWDE moze przyjsc: tygodniowe
+      z czujnikiem baterii i z pomiarem porownawczym z dzielnika (D141),
+      dzienne po staremu.                                              */
+  const status = profil === "tydzien"
+    ? { lastSeen: teraz - 120, battery: 87, volt: 3.98, voltDz: 2.32,
+        battSrc: "max17048", gauge: "ok", fw: "0.12.0", rssi: -56, queue: 0,
+        boots: 134, ssid: "Dom", boxOpen: false, tg: true }
+    : { lastSeen: teraz - 300, battery: 64, volt: 3.86, battSrc: "dzielnik",
+        fw: "1.53.0", rssi: -61, queue: 0, boots: 2041, ssid: "Dom", boxOpen: false };
+  return { cfg, doses, events, status,
+           urzadzenie: profil === "tydzien" ? "pillbox02" : "pillbox01" };
 }
 
 addEventListener("DOMContentLoaded", () => {
@@ -97,6 +112,21 @@ addEventListener("DOMContentLoaded", () => {
   const profil = q.get("profil") === "tydzien" ? "tydzien" : "warfin";
   const stan = __dane(profil);
   stan.ekran = q.get("ekran") || "cal";
+  /*  ?czujnik=ok|czeka|cichy pozwala zobaczyc KAZDY z trzech stanow
+      czujnika baterii (D142) - rozniace sie kolorem i czynnoscia, wiec
+      sprawdzalne tylko okiem.                                        */
+  const cz = q.get("czujnik");
+  if (cz && stan.status) {
+    stan.status.gauge = cz;
+    if (cz !== "ok") {
+      /* Bez czujnika procent przychodzi z dzielnika - inna liczba i inne
+         zrodlo, inaczej podglad pokazywalby stan, ktory nie moze zajsc. */
+      stan.status.battSrc = "dzielnik";
+      stan.status.battery = 48;
+      stan.status.volt    = 3.80;
+      delete stan.status.voltDz;
+    }
+  }
   __podglad(stan);
 });
 </script>`;

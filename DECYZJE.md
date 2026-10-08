@@ -9,7 +9,7 @@ zamiast 60 tys. tokenów wchodzi 2,5 tys. plus jeden obszar.
 
 | plik | o czym | ile |
 |---|---|---|
-| `decyzje/pudelko.md` | Pudełko — sen, alarm, NVS, WiFi | 45 |
+| `decyzje/pudelko.md` | Pudełko — sen, alarm, NVS, WiFi | 46 |
 | `decyzje/ota.md` | Aktualizacja przez WiFi i skan sieci | 10 |
 | `decyzje/telegram.md` | Powiadomienia Telegram | 6 |
 | `decyzje/aplikacja.md` | Aplikacja — ekrany i wygląd | 46 |
@@ -64,6 +64,7 @@ Od najnowszej. Kolumna „gdzie" mówi, który plik w `decyzje/` trzymać otwart
 | # | O co chodziło | gdzie |
 |---|---|---|
 | **D140** | **Komora przestaje znaczyć dzień tygodnia** — przypisanie żyło wyłącznie w kolejności rezystorów, czyli w czymś, czego pudełko nie umie sprawdzić, a mówiło o tym jak o fakcie. Przełożone lutowanie i powiadomienie wskazuje **złą** przegrodkę. Numer komory zostaje (napełnianie, powtórka, piknięcia), odpada tłumaczenie go na dzień — i samego numeru też człowiekowi nie pokazujemy | `pudelko` |
+| **D142** | **Diagnostyka czujnika baterii widoczna w aplikacji, nie w monitorze portu** — „czujnik jeszcze liczy" (odczekaj minutę) kontra „czujnik się nie odzywa" (lutownica) to ta sama liczba na ekranie, a dwie różne roboty. Pola `gauge` i `voltDz` w statusie; reguł bazy nie trzeba publikować (`$other: true`). Przy okazji: „Wieczko" w pudełku, które ma klapki | `pudelko` |
 | **D141** | **Czujnik baterii: trzy próby, rejestr VERSION i dzielnik jako punkt porównania** — pierwsze włączenie po przylutowaniu jest najmniej pewną chwilą tej ścieżki. Log rozróżnia „czujnika nie ma" od „jest, ale jeszcze nie liczy", a iloraz dwóch pomiarów z tej samej chwili rozstrzyga zagadkę 2,32 V z dzielnika | `pudelko` |
 | **D139** | **Czujnik MAX17048** w pudełku tygodniowym: ma pierwszeństwo przed dzielnikiem, ale jest **opcjonalny** — bez niego ten sam program działa jak dotąd. Podłączenie równoległe (nic nie przecinamy), dwa rejestry przez `Wire` bez biblioteki, a status mówi, SKĄD jest procent. `(Wire.read()<<8)|Wire.read()` ma nieokreśloną kolejność — kontrola statyczna tego zabrania | `pudelko` |
 | **D138** | **Próg baterii dla OTA zniesiony w pudełku tygodniowym** — próg oparty na pomiarze, którego nie rozumiemy (D136), nie jest zabezpieczeniem, tylko loterią, a stawką jest jedyna zdalna droga naprawy. Wraca dopiero razem z naprawionym pomiarem i kontrola statyczna tego pilnuje. `otaDecyzja()` nietknięta — różnica siedzi w makrze | `ota` |
