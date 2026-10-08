@@ -1097,6 +1097,31 @@ if w.exists():
         print('  OK   czujnik baterii ma pierwszenstwo, dzielnik zostaje zapasem')
 
     # ------------------------------------------------------------------
+    # „OTWARTE" MELDUJEMY ZAWSZE, NIE TYLKO PRZY NOWEJ DAWCE (B31).
+    #
+    # Status z `boxOpen` wychodzil wylacznie ze sciezki zapisu zdarzenia,
+    # a ta ma trzy wyjscia, ktore jej nie dotykaja: ta sama komora juz
+    # dzis zgloszona, kilka klapek naraz (napelnianie) i komora
+    # nierozpoznana. Pudelko wiedzialo, ze klapka jest otwarta, i nie
+    # mowilo o tym nikomu - a przy drugim otwarciu tej samej komory tego
+    # samego dnia baner nie mial jak sie zapalic ani razu.
+    #
+    # Odrzucenie powtorki dotyczy DANYCH o leku, `boxOpen` dotyczy STANU
+    # urzadzenia. Galaz "obudzila nas klapka" musi zglosic stan sama.
+    # Granice bierzemy z KODU, nie z komentarzy - `_kod` jest bez nich.
+    _b = _kod.find('powod == ESP_SLEEP_WAKEUP_TIMER')
+    _a = _kod.rfind('powod == ESP_SLEEP_WAKEUP_GPIO', 0, _b) if _b > 0 else -1
+    if _a < 0 or _b < 0 or _b < _a:
+        bad += 1
+        print('  BLAD nie znalazlem galezi wybudzenia w setup()')
+    elif 'zglosKlapki(' not in _kod[_a:_b]:
+        bad += 1
+        print('  BLAD wybudzenie klapka nie melduje stanu klapki:')
+        print('       "otwarte" wyszloby tylko przy nowej dawce (B31)')
+    else:
+        print('  OK   otwarcie melduje sie takze bez nowej dawki')
+
+    # ------------------------------------------------------------------
     # ZADNEGO DNIA TYGODNIA PRZY KOMORZE (D140).
     #
     # Do 0.10.0 drabinka nadawala komorom dni: komora 0 byla "PON", a

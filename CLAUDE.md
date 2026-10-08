@@ -39,7 +39,7 @@ bash tests/run_all.sh
 
 Musi przejść przed zmianą i po zmianie. Stan wyjściowy:
 **642 + 52 firmware, 1488 (×6 pór doby) + 92 + 52 aplikacja, 48 zgodności,
-156 reguł bazy, 375 kontroli audytu, 47 kontroli statycznych — 0 błędów.**
+156 reguł bazy, 375 kontroli audytu, 48 kontroli statycznych — 0 błędów.**
 
 **Nazwy leku w pudełku tygodniowym NIE MA** (D135, cofnięte z D126 na
 wyraźną prośbę Kuby — nie przywracaj). Nazwa jest potrzebna tam, gdzie się
@@ -353,7 +353,7 @@ na `esp32:esp32@3.3.11` i z **ustawieniami płytki z nagłówka `PillBox.ino`**.
 Nie jest częścią `run_all.sh`: wymaga sieci i ~500 MB toolchainu.
 **Uruchom to po każdej zmianie w firmware.**
 
-Stan: `PillBox.ino` **64% flasha** (1 265 417 B z 1,875 MB), `PillBoxWeek.ino` **62%** (1 234 805 B),
+Stan: `PillBox.ino` **64% flasha** (1 265 417 B z 1,875 MB), `PillBoxWeek.ino` **62%** (1 234 813 B),
 `PillBoxTest.ino` 20% bez `config.h` i **57%** z nim. Szkic diagnostyczny budujemy w OBU
 konfiguracjach — bez tego drugiego przebiegu 722 kB jego kodu (logowanie do
 bazy, zapis wyniku) nie było kompilowane ani razu (D103).
@@ -417,7 +417,15 @@ nie do publikacji. Szczegóły obejść — D17.
   klapki**, słaba bateria), nie o czterech — bez zapasu tabletek i INR.
   `tgDecyzja()` jest znak w znak ta sama co w pudełku dziennym i kontrola
   statyczna to porównuje. Wymaga podłączenia bota w aplikacji.
-  **Meldunek o otwartej klapce — dodany w `0.8.0` (D137).** Kuba: *„w
+  **Meldunek o otwartej klapce — dodany w `0.8.0` (D137), NAPRAWIONY
+  PONOWNIE w `0.14.0` (B31).** Kuba, już z wgranym `0.11.0`: *„nie
+  pokazuje się w aplikacji, jak otwieram cokolwiek"*. Status z `boxOpen`
+  wychodził **wyłącznie** ze ścieżki zapisu dawki, a ta ma trzy wyjścia,
+  które ją omijają: ta sama komora już dziś zgłoszona, kilka klapek
+  naraz, komora nierozpoznana. **Odrzucenie powtórki dotyczy DANYCH
+  o leku, `boxOpen` dotyczy STANU urządzenia — jedno nie ma prawa
+  blokować drugiego.** Moja pierwsza hipoteza (stary program na płytce)
+  była błędna i sprostował ją jednym zdaniem. Kuba: *„w
   aplikacji nie pokazuje się, że jest otwarte, jak jest otwarte"*.
   Przyczyny były dwie i obie po stronie pudełka: `boxOpen` nie było
   wysyłane w ogóle, a chwilę „ostatnio widziane" pudełko słało jako `ts`
