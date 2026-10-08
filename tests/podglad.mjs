@@ -115,6 +115,14 @@ addEventListener("DOMContentLoaded", () => {
   /*  ?czujnik=ok|czeka|cichy pozwala zobaczyc KAZDY z trzech stanow
       czujnika baterii (D142) - rozniace sie kolorem i czynnoscia, wiec
       sprawdzalne tylko okiem.                                        */
+  /*  ?klapka=3 pokazuje baner "Komora 3 - otwarte od ..." (D148).
+      Stan otwarcia trwa chwile i trudno go zlapac na zrzucie.      */
+  const kl = q.get("klapka");
+  if (kl && stan.status) {
+    stan.status.boxOpen   = true;
+    stan.status.openSlot  = kl === "kilka" ? -2 : (parseInt(kl, 10) - 1);
+    stan.status.openSince = Math.floor(Date.now()/1000) - 9*60;
+  }
   const cz = q.get("czujnik");
   if (cz && stan.status) {
     stan.status.gauge = cz;

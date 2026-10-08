@@ -2311,7 +2311,7 @@ window.wybierzPudelko = (id) => {
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-10-08.108";
+const APP_VERSION = "2026-10-08.109";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -5421,6 +5421,23 @@ function nazwaOtwarcia(){
         nadal:"czy wieczko nadal jest otwarte" };
 }
 
+/*  KTORA KOMORA JEST OTWARTA TERAZ (D148).
+
+    Kuba: *„niech pokazuje, która komora jest otwarta, tak żebyśmy
+    wiedzieli"*. To NIE jest powrót do nazw dni (D140) — tam odpadło
+    tłumaczenie numeru na **dzień tygodnia**, czyli założenie
+    o kolejności rezystorów, którego pudełko nie umie sprawdzić.
+    Tutaj jedzie sam numer i opisuje **stan teraz**: której klapki
+    szukać, gdy została otwarta. Tego da się użyć — i o to chodzi.
+
+    `-2` znaczy „kilka naraz", czyli napełnianie pudełka.          */
+function opisOtwartej(st){
+  const k = +st?.openSlot;
+  if (!Number.isFinite(k)) return "";
+  if (k === -2) return "kilka klapek naraz";
+  return (k >= 0 && k < 7) ? `komora ${k + 1}` : "";
+}
+
 function renderOpenWarn(st){
   const box = document.getElementById("openWarn");
   if (!box) return;
@@ -5448,16 +5465,24 @@ function renderOpenWarn(st){
     return;
   }
 
+  /*  Numer komory stoi PRZED czasem, bo to on mowi, co zrobic:
+      ktorej klapki szukac. Czas mowi tylko, jak dlugo tak jest.   */
+  const kom = opisOtwartej(st);
+  const przed = kom ? kom.charAt(0).toUpperCase() + kom.slice(1) + " — " : "";
+
   if (since > 1){
     /* Liczymy do chwili, w ktorej pudelko OSTATNIO to widzialo, a nie do
        „teraz" - inaczej licznik rosnie takze wtedy, gdy nikt nic nie mierzy. */
     const doKiedy = widziane || Math.round(Date.now()/1000);
     const mins = Math.max(0, (doKiedy - since) / 60);
-    when.textContent = mins < 60
-      ? `Otwarte od ${Math.round(mins)} min (od ${devHM(since)}).`
-      : `Otwarte od ${Math.floor(mins/60)} h ${Math.round(mins%60)} min (od ${devHM(since)}).`;
+    const slowo = przed ? "otwarte" : "Otwarte";
+    when.textContent = przed + (mins < 60
+      ? `${slowo} od ${Math.round(mins)} min (od ${devHM(since)}).`
+      : `${slowo} od ${Math.floor(mins/60)} h ${Math.round(mins%60)} min (od ${devHM(since)}).`);
   } else {
-    when.textContent = nazwaOtwarcia().zamknij;
+    when.textContent = przed ? przed + nazwaOtwarcia().zamknij.charAt(0).toLowerCase()
+                             + nazwaOtwarcia().zamknij.slice(1)
+                             : nazwaOtwarcia().zamknij;
   }
 }
 
@@ -5841,6 +5866,7 @@ function renderStatus(st){
     (typeof st.boxOpen === "boolean"
        ? wiersz(profilTydzien() ? "Klapka" : "Wieczko", st.boxOpen
            ? `<span style="color:var(--warn)">otwarte</span>` +
+             (opisOtwartej(st) ? ` <b>${esc(opisOtwartej(st))}</b>` : "") +
              (+st.openSince > 1 ? ` <span class="dim2">od ${devHM(+st.openSince)}</span>` : "")
            : "zamknięte")
        /*  BRAK POLA MUSI WYGLĄDAĆ INACZEJ NIŻ „ZAMKNIĘTE" (D144).

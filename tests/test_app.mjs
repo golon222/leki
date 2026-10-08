@@ -5555,6 +5555,56 @@ head("Karta dnia przy kilku przypomnieniach");
   A.__setState({ cfg:{ profil:"warfin", schedule:["20:00"], tzOffsetMin: tz } });
 }
 
+/*  KTORA KOMORA JEST OTWARTA (D148). Prosba Kuby: "niech pokazuje, ktora
+    komora jest otwarta, tak zebysmy wiedzieli".
+
+    To NIE jest powrot do D140: tam odpadlo tlumaczenie numeru na DZIEN
+    TYGODNIA, bo zalezalo od kolejnosci rezystorow i pudelko nie umialo
+    tego sprawdzic. Tu jedzie sam numer i opisuje STAN TERAZ - ktorej
+    klapki szukac. Test pilnuje obu polow naraz: numer JEST, nazwy dnia
+    NIE MA.                                                            */
+head("Ktora komora jest otwarta");
+{
+  const teraz = Math.round(Date.now()/1000);
+  const baner = () => document.getElementById("openWarnWhen").textContent;
+  const dev   = () => document.getElementById("devInfo").innerHTML;
+  A.__setState({ cfg:{ profil:"tydzien" } });
+  A.__setPudelko("pillbox02");
+
+  A.renderStatus({ lastSeen: teraz - 60, battery: 70, boxOpen: true,
+                   openSince: teraz - 600, openSlot: 2 });
+  check(/Komora 3/.test(baner()), `baner mowi, ktora komora ("${baner()}")`);
+  check(/komora 3/i.test(dev()), "i to samo stoi w Urzadzeniu");
+  /* 9, nie 10: czas liczymy do chwili, w ktorej pudelko to WIDZIALO
+     (lastSeen), a nie do "teraz" - licznik nie ma rosnac sam z siebie. */
+  check(/9 min \(od /.test(baner()), `czas otwarcia zostaje obok numeru ("${baner()}")`);
+  for (const d of ["poniedziałek","wtorek","środa","czwartek","piątek","sobota","niedziela"])
+    check(!baner().includes(d), `bez nazwy dnia przy komorze (${d})`);
+
+  /*  Numerujemy od JEDYNKI - tak samo, jak pudelko liczy pikniecia
+      w autotescie. Dwie rozne numeracje tej samej przegrodki byly do
+      pomylenia az nazbyt latwo.                                     */
+  A.renderStatus({ lastSeen: teraz - 60, battery: 70, boxOpen: true, openSlot: 0 });
+  check(/Komora 1/.test(baner()), `komora 0 z pudelka to komora 1 na ekranie ("${baner()}")`);
+  A.renderStatus({ lastSeen: teraz - 60, battery: 70, boxOpen: true, openSlot: 6 });
+  check(/Komora 7/.test(baner()), "a komora 6 to siodma");
+
+  /*  KILKA NARAZ to napelnianie, nie dawka - i tak ma byc nazwane. */
+  A.renderStatus({ lastSeen: teraz - 60, battery: 70, boxOpen: true, openSlot: -2 });
+  check(/kilka klapek naraz/i.test(baner()), `napelnianie mowimy slowem ("${baner()}")`);
+
+  /*  Starszy program pudelka tego pola nie przysyla - wtedy baner mowi
+      tyle, co dotad, zamiast zgadywac numer.                        */
+  A.renderStatus({ lastSeen: teraz - 60, battery: 70, boxOpen: true, openSince: teraz - 600 });
+  check(/Otwarte od/.test(baner()) && !/omora/.test(baner()),
+        `bez pola nie zmyslamy komory ("${baner()}")`);
+  A.renderStatus({ lastSeen: teraz - 60, battery: 70, boxOpen: true, openSlot: 99 });
+  check(!/omora/.test(baner()), "numer spoza zakresu to brak danych, nie smiec");
+
+  A.__setPudelko("pillbox01");
+  A.__setState({ cfg:{ profil:"warfin" } });
+}
+
 head("Stary program pudelka a meldunek o klapce");
 {
   const teraz = Math.round(Date.now()/1000);

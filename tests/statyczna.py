@@ -1030,7 +1030,7 @@ if w.exists():
     # przez kabel (D142): "nie bede patrzyl na monitor, zobacze
     # w aplikacji". Pole wyslane pod nazwa, ktorej aplikacja nie czyta,
     # to dokladnie blad D137 - wtedy kosztowal baner o otwartej klapce.
-    for _f in ('gauge', 'voltDz', 'charging', 'crate'):
+    for _f in ('gauge', 'voltDz', 'charging', 'crate', 'openSlot'):
         if f'doc["{_f}"]' not in _st:
             _brak.append(f'pudelko nie wysyla {_f}')
         elif _f not in _czytane:

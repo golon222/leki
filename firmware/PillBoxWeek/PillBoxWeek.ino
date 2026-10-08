@@ -65,7 +65,7 @@
 
     Numer wersji, ktory mieszka w NAGLOWKU, opisuje naglowek. Ten opisuje
     program. Gdy sie rozjada, log krzyczy o tym w pierwszej linii.        */
-#define KOD_WERSJA "0.16.0"
+#define KOD_WERSJA "0.17.0"
 
 /*  Po tym napisie pudelko poznaje config.h wzięty prosto z repozytorium -
     czyli "nie ma zadnej sieci", a nie "ma siec o takiej nazwie". Bez tego
@@ -182,6 +182,15 @@ bool    czasZsync     = false;
     „zamkniete" zamienialo sie w „otwarte" i nikt tego juz nie prostowal
     (D96). Tutaj ten sam blad byl do popelnienia dokladnie tak samo.  */
 bool    otwarteTeraz  = false;
+/*  KTORA komora jest otwarta w tej chwili: 0..6, -2 = kilka naraz,
+    -1 = zadna. Idzie do aplikacji jako `openSlot` (D148).
+
+    To NIE jest powrot do D140. Tam odpadlo tlumaczenie numeru na DZIEN
+    TYGODNIA - zalozenie o kolejnosci rezystorow, ktorego pudelko nie
+    umie sprawdzic. Tu jedzie sam numer i opisuje STAN TERAZ: ktorej
+    klapki szukac, gdy zostala otwarta. Kuba: "niech pokazuje, ktora
+    komora jest otwarta, tak zebysmy wiedzieli".                      */
+int     komoraTeraz   = -1;
 /*  SKAD WZIAL SIE PROCENT BATERII. Idzie do statusu, bo to jest jedyna
     rzecz, ktora rozstrzyga pytanie "czy czujnik w ogole gada" - a do
     tego pytania wracalismy juz kilka razy (D136, D139).              */
@@ -243,6 +252,7 @@ int ktoraKomora(uint16_t mV) {
 
 /* Czy ktorakolwiek klapka jest teraz otwarta. */
 bool klapkiOtwarte();
+void zglosKlapki(bool otwarte, int komora);
 
 /*  NUMER, NIE DZIEN TYGODNIA (D140).
 
@@ -994,6 +1004,9 @@ bool wyslijStatus() {
       Bierzemy `otwarteTeraz`, a nie swiezy odczyt pinu: jeden pomiar na
       wybudzenie, jedna prawda.                                        */
   doc["boxOpen"]   = otwarteTeraz;
+  /*  KTORA komora - zeby aplikacja umiala powiedziec, ktorej klapki
+      szukac (D148). -2 znaczy "kilka naraz", czyli napelnianie.     */
+  if (otwarteTeraz) doc["openSlot"] = komoraTeraz;
   if (otwarteTeraz && rtcOpenSince) doc["openSince"] = rtcOpenSince;
 #if OTA_ENABLED
   /*  Stan aktualizacji jedzie TYMI SAMYMI polami co w pudelku dziennym -
@@ -1032,8 +1045,9 @@ bool wyslijStatus() {
     ma. Status i tak jedzie przy kazdym zdarzeniu, wiec zwykle nie kosztuje
     to nic dodatkowego; radio wlaczamy sami tylko wtedy, gdy klapka
     zmienila stan, a nic innego nie kazalo nam sie tym razem laczyc.   */
-void zglosKlapki(bool otwarte) {
+void zglosKlapki(bool otwarte, int komora) {
   otwarteTeraz = otwarte;
+  komoraTeraz  = otwarte ? komora : -1;
   if (otwarte && !rtcOpenSince)
     rtcOpenSince = rtcCzasPewny ? (uint32_t)time(nullptr) : 0;
   if (!otwarte) rtcOpenSince = 0;
@@ -2181,12 +2195,13 @@ void idzSpac() {
       ich cena.                                                        */
   uint32_t start = millis();
   while (klapkiOtwarte() && millis() - start < CZEKAJ_ZAMKNIECIE_S * 1000UL) delay(200);
-  const bool otwarte = klapkiOtwarte();
-  if (otwarte) LOG("[SEN] klapka nadal otwarta - usypiam na sam zegar\n");
+  const int  komora  = ktoraKomora(czytajKlapki(16));
+  const bool otwarte = (komora != -1);
+  if (otwarte) LOG("[SEN] %s nadal otwarta - usypiam na sam zegar\n", opisKomory(komora));
 
   /*  Stan koncowy idzie do aplikacji ZANIM zgasimy radio. Wysyla sie
       tylko wtedy, gdy rozni sie od tego, co baza na pewno ma.        */
-  zglosKlapki(otwarte);
+  zglosKlapki(otwarte, komora);
 
 #if TG_ENABLED
   /*  POWIADOMIENIE IDZIE PIERWSZE Z TRZECH RZECZY PRZED SNEM (zasada 12).
@@ -2385,8 +2400,13 @@ void setup() {
 
       Jeden pomiar, jedna prawda (D96): status wysylany z `zglos()` niesie
       dokladnie to samo, co pozniejszy meldunek z `idzSpac()`.         */
-  otwarteTeraz = (powod == ESP_SLEEP_WAKEUP_GPIO && komoraPoStarcie >= 0)
-                 ? true : klapkiOtwarte();
+  if (powod == ESP_SLEEP_WAKEUP_GPIO && komoraPoStarcie >= 0) {
+    komoraTeraz  = komoraPoStarcie;       // z pomiaru w pierwszej linijce setup()
+    otwarteTeraz = true;
+  } else {
+    komoraTeraz  = ktoraKomora(czytajKlapki(16));
+    otwarteTeraz = (komoraTeraz != -1);
+  }
   if (otwarteTeraz && !rtcOpenSince && rtcCzasPewny)
     rtcOpenSince = (uint32_t)time(nullptr);
   if (!otwarteTeraz) rtcOpenSince = 0;
@@ -2481,7 +2501,7 @@ void setup() {
 
         Gdy zdarzenie poszlo, to wywolanie jest darmowe: `zglosKlapki()`
         sprawdza `rtcKlapkiZglosz` i wychodzi bez radia.               */
-    zglosKlapki(otwarteTeraz);
+    zglosKlapki(otwarteTeraz, komoraTeraz);
 
     if (battProcent >= 0 && battProcent <= BATT_WARN_PCT) { delay(300); beepBateria(); }
     idzSpac();

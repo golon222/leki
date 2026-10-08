@@ -614,8 +614,9 @@ które trzeba usłyszeć:
 | **dwa tony w GÓRĘ** | zapisałem dawkę |
 | **trzy tony w DÓŁ** | tę komorę już dziś otwierano — **nie bierz drugi raz** |
 
-Numeru komory pudełko **nie wypikuje** przy zwykłym otwarciu (robi to
-tylko w autoteście). Numer zależy od kolejności rezystorów, więc nie
+**Którą komorę otwarto, widać w aplikacji** — baner mówi wprost
+„Komora 3 — otwarte od 7 min". Pudełko **nie wypikuje** tego numeru przy
+zwykłym otwarciu (robi to tylko w autoteście). Numer zależy od kolejności rezystorów, więc nie
 niósł nic, czego dałoby się użyć — a zagłuszał tę jedną różnicę, która
 ma znaczenie.
 
