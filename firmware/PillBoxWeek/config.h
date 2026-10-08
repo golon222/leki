@@ -19,7 +19,7 @@
  *    miejsce w bazie i kalendarze wymieszalyby sie po cichu.
  * ------------------------------------------------------------------ */
 #define DEVICE_ID           "pillbox02"     // klucz w /devices/<DEVICE_ID>
-#define FW_VERSION          "0.14.0"         // widoczna w aplikacji
+#define FW_VERSION          "0.15.0"         // widoczna w aplikacji
 
 /* ---------------------------------------------------------------------
  * 2. FIREBASE
@@ -84,6 +84,25 @@
 #define ALARM_PRZERWA_MS    2500   // odstep miedzy piknieciami
 #define ALARM_PONOWIEN      3      // ile razy wrocic, jesli nikt nie otworzyl
 #define ALARM_PONOW_MIN     10     // co ile minut wracac
+
+/*  OKNO DOPASOWANIA PRZYPOMNIENIA (D145)
+ *
+ *  Ile minut PO godzinie z harmonogramu pudelko jeszcze uznaje, ze to
+ *  jest to przypomnienie. Tolerancja na spoznione wybudzenie, nie
+ *  swoboda - przed godzina nie dzwonimy w ogole.                      */
+#define SLOT_OKNO_MIN       30
+
+/*  ILE GODZIN PRZYPOMNIEN PUDELKO ZAPAMIETA (D145)
+ *
+ *  Stoi TUTAJ, a nie w szkicu, bo to ta sama liczba co `MAX_PRZYPOMNIEN`
+ *  w aplikacji - i kontrola statyczna porownuje je ze soba. Do 0.14.0
+ *  bylo tu 4, a aplikacja pozwalala ustawic 12: pokazywala szesc
+ *  przypomnien, zapisywala szesc do bazy, a pudelko po cichu znalo
+ *  cztery. Cicha rozbieznosc miedzy ekranem a urzadzeniem to ta sama
+ *  rodzina co B9/B10.
+ *
+ *  Maska wyczerpanych slotow jest `uint16_t`, wiec sufitem jest 16.    */
+#define SLOTOW_MAX          12
 
 /*  Klapka zostawiona otwarta trzyma pin nisko, a wybudzanie reaguje na
  *  POZIOM. Bez czekania na zamkniecie pudelko budziloby sie w kolko. */

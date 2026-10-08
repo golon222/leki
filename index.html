@@ -2307,7 +2307,7 @@ window.wybierzPudelko = (id) => {
 /* Numer wersji — widoczny w Ustawieniach. Podnieś go przy każdej zmianie
    plików, wtedy od razu widać na telefonie, czy aktualizacja doszła.
    TĘ SAMĄ WARTOŚĆ wpisz w sw.js, w stałej CACHE.                      */
-const APP_VERSION = "2026-10-08.106";
+const APP_VERSION = "2026-10-08.107";
 /* ═══════════════════════════════════════════════════════════════ */
 
 const app  = initializeApp(firebaseConfig);
@@ -3946,9 +3946,17 @@ function renderToday(){
       ? "Tak masz zapisane na ten dzień" : "Tak masz rozpisany ten dzień tygodnia";
   } else if (!any){
     el.textContent = "Jeszcze nie wzięte";  el.style.color = "var(--warn)";
+    /*  NAJBLIZSZE przypomnienie, nie pierwsze z listy (D145).
+
+        Przy jednej godzinie to to samo. Przy kilku - a o to Kuba prosil
+        wprost - karta mowila „przypomnienie o 08:00" jeszcze o 19:00,
+        czyli podawala godzine, ktora dawno minela, jako to, co dopiero
+        bedzie. `doNastepnej()` liczy to samo, co pasek faktow obok,
+        wiec dwa miejsca na jednym ekranie nie moga sie rozjechac.   */
+    const nastepne = doNastepnej();
     document.getElementById("todayWhen").textContent =
       (profilTydzien() ? "" : `${nf(target)} tabl. · `) +
-      `przypomnienie o ${cfg.schedule[0] || "—"}`;
+      `przypomnienie o ${nastepne ? nastepne.h : "—"}`;
   } else if (sum <= 0){
     el.textContent = "Pominięte";           el.style.color = "var(--bad)";
     document.getElementById("todayWhen").textContent = "Możesz to poprawić w kalendarzu";

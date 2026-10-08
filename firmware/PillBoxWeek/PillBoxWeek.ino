@@ -65,7 +65,7 @@
 
     Numer wersji, ktory mieszka w NAGLOWKU, opisuje naglowek. Ten opisuje
     program. Gdy sie rozjada, log krzyczy o tym w pierwszej linii.        */
-#define KOD_WERSJA "0.14.0"
+#define KOD_WERSJA "0.15.0"
 
 /*  Po tym napisie pudelko poznaje config.h wzięty prosto z repozytorium -
     czyli "nie ma zadnej sieci", a nie "ma siec o takiej nazwie". Bez tego
@@ -122,7 +122,7 @@ RTC_DATA_ATTR uint32_t rtcWybudzen      = 0;
 RTC_DATA_ATTR int32_t  rtcOstatniDzien  = -1;   // numer doby ostatniego otwarcia
 RTC_DATA_ATTR int8_t   rtcOstatniaKomora= -1;   // i ktora komora to byla
 RTC_DATA_ATTR int32_t  rtcDobaZnana     = -1;   // ostatnia doba, ktora pudelko WIDZIALO
-RTC_DATA_ATTR uint8_t  rtcAlarmMaska    = 0;    // ktore sloty juz sie wyczerpaly w tej dobie
+RTC_DATA_ATTR uint16_t rtcAlarmMaska    = 0;    // ktore sloty juz sie wyczerpaly w tej dobie
 RTC_DATA_ATTR int32_t  rtcAlarmDzien    = -1;
 RTC_DATA_ATTR int8_t   rtcAlarmSlot     = -1;   // slot, ktory wlasnie ponawiamy
 RTC_DATA_ATTR uint8_t  rtcAlarmPonowien = 0;
@@ -215,7 +215,6 @@ bool    battLaduje     = false;
 
 /* Harmonogram przypomnien. To sa godziny PRZYPOMNIEN, nie pory brania -
    dokladnie jak w pudelku dziennym. Domyslnie jedna, 20:00.            */
-#define SLOTOW_MAX 4
 int slotyMin[SLOTOW_MAX] = { 20*60 };
 int slotowIle = 1;
 
@@ -299,6 +298,20 @@ void beepBlad()       { pik(700, 260); }
 void beepKilkaNaraz() { pik(700, 700); }
 void beepAlarm()      { for (int i=0;i<3;i++){ pik(BUZZER_HZ,180); delay(120);} }
 void beepBateria()    { for (int i=0;i<2;i++){ pik(1200,300); delay(180);} }
+
+/*  „TA DAWKA JUZ BYLA DZIS" - trzy tony w DOL (D146).
+
+    Prosba Kuby wprost: *„to ma pikac, jak sie otworzy drugi raz, zeby nie
+    wziasc dwa razy, mimo ze sie nie da, ale tak zrob, bo to moze pomoc"*.
+
+    Do tej pory drugie otwarcie tej samej komory brzmialo DOKLADNIE TAK
+    SAMO jak pierwsze: numer komory i `beepAck()`. Pudelko potwierdzalo
+    dzwiekiem dawke, ktorej nie zapisalo - a to gorsze niz cisza, bo
+    brzmi jak zgoda. Opadajacy motyw jest tu jedynym dzwiekiem, ktory
+    nie idzie w gore, wiec nie da sie go pomylic z potwierdzeniem.
+    Komora bywa pusta i czlowiek nic z niej nie wyjmie - ale moze trzymac
+    blister obok, a wtedy to jedyne ostrzezenie, jakie dostanie.     */
+void beepJuzDzis()    { pik(1400,110); delay(60); pik(1100,110); delay(60); pik(800,220); }
 
 /* =====================================================================
  *  3.  BATERIA
@@ -602,11 +615,33 @@ int minutyDnia() {
 }
 
 /* Ktory slot przypomnienia wypada teraz (+/- 30 min), albo -1. */
+/*  KTORE PRZYPOMNIENIE WYPADA TERAZ. -1 = zadne.
+
+    Trzy rzeczy, ktorych nie robila pierwsza wersja (D145), i kazda
+    psula cos innego przy WIECEJ NIZ JEDNEJ godzinie:
+
+    1. BIERZEMY NAJBLIZSZE, nie pierwsze z brzegu. Przy 20:00 i 20:15
+       stara petla o 20:15 trafiala w slot 20:00 - a ten byl juz
+       wyczerpany, wiec drugie przypomnienie nie dzwonilo NIGDY.
+    2. NIE DZWONIMY PRZED CZASEM. `abs()` dawalo okno w obie strony,
+       wiec wybudzenie o 19:35 (np. po zaleglym wpisie w kolejce)
+       odpalalo przypomnienie o 20:00 dwadziescia piec minut za wczesnie.
+       Teraz liczymy tylko "ile minut PO godzinie". Spoznione wybudzenie
+       naprawia sie samo: `sekundDoNastepnego()` usypia do tej godziny.
+    3. PRZEZ POLNOC. Przypomnienie o 23:50 ogladane o 00:05 to 15 minut
+       po, a nie 1425 - roznica liczona modulo doba.
+
+    Pudelko dzienne ma to samo od dawna (`matchSlot()`); tutaj stala
+    naiwna kopia. Bez zegara nie zgadujemy - cisza jest wtedy tansza.  */
 int slotTeraz() {
+  if (!rtcCzasPewny || slotowIle <= 0) return -1;
   int m = minutyDnia();
-  for (int i = 0; i < slotowIle; i++)
-    if (abs(m - slotyMin[i]) <= 30) return i;
-  return -1;
+  int best = -1, najblizej = 100000;
+  for (int i = 0; i < slotowIle; i++) {
+    int po = (m - slotyMin[i] + 1440) % 1440;     // ile minut PO godzinie
+    if (po <= SLOT_OKNO_MIN && po < najblizej) { najblizej = po; best = i; }
+  }
+  return best;
 }
 
 /* =====================================================================
@@ -1174,12 +1209,16 @@ void zglos(const char* typ, int slot) {
     Ta sama komora drugi raz tego samego dnia to zagladanie do pudelka,
     nie druga dawka - a przy klapce, ktora nie domyka sie za pierwszym
     razem, takze zwykle odbicie styku.                                */
-void zapiszOtwarcie(int k) {
-  if (k < 0) return;
+/*  Zwraca `true`, gdy otwarcie zostalo ZAPISANE jako dawka, a `false`,
+    gdy to powtorka tej samej komory tego samego dnia. Wolajacy robi
+    z tego dzwiek (D146): potwierdzenie kontra ostrzezenie. Wczesniej
+    funkcja nie mowila nic i oba przypadki brzmialy identycznie.     */
+bool zapiszOtwarcie(int k) {
+  if (k < 0) return false;
   int32_t d = rtcCzasPewny ? dzisDoba() : -1;
   if (d >= 0 && d == rtcOstatniDzien && k == rtcOstatniaKomora) {
     LOG("[EV ] ta sama komora juz dzis zgloszona - nie powtarzam\n");
-    return;
+    return false;
   }
   zglos("open", k);
   /*  Dobe zapisujemy DOPIERO gdy znamy czas. Bez zegara wpis i tak czeka
@@ -1190,6 +1229,7 @@ void zapiszOtwarcie(int k) {
     rtcOstatniaKomora = (int8_t)k;
     if (rtcDobaZnana < 0) rtcDobaZnana = d;
   }
+  return true;
 }
 
 /* =====================================================================
@@ -2370,8 +2410,10 @@ void setup() {
     if (k >= 0) {
       rtcPuste = 0;                       // pin powiedzial cos sensownego
       pikniecia(k + 1);                   // potwierdzenie na sluch
-      zapiszOtwarcie(k);
-      beepAck();
+      /*  DRUGIE OTWARCIE TEJ SAMEJ KOMORY BRZMI INACZEJ (D146) - tak,
+          zeby po dzwieku dalo sie poznac, czy pudelko cos zapisalo. */
+      if (zapiszOtwarcie(k)) beepAck();
+      else                   beepJuzDzis();
     } else if (k == -2) {
       /* Kilka klapek naraz to NAPELNIANIE, nie dawka. Zapisanie tego jako
          wziecia zmyliloby kalendarz na caly tydzien do przodu.         */
@@ -2442,13 +2484,13 @@ void setup() {
       if (rtcAlarmSlot != slot) { rtcAlarmSlot = (int8_t)slot; rtcAlarmPonowien = 0; }
 
       bool juzDzis    = (rtcOstatniDzien == doba);
-      bool wyczerpany = rtcAlarmMaska & (1 << slot);
+      bool wyczerpany = rtcAlarmMaska & (uint16_t)(1u << slot);
       if (juzDzis || wyczerpany) {
         LOG("[ALM] cisza (%s)\n", juzDzis ? "dzis juz otwarte" : "slot wyczerpany");
       } else {
         LOG("[ALM] przypomnienie, slot %d (proba %d)\n", slot, rtcAlarmPonowien + 1);
         int przerwane = zagrajAlarm();
-        if (przerwane >= 0) { zapiszOtwarcie(przerwane); beepAck(); }
+        if (przerwane >= 0) { if (zapiszOtwarcie(przerwane)) beepAck(); else beepJuzDzis(); }
 #if TG_ENABLED
         /* --- Powiadomienie po KAZDYM nieodebranym, nie po ostatnim ---
            Zdarzenie "missed" powstaje dopiero z koncem doby (D64), bo
@@ -2465,7 +2507,7 @@ void setup() {
             ostatniej - inaczej jedno pikniecie o 20:00 bylo calym
             przypomnieniem na ten dzien.                              */
         if (rtcAlarmPonowien < ALARM_PONOWIEN) ponowAlarm = true;
-        else rtcAlarmMaska |= (1 << slot);
+        else rtcAlarmMaska |= (uint16_t)(1u << slot);
       }
     }
     idzSpac();

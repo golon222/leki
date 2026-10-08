@@ -147,6 +147,17 @@ public:
        Trzeci raz ta sama lekcja co w D30: atrapa lagodniejsza od oryginalu
        mierzy inna rzecz niz sie mysli.                                   */
     return v.s.size(); }
+  /*  int - uzywa go pudelko TYGODNIOWE (kolejka, harmonogram). Ta sama
+      zasada co wyzej: zapis przy zamknietym uchwycie zawodzi, a wynik
+      to liczba bajtow, nie "true".                                    */
+  std::map<std::string, int> in;
+  int getInt(const char* k, int d = 0) {
+    auto it = in.find(k); return it == in.end() ? d : it->second; }
+  size_t putInt(const char* k, int v) {
+    if (failKeys.count(k)) return 0;
+    if (strict && !_started) return 0;
+    in[k] = v; return sizeof(int); }
+
   unsigned short getUShort(const char* k, unsigned short d = 0) {
     auto it = us.find(k); return it == us.end() ? d : it->second; }
   size_t putUShort(const char* k, unsigned short v) {
